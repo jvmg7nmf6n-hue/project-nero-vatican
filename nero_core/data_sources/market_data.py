@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -179,7 +180,11 @@ class MarketDataClient:
     # -- source fetchers ------------------------------------------------------------
 
     BINANCE_MAX_LIMIT = 1000
-    BINANCE_MAX_PAGES = 30  # safety cap: 30 * 1000 = 30,000 candles, far beyond any request this client makes
+    # Safety cap, not a target: 250 * 1000 = 250,000 candles. At 30m granularity that's
+    # ~14.3 years — comfortably past even BTC's full Binance listing history (since 2017),
+    # so "longest available" requests are actually bounded by the exchange running out of
+    # history (see _fetch_binance_paginated's early-stop), not by this cap.
+    BINANCE_MAX_PAGES = 250
 
     def _load_binance(self, _label: str, symbol: str, interval: str, limit: int) -> pd.DataFrame:
         limit = max(30, limit)
@@ -224,9 +229,16 @@ class MarketDataClient:
         frames: list[pd.DataFrame] = []
         remaining = total_limit
         end_time_ms: int | None = None
-        for _ in range(self.BINANCE_MAX_PAGES):
+        for page_index in range(self.BINANCE_MAX_PAGES):
             if remaining <= 0:
                 break
+            if page_index > 0:
+                # A limit=1000 klines request costs 5 weight against Binance's 1200/min IP
+                # budget. A long paginated fetch (up to BINANCE_MAX_PAGES pages) run back
+                # to back could approach that limit; a small delay keeps this client well
+                # under it. A 429 mid-fetch would otherwise raise and fall back to a much
+                # more limited exchange, discarding every page already fetched.
+                time.sleep(0.15)
             batch = min(remaining, self.BINANCE_MAX_LIMIT)
             page = self._fetch_binance_page(symbol, interval, batch, end_time_ms=end_time_ms)
             if page.empty:
