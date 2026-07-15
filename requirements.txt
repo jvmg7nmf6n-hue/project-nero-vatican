@@ -1,1 +1,11 @@
-# Dependencies to be pinned as modules are ported in Step 3+ (Phase 0/1).
+# Project Vatican dependencies (Phase 0/1)
+pandas>=2.0,<3
+numpy>=1.24,<3
+pydantic>=2.0,<3
+statsmodels>=0.14,<1
+yfinance>=0.2,<1
+
+# arch>=7.0,<8  # GARCH(1,1) support — optional. No prebuilt wheel for this Python version on
+# Windows yet, and building from source requires MSVC C++ Build Tools. quant_intelligence.py
+# already falls back to an EWMA volatility estimate when `arch` is unavailable, so this is a
+# soft dependency: uncomment and install once GARCH(1,1) is needed and build tools are present.
