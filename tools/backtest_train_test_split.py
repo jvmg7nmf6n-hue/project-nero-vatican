@@ -43,7 +43,7 @@ def split_chronological(candles: pd.DataFrame, train_fraction: float = TRAIN_FRA
     return train, test
 
 
-def run_split_backtest(asset: str, timeframe: str, client: MarketDataClient) -> dict[str, object]:
+def run_split_backtest(asset: str, timeframe: str, client: MarketDataClient, strategy_keys: list[str] = DEFAULT_STRATEGIES) -> dict[str, object]:
     result = client.load_intraday(asset, interval=timeframe, candles=DEFAULT_TIMEFRAME_CANDLES)
     train, test = split_chronological(result.prices)
 
@@ -54,7 +54,7 @@ def run_split_backtest(asset: str, timeframe: str, client: MarketDataClient) -> 
             if not half_candles.empty
             else "n/a"
         )
-        for strategy_key in DEFAULT_STRATEGIES:
+        for strategy_key in strategy_keys:
             spec = VARIANT_SPECS[strategy_key]
             trades, state = run_backtest(half_candles, spec)
             metrics = compute_metrics(asset, spec.label, state, trades)
@@ -102,13 +102,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--assets", nargs="+", default=DEFAULT_ASSETS)
     parser.add_argument("--timeframe", default="12h")
+    parser.add_argument("--variants", nargs="+", default=DEFAULT_STRATEGIES, choices=list(VARIANT_SPECS))
     args = parser.parse_args()
 
     client = MarketDataClient()
     results: list[dict[str, object]] = []
     for asset in args.assets:
         try:
-            result = run_split_backtest(asset, args.timeframe, client)
+            result = run_split_backtest(asset, args.timeframe, client, args.variants)
             results.append(result)
             print(f"{asset}: OK — {result['source']} ({result['total_candles']} candles total)")
         except MarketDataUnavailableError as exc:
