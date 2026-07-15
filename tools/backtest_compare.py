@@ -42,6 +42,13 @@ MIN_SAMPLE_SIZE = 20
 
 DEFAULT_ASSETS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "NEAR", "GOLD"]
 
+# The volatility-regime filter only needs recent history to judge "current" conditions
+# (build_garch_volatility_report's own EWMA fallback already only looks at the trailing
+# 252 observations internally). Capping the as-of slice fed into it keeps each per-candle
+# recompute O(1) instead of O(i) — turning a long backtest from O(n^2) into O(n) — without
+# giving it access to anything it wouldn't otherwise use, and without introducing lookahead.
+GARCH_LOOKBACK_CANDLES = 300
+
 
 @dataclass(frozen=True)
 class BacktestMetrics:
@@ -87,7 +94,7 @@ def run_backtest(
             closed_trades.append(exit_event)
 
         if use_v2:
-            as_of_intraday = evaluable.iloc[: i + 1]
+            as_of_intraday = evaluable.iloc[max(0, i + 1 - GARCH_LOOKBACK_CANDLES) : i + 1]
             as_of_daily = daily[daily["close_time"] <= candle["close_time"]]
             evaluation = evaluate_entry_v2(candle, as_of_intraday, as_of_daily, state, params, asset=asset)
         else:
@@ -232,6 +239,8 @@ def main() -> None:
                   f"daily {result['daily_source']} ({result['daily_candle_count']} candles)")
         except MarketDataUnavailableError as exc:
             print(f"{asset}: SKIPPED — {exc}")
+        except Exception as exc:  # noqa: BLE001 - one asset's unexpected failure must not lose every other asset's already-computed results
+            print(f"{asset}: FAILED — {exc.__class__.__name__}: {exc}")
 
     print()
     if results:

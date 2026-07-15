@@ -147,6 +147,24 @@ class MarketDataDailyTest(unittest.TestCase):
         self.assertIn("Twelve Data", result.source)
         self.assertGreater(len(result.prices), 0)
 
+    def test_gold_with_no_volume_field_in_response_does_not_crash(self) -> None:
+        # Regression test: Twelve Data's spot Gold (XAU/USD) feed omits "volume" entirely
+        # at some intervals — frame.get("volume") on a missing column used to collapse to
+        # a scalar NaN instead of a Series, breaking a chained .fillna() call downstream.
+        values = [
+            {"datetime": v["datetime"], "open": v["open"], "high": v["high"], "low": v["low"], "close": v["close"]}
+            for v in _twelve_data_values(40)
+        ]
+        self.assertNotIn("volume", values[0])
+
+        with patch(
+            "nero_core.data_sources.market_data.requests.get",
+            return_value=_mock_response({"status": "ok", "values": values}),
+        ):
+            result = self.client.load_daily("GOLD", days=40, twelve_data_api_key="fake-key")
+
+        self.assertTrue((result.prices["volume"] == 0.0).all())
+
     def test_gold_raises_clear_error_when_api_key_missing(self) -> None:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("TWELVE_DATA_API_KEY", None)
@@ -174,6 +192,51 @@ class MarketDataDailyTest(unittest.TestCase):
         self.assertIn("Binance", message)
         self.assertNotIn("Coinbase", message)
         self.assertNotIn("Kraken", message)
+
+
+class MarketDataPaginationTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.client = MarketDataClient()
+
+    def test_requesting_more_than_1000_candles_pages_backward_and_stitches_results(self) -> None:
+        interval_ms = 3_600_000
+        call_state = {"end_ms": SAFE_END_MS, "calls": 0}
+
+        def side_effect(url, **kwargs):
+            call_state["calls"] += 1
+            params = kwargs["params"]
+            batch_size = params["limit"]
+            end_ms = params.get("endTime", call_state["end_ms"])
+            return _mock_response(_binance_klines(batch_size, interval_ms=interval_ms, end_ms=end_ms))
+
+        with patch("nero_core.data_sources.market_data.requests.get", side_effect=side_effect):
+            result = self.client.load_intraday("BTC", interval="1h", candles=1500)
+
+        self.assertEqual(call_state["calls"], 2)  # 1000 + 500
+        self.assertEqual(len(result.prices), 1500)
+        # Pages must stitch into one continuously ordered, de-duplicated series.
+        self.assertTrue(result.prices["close_time"].is_monotonic_increasing)
+        self.assertEqual(result.prices["close_time"].nunique(), len(result.prices))
+
+    def test_pagination_stops_early_when_exchange_runs_out_of_history(self) -> None:
+        # Exchange only has 1200 candles of history total, even though 5000 were requested.
+        interval_ms = 3_600_000
+        call_state = {"remaining": 1200}
+
+        def side_effect(url, **kwargs):
+            params = kwargs["params"]
+            requested = params["limit"]
+            end_ms = params.get("endTime", SAFE_END_MS)
+            given = min(requested, call_state["remaining"])
+            call_state["remaining"] -= given
+            if given <= 0:
+                return _mock_response([])
+            return _mock_response(_binance_klines(given, interval_ms=interval_ms, end_ms=end_ms))
+
+        with patch("nero_core.data_sources.market_data.requests.get", side_effect=side_effect):
+            result = self.client.load_intraday("BTC", interval="1h", candles=5000)
+
+        self.assertEqual(len(result.prices), 1200)
 
 
 class MarketDataIntradayTest(unittest.TestCase):

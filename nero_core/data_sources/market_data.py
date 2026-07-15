@@ -178,16 +178,31 @@ class MarketDataClient:
 
     # -- source fetchers ------------------------------------------------------------
 
+    BINANCE_MAX_LIMIT = 1000
+    BINANCE_MAX_PAGES = 30  # safety cap: 30 * 1000 = 30,000 candles, far beyond any request this client makes
+
     def _load_binance(self, _label: str, symbol: str, interval: str, limit: int) -> pd.DataFrame:
-        response = requests.get(
-            "https://api.binance.com/api/v3/klines",
-            params={"symbol": symbol, "interval": interval, "limit": max(30, min(limit, 1000))},
-            timeout=self.timeout_seconds,
-        )
+        limit = max(30, limit)
+        if limit <= self.BINANCE_MAX_LIMIT:
+            frame = self._fetch_binance_page(symbol, interval, limit)
+        else:
+            frame = self._fetch_binance_paginated(symbol, interval, limit)
+        if frame.empty:
+            raise ValueError("empty Binance candle response")
+        frame = _drop_unclosed(frame)
+        frame = frame.sort_values("close_time").reset_index(drop=True)
+        frame["date"] = pd.to_datetime(frame["close_time"], unit="ms", utc=True)
+        return frame[CANDLE_COLUMNS].reset_index(drop=True)
+
+    def _fetch_binance_page(self, symbol: str, interval: str, limit: int, end_time_ms: int | None = None) -> pd.DataFrame:
+        params = {"symbol": symbol, "interval": interval, "limit": min(limit, self.BINANCE_MAX_LIMIT)}
+        if end_time_ms is not None:
+            params["endTime"] = end_time_ms
+        response = requests.get("https://api.binance.com/api/v3/klines", params=params, timeout=self.timeout_seconds)
         response.raise_for_status()
         payload = response.json()
         if not isinstance(payload, list) or not payload:
-            raise ValueError("empty Binance candle response")
+            return pd.DataFrame(columns=["open_time", "open", "high", "low", "close", "volume", "close_time"])
         frame = pd.DataFrame(
             payload,
             columns=[
@@ -199,9 +214,33 @@ class MarketDataClient:
         frame[["open", "high", "low", "close", "volume"]] = frame[["open", "high", "low", "close", "volume"]].astype(float)
         frame["open_time"] = frame["open_time"].astype("int64")
         frame["close_time"] = frame["close_time"].astype("int64")
-        frame = _drop_unclosed(frame)
-        frame["date"] = pd.to_datetime(frame["close_time"], unit="ms", utc=True)
-        return frame[CANDLE_COLUMNS].reset_index(drop=True)
+        return frame[["open_time", "open", "high", "low", "close", "volume", "close_time"]]
+
+    def _fetch_binance_paginated(self, symbol: str, interval: str, total_limit: int) -> pd.DataFrame:
+        """Binance caps a single request at 1000 candles. To cover a longer window (e.g.
+        6-12 months of 1h candles), page backward in time using `endTime`, stitching pages
+        together — every page is still a genuine live response, nothing is interpolated or
+        fabricated between pages."""
+        frames: list[pd.DataFrame] = []
+        remaining = total_limit
+        end_time_ms: int | None = None
+        for _ in range(self.BINANCE_MAX_PAGES):
+            if remaining <= 0:
+                break
+            batch = min(remaining, self.BINANCE_MAX_LIMIT)
+            page = self._fetch_binance_page(symbol, interval, batch, end_time_ms=end_time_ms)
+            if page.empty:
+                break
+            frames.append(page)
+            earliest_open = int(page["open_time"].min())
+            end_time_ms = earliest_open - 1
+            remaining -= len(page)
+            if len(page) < batch:
+                break  # exchange ran out of history for this symbol
+        if not frames:
+            return pd.DataFrame(columns=["open_time", "open", "high", "low", "close", "volume", "close_time"])
+        combined = pd.concat(frames, ignore_index=True)
+        return combined.drop_duplicates(subset=["open_time"]).sort_values("open_time").reset_index(drop=True)
 
     def _load_coinbase(self, product_id: str, granularity_seconds: int, candles: int) -> pd.DataFrame:
         response = requests.get(
@@ -268,7 +307,11 @@ class MarketDataClient:
             raise ValueError("empty Twelve Data response")
         frame = pd.DataFrame(values)
         frame[["open", "high", "low", "close"]] = frame[["open", "high", "low", "close"]].astype(float)
-        frame["volume"] = pd.to_numeric(frame.get("volume"), errors="coerce").fillna(0.0)
+        if "volume" in frame.columns:
+            frame["volume"] = pd.to_numeric(frame["volume"], errors="coerce").fillna(0.0)
+        else:
+            # Some Twelve Data feeds (e.g. spot Gold XAU/USD) report no volume at all.
+            frame["volume"] = 0.0
         frame["date"] = pd.to_datetime(frame["datetime"], utc=True)
         frame = frame.sort_values("date").reset_index(drop=True)
         interval_ms = _twelve_data_interval_milliseconds(interval)

@@ -17,3 +17,4 @@ work/
 outputs/
 local_untracked_backup_*/
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
