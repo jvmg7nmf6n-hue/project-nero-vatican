@@ -5,11 +5,15 @@ import unittest
 
 import pandas as pd
 
-from nero_core.strategies.mean_reversion import DEFAULT_PARAMETERS as V1_PARAMETERS, ExitEvent
-from nero_core.strategies.mean_reversion_v2 import DEFAULT_V2_PARAMETERS
+from nero_core.strategies.mean_reversion import ExitEvent, MeanReversionState
 from tests.test_council_engine import _flat_then_pullback_history, _make_candle_row
-from tools.backtest_compare import MIN_SAMPLE_SIZE, compute_metrics, run_backtest, _max_drawdown
-from nero_core.strategies.mean_reversion import MeanReversionState
+from tools.backtest_compare import (
+    MIN_SAMPLE_SIZE,
+    VARIANT_SPECS,
+    _max_drawdown,
+    compute_metrics,
+    run_backtest,
+)
 
 
 def _extended_history_with_room_to_exit() -> pd.DataFrame:
@@ -23,6 +27,28 @@ def _extended_history_with_room_to_exit() -> pd.DataFrame:
     for i in range(1, 31):
         close_time = last_close_time + i * 3_600_000
         rows.append(_make_candle_row(close_time, last_close))
+    return pd.DataFrame(rows)
+
+
+def _breakout_history() -> pd.DataFrame:
+    """220 candles of flat consolidation around 100, then a sustained breakout above the
+    prior 20-bar high with RSI supportive — a real BREAKOUT_MOMENTUM entry setup — plus
+    30 more candles after so any opened trade has room to exit."""
+    rows: list[dict[str, float]] = []
+    close_time = 0
+    for i in range(200):
+        close = 100.0 + 0.01 * i  # gentle drift, close stays above MA200 once warmed up
+        rows.append(_make_candle_row(close_time, close))
+        close_time += 3_600_000
+    # sustained breakout leg: each candle's high clears the prior 20-bar high
+    price = rows[-1]["close"]
+    for _ in range(20):
+        price *= 1.01
+        rows.append(_make_candle_row(close_time, price))
+        close_time += 3_600_000
+    for _ in range(30):
+        rows.append(_make_candle_row(close_time, price))
+        close_time += 3_600_000
     return pd.DataFrame(rows)
 
 
@@ -64,7 +90,7 @@ class ComputeMetricsTest(unittest.TestCase):
     def test_zero_trades_reports_insufficient_sample(self) -> None:
         state = MeanReversionState(equity=10000.0)
 
-        metrics = compute_metrics("BTC", "v1", 10000.0, state, [])
+        metrics = compute_metrics("BTC", "v1", state, [])
 
         self.assertEqual(metrics.sample_size, 0)
         self.assertTrue(metrics.insufficient_sample)
@@ -74,7 +100,7 @@ class ComputeMetricsTest(unittest.TestCase):
         trades = _win_loss_trades()
         state = MeanReversionState(equity=trades[-1].equity_after)
 
-        metrics = compute_metrics("BTC", "v1", 10000.0, state, trades)
+        metrics = compute_metrics("BTC", "v1", state, trades)
 
         self.assertEqual(metrics.sample_size, 4)
         self.assertAlmostEqual(metrics.win_rate, 0.5)
@@ -86,7 +112,7 @@ class ComputeMetricsTest(unittest.TestCase):
         trades = _win_loss_trades()  # 4 trades, well under MIN_SAMPLE_SIZE
         state = MeanReversionState(equity=trades[-1].equity_after)
 
-        metrics = compute_metrics("BTC", "v1", 10000.0, state, trades)
+        metrics = compute_metrics("BTC", "v1", state, trades)
 
         self.assertLess(metrics.sample_size, MIN_SAMPLE_SIZE)
         self.assertTrue(metrics.insufficient_sample)
@@ -99,7 +125,7 @@ class ComputeMetricsTest(unittest.TestCase):
         ]
         state = MeanReversionState(equity=10110.0)
 
-        metrics = compute_metrics("BTC", "v1", 10000.0, state, trades)
+        metrics = compute_metrics("BTC", "v1", state, trades)
 
         self.assertEqual(metrics.profit_factor, 110.0)
 
@@ -112,12 +138,13 @@ class RunBacktestOfflineTest(unittest.TestCase):
 
     def test_v1_backtest_runs_and_closes_the_triggered_trade(self) -> None:
         history = _extended_history_with_room_to_exit()
+        spec = VARIANT_SPECS["mean_reversion_v1"]
 
-        trades, state = run_backtest(history, V1_PARAMETERS)
+        trades, state = run_backtest(history, spec)
 
         self.assertGreaterEqual(len(trades), 1)
         self.assertIsInstance(trades[0], ExitEvent)
-        self.assertNotEqual(state.equity, V1_PARAMETERS.initial_equity)
+        self.assertNotEqual(state.equity, spec.params.initial_equity)
 
     def test_v2_backtest_runs_offline_with_daily_context_and_no_network(self) -> None:
         history = _extended_history_with_room_to_exit()
@@ -127,8 +154,9 @@ class RunBacktestOfflineTest(unittest.TestCase):
                 "close": [100.0 + i for i in range(90)],  # bullish daily trend
             }
         )
+        spec = VARIANT_SPECS["mean_reversion_v2"]
 
-        trades, state = run_backtest(history, DEFAULT_V2_PARAMETERS, daily=daily, asset="BTC")
+        trades, state = run_backtest(history, spec, daily=daily, asset="BTC")
 
         # Must not raise, must return the right shapes regardless of whether the
         # volatility/higher-timeframe filters happened to allow this particular trade.
@@ -148,10 +176,20 @@ class RunBacktestOfflineTest(unittest.TestCase):
             }
         )
 
-        v1_trades, _ = run_backtest(history, V1_PARAMETERS)
-        v2_trades, _ = run_backtest(history, DEFAULT_V2_PARAMETERS, daily=bearish_daily, asset="BTC")
+        v1_trades, _ = run_backtest(history, VARIANT_SPECS["mean_reversion_v1"])
+        v2_trades, _ = run_backtest(history, VARIANT_SPECS["mean_reversion_v2"], daily=bearish_daily, asset="BTC")
 
         self.assertLessEqual(len(v2_trades), len(v1_trades))
+
+    def test_breakout_momentum_backtest_runs_and_closes_the_triggered_trade(self) -> None:
+        history = _breakout_history()
+        spec = VARIANT_SPECS["breakout_momentum"]
+
+        trades, state = run_backtest(history, spec)
+
+        self.assertGreaterEqual(len(trades), 1)
+        self.assertIsInstance(trades[0], ExitEvent)
+        self.assertNotEqual(state.equity, spec.params.initial_equity)
 
 
 if __name__ == "__main__":

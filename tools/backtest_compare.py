@@ -1,8 +1,10 @@
-"""CLI: backtest Mean Reversion v1 vs v2 (regime-filtered) side by side over the same
+"""CLI: backtest one or more registered strategy variants side by side over the same
 real historical data, pulled live through nero_core.data_sources.market_data.
 
 Usage:
     python tools/backtest_compare.py --assets BTC ETH SOL --interval 1h
+    python tools/backtest_compare.py --variants breakout_momentum --assets BTC
+    python tools/backtest_compare.py --variants mean_reversion_v1 breakout_momentum
 
 No synthetic/fabricated price data is ever used here — if a market data fetch fails for
 an asset, that asset is reported as SKIPPED with the reason, not silently substituted.
@@ -14,26 +16,30 @@ import math
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Callable
 
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from nero_core.data_sources.market_data import MarketDataClient, MarketDataUnavailableError
+from nero_core.strategies.breakout_momentum import (
+    DEFAULT_PARAMETERS as BREAKOUT_MOMENTUM_PARAMETERS,
+)
+from nero_core.strategies.breakout_momentum import add_indicators as bm_add_indicators
+from nero_core.strategies.breakout_momentum import evaluate_entry as bm_evaluate_entry
+from nero_core.strategies.breakout_momentum import size_entry as bm_size_entry
 from nero_core.strategies.mean_reversion import (
     DEFAULT_PARAMETERS as V1_PARAMETERS,
-    ExitEvent,
-    MeanReversionParameters,
     MeanReversionState,
-    add_indicators,
+    add_indicators as mr_add_indicators,
     evaluate_entry as evaluate_entry_v1,
     evaluate_exit,
     reset_daily_guard_if_needed,
-    size_entry,
+    size_entry as mr_size_entry,
 )
 from nero_core.strategies.mean_reversion_v2 import (
     DEFAULT_V2_PARAMETERS,
-    MeanReversionV2Parameters,
     evaluate_entry_v2,
 )
 
@@ -48,6 +54,61 @@ DEFAULT_ASSETS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "NEAR", "GOLD"]
 # recompute O(1) instead of O(i) — turning a long backtest from O(n^2) into O(n) — without
 # giving it access to anything it wouldn't otherwise use, and without introducing lookahead.
 GARCH_LOOKBACK_CANDLES = 300
+
+INDICATOR_COLUMNS_TO_CHECK = ["rsi", "bb_lower", "ma20", "ma200", "atr", "breakout_high"]
+
+
+@dataclass(frozen=True)
+class VariantSpec:
+    """Everything the generic backtest loop needs to run one registered strategy variant.
+    Each strategy family plugs in its own add_indicators/evaluate_entry/size_entry;
+    evaluate_exit and reset_daily_guard_if_needed are genuinely shared across all of them
+    (see nero_core.strategies.mean_reversion) since exit/state mechanics don't vary by
+    entry family."""
+
+    key: str
+    label: str
+    params: Any
+    add_indicators_fn: Callable[[pd.DataFrame, Any], pd.DataFrame]
+    # (candle, as_of_intraday, as_of_daily, state, params, asset) -> entry evaluation with a `.passed` attribute
+    evaluate_entry_fn: Callable[[pd.Series, pd.DataFrame, pd.DataFrame, MeanReversionState, Any, str], Any]
+    size_entry_fn: Callable[[pd.Series, MeanReversionState, Any], Any]
+    needs_daily: bool
+
+
+VARIANT_SPECS: dict[str, VariantSpec] = {
+    "mean_reversion_v1": VariantSpec(
+        key="mean_reversion_v1",
+        label="MEAN_REVERSION v1 (mean-reversion-v1.0.0)",
+        params=V1_PARAMETERS,
+        add_indicators_fn=mr_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: evaluate_entry_v1(candle, state, params),
+        size_entry_fn=mr_size_entry,
+        needs_daily=False,
+    ),
+    "mean_reversion_v2": VariantSpec(
+        key="mean_reversion_v2",
+        label="MEAN_REVERSION v2 (mean-reversion-v2.0.0-regime-filtered)",
+        params=DEFAULT_V2_PARAMETERS,
+        add_indicators_fn=mr_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: evaluate_entry_v2(
+            candle, as_of_intraday, as_of_daily, state, params, asset=asset
+        ),
+        size_entry_fn=mr_size_entry,
+        needs_daily=True,
+    ),
+    "breakout_momentum": VariantSpec(
+        key="breakout_momentum",
+        label="BREAKOUT_MOMENTUM v1 (breakout-momentum-v1.0.0)",
+        params=BREAKOUT_MOMENTUM_PARAMETERS,
+        add_indicators_fn=bm_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: bm_evaluate_entry(candle, state, params),
+        size_entry_fn=bm_size_entry,
+        needs_daily=False,
+    ),
+}
+
+DEFAULT_VARIANTS = ["mean_reversion_v1", "mean_reversion_v2"]
 
 
 @dataclass(frozen=True)
@@ -67,48 +128,46 @@ class BacktestMetrics:
 
 def run_backtest(
     intraday: pd.DataFrame,
-    params: MeanReversionParameters,
+    spec: VariantSpec,
     daily: pd.DataFrame | None = None,
     asset: str = "",
-) -> tuple[list[ExitEvent], MeanReversionState]:
+) -> tuple[list[Any], MeanReversionState]:
     """Runs one strategy variant candle-by-candle over closed intraday candles.
 
-    If `daily` is provided (and `params` is a MeanReversionV2Parameters), entry uses
-    evaluate_entry_v2 with an "as-of" slice of both the intraday and daily history —
-    never the full fetched history — so no future candle can influence a past decision.
-    If `daily` is None, entry uses the plain v1 evaluate_entry.
+    If `spec.needs_daily` and `daily` is provided, entry evaluation gets an "as-of" slice
+    of both the intraday and daily history — never the full fetched history — so no
+    future candle can influence a past decision. Variants that don't need daily context
+    (v1, breakout momentum) simply ignore the as-of slices their adapter receives.
     """
-    state = MeanReversionState(equity=params.initial_equity)
-    enriched = add_indicators(intraday, params)
-    evaluable = enriched.dropna(subset=["rsi", "bb_lower", "ma20", "ma200", "atr"]).reset_index(drop=True)
-    closed_trades: list[ExitEvent] = []
+    state = MeanReversionState(equity=spec.params.initial_equity)
+    enriched = spec.add_indicators_fn(intraday, spec.params)
+    dropna_columns = [c for c in INDICATOR_COLUMNS_TO_CHECK if c in enriched.columns]
+    evaluable = enriched.dropna(subset=dropna_columns).reset_index(drop=True)
+    closed_trades: list[Any] = []
 
-    use_v2 = daily is not None and isinstance(params, MeanReversionV2Parameters)
+    use_daily = spec.needs_daily and daily is not None
 
     for i in range(len(evaluable)):
         candle = evaluable.iloc[i]
         reset_daily_guard_if_needed(state, candle["date"])
 
-        exit_event = evaluate_exit(candle, state, params)
+        exit_event = evaluate_exit(candle, state, spec.params)
         if exit_event is not None:
             closed_trades.append(exit_event)
 
-        if use_v2:
-            as_of_intraday = evaluable.iloc[max(0, i + 1 - GARCH_LOOKBACK_CANDLES) : i + 1]
-            as_of_daily = daily[daily["close_time"] <= candle["close_time"]]
-            evaluation = evaluate_entry_v2(candle, as_of_intraday, as_of_daily, state, params, asset=asset)
-        else:
-            evaluation = evaluate_entry_v1(candle, state, params)
+        as_of_intraday = evaluable.iloc[max(0, i + 1 - GARCH_LOOKBACK_CANDLES) : i + 1] if use_daily else evaluable.iloc[: i + 1]
+        as_of_daily = daily[daily["close_time"] <= candle["close_time"]] if use_daily else None
+        evaluation = spec.evaluate_entry_fn(candle, as_of_intraday, as_of_daily, state, spec.params, asset)
 
         if evaluation.passed:
-            trade = size_entry(candle, state, params)
+            trade = spec.size_entry_fn(candle, state, spec.params)
             if trade is not None:
                 state.open_trade = trade
 
     return closed_trades, state
 
 
-def compute_metrics(asset: str, variant: str, initial_equity: float, state: MeanReversionState, trades: list[ExitEvent]) -> BacktestMetrics:
+def compute_metrics(asset: str, variant: str, state: MeanReversionState, trades: list[Any]) -> BacktestMetrics:
     sample_size = len(trades)
     if sample_size == 0:
         return BacktestMetrics(
@@ -174,48 +233,52 @@ def _max_drawdown(equity_curve: list[float]) -> float:
 def compare_asset(
     asset: str,
     client: MarketDataClient,
+    variant_keys: list[str],
     interval: str = "1h",
     intraday_candles: int = 500,
     daily_days: int = 400,
 ) -> dict[str, object]:
     intraday_result = client.load_intraday(asset, interval=interval, candles=intraday_candles)
-    daily_result = client.load_daily(asset, days=daily_days)
+    needs_daily = any(VARIANT_SPECS[key].needs_daily for key in variant_keys)
+    daily_result = client.load_daily(asset, days=daily_days) if needs_daily else None
 
-    v1_trades, v1_state = run_backtest(intraday_result.prices, V1_PARAMETERS)
-    v2_trades, v2_state = run_backtest(intraday_result.prices, DEFAULT_V2_PARAMETERS, daily=daily_result.prices, asset=asset)
-
-    v1_metrics = compute_metrics(asset, "v1 (mean-reversion-v1.0.0)", V1_PARAMETERS.initial_equity, v1_state, v1_trades)
-    v2_metrics = compute_metrics(asset, "v2 (mean-reversion-v2.0.0-regime-filtered)", DEFAULT_V2_PARAMETERS.initial_equity, v2_state, v2_trades)
+    metrics: dict[str, BacktestMetrics] = {}
+    for key in variant_keys:
+        spec = VARIANT_SPECS[key]
+        daily_prices = daily_result.prices if (spec.needs_daily and daily_result is not None) else None
+        trades, state = run_backtest(intraday_result.prices, spec, daily=daily_prices, asset=asset)
+        metrics[key] = compute_metrics(asset, spec.label, state, trades)
 
     return {
         "asset": asset,
         "intraday_source": intraday_result.source,
         "intraday_candle_count": len(intraday_result.prices),
-        "daily_source": daily_result.source,
-        "daily_candle_count": len(daily_result.prices),
-        "v1": v1_metrics,
-        "v2": v2_metrics,
+        "daily_source": daily_result.source if daily_result is not None else "not fetched (no selected variant needs it)",
+        "daily_candle_count": len(daily_result.prices) if daily_result is not None else 0,
+        "variant_keys": variant_keys,
+        "metrics": metrics,
     }
 
 
 def format_comparison_table(results: list[dict[str, object]]) -> str:
     lines: list[str] = []
     header = (
-        f"{'Asset':<6} {'Variant':<40} {'Trades':>7} {'Win%':>7} {'ExpR':>8} "
+        f"{'Asset':<6} {'Variant':<45} {'Trades':>7} {'Win%':>7} {'ExpR':>8} "
         f"{'PF':>8} {'MaxDD':>8} {'NetPnL':>10}"
     )
     lines.append(header)
     lines.append("-" * len(header))
     for entry in results:
-        for key in ("v1", "v2"):
-            m: BacktestMetrics = entry[key]
+        metrics: dict[str, BacktestMetrics] = entry["metrics"]
+        for key in entry["variant_keys"]:
+            m = metrics[key]
             pf_display = f"{m.profit_factor:.2f}" if math.isfinite(m.profit_factor) else "inf"
             lines.append(
-                f"{m.asset:<6} {m.variant:<40} {m.sample_size:>7} {m.win_rate * 100:>6.1f}% "
+                f"{m.asset:<6} {m.variant:<45} {m.sample_size:>7} {m.win_rate * 100:>6.1f}% "
                 f"{m.expectancy_r:>8.3f} {pf_display:>8} {m.max_drawdown * 100:>7.1f}% {m.net_pnl:>10.2f}"
             )
-        for key in ("v1", "v2"):
-            m: BacktestMetrics = entry[key]
+        for key in entry["variant_keys"]:
+            m = metrics[key]
             for note in m.notes:
                 lines.append(f"    [{m.variant}] {note}")
     return "\n".join(lines)
@@ -224,6 +287,7 @@ def format_comparison_table(results: list[dict[str, object]]) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--assets", nargs="+", default=DEFAULT_ASSETS)
+    parser.add_argument("--variants", nargs="+", default=DEFAULT_VARIANTS, choices=list(VARIANT_SPECS))
     parser.add_argument("--interval", default="1h")
     parser.add_argument("--intraday-candles", type=int, default=500)
     parser.add_argument("--daily-days", type=int, default=400)
@@ -233,7 +297,7 @@ def main() -> None:
     results: list[dict[str, object]] = []
     for asset in args.assets:
         try:
-            result = compare_asset(asset, client, args.interval, args.intraday_candles, args.daily_days)
+            result = compare_asset(asset, client, args.variants, args.interval, args.intraday_candles, args.daily_days)
             results.append(result)
             print(f"{asset}: OK — intraday {result['intraday_source']} ({result['intraday_candle_count']} candles), "
                   f"daily {result['daily_source']} ({result['daily_candle_count']} candles)")
