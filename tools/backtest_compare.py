@@ -42,6 +42,12 @@ from nero_core.strategies.mean_reversion_v2 import (
     DEFAULT_V2_PARAMETERS,
     evaluate_entry_v2,
 )
+from nero_core.strategies.mean_reversion_gold_calibrated import (
+    GOLD_CALIBRATED_PARAMETERS as MR_GOLD_PARAMETERS,
+)
+from nero_core.strategies.breakout_momentum_gold_calibrated import (
+    GOLD_CALIBRATED_PARAMETERS as BM_GOLD_PARAMETERS,
+)
 
 # Matches the "insufficient_sample" convention from the original agent's report_row().
 MIN_SAMPLE_SIZE = 20
@@ -101,6 +107,24 @@ VARIANT_SPECS: dict[str, VariantSpec] = {
         key="breakout_momentum",
         label="BREAKOUT_MOMENTUM v1 (breakout-momentum-v1.0.0)",
         params=BREAKOUT_MOMENTUM_PARAMETERS,
+        add_indicators_fn=bm_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: bm_evaluate_entry(candle, state, params),
+        size_entry_fn=bm_size_entry,
+        needs_daily=False,
+    ),
+    "mean_reversion_gold_calibrated": VariantSpec(
+        key="mean_reversion_gold_calibrated",
+        label="MEAN_REVERSION gold-calibrated (mean-reversion-v1.1.0-gold-calibrated)",
+        params=MR_GOLD_PARAMETERS,
+        add_indicators_fn=mr_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: evaluate_entry_v1(candle, state, params),
+        size_entry_fn=mr_size_entry,
+        needs_daily=False,
+    ),
+    "breakout_momentum_gold_calibrated": VariantSpec(
+        key="breakout_momentum_gold_calibrated",
+        label="BREAKOUT_MOMENTUM gold-calibrated (breakout-momentum-v1.1.0-gold-calibrated)",
+        params=BM_GOLD_PARAMETERS,
         add_indicators_fn=bm_add_indicators,
         evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: bm_evaluate_entry(candle, state, params),
         size_entry_fn=bm_size_entry,

@@ -16,6 +16,7 @@ that combination is reported as SKIPPED with the reason, not silently substitute
 """
 from __future__ import annotations
 
+import argparse
 import sys
 import time
 from pathlib import Path
@@ -111,25 +112,31 @@ def fetch_timeframe_candles(
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--assets", nargs="+", default=ASSETS)
+    parser.add_argument("--timeframes", nargs="+", default=TIMEFRAMES, choices=TIMEFRAMES)
+    parser.add_argument("--variants", nargs="+", default=STRATEGY_KEYS, choices=list(VARIANT_SPECS))
+    args = parser.parse_args()
+
     client = MarketDataClient()
     rows: list[dict[str, object]] = []
     daily_cache: dict[str, tuple[pd.DataFrame, str]] = {}
 
-    for asset in ASSETS:
-        for timeframe in TIMEFRAMES:
+    for asset in args.assets:
+        for timeframe in args.timeframes:
             start = time.monotonic()
             try:
                 candles, method = fetch_timeframe_candles(client, asset, timeframe, daily_cache)
             except MarketDataUnavailableError as exc:
                 elapsed = time.monotonic() - start
                 print(f"{asset} / {timeframe}: SKIPPED ({elapsed:.1f}s) — {exc}")
-                for strategy_key in STRATEGY_KEYS:
+                for strategy_key in args.variants:
                     rows.append(_skipped_row(asset, timeframe, strategy_key, str(exc)))
                 continue
             except Exception as exc:  # noqa: BLE001 - one combo's failure must not lose the rest
                 elapsed = time.monotonic() - start
                 print(f"{asset} / {timeframe}: FAILED ({elapsed:.1f}s) — {exc.__class__.__name__}: {exc}")
-                for strategy_key in STRATEGY_KEYS:
+                for strategy_key in args.variants:
                     rows.append(_skipped_row(asset, timeframe, strategy_key, f"{exc.__class__.__name__}: {exc}"))
                 continue
 
@@ -142,7 +149,7 @@ def main() -> None:
                 window_desc = f"{len(candles)} candles / {window_days:.1f} days"
             print(f"{asset} / {timeframe}: {method} — {window_desc} ({elapsed:.1f}s)")
 
-            for strategy_key in STRATEGY_KEYS:
+            for strategy_key in args.variants:
                 spec = VARIANT_SPECS[strategy_key]
                 trades, state = run_backtest(candles, spec)
                 metrics = compute_metrics(asset, spec.label, state, trades)
