@@ -8,6 +8,10 @@ from datetime import datetime, timezone
 import pandas as pd
 import requests
 
+from nero_core.config import load_dotenv
+
+load_dotenv()  # populates os.environ from a repo-root .env if present; never overrides a real env var
+
 # Scoped to the assets this session actually needs: BTC, Gold, SOL, ETH, BNB, XRP, DOGE, NEAR.
 # Adding an asset later just means adding an entry to the relevant map(s) below.
 BINANCE_SYMBOLS = {

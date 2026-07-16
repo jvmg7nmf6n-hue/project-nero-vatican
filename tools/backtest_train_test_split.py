@@ -24,10 +24,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from nero_core.data_sources.market_data import MarketDataClient, MarketDataUnavailableError
 from tools.backtest_compare import MIN_SAMPLE_SIZE, VARIANT_SPECS, compute_metrics, run_backtest
+from tools.timeframe_data import STANDARD_TIMEFRAMES, fetch_timeframe_candles
 
 DEFAULT_ASSETS = ["BTC", "ETH", "BNB", "DOGE"]
 DEFAULT_STRATEGIES = ["mean_reversion_v1", "breakout_momentum"]
-DEFAULT_TIMEFRAME_CANDLES = 20_000  # matches backtest_timeframe_sweep.py's 12h request size
 TRAIN_FRACTION = 0.7
 
 
@@ -44,8 +44,8 @@ def split_chronological(candles: pd.DataFrame, train_fraction: float = TRAIN_FRA
 
 
 def run_split_backtest(asset: str, timeframe: str, client: MarketDataClient, strategy_keys: list[str] = DEFAULT_STRATEGIES) -> dict[str, object]:
-    result = client.load_intraday(asset, interval=timeframe, candles=DEFAULT_TIMEFRAME_CANDLES)
-    train, test = split_chronological(result.prices)
+    candles, method = fetch_timeframe_candles(client, asset, timeframe)
+    train, test = split_chronological(candles)
 
     rows: list[dict[str, object]] = []
     for half_name, half_candles in (("TRAIN", train), ("TEST", test)):
@@ -74,7 +74,7 @@ def run_split_backtest(asset: str, timeframe: str, client: MarketDataClient, str
                     "below_min_sample": metrics.sample_size < MIN_SAMPLE_SIZE,
                 }
             )
-    return {"asset": asset, "source": result.source, "total_candles": len(result.prices), "rows": rows}
+    return {"asset": asset, "source": method, "total_candles": len(candles), "rows": rows}
 
 
 def format_train_test_table(results: list[dict[str, object]]) -> str:
@@ -101,7 +101,7 @@ def format_train_test_table(results: list[dict[str, object]]) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--assets", nargs="+", default=DEFAULT_ASSETS)
-    parser.add_argument("--timeframe", default="12h")
+    parser.add_argument("--timeframe", default="12h", choices=STANDARD_TIMEFRAMES)
     parser.add_argument("--variants", nargs="+", default=DEFAULT_STRATEGIES, choices=list(VARIANT_SPECS))
     args = parser.parse_args()
 

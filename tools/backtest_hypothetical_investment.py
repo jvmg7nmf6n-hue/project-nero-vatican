@@ -9,7 +9,7 @@ the most recent candle is reported as OPEN/unresolved, never given a fabricated 
 
 Usage:
     python tools/backtest_hypothetical_investment.py --asset GOLD --timeframe 1week \
-        --variant breakout_momentum_gold_calibrated --starting-equity 2000 --lookback-days 365
+        --variant breakout_momentum_gold_calibrated_1week --starting-equity 2000 --lookback-days 365
 """
 from __future__ import annotations
 
@@ -175,7 +175,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--asset", default="GOLD")
     parser.add_argument("--timeframe", default="1week")
-    parser.add_argument("--variant", default="breakout_momentum_gold_calibrated", choices=list(VARIANT_SPECS))
+    parser.add_argument("--variant", default="breakout_momentum_gold_calibrated_1week", choices=list(VARIANT_SPECS))
     parser.add_argument("--starting-equity", type=float, default=2000.0)
     parser.add_argument("--lookback-days", type=int, default=365)
     args = parser.parse_args()

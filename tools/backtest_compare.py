@@ -48,6 +48,20 @@ from nero_core.strategies.mean_reversion_gold_calibrated import (
 from nero_core.strategies.breakout_momentum_gold_calibrated import (
     GOLD_CALIBRATED_PARAMETERS as BM_GOLD_PARAMETERS,
 )
+from nero_core.strategies.mean_reversion_gold_calibrated_1week import (
+    GOLD_CALIBRATED_1WEEK_PARAMETERS as MR_GOLD_1WEEK_PARAMETERS,
+)
+from nero_core.strategies.breakout_momentum_gold_calibrated_1week import (
+    GOLD_CALIBRATED_1WEEK_PARAMETERS as BM_GOLD_1WEEK_PARAMETERS,
+)
+from nero_core.strategies.volatility_squeeze import (
+    DEFAULT_PARAMETERS_MA100 as VS_MA100_PARAMETERS,
+    DEFAULT_PARAMETERS_MA150 as VS_MA150_PARAMETERS,
+    DEFAULT_PARAMETERS_MA200 as VS_MA200_PARAMETERS,
+)
+from nero_core.strategies.volatility_squeeze import add_indicators as vs_add_indicators
+from nero_core.strategies.volatility_squeeze import evaluate_entry as vs_evaluate_entry
+from nero_core.strategies.volatility_squeeze import size_entry as vs_size_entry
 
 # Matches the "insufficient_sample" convention from the original agent's report_row().
 MIN_SAMPLE_SIZE = 20
@@ -61,7 +75,7 @@ DEFAULT_ASSETS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "NEAR", "GOLD"]
 # giving it access to anything it wouldn't otherwise use, and without introducing lookahead.
 GARCH_LOOKBACK_CANDLES = 300
 
-INDICATOR_COLUMNS_TO_CHECK = ["rsi", "bb_lower", "ma20", "ma200", "atr", "breakout_high"]
+INDICATOR_COLUMNS_TO_CHECK = ["rsi", "bb_lower", "ma20", "ma200", "atr", "breakout_high", "trend_ma"]
 
 
 @dataclass(frozen=True)
@@ -128,6 +142,51 @@ VARIANT_SPECS: dict[str, VariantSpec] = {
         add_indicators_fn=bm_add_indicators,
         evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: bm_evaluate_entry(candle, state, params),
         size_entry_fn=bm_size_entry,
+        needs_daily=False,
+    ),
+    "mean_reversion_gold_calibrated_1week": VariantSpec(
+        key="mean_reversion_gold_calibrated_1week",
+        label="MEAN_REVERSION gold-calibrated 1week (mean-reversion-v1.2.0-gold-calibrated-1week)",
+        params=MR_GOLD_1WEEK_PARAMETERS,
+        add_indicators_fn=mr_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: evaluate_entry_v1(candle, state, params),
+        size_entry_fn=mr_size_entry,
+        needs_daily=False,
+    ),
+    "breakout_momentum_gold_calibrated_1week": VariantSpec(
+        key="breakout_momentum_gold_calibrated_1week",
+        label="BREAKOUT_MOMENTUM gold-calibrated 1week (breakout-momentum-v1.2.0-gold-calibrated-1week)",
+        params=BM_GOLD_1WEEK_PARAMETERS,
+        add_indicators_fn=bm_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: bm_evaluate_entry(candle, state, params),
+        size_entry_fn=bm_size_entry,
+        needs_daily=False,
+    ),
+    "volatility_squeeze_ma200": VariantSpec(
+        key="volatility_squeeze_ma200",
+        label="VOLATILITY_SQUEEZE ma200 (volatility-squeeze-v1.0.0-ma200)",
+        params=VS_MA200_PARAMETERS,
+        add_indicators_fn=vs_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: vs_evaluate_entry(candle, state, params),
+        size_entry_fn=vs_size_entry,
+        needs_daily=False,
+    ),
+    "volatility_squeeze_ma150": VariantSpec(
+        key="volatility_squeeze_ma150",
+        label="VOLATILITY_SQUEEZE ma150 (volatility-squeeze-v1.0.0-ma150)",
+        params=VS_MA150_PARAMETERS,
+        add_indicators_fn=vs_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: vs_evaluate_entry(candle, state, params),
+        size_entry_fn=vs_size_entry,
+        needs_daily=False,
+    ),
+    "volatility_squeeze_ma100": VariantSpec(
+        key="volatility_squeeze_ma100",
+        label="VOLATILITY_SQUEEZE ma100 (volatility-squeeze-v1.0.0-ma100)",
+        params=VS_MA100_PARAMETERS,
+        add_indicators_fn=vs_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: vs_evaluate_entry(candle, state, params),
+        size_entry_fn=vs_size_entry,
         needs_daily=False,
     ),
 }

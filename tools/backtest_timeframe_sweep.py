@@ -1,15 +1,14 @@
-"""CLI: backtest MEAN_REVERSION v1 and BREAKOUT_MOMENTUM_V1 across multiple timeframes,
-over the same 8 assets, using the longest historical window each source actually has.
+"""CLI: backtest MEAN_REVERSION v1 and BREAKOUT_MOMENTUM_V1 across the standard
+timeframe set, over the same 8 assets, using the longest historical window each source
+actually has.
 
 Usage:
     python tools/backtest_timeframe_sweep.py
 
-Timeframes: 30min, 4h, 12h, 1week are fetched as native exchange candles (Binance for
-crypto; Twelve Data for GOLD, except 12h which Twelve Data doesn't offer natively).
-48h, 15days, and 30days are NOT standard exchange intervals — they are built by
-resampling daily (1d) candles, grouping N consecutive already-closed daily candles into
-one wider candle. A trailing partial group (fewer than N candles) is always dropped, so
-no still-forming candle is ever included.
+Standard timeframes: 2h, 4h, 12h, 24h (daily), 1week — fetched as native exchange
+candles (Binance for crypto; Twelve Data for GOLD, except 12h which Twelve Data doesn't
+offer natively, resampled from 1h instead). 24h is native daily data (MarketDataClient's
+load_daily), not an intraday interval string.
 
 No synthetic/fabricated price data is ever used — if a fetch fails for an asset/timeframe,
 that combination is reported as SKIPPED with the reason, not silently substituted.
@@ -21,94 +20,18 @@ import sys
 import time
 from pathlib import Path
 
-import pandas as pd
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from nero_core.data_sources.market_data import CANDLE_COLUMNS, MarketDataClient, MarketDataUnavailableError
+from nero_core.data_sources.market_data import MarketDataClient, MarketDataUnavailableError
 from tools.backtest_compare import VARIANT_SPECS, compute_metrics, run_backtest
+from tools.timeframe_data import ASSETS, STANDARD_TIMEFRAMES, aggregate_n_consecutive_candles, fetch_timeframe_candles
 
 STRATEGY_KEYS = ["mean_reversion_v1", "breakout_momentum"]
 
 # Canonical timeframe order for the report.
-TIMEFRAMES = ["30min", "4h", "12h", "48h", "1week", "15days", "30days"]
-
-# Timeframes fetched directly as native exchange candles.
-NATIVE_BINANCE_INTERVAL = {"30min": "30m", "4h": "4h", "12h": "12h", "1week": "1w"}
-NATIVE_TWELVEDATA_INTERVAL = {"30min": "30min", "4h": "4h", "1week": "1week"}  # no native 12h on Twelve Data
-
-# How many candles to request per native timeframe — set well past any of these assets'
-# actual listing history, so the real cap is "the exchange ran out of history", not this
-# request size. (30m: ~14y at the pagination cap; 4h/12h/1week comfortably exceed any of
-# these assets' full history.)
-NATIVE_INTERVAL_CANDLES = {"30min": 200_000, "4h": 50_000, "12h": 20_000, "1week": 2_000}
-GOLD_HOURLY_FALLBACK_CANDLES = 50_000  # for GOLD's 12h, resampled from Twelve Data 1h
-
-# Timeframes NOT natively offered by any source here — built by resampling N consecutive
-# daily candles into one wider candle.
-DAILY_RESAMPLE_GROUPS = {"48h": 2, "15days": 15, "30days": 30}
-DAILY_LOOKBACK_DAYS = 8000  # ~21.9 years — comfortably exceeds any of these assets' history
-
-ASSETS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "NEAR", "GOLD"]
+TIMEFRAMES = STANDARD_TIMEFRAMES
 
 MIN_SAMPLE_SIZE = 20
-
-
-def aggregate_n_consecutive_candles(source: pd.DataFrame, n: int) -> pd.DataFrame:
-    """Build wider candles by grouping every N consecutive already-closed candles from
-    `source` (sorted ascending) — index-based consecutive grouping, not calendar-boundary
-    resampling. Only complete groups of exactly N candles are kept: a trailing partial
-    group (fewer than N) would represent a still-forming wider candle and is dropped, so
-    this never introduces lookahead."""
-    if source.empty or len(source) < n:
-        return pd.DataFrame(columns=CANDLE_COLUMNS)
-    frame = source.sort_values("close_time").reset_index(drop=True)
-    complete_groups = len(frame) // n
-    frame = frame.iloc[: complete_groups * n].copy()
-    frame["_group"] = frame.index // n
-    grouped = frame.groupby("_group").agg(
-        open_time=("open_time", "first"),
-        close_time=("close_time", "last"),
-        open=("open", "first"),
-        high=("high", "max"),
-        low=("low", "min"),
-        close=("close", "last"),
-        volume=("volume", "sum"),
-    ).reset_index(drop=True)
-    grouped["date"] = pd.to_datetime(grouped["close_time"], unit="ms", utc=True)
-    return grouped[CANDLE_COLUMNS]
-
-
-def fetch_timeframe_candles(
-    client: MarketDataClient,
-    asset: str,
-    timeframe: str,
-    daily_cache: dict[str, tuple[pd.DataFrame, str]],
-) -> tuple[pd.DataFrame, str]:
-    """Returns (candles, method_description). Raises MarketDataUnavailableError if the
-    underlying live fetch fails for every configured source."""
-    if timeframe in DAILY_RESAMPLE_GROUPS:
-        if asset not in daily_cache:
-            daily_result = client.load_daily(asset, days=DAILY_LOOKBACK_DAYS)
-            daily_cache[asset] = (daily_result.prices, daily_result.source)
-        daily_prices, daily_source = daily_cache[asset]
-        n = DAILY_RESAMPLE_GROUPS[timeframe]
-        resampled = aggregate_n_consecutive_candles(daily_prices, n)
-        return resampled, f"RESAMPLED: grouped {n} consecutive daily candles from {daily_source}"
-
-    if asset == "GOLD":
-        td_interval = NATIVE_TWELVEDATA_INTERVAL.get(timeframe)
-        if td_interval is not None:
-            result = client.load_intraday(asset, interval=td_interval, candles=NATIVE_INTERVAL_CANDLES[timeframe])
-            return result.prices, f"NATIVE: {result.source}"
-        if timeframe == "12h":
-            hourly = client.load_intraday(asset, interval="1h", candles=GOLD_HOURLY_FALLBACK_CANDLES)
-            resampled = aggregate_n_consecutive_candles(hourly.prices, 12)
-            return resampled, f"RESAMPLED: grouped 12 consecutive 1h candles from {hourly.source} (Twelve Data has no native 12h)"
-        raise MarketDataUnavailableError(f"No fetch method configured for GOLD at timeframe {timeframe!r}.")
-
-    result = client.load_intraday(asset, interval=NATIVE_BINANCE_INTERVAL[timeframe], candles=NATIVE_INTERVAL_CANDLES[timeframe])
-    return result.prices, f"NATIVE: {result.source}"
 
 
 def main() -> None:
@@ -120,13 +43,12 @@ def main() -> None:
 
     client = MarketDataClient()
     rows: list[dict[str, object]] = []
-    daily_cache: dict[str, tuple[pd.DataFrame, str]] = {}
 
     for asset in args.assets:
         for timeframe in args.timeframes:
             start = time.monotonic()
             try:
-                candles, method = fetch_timeframe_candles(client, asset, timeframe, daily_cache)
+                candles, method = fetch_timeframe_candles(client, asset, timeframe)
             except MarketDataUnavailableError as exc:
                 elapsed = time.monotonic() - start
                 print(f"{asset} / {timeframe}: SKIPPED ({elapsed:.1f}s) — {exc}")
