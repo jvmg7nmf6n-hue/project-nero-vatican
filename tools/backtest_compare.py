@@ -69,6 +69,7 @@ from nero_core.strategies.trend_pullback import size_entry as tp_size_entry
 from nero_core.strategies.mean_reversion_relaxed_pullback import PARAMETERS as MR_RELAXED_PULLBACK_PARAMETERS
 from nero_core.strategies.mean_reversion_deep_value import PARAMETERS as MR_DEEP_VALUE_PARAMETERS
 from nero_core.strategies.mean_reversion_target_1r import PARAMETERS as MR_TARGET_1R_PARAMETERS
+from nero_core.strategies.mean_reversion_regime_filter import PARAMETERS as MR_REGIME_FILTER_PARAMETERS
 
 # Matches the "insufficient_sample" convention from the original agent's report_row().
 MIN_SAMPLE_SIZE = 20
@@ -227,6 +228,15 @@ VARIANT_SPECS: dict[str, VariantSpec] = {
         key="mean_reversion_target_1r",
         label="MEAN_REVERSION target-1r (mean-reversion-v1.0.0-target-1r)",
         params=MR_TARGET_1R_PARAMETERS,
+        add_indicators_fn=mr_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: evaluate_entry_v1(candle, state, params),
+        size_entry_fn=mr_size_entry,
+        needs_daily=False,
+    ),
+    "mean_reversion_regime_filter": VariantSpec(
+        key="mean_reversion_regime_filter",
+        label="MEAN_REVERSION regime-filter (mean-reversion-v1.0.0-regime-filter)",
+        params=MR_REGIME_FILTER_PARAMETERS,
         add_indicators_fn=mr_add_indicators,
         evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: evaluate_entry_v1(candle, state, params),
         size_entry_fn=mr_size_entry,

@@ -51,6 +51,7 @@ SINGLE_ASSET_VARIANT_KEYS = [
     "mean_reversion_relaxed_pullback",
     "mean_reversion_deep_value",
     "mean_reversion_target_1r",
+    "mean_reversion_regime_filter",
 ]
 
 PAIRS_ASSET_LABEL = "-".join(PAIRS_ASSET_PAIR)  # "BTC-ETH"
@@ -93,7 +94,12 @@ def _calibrated_spec(base_spec: VariantSpec, timeframe: str, asset: str) -> Vari
     return replace(base_spec, params=build_calibrated_params(base_spec.params, timeframe, asset))
 
 
-def run_single_asset_rows(assets: list[str], timeframes: list[str], client: MarketDataClient) -> list[dict[str, object]]:
+def run_single_asset_rows(
+    assets: list[str],
+    timeframes: list[str],
+    client: MarketDataClient,
+    variant_keys: list[str] = SINGLE_ASSET_VARIANT_KEYS,
+) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
 
     for asset in assets:
@@ -104,13 +110,13 @@ def run_single_asset_rows(assets: list[str], timeframes: list[str], client: Mark
             except MarketDataUnavailableError as exc:
                 elapsed = time.monotonic() - start
                 print(f"{asset} / {timeframe}: SKIPPED ({elapsed:.1f}s) — {exc}")
-                for key in SINGLE_ASSET_VARIANT_KEYS:
+                for key in variant_keys:
                     rows.append(_skip_row(asset, timeframe, VARIANT_SPECS[key].label, str(exc)))
                 continue
             except Exception as exc:  # noqa: BLE001 - one combo's failure must not lose the rest
                 elapsed = time.monotonic() - start
                 print(f"{asset} / {timeframe}: FAILED ({elapsed:.1f}s) — {exc.__class__.__name__}: {exc}")
-                for key in SINGLE_ASSET_VARIANT_KEYS:
+                for key in variant_keys:
                     rows.append(_skip_row(asset, timeframe, VARIANT_SPECS[key].label, f"{exc.__class__.__name__}: {exc}"))
                 continue
 
@@ -118,7 +124,7 @@ def run_single_asset_rows(assets: list[str], timeframes: list[str], client: Mark
             print(f"{asset} / {timeframe}: {method} — {len(candles)} candles ({elapsed:.1f}s)")
             train, test = split_chronological(candles)
 
-            for key in SINGLE_ASSET_VARIANT_KEYS:
+            for key in variant_keys:
                 base_spec = VARIANT_SPECS[key]
                 spec = _calibrated_spec(base_spec, timeframe, asset)
 
@@ -264,11 +270,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--assets", nargs="+", default=ASSETS)
     parser.add_argument("--timeframes", nargs="+", default=STANDARD_TIMEFRAMES, choices=STANDARD_TIMEFRAMES)
+    parser.add_argument("--variants", nargs="+", default=SINGLE_ASSET_VARIANT_KEYS, choices=SINGLE_ASSET_VARIANT_KEYS)
     parser.add_argument("--skip-pairs", action="store_true", help="skip the COINTEGRATION_PAIRS BTC-ETH rows")
     args = parser.parse_args()
 
     client = MarketDataClient()
-    rows = run_single_asset_rows(args.assets, args.timeframes, client)
+    rows = run_single_asset_rows(args.assets, args.timeframes, client, args.variants)
     if not args.skip_pairs:
         rows.extend(run_pairs_rows(args.timeframes, client))
 
