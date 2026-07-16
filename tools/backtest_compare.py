@@ -62,6 +62,13 @@ from nero_core.strategies.volatility_squeeze import (
 from nero_core.strategies.volatility_squeeze import add_indicators as vs_add_indicators
 from nero_core.strategies.volatility_squeeze import evaluate_entry as vs_evaluate_entry
 from nero_core.strategies.volatility_squeeze import size_entry as vs_size_entry
+from nero_core.strategies.trend_pullback import DEFAULT_PARAMETERS as TREND_PULLBACK_PARAMETERS
+from nero_core.strategies.trend_pullback import add_indicators as tp_add_indicators
+from nero_core.strategies.trend_pullback import evaluate_entry as tp_evaluate_entry
+from nero_core.strategies.trend_pullback import size_entry as tp_size_entry
+from nero_core.strategies.mean_reversion_relaxed_pullback import PARAMETERS as MR_RELAXED_PULLBACK_PARAMETERS
+from nero_core.strategies.mean_reversion_deep_value import PARAMETERS as MR_DEEP_VALUE_PARAMETERS
+from nero_core.strategies.mean_reversion_target_1r import PARAMETERS as MR_TARGET_1R_PARAMETERS
 
 # Matches the "insufficient_sample" convention from the original agent's report_row().
 MIN_SAMPLE_SIZE = 20
@@ -75,7 +82,7 @@ DEFAULT_ASSETS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "NEAR", "GOLD"]
 # giving it access to anything it wouldn't otherwise use, and without introducing lookahead.
 GARCH_LOOKBACK_CANDLES = 300
 
-INDICATOR_COLUMNS_TO_CHECK = ["rsi", "bb_lower", "ma20", "ma200", "atr", "breakout_high", "trend_ma"]
+INDICATOR_COLUMNS_TO_CHECK = ["rsi", "bb_lower", "ma20", "ma200", "atr", "breakout_high", "trend_ma", "ma50"]
 
 
 @dataclass(frozen=True)
@@ -187,6 +194,42 @@ VARIANT_SPECS: dict[str, VariantSpec] = {
         add_indicators_fn=vs_add_indicators,
         evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: vs_evaluate_entry(candle, state, params),
         size_entry_fn=vs_size_entry,
+        needs_daily=False,
+    ),
+    "trend_pullback": VariantSpec(
+        key="trend_pullback",
+        label="TREND_PULLBACK (trend-pullback-v1.0.0)",
+        params=TREND_PULLBACK_PARAMETERS,
+        add_indicators_fn=tp_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: tp_evaluate_entry(candle, state, params),
+        size_entry_fn=tp_size_entry,
+        needs_daily=False,
+    ),
+    "mean_reversion_relaxed_pullback": VariantSpec(
+        key="mean_reversion_relaxed_pullback",
+        label="MEAN_REVERSION relaxed-pullback (mean-reversion-v1.0.0-relaxed-pullback)",
+        params=MR_RELAXED_PULLBACK_PARAMETERS,
+        add_indicators_fn=mr_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: evaluate_entry_v1(candle, state, params),
+        size_entry_fn=mr_size_entry,
+        needs_daily=False,
+    ),
+    "mean_reversion_deep_value": VariantSpec(
+        key="mean_reversion_deep_value",
+        label="MEAN_REVERSION deep-value (mean-reversion-v1.0.0-deep-value)",
+        params=MR_DEEP_VALUE_PARAMETERS,
+        add_indicators_fn=mr_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: evaluate_entry_v1(candle, state, params),
+        size_entry_fn=mr_size_entry,
+        needs_daily=False,
+    ),
+    "mean_reversion_target_1r": VariantSpec(
+        key="mean_reversion_target_1r",
+        label="MEAN_REVERSION target-1r (mean-reversion-v1.0.0-target-1r)",
+        params=MR_TARGET_1R_PARAMETERS,
+        add_indicators_fn=mr_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: evaluate_entry_v1(candle, state, params),
+        size_entry_fn=mr_size_entry,
         needs_daily=False,
     ),
 }

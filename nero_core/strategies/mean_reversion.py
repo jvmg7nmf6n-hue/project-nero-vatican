@@ -31,6 +31,16 @@ class MeanReversionParameters:
     ma200_period: int = 200
     atr_period: int = 14
     atr_stop_multiple: float = 1.5
+    # Widens the "close below lower Bollinger Band" trigger by this many ATRs — entry is
+    # allowed whenever close < bb_lower + lower_bb_buffer_atr * atr. Default 0.0 keeps the
+    # original strict "close below the band itself" rule unchanged; > 0.0 is what the
+    # ported NERO MR_RELAXED_PULLBACK_V1 candidate used to catch pullbacks that don't
+    # quite touch the band (see mean_reversion_relaxed_pullback.py).
+    lower_bb_buffer_atr: float = 0.0
+    # "FROZEN_MA20" (default, original v1.0.0 behavior) or "FIXED_1R" (target = entry +
+    # 1x risk-per-unit) — see mean_reversion_target_1r.py, ported from the NERO
+    # MR_TARGET_1R_V1 candidate's target_mode field.
+    target_mode: str = "FROZEN_MA20"
     max_holding_hours: int = 24
     initial_equity: float = 10000.0
     risk_per_trade: float = 0.01
@@ -155,11 +165,12 @@ def evaluate_entry(
         reasons.append("DAILY_LOSS_GUARD")
     if float(candle["rsi"]) >= params.rsi_entry_below:
         reasons.append("RSI_NOT_BELOW_35")
-    if float(candle["close"]) >= float(candle["bb_lower"]):
+    relaxed_bb_threshold = float(candle["bb_lower"]) + params.lower_bb_buffer_atr * float(candle["atr"])
+    if float(candle["close"]) >= relaxed_bb_threshold:
         reasons.append("CLOSE_NOT_BELOW_LOWER_BB")
     if float(candle["close"]) <= float(candle["ma200"]):
         reasons.append("CLOSE_NOT_ABOVE_MA200")
-    if float(candle["ma20"]) <= float(candle["close"]):
+    if params.target_mode == "FROZEN_MA20" and float(candle["ma20"]) <= float(candle["close"]):
         reasons.append("TARGET_NOT_ABOVE_ENTRY")
 
     return EntryEvaluation(
@@ -187,10 +198,12 @@ def size_entry(
     raw_entry = float(candle["close"])
     entry_price = apply_slippage(raw_entry, params.slippage_bps, "buy")
     stop_loss = entry_price - params.atr_stop_multiple * float(candle["atr"])
-    target = float(candle["ma20"])
     risk_per_unit = entry_price - stop_loss
+    if risk_per_unit <= 0:
+        return None
+    target = entry_price + risk_per_unit if params.target_mode == "FIXED_1R" else float(candle["ma20"])
     reward_per_unit = target - entry_price
-    if risk_per_unit <= 0 or reward_per_unit <= 0:
+    if reward_per_unit <= 0:
         return None
 
     risk_dollars = state.equity * params.risk_per_trade
