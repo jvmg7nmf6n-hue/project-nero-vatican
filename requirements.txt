@@ -4,6 +4,7 @@ numpy>=1.24,<3
 pydantic>=2.0,<3
 statsmodels>=0.14,<1
 yfinance>=0.2,<1
+requests>=2.31,<3
 
 # arch>=7.0,<8  # GARCH(1,1) support — optional. No prebuilt wheel for this Python version on
 # Windows yet, and building from source requires MSVC C++ Build Tools. quant_intelligence.py

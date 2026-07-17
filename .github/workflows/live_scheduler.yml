@@ -1,0 +1,45 @@
+name: Live Scheduler
+
+on:
+  schedule:
+    - cron: "0,30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: live-scheduler
+  cancel-in-progress: false
+
+jobs:
+  live-scheduler:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run live scheduler
+        run: python -m nero_core.execution.live_scheduler
+        env:
+          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        continue-on-error: true
+      - name: Save Truth Ledger
+        run: |
+          git config user.name "nero-live-scheduler"
+          git config user.email "actions@users.noreply.github.com"
+          git pull --rebase origin main || git rebase --abort || true
+          if [ -f data/truth_ledger.db ]; then
+            git add -f data/truth_ledger.db
+          fi
+          if git diff --cached --quiet; then
+            echo "no live scheduler changes"
+            exit 0
+          fi
+          git commit -m "Update live scheduler execution log"
+          git pull --rebase origin main || git rebase --abort || true
+          git push || echo "live scheduler push skipped; next run will retry"
