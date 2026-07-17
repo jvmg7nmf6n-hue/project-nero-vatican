@@ -28,6 +28,9 @@ jobs:
           TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         continue-on-error: true
+      - name: Send ntfy notification
+        run: python -m nero_core.execution.notify_ntfy
+        continue-on-error: true
       - name: Save Truth Ledger
         run: |
           git config user.name "nero-live-scheduler"

@@ -246,6 +246,49 @@ def insert_execution_metadata(
     )
 
 
+def list_execution_log_for_run(run_id: str, db_path: Path = DEFAULT_DB_PATH) -> list[ExecutionLogRow]:
+    """All execution_log rows inserted by one specific run, in insertion order — what
+    nero_core.execution.notify_ntfy reports on, distinct from `list_execution_log`'s
+    all-time-per-asset view."""
+    init_execution_tables(db_path)
+    with closing(sqlite3.connect(str(db_path))) as conn:
+        rows = conn.execute(
+            """
+            SELECT id, run_id, timestamp, strategy, strategy_version, asset, signal_type,
+                   entry_price, exit_price, reasoning, candle_timestamp, created_at
+            FROM execution_log WHERE run_id = ? ORDER BY id ASC
+            """,
+            (run_id,),
+        ).fetchall()
+    return [
+        ExecutionLogRow(
+            id=r[0], run_id=r[1], timestamp=datetime.fromisoformat(r[2]), strategy=r[3], strategy_version=r[4],
+            asset=r[5], signal_type=r[6], entry_price=r[7], exit_price=r[8], reasoning=r[9],
+            candle_timestamp=r[10], created_at=datetime.fromisoformat(r[11]),
+        )
+        for r in rows
+    ]
+
+
+def latest_execution_metadata(db_path: Path = DEFAULT_DB_PATH) -> ExecutionMetadataRow | None:
+    """The most recently inserted execution_metadata row (by insertion order, not
+    start_time, so it's robust to any clock oddity) — "what the last scheduler run
+    did," which nero_core.execution.notify_ntfy reports on. None if the scheduler has
+    never run."""
+    init_execution_tables(db_path)
+    with closing(sqlite3.connect(str(db_path))) as conn:
+        row = conn.execute(
+            "SELECT run_id, start_time, end_time, assets_evaluated, assets_skipped, errors_encountered "
+            "FROM execution_metadata ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    if row is None:
+        return None
+    return ExecutionMetadataRow(
+        run_id=row[0], start_time=datetime.fromisoformat(row[1]), end_time=datetime.fromisoformat(row[2]),
+        assets_evaluated=json.loads(row[3]), assets_skipped=json.loads(row[4]), errors_encountered=json.loads(row[5]),
+    )
+
+
 def list_execution_metadata(db_path: Path = DEFAULT_DB_PATH) -> list[ExecutionMetadataRow]:
     init_execution_tables(db_path)
     with closing(sqlite3.connect(str(db_path))) as conn:
@@ -257,6 +300,43 @@ def list_execution_metadata(db_path: Path = DEFAULT_DB_PATH) -> list[ExecutionMe
         ExecutionMetadataRow(
             run_id=r[0], start_time=datetime.fromisoformat(r[1]), end_time=datetime.fromisoformat(r[2]),
             assets_evaluated=json.loads(r[3]), assets_skipped=json.loads(r[4]), errors_encountered=json.loads(r[5]),
+        )
+        for r in rows
+    ]
+
+
+@dataclass(frozen=True)
+class NewsSentimentLogRow:
+    id: int | None
+    run_id: str
+    asset: str
+    news_timestamp: datetime | None
+    fetch_timestamp: datetime
+    sentiment_score: int | None
+    signal_type: str
+    confidence: float
+    reasoning: str
+    source: str
+    created_at: datetime
+
+
+def list_news_sentiment_log_for_run(run_id: str, db_path: Path = DEFAULT_DB_PATH) -> list[NewsSentimentLogRow]:
+    """All news_sentiment_log rows inserted by one specific run, in insertion order."""
+    init_execution_tables(db_path)
+    with closing(sqlite3.connect(str(db_path))) as conn:
+        rows = conn.execute(
+            """
+            SELECT id, run_id, asset, news_timestamp, fetch_timestamp, sentiment_score,
+                   signal_type, confidence, reasoning, source, created_at
+            FROM news_sentiment_log WHERE run_id = ? ORDER BY id ASC
+            """,
+            (run_id,),
+        ).fetchall()
+    return [
+        NewsSentimentLogRow(
+            id=r[0], run_id=r[1], asset=r[2], news_timestamp=datetime.fromisoformat(r[3]) if r[3] else None,
+            fetch_timestamp=datetime.fromisoformat(r[4]), sentiment_score=r[5], signal_type=r[6],
+            confidence=r[7], reasoning=r[8], source=r[9], created_at=datetime.fromisoformat(r[10]),
         )
         for r in rows
     ]
