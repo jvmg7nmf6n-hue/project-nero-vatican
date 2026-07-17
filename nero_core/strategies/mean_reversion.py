@@ -102,6 +102,11 @@ class ExitEvent:
     r_multiple: float
     holding_hours: float
     equity_after: float
+    # Default 0 keeps this additive/backward-compatible with any existing positional-arg
+    # construction. Populated by evaluate_exit with the closing candle's close_time —
+    # added for the H6 robustness audit (day-of-week/hour/year trade breakdowns), which
+    # needs a per-trade timestamp that wasn't previously exposed on this dataclass.
+    exit_close_time: int = 0
 
 
 def rsi(close: pd.Series, period: int) -> pd.Series:
@@ -288,6 +293,7 @@ def evaluate_exit(
         r_multiple=r_multiple,
         holding_hours=hours_held,
         equity_after=equity_after,
+        exit_close_time=candle_time,
     )
 
 

@@ -257,5 +257,22 @@ class RegistrationTest(unittest.TestCase):
             register_default_variant(registry)
 
 
+class ExitCloseTimeTest(unittest.TestCase):
+    """H6 robustness audit needs a per-trade timestamp — exit_close_time was added to
+    this module's ExitEvent additively (default 0) specifically for that."""
+
+    def test_every_closed_trade_has_a_nonzero_exit_close_time(self) -> None:
+        x_df, y_df = _cointegrated_pair_frames(500)
+        aligned = align_pair_candles(x_df, y_df, "BTC", "ETH")
+        params = CointegrationPairsParameters(window=60, entry_z=1.5, stop_z=3.0, exit_z=0.0)
+        enriched = add_indicators(aligned, params, "BTC", "ETH")
+
+        trades, _ = run_pairs_backtest(enriched, params, "BTC", "ETH")
+
+        self.assertGreater(len(trades), 0)
+        for trade in trades:
+            self.assertGreater(trade.exit_close_time, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

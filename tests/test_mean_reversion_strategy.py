@@ -225,5 +225,23 @@ class MeanReversionRegistrationTest(unittest.TestCase):
             register_default_variant(registry)
 
 
+class ExitCloseTimeTest(unittest.TestCase):
+    """H6 robustness audit needs a per-trade timestamp — exit_close_time was added to
+    ExitEvent additively (default 0) specifically for that."""
+
+    def test_exit_close_time_matches_the_closing_candles_close_time(self) -> None:
+        state = MeanReversionState(equity=10000.0)
+        state.open_trade = size_entry(make_candle(close_time=3600000), state, DEFAULT_PARAMETERS)
+
+        exit_event = evaluate_exit(
+            make_candle(close_time=7200000, high=state.open_trade.target + 1.0, low=state.open_trade.stop_loss + 0.1, close=state.open_trade.target),
+            state,
+            DEFAULT_PARAMETERS,
+        )
+
+        self.assertIsNotNone(exit_event)
+        self.assertEqual(exit_event.exit_close_time, 7200000)
+
+
 if __name__ == "__main__":
     unittest.main()

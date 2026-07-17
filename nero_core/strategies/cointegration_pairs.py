@@ -96,6 +96,10 @@ class ExitEvent:
     # stop-distance risk multiple (this strategy has no fixed price stop to measure against)
     exit_zscore: float
     equity_after: float
+    # Default 0 keeps this additive/backward-compatible. Populated by
+    # run_pairs_backtest with the closing candle's close_time — added for the H6
+    # robustness audit (day-of-week/hour/year trade breakdowns).
+    exit_close_time: int = 0
 
 
 def align_pair_candles(x_candles: pd.DataFrame, y_candles: pd.DataFrame, x_name: str, y_name: str) -> pd.DataFrame:
@@ -200,6 +204,7 @@ def run_pairs_backtest(
                         r_multiple=net_pnl / max(trade.notional, 1e-9),
                         exit_zscore=z,
                         equity_after=equity_after,
+                        exit_close_time=int(row["close_time"]),
                     )
                 )
 
