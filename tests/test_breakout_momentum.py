@@ -268,5 +268,44 @@ class BreakoutMomentumRegistrationTest(unittest.TestCase):
         self.assertEqual(registry.strategy_ids(), ["BREAKOUT_MOMENTUM", "MEAN_REVERSION"])
 
 
+class RegimeScaledRiskSizingTest(unittest.TestCase):
+    """H3 hypothesis: regime_scaled_risk defaults to False and must leave v1.0.0's
+    sizing byte-for-byte unchanged; when explicitly enabled, risk_dollars must scale by
+    the clamped median/current ATR% ratio."""
+
+    def setUp(self) -> None:
+        self.state = MeanReversionState(equity=10000.0)
+
+    def test_default_is_disabled_and_matches_v1_sizing(self) -> None:
+        from nero_core.strategies.breakout_momentum import BreakoutMomentumParameters
+
+        self.assertFalse(DEFAULT_PARAMETERS.regime_scaled_risk)
+        candle = make_candle(atr=2.0, atr_pct_median100=0.05)  # would scale if enabled
+        trade = size_entry(candle, self.state, DEFAULT_PARAMETERS)
+        self.assertAlmostEqual(trade.risk_dollars, self.state.equity * DEFAULT_PARAMETERS.risk_per_trade, places=6)
+
+    def test_enabled_scales_risk_dollars_by_clamped_ratio(self) -> None:
+        from nero_core.strategies.breakout_momentum import BreakoutMomentumParameters
+
+        params = BreakoutMomentumParameters(regime_scaled_risk=True)
+        # current ATR% = 2.0/110.0 ~= 0.01818; set median to double that -> ratio = 2.0 (clamp ceiling)
+        current_atr_pct = 2.0 / 110.0
+        candle = make_candle(atr=2.0, atr_pct_median100=current_atr_pct * 2.0)
+
+        trade = size_entry(candle, self.state, params)
+
+        self.assertAlmostEqual(trade.risk_dollars, self.state.equity * params.risk_per_trade * 2.0, places=4)
+
+    def test_enabled_falls_back_to_base_risk_when_median_column_missing(self) -> None:
+        from nero_core.strategies.breakout_momentum import BreakoutMomentumParameters
+
+        params = BreakoutMomentumParameters(regime_scaled_risk=True)
+        candle = make_candle(atr=2.0)  # no atr_pct_median100 key at all
+
+        trade = size_entry(candle, self.state, params)
+
+        self.assertAlmostEqual(trade.risk_dollars, self.state.equity * params.risk_per_trade, places=6)
+
+
 if __name__ == "__main__":
     unittest.main()

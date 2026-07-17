@@ -12,6 +12,7 @@ from nero_core.strategies.mean_reversion import (
     reset_daily_guard_if_needed,
     rsi,
 )
+from nero_core.strategies.regime_risk import atr_pct_rolling_median, regime_scaled_risk_per_trade
 from nero_core.strategies.registry import StrategyRegistry, StrategyVariant, default_registry
 
 STRATEGY_ID = "BREAKOUT_MOMENTUM"
@@ -49,6 +50,10 @@ class BreakoutMomentumParameters:
     fee_bps: float = 10.0
     slippage_bps: float = 2.0
     max_notional_pct: float = 1.0
+    # H3 hypothesis (see nero_core.strategies.regime_risk): when True, risk_per_trade is
+    # scaled per-trade by clamp(median_trailing_ATRpct / current_ATRpct, 0.5, 2.0).
+    # Default False preserves the original fixed risk_per_trade exactly.
+    regime_scaled_risk: bool = False
 
 
 DEFAULT_PARAMETERS = BreakoutMomentumParameters()
@@ -96,6 +101,9 @@ def add_indicators(candles: pd.DataFrame, params: BreakoutMomentumParameters = D
     frame["rsi"] = rsi(close, params.rsi_period)
     frame["atr"] = atr(frame, params.atr_period)
     frame["breakout_high"] = frame["high"].shift(1).rolling(params.breakout_lookback).max()
+    # Always computed (cheap) regardless of regime_scaled_risk — only consumed by
+    # size_entry when that flag is on; unused otherwise, matching v1's exact behavior.
+    frame["atr_pct_median100"] = atr_pct_rolling_median(close, frame["atr"])
     return frame
 
 
@@ -153,7 +161,13 @@ def size_entry(
     if reward_per_unit <= 0:
         return None
 
-    risk_dollars = state.equity * params.risk_per_trade
+    risk_per_trade = params.risk_per_trade
+    if params.regime_scaled_risk:
+        current_atr_pct = float(candle["atr"]) / raw_entry if raw_entry != 0 else float("nan")
+        risk_per_trade = regime_scaled_risk_per_trade(
+            params.risk_per_trade, candle.get("atr_pct_median100"), current_atr_pct
+        )
+    risk_dollars = state.equity * risk_per_trade
     quantity = risk_dollars / risk_per_unit
     max_notional = state.equity * params.max_notional_pct
     notional = quantity * entry_price
