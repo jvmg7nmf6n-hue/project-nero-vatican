@@ -3,6 +3,7 @@ data/*.db
 data/*.sqlite
 data/*.sqlite3
 data/prediction_log.csv
+data/macro_cache/
 .streamlit/secrets.toml
 .env
 .env.*
