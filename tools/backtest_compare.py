@@ -29,6 +29,9 @@ from nero_core.strategies.breakout_momentum import (
 from nero_core.strategies.breakout_momentum import add_indicators as bm_add_indicators
 from nero_core.strategies.breakout_momentum import evaluate_entry as bm_evaluate_entry
 from nero_core.strategies.breakout_momentum import size_entry as bm_size_entry
+from nero_core.strategies.breakout_momentum_volume_confirmed import (
+    PARAMETERS as BM_VOLUME_CONFIRMED_PARAMETERS,
+)
 from nero_core.strategies.mean_reversion import (
     DEFAULT_PARAMETERS as V1_PARAMETERS,
     MeanReversionState,
@@ -240,6 +243,15 @@ VARIANT_SPECS: dict[str, VariantSpec] = {
         add_indicators_fn=mr_add_indicators,
         evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: evaluate_entry_v1(candle, state, params),
         size_entry_fn=mr_size_entry,
+        needs_daily=False,
+    ),
+    "breakout_momentum_volume_confirmed": VariantSpec(
+        key="breakout_momentum_volume_confirmed",
+        label="BREAKOUT_MOMENTUM volume-confirmed (breakout-momentum-v1.4.0-volume-confirmed)",
+        params=BM_VOLUME_CONFIRMED_PARAMETERS,
+        add_indicators_fn=bm_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: bm_evaluate_entry(candle, state, params),
+        size_entry_fn=bm_size_entry,
         needs_daily=False,
     ),
 }

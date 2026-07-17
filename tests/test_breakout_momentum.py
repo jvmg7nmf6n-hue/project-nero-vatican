@@ -307,5 +307,76 @@ class RegimeScaledRiskSizingTest(unittest.TestCase):
         self.assertAlmostEqual(trade.risk_dollars, self.state.equity * params.risk_per_trade, places=6)
 
 
+class VolumeConfirmationTest(unittest.TestCase):
+    """H4 hypothesis: volume_confirmed defaults to False and must leave v1.0.0's entry
+    evaluation unaffected; when enabled, entry additionally requires the candle's own
+    volume to exceed volume_multiple x the prior-20-candle average volume."""
+
+    def setUp(self) -> None:
+        self.state = MeanReversionState(equity=10000.0)
+
+    def test_default_is_disabled_and_ignores_volume(self) -> None:
+        self.assertFalse(DEFAULT_PARAMETERS.volume_confirmed)
+        candle = make_candle(volume=1.0, avg_volume_prior=1000.0)  # would fail confirmation if enabled
+
+        evaluation = evaluate_entry(candle, self.state, DEFAULT_PARAMETERS)
+
+        self.assertTrue(evaluation.passed)
+
+    def test_enabled_blocks_entry_when_volume_below_threshold(self) -> None:
+        from nero_core.strategies.breakout_momentum import BreakoutMomentumParameters
+
+        params = BreakoutMomentumParameters(volume_confirmed=True)
+        candle = make_candle(volume=100.0, avg_volume_prior=100.0)  # exactly 1.0x, not > 1.5x
+
+        evaluation = evaluate_entry(candle, self.state, params)
+
+        self.assertFalse(evaluation.passed)
+        self.assertIn("VOLUME_NOT_CONFIRMED", evaluation.reasons)
+
+    def test_enabled_passes_entry_when_volume_above_threshold(self) -> None:
+        from nero_core.strategies.breakout_momentum import BreakoutMomentumParameters
+
+        params = BreakoutMomentumParameters(volume_confirmed=True)
+        candle = make_candle(volume=200.0, avg_volume_prior=100.0)  # 2.0x > 1.5x
+
+        evaluation = evaluate_entry(candle, self.state, params)
+
+        self.assertTrue(evaluation.passed)
+        self.assertNotIn("VOLUME_NOT_CONFIRMED", evaluation.reasons)
+
+    def test_enabled_blocks_when_avg_volume_prior_is_nan(self) -> None:
+        from nero_core.strategies.breakout_momentum import BreakoutMomentumParameters
+
+        params = BreakoutMomentumParameters(volume_confirmed=True)
+        candle = make_candle(volume=200.0, avg_volume_prior=float("nan"))
+
+        evaluation = evaluate_entry(candle, self.state, params)
+
+        self.assertFalse(evaluation.passed)
+        self.assertIn("VOLUME_NOT_CONFIRMED", evaluation.reasons)
+
+    def test_avg_volume_prior_column_excludes_current_candles_own_volume(self) -> None:
+        rows = []
+        close_time = 0
+        for i in range(30):
+            rows.append(
+                {
+                    "date": pd.Timestamp(close_time, unit="ms", tz="UTC"),
+                    "open_time": close_time - 3_600_000,
+                    "close_time": close_time,
+                    "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0,
+                    "volume": 10.0 if i < 29 else 100000.0,  # huge spike on the LAST candle only
+                }
+            )
+            close_time += 3_600_000
+        frame = pd.DataFrame(rows)
+
+        enriched = add_indicators(frame, DEFAULT_PARAMETERS)
+
+        # the last row's own huge volume must not leak into its own average
+        self.assertAlmostEqual(enriched.iloc[-1]["avg_volume_prior"], 10.0, places=6)
+
+
 if __name__ == "__main__":
     unittest.main()

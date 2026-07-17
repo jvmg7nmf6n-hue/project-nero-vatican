@@ -54,6 +54,13 @@ class BreakoutMomentumParameters:
     # scaled per-trade by clamp(median_trailing_ATRpct / current_ATRpct, 0.5, 2.0).
     # Default False preserves the original fixed risk_per_trade exactly.
     regime_scaled_risk: bool = False
+    # H4 hypothesis: when True, entry additionally requires the entry candle's own
+    # volume to exceed volume_multiple x the average volume of the prior 20 candles
+    # (excluding the entry candle itself). Default False preserves v1.0.0 exactly — see
+    # breakout_momentum_volume_confirmed.py for the variant that turns this on.
+    volume_confirmed: bool = False
+    volume_multiple: float = 1.5
+    volume_lookback: int = 20
 
 
 DEFAULT_PARAMETERS = BreakoutMomentumParameters()
@@ -104,6 +111,10 @@ def add_indicators(candles: pd.DataFrame, params: BreakoutMomentumParameters = D
     # Always computed (cheap) regardless of regime_scaled_risk — only consumed by
     # size_entry when that flag is on; unused otherwise, matching v1's exact behavior.
     frame["atr_pct_median100"] = atr_pct_rolling_median(close, frame["atr"])
+    # H4 hypothesis: prior-20-candle average volume, excluding the entry candle's own
+    # volume (shift(1) before the rolling mean, same no-lookahead convention as
+    # breakout_high). Always computed (cheap); only consumed when volume_confirmed=True.
+    frame["avg_volume_prior"] = frame["volume"].shift(1).rolling(params.volume_lookback).mean()
     return frame
 
 
@@ -127,6 +138,10 @@ def evaluate_entry(
         reasons.append("CLOSE_NOT_ABOVE_MA200")
     if float(candle["rsi"]) < params.rsi_momentum_min:
         reasons.append("RSI_NOT_MOMENTUM_SUPPORTIVE")
+    if params.volume_confirmed:
+        avg_volume_prior = candle.get("avg_volume_prior")
+        if pd.isna(avg_volume_prior) or float(candle["volume"]) <= params.volume_multiple * float(avg_volume_prior):
+            reasons.append("VOLUME_NOT_CONFIRMED")
 
     return EntryEvaluation(
         passed=not reasons,
