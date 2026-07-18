@@ -1,0 +1,109 @@
+.orbit {
+  transform-box: view-box;
+  transform-origin: 50px 50px;
+  animation: orbit 4s linear infinite;
+}
+
+@keyframes orbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.innerV {
+  animation: flash 4s linear infinite;
+}
+
+@keyframes flash {
+  0% {
+    filter: brightness(1) drop-shadow(0 0 0 rgba(212, 175, 55, 0));
+  }
+  4% {
+    filter: brightness(1.9) drop-shadow(0 0 4px rgba(212, 175, 55, 0.9));
+  }
+  10% {
+    filter: brightness(1) drop-shadow(0 0 0 rgba(212, 175, 55, 0));
+  }
+  100% {
+    filter: brightness(1) drop-shadow(0 0 0 rgba(212, 175, 55, 0));
+  }
+}
+
+.burst {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: burst 4s linear infinite;
+  opacity: 0;
+}
+
+@keyframes burst {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  3% {
+    transform: scale(0.4);
+    opacity: 0.9;
+  }
+  14% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+}
+
+.marketLine {
+  stroke-dasharray: 100;
+  animation: drawLine 3s ease-in-out infinite;
+}
+
+@keyframes drawLine {
+  0% {
+    stroke-dashoffset: 100;
+    opacity: 1;
+  }
+  70% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  85% {
+    stroke-dashoffset: 0;
+    opacity: 0.4;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0.4;
+  }
+}
+
+.marketDot {
+  animation: dotPulse 1s ease-in-out infinite;
+}
+
+@keyframes dotPulse {
+  0%,
+  100% {
+    opacity: 1;
+    r: 2.2;
+  }
+  50% {
+    opacity: 0.5;
+    r: 3.2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbit,
+  .innerV,
+  .burst,
+  .marketLine,
+  .marketDot {
+    animation: none;
+  }
+}

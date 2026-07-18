@@ -1,0 +1,58 @@
+[
+  {
+    "name": "FVG_REVERSION",
+    "family": "Fair Value Gap",
+    "what_was_tested": "FVG_REVERSION v1.0.0 (bullish/bearish gap-touch reversion, MA200 trend filter, ATR-based stop/target) across 7 crypto assets x {2h, 4h, 12h} = 21 configs, 70/30 chronological split, bootstrap CI + random-entry baseline.",
+    "why_it_died": "18 of 21 configs DIED, 0 SURVIVED. Died on every single 2h and 4h config across all 7 assets. Even the 3 PROMISING-WATCHLIST configs (all 12h) showed a near-zero edge over random-entry timing (+0.00 to +0.03 R) - the gap-touch trigger itself wasn't adding meaningful value beyond randomly-timed entries in the same trend regime.",
+    "source_doc": "docs/fvg_reversion_report.md"
+  },
+  {
+    "name": "BOS_CONTINUATION",
+    "family": "Break of Structure",
+    "what_was_tested": "BOS_CONTINUATION v1.0.0 (structure-break continuation, MA200 trend filter, ATR-capped structural stop) across 7 crypto assets x {4h, 12h, 24h} = 21 configs, 70/30 chronological split, bootstrap CI + random-entry baseline.",
+    "why_it_died": "0 of 21 configs SURVIVED the strict bar. 13 are PROMISING-WATCHLIST, but roughly half of all (asset, timeframe, half) cells showed a NEGATIVE edge over random-entry timing - most of the apparent promise looks attributable to the MA200 regime filter, not the structure-break trigger itself. The capped 3.0x ATR stop (not the structural swing-point stop) was used in 75-95% of trades across almost every config.",
+    "source_doc": "docs/bos_continuation_report.md"
+  },
+  {
+    "name": "FUNDING_EXTREME",
+    "family": "Funding Rate",
+    "what_was_tested": "FUNDING_EXTREME v1.0.0 (contrarian, long-only entries on crowded-short funding-rate extremes) across BTC/ETH/SOL/BNB x {8h, 24h} = 8 configs, 70/30 chronological split, bootstrap CI + random-entry baseline.",
+    "why_it_died": "No asset/timeframe combination showed a robust, cross-validated edge. Three test halves were statistically significantly NEGATIVE (ETH/8h, SOL/8h, SOL/24h). The single strongest result (BNB/8h train) was never confirmed by its own 12-trade test half.",
+    "source_doc": "docs/funding_extreme_report.md"
+  },
+  {
+    "name": "EMA-trail exit (v2 A/B variants)",
+    "family": "Exit Mechanics",
+    "what_was_tested": "Armed-EMA trailing-stop exit variants of both single-asset live survivors (BNB/12h TREND_PULLBACK-trail: EMA21, GOLD/1week BREAKOUT_MOMENTUM-trail: EMA8), identical entries and disaster stops to v1, compared side by side through the upgraded harness.",
+    "why_it_died": "The trail's asymmetric win/loss shape (bigger winners, smaller losers, higher profit factor, lower drawdown) showed up clearly in-sample on both configs, but did not survive to the test half on either: BNB's test expectancy flipped negative under the trail (v1 stayed positive); GOLD's test expectancy stayed positive but was weaker than v1's, with a confidence interval that no longer cleared zero.",
+    "source_doc": "docs/trail_exit_ab_report.md"
+  },
+  {
+    "name": "TREND_PULLBACK filter variants (FVG-overlap, BOS-recency)",
+    "family": "Entry Filters",
+    "what_was_tested": "Two filtered variants of the live BNB/12h TREND_PULLBACK survivor - one requiring an overlapping open Fair Value Gap in the last 10 candles, one requiring a Break of Structure within the last 20 candles - compared against unfiltered v1 on identical data.",
+    "why_it_died": "The BOS filter was a complete no-op: identical results to v1 in every metric on both halves - it never once rejected a trade v1 would have taken on this data. The FVG filter roughly halved the sample and made test-half expectancy worse than v1's (0.095R vs 0.243R) on a sample too small to trust either way. Neither filter raised per-trade quality.",
+    "source_doc": "docs/trend_pullback_filter_ab_report.md"
+  },
+  {
+    "name": "LEADLAG_FOLLOW",
+    "family": "Lead-Lag Momentum",
+    "what_was_tested": "BTC-to-altcoin Granger-causality lead-lag following (BTC-SOL lag5, BTC-XRP lag3, BTC-DOGE lag3, BTC-NEAR lag5, all 12h) re-tested for robustness across shifted candle grids (native, +3h, +6h offsets).",
+    "why_it_died": "All 4 pairs passed the original native-grid train/test filter but failed the grid-shift robustness check on at least one shifted grid - BTC-XRP failed on every shifted grid tested, and the other three each flipped negative on at least one offset.",
+    "source_doc": "docs/grid_shift_robustness_followup.md"
+  },
+  {
+    "name": "MEAN_REVERSION variants (relaxed-pullback, deep-value)",
+    "family": "Mean Reversion",
+    "what_was_tested": "Relaxed-pullback (BTC/12h, BNB/12h) and deep-value (XRP/2h, NEAR/2h) MEAN_REVERSION variants re-tested for robustness across shifted candle grids.",
+    "why_it_died": "Every one of these configs passed its original native-grid train/test filter but flipped negative on at least one shifted grid offset - none held up as a robust, grid-independent edge once the candle grid's wall-clock alignment was perturbed.",
+    "source_doc": "docs/grid_shift_robustness_followup.md"
+  },
+  {
+    "name": "MACRO_RISK_ON",
+    "family": "Macro Regime",
+    "what_was_tested": "Dollar-proxy (UUP/DXY/EUR-USD cascade) + FRED DFII10 real-yield regime-following strategy on BTC and GOLD, full available daily history, 70/30 chronological split.",
+    "why_it_died": "BTC's expectancy flipped from +0.191R (train) to -0.140R (test). GOLD's train half was itself negative (-0.019R) before the test half even mattered (+0.018R). Neither asset passed the strict positive-both-halves filter.",
+    "source_doc": "docs/macro_risk_on_report.md"
+  }
+]
