@@ -125,11 +125,18 @@ def _simulate_random_entries_single_asset(
     size_entry_fn: Callable,
     entry_probability: float,
     rng: random.Random,
+    evaluate_exit_fn: Callable = evaluate_exit,
 ) -> list:
-    """One random-entry pass: identical to a real backtest loop (same evaluate_exit,
+    """One random-entry pass: identical to a real backtest loop (same evaluate_exit_fn,
     same size_entry_fn, same params) except the entry TRIGGER is replaced by "eligible
     (regime holds) AND a Bernoulli(entry_probability) draw," so it never opens a second
     position while one is already open, exactly like the real strategy.
+
+    `evaluate_exit_fn` defaults to the shared mean_reversion.evaluate_exit (what every
+    ATR-stop-and-target strategy in this codebase uses) but accepts any function with
+    the same (candle, state, params) -> ExitEvent | None contract — e.g. a strategy
+    with a genuinely different exit shape (no target, no max-holding cap) that defines
+    its own, like FUNDING_EXTREME.
 
     Takes pre-extracted `rows`/`eligible_flags` (built once by the caller, outside the
     n_runs loop) rather than a DataFrame + `.iloc[i]` per access — repeating `.iloc`
@@ -140,7 +147,7 @@ def _simulate_random_entries_single_asset(
     trades = []
     for candle, eligible in zip(rows, eligible_flags):
         reset_daily_guard_if_needed(state, candle["date"])
-        exit_event = evaluate_exit(candle, state, params)
+        exit_event = evaluate_exit_fn(candle, state, params)
         if exit_event is not None:
             trades.append(exit_event)
         if state.open_trade is None and eligible and rng.random() < entry_probability:
@@ -159,6 +166,7 @@ def random_entry_baseline_single_asset(
     target_trade_count: int,
     n_runs: int = RANDOM_ENTRY_RUNS,
     seed: int = RANDOM_ENTRY_SEED,
+    evaluate_exit_fn: Callable = evaluate_exit,
 ) -> RandomBaselineResult | None:
     """`entry_probability` is calibrated so E[trades per run] == target_trade_count (the
     real strategy's trade count in this half) — individual runs' realized counts vary
@@ -175,7 +183,9 @@ def random_entry_baseline_single_asset(
     exp_rs: list[float] = []
     trade_counts: list[int] = []
     for _ in range(n_runs):
-        trades = _simulate_random_entries_single_asset(rows, eligible_flags, params, size_entry_fn, entry_probability, rng)
+        trades = _simulate_random_entries_single_asset(
+            rows, eligible_flags, params, size_entry_fn, entry_probability, rng, evaluate_exit_fn
+        )
         trade_counts.append(len(trades))
         exp_rs.append(sum(t.r_multiple for t in trades) / len(trades) if trades else 0.0)
     exp_rs_sorted = sorted(exp_rs)
