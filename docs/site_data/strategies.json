@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "last_updated": "2026-07-18T12:45:15.568310+00:00",
+  "strategies": [
+    {
+      "name": "BREAKOUT_MOMENTUM",
+      "version": "breakout-momentum-v1.2.0-gold-calibrated-1week",
+      "asset": "GOLD",
+      "timeframe": "1week",
+      "verification_status": "triple-verified"
+    },
+    {
+      "name": "TREND_PULLBACK",
+      "version": "trend-pullback-v1.0.0",
+      "asset": "BNB",
+      "timeframe": "12h",
+      "verification_status": "verified — sample-limited"
+    },
+    {
+      "name": "COINTEGRATION_PAIRS",
+      "version": "cointegration-pairs-v1.0.0",
+      "asset": "BTC-ETH",
+      "timeframe": "12h",
+      "verification_status": "verified — weakest, live-proving"
+    },
+    {
+      "name": "NEWS_SENTIMENT",
+      "version": "news-sentiment-v1.0.0",
+      "asset": "GOLD",
+      "timeframe": "daily",
+      "verification_status": "forward-test-only, no historical backtest"
+    },
+    {
+      "name": "NEWS_SENTIMENT",
+      "version": "news-sentiment-v1.0.0",
+      "asset": "BTC",
+      "timeframe": "daily",
+      "verification_status": "forward-test-only, no historical backtest"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "last_updated": "2026-07-18T12:45:15.568300+00:00",
+  "strategies": [
+    {
+      "strategy": "BREAKOUT_MOMENTUM",
+      "strategy_version": "breakout-momentum-v1.2.0-gold-calibrated-1week",
+      "asset": "GOLD",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "TREND_PULLBACK",
+      "strategy_version": "trend-pullback-v1.0.0",
+      "asset": "BNB",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "COINTEGRATION_PAIRS",
+      "strategy_version": "cointegration-pairs-v1.0.0",
+      "asset": "BTC-ETH",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    }
+  ]
+}

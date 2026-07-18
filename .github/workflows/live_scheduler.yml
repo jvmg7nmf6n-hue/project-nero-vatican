@@ -31,6 +31,9 @@ jobs:
       - name: Send ntfy notification
         run: python -m nero_core.execution.notify_ntfy
         continue-on-error: true
+      - name: Export site data
+        run: python -m nero_core.execution.export_site_data
+        continue-on-error: true
       - name: Save Truth Ledger
         run: |
           git config user.name "nero-live-scheduler"
@@ -38,6 +41,9 @@ jobs:
           git pull --rebase origin main || git rebase --abort || true
           if [ -f data/truth_ledger.db ]; then
             git add -f data/truth_ledger.db
+          fi
+          if [ -d docs/site_data ]; then
+            git add -f docs/site_data/
           fi
           if git diff --cached --quiet; then
             echo "no live scheduler changes"
