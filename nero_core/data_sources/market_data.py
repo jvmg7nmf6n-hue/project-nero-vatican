@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 import requests
+import yfinance as yf
 
 from nero_core.config import load_dotenv
 
@@ -45,7 +46,24 @@ KRAKEN_PAIRS = {
 
 TWELVE_DATA_SYMBOLS = {
     "GOLD": "XAU/USD",
+    "SILVER": "XAG/USD",
+    "PLATINUM": "XPT/USD",
 }
+
+# Confirmed via a direct live request (see docs/metals_data_calibration_audit.md): Twelve
+# Data's time_series endpoint 404s for XAG/USD and XPT/USD on the current plan
+# ("available starting with the Grow or Venture plan"), even though the symbols
+# themselves are valid and GOLD's XAU/USD works fine on the same key. YFINANCE_FUTURES_
+# SYMBOLS is a free fallback for exactly those two: COMEX Silver and NYMEX Platinum
+# CONTINUOUS FRONT-MONTH FUTURES (not spot) — a genuine data-source substitution, not a
+# fabrication, but real basis/roll differences from spot XAG/USD/XPT/USD exist and every
+# report using this data says so explicitly.
+YFINANCE_FUTURES_SYMBOLS = {
+    "SILVER": "SI=F",
+    "PLATINUM": "PL=F",
+}
+
+YFINANCE_INTERVAL_MILLISECONDS = {"1h": 3_600_000, "1d": 86_400_000, "1wk": 604_800_000}
 
 CANDLE_COLUMNS = ["date", "open_time", "close_time", "open", "high", "low", "close", "volume"]
 
@@ -122,6 +140,14 @@ class MarketDataClient:
                 except (requests.RequestException, KeyError, TypeError, ValueError) as exc:
                     errors.append(f"Twelve Data: {exc.__class__.__name__}: {exc}")
 
+        if asset in YFINANCE_FUTURES_SYMBOLS:
+            try:
+                symbol = YFINANCE_FUTURES_SYMBOLS[asset]
+                prices = self._load_yfinance(symbol, yf_interval="1d", period="max", tail=days)
+                return MarketDataResult(prices, f"YFinance {symbol} (continuous futures proxy, not spot) daily candles", asset, "1d")
+            except (ValueError, KeyError) as exc:
+                errors.append(f"YFinance: {exc.__class__.__name__}: {exc}")
+
         self._raise_unavailable(asset, errors)
 
     def load_intraday(
@@ -170,6 +196,27 @@ class MarketDataClient:
                     return MarketDataResult(prices, f"Twelve Data {symbol} {interval} candles", asset, interval)
                 except (requests.RequestException, KeyError, TypeError, ValueError) as exc:
                     errors.append(f"Twelve Data: {exc.__class__.__name__}: {exc}")
+
+        if asset in YFINANCE_FUTURES_SYMBOLS:
+            symbol = YFINANCE_FUTURES_SYMBOLS[asset]
+            # Only 1h and 1week are fetched natively from yfinance — 2h/4h/12h have no
+            # native yfinance interval and are resampled from a 1h fetch by the CALLER
+            # (see tools.timeframe_data.fetch_timeframe_candles), the same division of
+            # responsibility Twelve Data's missing-native-12h case already uses for GOLD.
+            if interval == "1h":
+                try:
+                    prices = self._load_yfinance(symbol, yf_interval="1h", period="730d", tail=candles)
+                    return MarketDataResult(prices, f"YFinance {symbol} (continuous futures proxy, not spot) 1h candles", asset, interval)
+                except (ValueError, KeyError) as exc:
+                    errors.append(f"YFinance: {exc.__class__.__name__}: {exc}")
+            elif interval == "1week":
+                try:
+                    prices = self._load_yfinance(symbol, yf_interval="1wk", period="max", tail=candles)
+                    return MarketDataResult(prices, f"YFinance {symbol} (continuous futures proxy, not spot) 1week candles", asset, interval)
+                except (ValueError, KeyError) as exc:
+                    errors.append(f"YFinance: {exc.__class__.__name__}: {exc}")
+            else:
+                errors.append(f"YFinance: no native {interval!r} interval for continuous futures (only 1h/1week fetched directly)")
 
         self._raise_unavailable(asset, errors)
 
@@ -303,6 +350,53 @@ class MarketDataClient:
         frame["date"] = pd.to_datetime(frame["close_time"], unit="ms", utc=True)
         return frame[CANDLE_COLUMNS].reset_index(drop=True)
 
+    YFINANCE_RETRY_DELAYS_SECONDS = (2.0, 5.0, 10.0)  # yfinance/Yahoo rate-limits aggressively
+    # under repeated back-to-back requests (observed directly: an identical call fails with
+    # "possibly delisted; no price data found" and recovers within seconds once the burst
+    # stops) — this is a transient throttle, not a real "no data" condition, so it's worth
+    # a short backoff-retry before treating it as a genuine fetch failure.
+
+    def _load_yfinance(self, symbol: str, yf_interval: str, period: str, tail: int) -> pd.DataFrame:
+        """yfinance only exposes one timestamp per bar (its conventional bar-OPEN time,
+        same convention as Coinbase/Kraken above) — close_time is derived as open_time +
+        the interval's duration, then _drop_unclosed filters out any still-forming bar,
+        exactly like every other source in this client."""
+        history = None
+        last_error: Exception | None = None
+        for attempt, delay in enumerate((0.0,) + self.YFINANCE_RETRY_DELAYS_SECONDS):
+            if delay:
+                time.sleep(delay)
+            try:
+                ticker = yf.Ticker(symbol)
+                history = ticker.history(period=period, interval=yf_interval)
+            except Exception as exc:  # noqa: BLE001 - yfinance raises a variety of types; retry regardless
+                last_error = exc
+                history = None
+            if history is not None and not history.empty:
+                break
+
+        if history is None or history.empty:
+            reason = f": {last_error.__class__.__name__}: {last_error}" if last_error is not None else ""
+            raise ValueError(
+                f"empty yfinance response for {symbol} interval={yf_interval} period={period} "
+                f"after {len(self.YFINANCE_RETRY_DELAYS_SECONDS) + 1} attempts{reason}"
+            )
+
+        frame = history.reset_index()
+        time_col = "Datetime" if "Datetime" in frame.columns else "Date"
+        # See _load_twelve_data's comment on why .dt.as_unit("ms") is used instead of a
+        # bare .astype("int64") // 1_000_000 — yfinance's own index resolution (observed:
+        # datetime64[s]) makes the naive nanosecond assumption silently wrong here too.
+        frame["open_time"] = pd.to_datetime(frame[time_col], utc=True).dt.as_unit("ms").astype("int64")
+        interval_ms = YFINANCE_INTERVAL_MILLISECONDS.get(yf_interval, 86_400_000)
+        frame["close_time"] = frame["open_time"] + interval_ms
+        frame = frame.rename(columns={"Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"})
+        frame[["open", "high", "low", "close", "volume"]] = frame[["open", "high", "low", "close", "volume"]].astype(float)
+        frame = _drop_unclosed(frame)
+        frame = frame.sort_values("close_time").tail(max(30, tail)).reset_index(drop=True)
+        frame["date"] = pd.to_datetime(frame["close_time"], unit="ms", utc=True)
+        return frame[CANDLE_COLUMNS].reset_index(drop=True)
+
     def _load_twelve_data(self, symbol: str, interval: str, outputsize: int, api_key: str) -> pd.DataFrame:
         response = requests.get(
             "https://api.twelvedata.com/time_series",
@@ -331,7 +425,14 @@ class MarketDataClient:
         frame["date"] = pd.to_datetime(frame["datetime"], utc=True)
         frame = frame.sort_values("date").reset_index(drop=True)
         interval_ms = _twelve_data_interval_milliseconds(interval)
-        frame["close_time"] = (frame["date"].astype("int64") // 1_000_000)
+        # .dt.as_unit("ms") forces millisecond resolution before the int64 cast, so this
+        # is correct regardless of whatever resolution pandas infers for the parsed
+        # datetime (s/ms/us/ns — this varies by pandas version, not just input format).
+        # A bare .astype("int64") // 1_000_000 assumes nanosecond resolution; on pandas
+        # versions that infer a coarser resolution (e.g. seconds) that division silently
+        # produces a close_time off by 1000x, which in turn breaks every downstream
+        # holding-hours/TIME-exit computation without ever raising an error.
+        frame["close_time"] = frame["date"].dt.as_unit("ms").astype("int64")
         frame["open_time"] = frame["close_time"] - interval_ms
         now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
         frame = frame[frame["close_time"] < now_ms].copy()

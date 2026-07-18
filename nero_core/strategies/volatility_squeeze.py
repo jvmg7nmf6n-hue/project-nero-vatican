@@ -13,6 +13,7 @@ from nero_core.strategies.mean_reversion import (
 )
 from nero_core.strategies.mean_reversion_gold_calibrated import GOLD_FEE_SCALE_FACTOR
 from nero_core.strategies.registry import StrategyRegistry, StrategyVariant, default_registry
+from nero_core.strategies.timeframe_calibration import scaled_fees_for_asset
 
 STRATEGY_ID = "VOLATILITY_SQUEEZE"
 
@@ -101,11 +102,12 @@ def build_params_for_run(base_params: VolatilitySqueezeParameters, timeframe: st
     asset/timeframe backtest run, without mutating or re-registering `base_params` — the
     registered strategy variant's canonical parameters never change; this only produces an
     ephemeral, honestly-derived clone for the run at hand (the same relationship
-    VARIANT_SPECS already has with GOLD_CALIBRATED_PARAMETERS in backtest_compare.py)."""
+    VARIANT_SPECS already has with GOLD_CALIBRATED_PARAMETERS in backtest_compare.py).
+    Delegates fee scaling to timeframe_calibration.scaled_fees_for_asset so SILVER/
+    PLATINUM (and any future non-GOLD, non-crypto asset) get the same treatment GOLD
+    always has, instead of a GOLD-only special case."""
     params = replace(base_params, max_holding_hours=max_holding_hours_for_timeframe(timeframe))
-    if asset == "GOLD":
-        params = gold_calibrated_fees(params)
-    return params
+    return scaled_fees_for_asset(params, asset)
 
 
 @dataclass

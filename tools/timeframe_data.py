@@ -27,10 +27,26 @@ NATIVE_TWELVEDATA_INTERVAL = {"2h": "2h", "4h": "4h", "1week": "1week"}  # no na
 # assets' actual listing history, so the real cap is "the exchange ran out of history,"
 # not this request size.
 NATIVE_INTERVAL_CANDLES = {"2h": 100_000, "4h": 50_000, "12h": 20_000, "1week": 2_000}
-GOLD_HOURLY_FALLBACK_CANDLES = 50_000  # for GOLD's 12h, resampled from Twelve Data 1h
+GOLD_HOURLY_FALLBACK_CANDLES = 50_000  # for GOLD/SILVER/PLATINUM's 12h, resampled from Twelve Data 1h
 DAILY_LOOKBACK_DAYS = 8000  # ~21.9 years — comfortably exceeds any of these assets' history
 
 ASSETS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "NEAR", "GOLD"]
+
+# GOLD's spot (XAU/USD) is available on the project's current Twelve Data plan: native
+# 2h/4h/1week directly, 12h resampled from Twelve Data 1h (no native 12h interval on
+# that API), 24h via MarketDataClient.load_daily like every other asset. Kept as its own
+# set rather than folded into ASSETS so unrelated sweep tools that default to ASSETS
+# don't silently pick up new metals they were never scoped to test.
+TWELVE_DATA_ONLY_ASSETS = {"GOLD"}
+
+# SILVER (XAG/USD) and PLATINUM (XPT/USD) both 404 on Twelve Data's current plan
+# ("available starting with the Grow or Venture plan" — see
+# docs/metals_data_calibration_audit.md). MarketDataClient falls back to yfinance
+# COMEX/NYMEX continuous futures (SI=F/PL=F) for these two, which only exposes native
+# 1h and 1week — 2h/4h/12h are all resampled here from a single 1h fetch, the same
+# division of responsibility GOLD's 12h-from-Twelve-Data-1h fallback already uses.
+YFINANCE_FUTURES_ASSETS = {"SILVER", "PLATINUM"}
+YFINANCE_RESAMPLE_GROUPS = {"2h": 2, "4h": 4, "12h": 12}
 
 
 def aggregate_n_consecutive_candles(source: pd.DataFrame, n: int) -> pd.DataFrame:
@@ -65,7 +81,7 @@ def fetch_timeframe_candles(client: MarketDataClient, asset: str, timeframe: str
         result = client.load_daily(asset, days=DAILY_LOOKBACK_DAYS)
         return result.prices, f"NATIVE: {result.source}"
 
-    if asset == "GOLD":
+    if asset in TWELVE_DATA_ONLY_ASSETS:
         td_interval = NATIVE_TWELVEDATA_INTERVAL.get(timeframe)
         if td_interval is not None:
             result = client.load_intraday(asset, interval=td_interval, candles=NATIVE_INTERVAL_CANDLES[timeframe])
@@ -74,7 +90,18 @@ def fetch_timeframe_candles(client: MarketDataClient, asset: str, timeframe: str
             hourly = client.load_intraday(asset, interval="1h", candles=GOLD_HOURLY_FALLBACK_CANDLES)
             resampled = aggregate_n_consecutive_candles(hourly.prices, 12)
             return resampled, f"RESAMPLED: grouped 12 consecutive 1h candles from {hourly.source} (Twelve Data has no native 12h)"
-        raise MarketDataUnavailableError(f"No fetch method configured for GOLD at timeframe {timeframe!r}.")
+        raise MarketDataUnavailableError(f"No fetch method configured for {asset} at timeframe {timeframe!r}.")
+
+    if asset in YFINANCE_FUTURES_ASSETS:
+        if timeframe == "1week":
+            result = client.load_intraday(asset, interval="1week", candles=NATIVE_INTERVAL_CANDLES[timeframe])
+            return result.prices, f"NATIVE: {result.source}"
+        group_size = YFINANCE_RESAMPLE_GROUPS.get(timeframe)
+        if group_size is not None:
+            hourly = client.load_intraday(asset, interval="1h", candles=GOLD_HOURLY_FALLBACK_CANDLES)
+            resampled = aggregate_n_consecutive_candles(hourly.prices, group_size)
+            return resampled, f"RESAMPLED: grouped {group_size} consecutive 1h candles from {hourly.source}"
+        raise MarketDataUnavailableError(f"No fetch method configured for {asset} at timeframe {timeframe!r}.")
 
     result = client.load_intraday(asset, interval=NATIVE_BINANCE_INTERVAL[timeframe], candles=NATIVE_INTERVAL_CANDLES[timeframe])
     return result.prices, f"NATIVE: {result.source}"

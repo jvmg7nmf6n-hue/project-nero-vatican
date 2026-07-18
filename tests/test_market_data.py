@@ -5,6 +5,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
+import pandas as pd
 import requests
 
 from nero_core.data_sources.market_data import (
@@ -259,6 +260,87 @@ class MarketDataIntradayTest(unittest.TestCase):
         ):
             with self.assertRaises(MarketDataUnavailableError):
                 self.client.load_intraday("SOL", interval="1h", candles=50)
+
+
+def _twelve_data_intraday_values(count: int, end: datetime, interval_hours: int = 1) -> list[dict[str, str]]:
+    """Unlike _twelve_data_values (daily, date-only strings), this uses a full
+    datetime string with a time-of-day component — the shape Twelve Data actually
+    returns for intraday intervals, and the input that exposed the resolution bug
+    below (a date-only string happens to not exercise the same pandas datetime64
+    resolution path in every pandas version)."""
+    values = []
+    for i in range(count):
+        dt = end - timedelta(hours=interval_hours * (count - 1 - i))
+        price = 100.0 + i
+        values.append(
+            {
+                "datetime": dt.strftime("%Y-%m-%d %H:%M:%S"),
+                "open": str(price),
+                "high": str(price + 1),
+                "low": str(price - 1),
+                "close": str(price + 0.5),
+                "volume": "10",
+            }
+        )
+    return values
+
+
+class TimestampMillisecondPrecisionRegressionTest(unittest.TestCase):
+    """Regression test for a real bug found while auditing metals data sources: on a
+    pandas version where pd.to_datetime infers a non-nanosecond resolution (e.g. the
+    project's own pandas>=2.0,<3 pin drifting to an installed pandas 3.0.3), a bare
+    `.astype("int64") // 1_000_000` silently produces a close_time off by 1000x (seconds
+    mislabeled as milliseconds) instead of raising — which in turn breaks every
+    downstream holding-hours/TIME-exit computation without ever crashing. Both
+    _load_twelve_data and _load_yfinance must produce a close_time that, when converted
+    back via pd.to_datetime(close_time, unit="ms"), reproduces the source date exactly —
+    regardless of what resolution pandas happens to infer internally."""
+
+    def setUp(self) -> None:
+        self.client = MarketDataClient()
+
+    def test_twelve_data_intraday_close_time_is_millisecond_precision(self) -> None:
+        end = datetime(2026, 7, 1, 12, 0, 0, tzinfo=timezone.utc) - timedelta(hours=3)
+        values = _twelve_data_intraday_values(30, end=end, interval_hours=1)
+        expected_last_close_ms = int(end.timestamp() * 1000)
+
+        with patch(
+            "nero_core.data_sources.market_data.requests.get",
+            return_value=_mock_response({"status": "ok", "values": values}),
+        ):
+            result = self.client.load_intraday("GOLD", interval="1h", candles=30, twelve_data_api_key="fake-key")
+
+        last_close_ms = int(result.prices["close_time"].iloc[-1])
+        self.assertEqual(last_close_ms, expected_last_close_ms)
+        # A close_time 1000x too small (the bug) would round-trip to 1970, not 2026.
+        reconstructed = pd.to_datetime(last_close_ms, unit="ms", utc=True)
+        self.assertEqual(reconstructed.year, 2026)
+
+    def test_yfinance_metals_close_time_is_millisecond_precision(self) -> None:
+        end = datetime(2026, 7, 1, 12, 0, 0, tzinfo=timezone.utc) - timedelta(hours=3)
+        index = pd.DatetimeIndex(
+            [end - timedelta(hours=i) for i in range(29, -1, -1)], name="Datetime", tz="UTC"
+        )
+        history = pd.DataFrame(
+            {
+                "Open": [100.0 + i for i in range(30)],
+                "High": [101.0 + i for i in range(30)],
+                "Low": [99.0 + i for i in range(30)],
+                "Close": [100.5 + i for i in range(30)],
+                "Volume": [10.0] * 30,
+            },
+            index=index,
+        )
+        expected_last_open_ms = int(end.timestamp() * 1000)
+
+        with patch("nero_core.data_sources.market_data.yf.Ticker") as mock_ticker_cls:
+            mock_ticker_cls.return_value.history.return_value = history
+            result = self.client.load_intraday("SILVER", interval="1h", candles=30)
+
+        last_open_ms = int(result.prices["open_time"].iloc[-1])
+        self.assertEqual(last_open_ms, expected_last_open_ms)
+        reconstructed = pd.to_datetime(last_open_ms, unit="ms", utc=True)
+        self.assertEqual(reconstructed.year, 2026)
 
 
 if __name__ == "__main__":
