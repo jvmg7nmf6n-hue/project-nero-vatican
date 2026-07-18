@@ -105,6 +105,39 @@ class RandomBaselineResult:
     caveat: str | None = None
 
 
+MIN_SAMPLE_SIZE = 20
+
+# Business-pragmatic verdict categories (see docs for the FVG/BOS research batch):
+# SURVIVED — positive expectancy on BOTH halves, adequate sample (>= MIN_SAMPLE_SIZE
+#   trades) on BOTH halves, AND the bootstrap CI clears zero on BOTH halves.
+# PROMISING-WATCHLIST — positive expectancy on BOTH halves, but doesn't clear the bar
+#   above (LOW SAMPLE on either half, or the CI crosses zero on either half) — eligible
+#   for live forward-testing, not dead.
+# DIED — negative or flat expectancy on either half.
+VERDICT_SURVIVED = "SURVIVED"
+VERDICT_PROMISING_WATCHLIST = "PROMISING-WATCHLIST"
+VERDICT_DIED = "DIED"
+
+
+def classify_verdict(train_stats: dict, test_stats: dict, min_sample_size: int = MIN_SAMPLE_SIZE) -> str:
+    """`train_stats`/`test_stats` are per-half stat dicts carrying at least
+    "expectancy_r", "trades", and "ci" (a BootstrapCI or None) keys — the shape every
+    report tool in this research batch already builds. Classifies into exactly one of
+    VERDICT_SURVIVED / VERDICT_PROMISING_WATCHLIST / VERDICT_DIED."""
+    train_positive = train_stats["expectancy_r"] > 0
+    test_positive = test_stats["expectancy_r"] > 0
+    if not (train_positive and test_positive):
+        return VERDICT_DIED
+
+    adequate_sample = train_stats["trades"] >= min_sample_size and test_stats["trades"] >= min_sample_size
+    train_ci, test_ci = train_stats["ci"], test_stats["ci"]
+    ci_clears_both = train_ci is not None and not train_ci.crosses_zero and test_ci is not None and not test_ci.crosses_zero
+
+    if adequate_sample and ci_clears_both:
+        return VERDICT_SURVIVED
+    return VERDICT_PROMISING_WATCHLIST
+
+
 def breakout_momentum_regime_mask(evaluable: pd.DataFrame) -> pd.Series:
     """BREAKOUT_MOMENTUM's trend PRECONDITION only (close > MA200) — deliberately
     excludes the specific breakout-high/RSI TRIGGER, which is exactly what "random
@@ -116,6 +149,19 @@ def trend_pullback_regime_mask(evaluable: pd.DataFrame) -> pd.Series:
     """TREND_PULLBACK's established-uptrend PRECONDITION only (close > MA200 AND MA50 >
     MA200) — excludes the specific pullback-to-MA50/RSI-band TRIGGER."""
     return (evaluable["close"] > evaluable["ma200"]) & (evaluable["ma50"] > evaluable["ma200"])
+
+
+def above_ma200_mask(evaluable: pd.DataFrame) -> pd.Series:
+    """The LONG-side trend precondition shared by FVG_REVERSION and BOS_CONTINUATION
+    (close > MA200) — same formula as breakout_momentum_regime_mask, named separately
+    here since those two strategies' entry trigger (gap touch / structure break) is
+    unrelated to breakout momentum's own trigger."""
+    return evaluable["close"] > evaluable["ma200"]
+
+
+def below_ma200_mask(evaluable: pd.DataFrame) -> pd.Series:
+    """The SHORT-side mirror of above_ma200_mask (close < MA200)."""
+    return evaluable["close"] < evaluable["ma200"]
 
 
 def _simulate_random_entries_single_asset(
@@ -185,6 +231,86 @@ def random_entry_baseline_single_asset(
     for _ in range(n_runs):
         trades = _simulate_random_entries_single_asset(
             rows, eligible_flags, params, size_entry_fn, entry_probability, rng, evaluate_exit_fn
+        )
+        trade_counts.append(len(trades))
+        exp_rs.append(sum(t.r_multiple for t in trades) / len(trades) if trades else 0.0)
+    exp_rs_sorted = sorted(exp_rs)
+    mean_random = sum(exp_rs) / n_runs
+    return RandomBaselineResult(
+        real_expectancy_r=real_expectancy_r,
+        mean_random_expectancy_r=mean_random,
+        p95_random_expectancy_r=_percentile(exp_rs_sorted, 95),
+        edge_over_random=real_expectancy_r - mean_random,
+        target_trade_count=target_trade_count,
+        realized_mean_trade_count=sum(trade_counts) / n_runs,
+        n_runs=n_runs,
+    )
+
+
+def _simulate_random_entries_bidirectional(
+    rows: list[pd.Series],
+    long_eligible_flags: list[bool],
+    short_eligible_flags: list[bool],
+    params,
+    size_entry_fn: Callable,
+    evaluate_exit_fn: Callable,
+    entry_probability: float,
+    rng: random.Random,
+) -> list:
+    """For strategies that trade BOTH directions off one regime filter each (e.g.
+    FVG_REVERSION: long when close > MA200, short when close < MA200 — these are
+    mutually exclusive in practice) — same idea as
+    `_simulate_random_entries_single_asset`, except `size_entry_fn` takes an explicit
+    `direction` argument (the real strategy's own `size_entry(candle, state, params,
+    direction)` signature) instead of inferring it internally."""
+    state = MeanReversionState(equity=params.initial_equity)
+    trades = []
+    for candle, long_ok, short_ok in zip(rows, long_eligible_flags, short_eligible_flags):
+        reset_daily_guard_if_needed(state, candle["date"])
+        exit_event = evaluate_exit_fn(candle, state, params)
+        if exit_event is not None:
+            trades.append(exit_event)
+        if state.open_trade is None:
+            if long_ok and short_ok:
+                direction = "LONG" if rng.random() < 0.5 else "SHORT"
+            elif long_ok:
+                direction = "LONG"
+            elif short_ok:
+                direction = "SHORT"
+            else:
+                direction = None
+            if direction is not None and rng.random() < entry_probability:
+                trade = size_entry_fn(candle, state, params, direction)
+                if trade is not None:
+                    state.open_trade = trade
+    return trades
+
+
+def random_entry_baseline_bidirectional(
+    evaluable: pd.DataFrame,
+    long_eligible_mask: pd.Series,
+    short_eligible_mask: pd.Series,
+    params,
+    size_entry_fn: Callable,
+    evaluate_exit_fn: Callable,
+    real_expectancy_r: float,
+    target_trade_count: int,
+    n_runs: int = RANDOM_ENTRY_RUNS,
+    seed: int = RANDOM_ENTRY_SEED,
+) -> RandomBaselineResult | None:
+    eligible_count = int((long_eligible_mask | short_eligible_mask).sum())
+    if eligible_count == 0 or target_trade_count <= 0:
+        return None
+    entry_probability = min(1.0, target_trade_count / eligible_count)
+    rng = random.Random(seed)
+    rows = [evaluable.iloc[i] for i in range(len(evaluable))]
+    long_flags = [bool(v) for v in long_eligible_mask]
+    short_flags = [bool(v) for v in short_eligible_mask]
+    exp_rs: list[float] = []
+    trade_counts: list[int] = []
+    for _ in range(n_runs):
+        trades = _simulate_random_entries_bidirectional(
+            rows, long_flags, short_flags, params, size_entry_fn, evaluate_exit_fn, entry_probability, rng
         )
         trade_counts.append(len(trades))
         exp_rs.append(sum(t.r_multiple for t in trades) / len(trades) if trades else 0.0)

@@ -10,6 +10,10 @@ from nero_core.strategies.breakout_momentum import size_entry as bm_size_entry
 from nero_core.strategies.cointegration_pairs import DEFAULT_PARAMETERS as PAIRS_PARAMETERS
 from nero_core.strategies.cointegration_pairs import add_indicators as pairs_add_indicators
 from nero_core.strategies.cointegration_pairs import align_pair_candles
+from nero_core.strategies.fvg_reversion import DEFAULT_PARAMETERS as FVG_PARAMETERS
+from nero_core.strategies.fvg_reversion import add_indicators as fvg_add_indicators
+from nero_core.strategies.fvg_reversion import evaluate_exit as fvg_evaluate_exit
+from nero_core.strategies.fvg_reversion import size_entry as fvg_size_entry
 from nero_core.strategies.trend_pullback import DEFAULT_PARAMETERS as TP_PARAMETERS
 from nero_core.strategies.trend_pullback import add_indicators as tp_add_indicators
 from nero_core.strategies.trend_pullback import size_entry as tp_size_entry
@@ -18,8 +22,15 @@ from tests.test_council_engine import _make_candle_row
 from tools.backtest_compare import INDICATOR_COLUMNS_TO_CHECK
 from tools.backtest_statistics import (
     PAIRS_REGIME_CAVEAT,
+    VERDICT_DIED,
+    VERDICT_PROMISING_WATCHLIST,
+    VERDICT_SURVIVED,
+    above_ma200_mask,
+    below_ma200_mask,
     bootstrap_mean_r_ci,
     breakout_momentum_regime_mask,
+    classify_verdict,
+    random_entry_baseline_bidirectional,
     random_entry_baseline_pairs,
     random_entry_baseline_single_asset,
     trend_pullback_regime_mask,
@@ -176,6 +187,147 @@ class RandomEntryBaselineSingleAssetTest(unittest.TestCase):
         # May legitimately be None if this fixture never satisfies the uptrend mask.
         if result is not None:
             self.assertEqual(result.n_runs, 20)
+
+
+def _row_with_high_low(close_time: int, high: float, low: float) -> dict[str, object]:
+    return {
+        "date": pd.Timestamp(close_time, unit="ms", tz="UTC"),
+        "close_time": close_time,
+        "open": (high + low) / 2,
+        "high": high,
+        "low": low,
+        "close": (high + low) / 2,
+        "volume": 10.0,
+    }
+
+
+def _uptrend_with_bullish_gap_history() -> pd.DataFrame:
+    """Uptrend warmup, a bullish gap, an ACTUAL pullback that touches the zone (without
+    this, price never revisits the gap and zero signals ever fire — see the real bug
+    this exact mistake produced, caught while writing this fixture), then continued
+    uptrend so the resulting trade has room to resolve."""
+    rows: list[dict[str, object]] = []
+    close_time = 0
+    price = 100.0
+    for i in range(210):
+        price += 0.3
+        rows.append(_make_candle_row(close_time, price))
+        close_time += 3_600_000
+    last = price
+    anchor_high = last + 2
+    rows.append(_row_with_high_low(close_time, high=anchor_high, low=last - 1))
+    close_time += 3_600_000
+    rows.append(_row_with_high_low(close_time, high=last + 20, low=last + 15))  # filler, raised to avoid cascade
+    close_time += 3_600_000
+    rows.append(_row_with_high_low(close_time, high=last + 30, low=last + 22))  # gap forms: zone [anchor_high, last+22]
+    close_time += 3_600_000
+    rows.append(_row_with_high_low(close_time, high=last + 24, low=anchor_high + 0.5))  # pullback TOUCHES the zone
+    close_time += 3_600_000
+    for i in range(30):
+        level = last + 25 + i
+        rows.append(_row_with_high_low(close_time, high=level + 1, low=level - 1))
+        close_time += 3_600_000
+    return pd.DataFrame(rows)
+
+
+def _stats(expectancy_r: float, trades: int, ci) -> dict:
+    return {"expectancy_r": expectancy_r, "trades": trades, "ci": ci}
+
+
+class ClassifyVerdictTest(unittest.TestCase):
+    def test_negative_either_half_is_died(self) -> None:
+        good = _stats(0.2, 50, bootstrap_mean_r_ci([0.2] * 50))
+        bad = _stats(-0.1, 50, bootstrap_mean_r_ci([-0.1] * 50))
+        self.assertEqual(classify_verdict(good, bad), VERDICT_DIED)
+        self.assertEqual(classify_verdict(bad, good), VERDICT_DIED)
+
+    def test_flat_zero_expectancy_is_died(self) -> None:
+        zero = _stats(0.0, 50, bootstrap_mean_r_ci([0.0] * 50))
+        good = _stats(0.2, 50, bootstrap_mean_r_ci([0.2] * 50))
+        self.assertEqual(classify_verdict(zero, good), VERDICT_DIED)
+
+    def test_positive_both_adequate_sample_ci_clears_is_survived(self) -> None:
+        r_values = [0.3, 0.4, 0.5, 0.2, 0.35] * 5  # n=25 >= MIN_SAMPLE_SIZE, tight and positive
+        stats_a = _stats(sum(r_values) / len(r_values), len(r_values), bootstrap_mean_r_ci(r_values))
+        stats_b = _stats(sum(r_values) / len(r_values), len(r_values), bootstrap_mean_r_ci(r_values))
+        self.assertEqual(classify_verdict(stats_a, stats_b), VERDICT_SURVIVED)
+
+    def test_positive_both_but_low_sample_is_promising_watchlist(self) -> None:
+        r_values = [0.3, 0.4, 0.5]  # n=3, below MIN_SAMPLE_SIZE
+        stats_a = _stats(0.4, 3, bootstrap_mean_r_ci(r_values))
+        stats_b = _stats(0.4, 3, bootstrap_mean_r_ci(r_values))
+        self.assertEqual(classify_verdict(stats_a, stats_b), VERDICT_PROMISING_WATCHLIST)
+
+    def test_positive_both_adequate_sample_but_ci_crosses_zero_is_promising_watchlist(self) -> None:
+        r_values = [2.0, -1.8, 1.9, -1.7, 0.3] * 5  # noisy, positive mean, wide CI
+        mean_r = sum(r_values) / len(r_values)
+        stats_a = _stats(mean_r, len(r_values), bootstrap_mean_r_ci(r_values))
+        stats_b = _stats(mean_r, len(r_values), bootstrap_mean_r_ci(r_values))
+        verdict = classify_verdict(stats_a, stats_b)
+        # Guard the premise before asserting the interesting branch.
+        self.assertTrue(stats_a["ci"].crosses_zero)
+        self.assertEqual(verdict, VERDICT_PROMISING_WATCHLIST)
+
+    def test_none_ci_with_positive_expectancy_is_promising_watchlist_not_survived(self) -> None:
+        stats_a = _stats(0.3, 25, None)
+        stats_b = _stats(0.3, 25, None)
+        self.assertEqual(classify_verdict(stats_a, stats_b), VERDICT_PROMISING_WATCHLIST)
+
+
+class MaBasedMaskTest(unittest.TestCase):
+    def test_above_and_below_masks_are_mutually_exclusive(self) -> None:
+        frame = pd.DataFrame({"close": [90.0, 100.0, 110.0], "ma200": [100.0, 100.0, 100.0]})
+        above = above_ma200_mask(frame)
+        below = below_ma200_mask(frame)
+        self.assertEqual(list(above), [False, False, True])
+        self.assertEqual(list(below), [True, False, False])
+        self.assertFalse((above & below).any())
+
+
+class RandomEntryBaselineBidirectionalTest(unittest.TestCase):
+    """FVG_REVERSION's size_entry needs trigger-specific zone columns that are only
+    non-NaN on an actual touch candle — a broad "regime holds" mask (e.g. plain
+    above_ma200_mask) would let the random simulator try to size an entry at a candle
+    with no real zone data at all, producing NaN. The eligible mask for THIS strategy's
+    random baseline must therefore be narrowed to "has a real signal, in the direction
+    the regime allows" — a necessary adaptation for any trigger-derived-stop strategy,
+    documented in fvg_reversion.py / bos_continuation.py's own reports."""
+
+    def setUp(self) -> None:
+        history = _uptrend_with_bullish_gap_history()
+        enriched = fvg_add_indicators(history)
+        self.evaluable = enriched.dropna(subset=["ma200", "atr"]).reset_index(drop=True)
+        self.long_mask = above_ma200_mask(self.evaluable) & self.evaluable["fvg_bullish_signal_zone_bottom"].notna()
+        self.short_mask = below_ma200_mask(self.evaluable) & self.evaluable["fvg_bearish_signal_zone_top"].notna()
+
+    def test_returns_a_result_with_the_requested_run_count(self) -> None:
+        result = random_entry_baseline_bidirectional(
+            self.evaluable, self.long_mask, self.short_mask, FVG_PARAMETERS, fvg_size_entry, fvg_evaluate_exit,
+            real_expectancy_r=0.1, target_trade_count=1, n_runs=25, seed=1,
+        )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.n_runs, 25)
+
+    def test_deterministic_for_a_fixed_seed(self) -> None:
+        first = random_entry_baseline_bidirectional(
+            self.evaluable, self.long_mask, self.short_mask, FVG_PARAMETERS, fvg_size_entry, fvg_evaluate_exit,
+            real_expectancy_r=0.1, target_trade_count=1, n_runs=25, seed=7,
+        )
+        second = random_entry_baseline_bidirectional(
+            self.evaluable, self.long_mask, self.short_mask, FVG_PARAMETERS, fvg_size_entry, fvg_evaluate_exit,
+            real_expectancy_r=0.1, target_trade_count=1, n_runs=25, seed=7,
+        )
+
+        self.assertEqual(first, second)
+
+    def test_empty_masks_return_none(self) -> None:
+        empty = pd.Series([False] * len(self.evaluable))
+        result = random_entry_baseline_bidirectional(
+            self.evaluable, empty, empty, FVG_PARAMETERS, fvg_size_entry, fvg_evaluate_exit,
+            real_expectancy_r=0.1, target_trade_count=3,
+        )
+        self.assertIsNone(result)
 
 
 class RandomEntryBaselinePairsTest(unittest.TestCase):
