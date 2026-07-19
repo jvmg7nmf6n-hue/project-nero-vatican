@@ -1,7 +1,27 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-19T20:01:46.083755+00:00",
+  "last_updated": "2026-07-19T21:12:06.051852+00:00",
   "rows": [
+    {
+      "timestamp": "2026-07-19T21:12:03.294487+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "ETH",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 1865.76,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=2.8397",
+      "candle_timestamp": "2026-07-19T21:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-19T21:12:03.294487+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 64488.31,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=1.3100",
+      "candle_timestamp": "2026-07-19T21:00:00+00:00"
+    },
     {
       "timestamp": "2026-07-19T20:01:43.613414+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
