@@ -10,6 +10,7 @@ import pandas as pd
 
 from nero_core.data_sources.market_data import MarketDataClient, MarketDataResult, MarketDataUnavailableError
 from nero_core.data_sources.news_feed import NewsFeedResult, NewsItem
+from nero_core.data_sources.orderbook_data import OrderbookSnapshot
 from nero_core.execution import live_scheduler
 from nero_core.truth_ledger.execution_log import list_execution_log, list_execution_metadata, has_news_sentiment_logged_today
 from tests.test_cointegration_pairs import _cointegrated_pair_frames
@@ -86,6 +87,16 @@ class LiveSchedulerTestCase(unittest.TestCase):
             raise MarketDataUnavailableError(f"no fixture configured for {asset}")
         return MarketDataResult(prices=source_map[asset], source="test-fixture", asset=asset, interval="1d")
 
+    @staticmethod
+    def _fake_fetch_and_cache_snapshot(binance_symbol, now=None, db_path=None):
+        # imbalance_ratio=None -> ORDERFLOW_IMBALANCE never enters in these tests
+        # (IMBALANCE_RATIO_UNDEFINED), keeping this a no-op for every other test's own
+        # row-count/error assertions unless a test explicitly overrides it.
+        return OrderbookSnapshot(
+            timestamp=now or datetime(2026, 7, 17, 0, 5, tzinfo=timezone.utc), symbol=binance_symbol,
+            best_bid=100.0, best_ask=100.1, bid_vol_20=1.0, ask_vol_20=1.0, imbalance_ratio=None, source="test-fixture",
+        )
+
     def _patched_client(self):
         intraday_patcher = patch.object(MarketDataClient, "load_intraday", side_effect=self._fake_load_intraday)
         intraday_patcher.start()
@@ -93,13 +104,25 @@ class LiveSchedulerTestCase(unittest.TestCase):
         daily_patcher = patch.object(MarketDataClient, "load_daily", side_effect=self._fake_load_daily)
         daily_patcher.start()
         self.addCleanup(daily_patcher.stop)
+        orderbook_patcher = patch(
+            "nero_core.execution.live_scheduler.fetch_and_cache_snapshot", side_effect=self._fake_fetch_and_cache_snapshot
+        )
+        orderbook_patcher.start()
+        self.addCleanup(orderbook_patcher.stop)
         return MarketDataClient()
 
 
 class NotDueSkipsWithoutFetchingTest(LiveSchedulerTestCase):
-    def test_no_network_call_attempted_when_nothing_is_due(self) -> None:
-        def _explode(*_args, **_kwargs):
-            raise AssertionError("load_intraday/load_daily must not be called when nothing is due")
+    def test_no_candle_gated_network_call_attempted_when_nothing_is_due(self) -> None:
+        # ORDERFLOW_IMBALANCE has no candle_boundary_due gate (see live_scheduler.py's
+        # module docstring) — it legitimately fetches every run, even when every other
+        # config is NOT_DUE. This fixture lets ONLY that fetch through (and fails it
+        # gracefully via MarketDataUnavailableError) while still proving every
+        # candle-gated config makes zero network calls.
+        def _explode(asset, *_args, **_kwargs):
+            if asset in ("BTC", "ETH"):
+                raise MarketDataUnavailableError("no network in this test")
+            raise AssertionError(f"load_intraday/load_daily must not be called for {asset} when nothing is due")
 
         with patch.object(MarketDataClient, "load_intraday", side_effect=_explode), patch.object(
             MarketDataClient, "load_daily", side_effect=_explode
@@ -110,8 +133,12 @@ class NotDueSkipsWithoutFetchingTest(LiveSchedulerTestCase):
         self.assertEqual(result.assets_evaluated, [])
         skipped_reasons = {r["classification"] for r in result.assets_skipped}
         self.assertEqual(skipped_reasons, {"NOT_DUE"})
-        # GOLD, BNB, 5x SILVER, pairs, NEWS_SENTIMENT
+        # GOLD, BNB, 5x SILVER, pairs, NEWS_SENTIMENT (ORDERFLOW_IMBALANCE isn't
+        # candle-gated, so it never appears among these NOT_DUE skips).
         self.assertEqual(len(result.assets_skipped), 9)
+        orderflow_errors = [e for e in result.errors_encountered if e["strategy"] == "ORDERFLOW_IMBALANCE"]
+        self.assertEqual(len(orderflow_errors), 2)  # BTC and ETH each fail their own fetch
+        self.assertTrue(all(e["classification"] == "DATA_UNAVAILABLE" for e in orderflow_errors))
 
 
 class FullRunTest(LiveSchedulerTestCase):
@@ -162,6 +189,8 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
 
         with patch.object(MarketDataClient, "load_intraday", side_effect=_fake_load_intraday), patch.object(
             MarketDataClient, "load_daily", side_effect=self._fake_load_daily
+        ), patch(
+            "nero_core.execution.live_scheduler.fetch_and_cache_snapshot", side_effect=self._fake_fetch_and_cache_snapshot
         ):
             client = MarketDataClient()
             result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
@@ -189,6 +218,8 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
         sleeps: list[float] = []
         with patch.object(MarketDataClient, "load_intraday", side_effect=_fake_load_intraday), patch.object(
             MarketDataClient, "load_daily", side_effect=self._fake_load_daily
+        ), patch(
+            "nero_core.execution.live_scheduler.fetch_and_cache_snapshot", side_effect=self._fake_fetch_and_cache_snapshot
         ):
             client = MarketDataClient()
             result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=sleeps.append)
@@ -206,6 +237,8 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
 
         with patch.object(MarketDataClient, "load_intraday", side_effect=_fake_load_intraday), patch.object(
             MarketDataClient, "load_daily", side_effect=self._fake_load_daily
+        ), patch(
+            "nero_core.execution.live_scheduler.fetch_and_cache_snapshot", side_effect=self._fake_fetch_and_cache_snapshot
         ):
             client = MarketDataClient()
             result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
@@ -249,6 +282,92 @@ class NewsSentimentSchedulingTest(LiveSchedulerTestCase):
         news_skips = [r for r in result.assets_skipped if r["asset"] == "NEWS_SENTIMENT"]
         self.assertEqual(len(news_skips), 1)
         self.assertEqual(news_skips[0]["classification"], "NOT_DUE")
+
+
+def _uptrend_1h_history(n: int = 40) -> pd.DataFrame:
+    """Steady uptrend so close ends up above MA20 — the entry precondition
+    ORDERFLOW_IMBALANCE's LONG side needs alongside a high imbalance_ratio."""
+    rows = []
+    close_time = 0
+    for i in range(n):
+        rows.append(_make_candle_row(close_time, 100.0 + i * 0.5))
+        close_time += 3_600_000
+    return pd.DataFrame(rows)
+
+
+class OrderflowImbalanceSchedulingTest(LiveSchedulerTestCase):
+    """Task C1: proves the full scheduler-integration loop — snapshot fetch -> entry ->
+    Truth Ledger logging -> state reconstruction on the next run -> ratio-reversal
+    exit — not just the pure strategy-function unit tests in
+    tests/test_orderflow_imbalance.py."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.btc_uptrend_history = _uptrend_1h_history()
+
+    def _patched_client_with_uptrend_btc(self):
+        def _fake_load_intraday(asset, interval="1h", candles=240, twelve_data_api_key=None):
+            source_map = {
+                "GOLD": self.gold_history, "BNB": self.bnb_history,
+                "BTC": self.btc_uptrend_history, "ETH": self.btc_uptrend_history,
+            }
+            if asset not in source_map:
+                raise MarketDataUnavailableError(f"no fixture configured for {asset}")
+            return MarketDataResult(prices=source_map[asset], source="test-fixture", asset=asset, interval=interval)
+
+        patcher = patch.object(MarketDataClient, "load_intraday", side_effect=_fake_load_intraday)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        daily_patcher = patch.object(MarketDataClient, "load_daily", side_effect=self._fake_load_daily)
+        daily_patcher.start()
+        self.addCleanup(daily_patcher.stop)
+        return MarketDataClient()
+
+    def test_entry_logged_then_reversal_exit_on_a_later_run(self) -> None:
+        def _high_ratio_snapshot(binance_symbol, now=None, db_path=None):
+            return OrderbookSnapshot(
+                timestamp=now, symbol=binance_symbol, best_bid=100.0, best_ask=100.1,
+                bid_vol_20=10.0, ask_vol_20=1.0, imbalance_ratio=10.0, source="test-fixture",
+            )
+
+        client = self._patched_client_with_uptrend_btc()
+        with patch("nero_core.execution.live_scheduler.fetch_and_cache_snapshot", side_effect=_high_ratio_snapshot):
+            first = live_scheduler.run_once(client=client, now=NOT_DUE_UTC, db_path=self.db_path)
+
+        self.assertIn("ORDERFLOW_IMBALANCE:BTC", first.assets_evaluated)
+        entry_rows = [r for r in list_execution_log(db_path=self.db_path, asset="BTC", strategy="ORDERFLOW_IMBALANCE") if r.signal_type == "ENTRY"]
+        self.assertEqual(len(entry_rows), 1)
+        self.assertIn("direction=LONG", entry_rows[0].reasoning)
+        self.assertIsNotNone(entry_rows[0].entry_price)
+
+        def _reversal_ratio_snapshot(binance_symbol, now=None, db_path=None):
+            return OrderbookSnapshot(
+                timestamp=now, symbol=binance_symbol, best_bid=100.0, best_ask=100.1,
+                bid_vol_20=1.0, ask_vol_20=1.0, imbalance_ratio=1.0, source="test-fixture",
+            )
+
+        with patch("nero_core.execution.live_scheduler.fetch_and_cache_snapshot", side_effect=_reversal_ratio_snapshot):
+            second = live_scheduler.run_once(client=client, now=NOT_DUE_UTC, db_path=self.db_path)
+
+        self.assertIn("ORDERFLOW_IMBALANCE:BTC", second.assets_evaluated)
+        exit_rows = [r for r in list_execution_log(db_path=self.db_path, asset="BTC", strategy="ORDERFLOW_IMBALANCE") if r.signal_type == "EXIT"]
+        self.assertEqual(len(exit_rows), 1)
+        self.assertIn("RATIO_REVERSAL", exit_rows[0].reasoning)
+
+    def test_no_open_position_undefined_ratio_never_enters(self) -> None:
+        def _undefined_ratio_snapshot(binance_symbol, now=None, db_path=None):
+            return OrderbookSnapshot(
+                timestamp=now, symbol=binance_symbol, best_bid=100.0, best_ask=100.1,
+                bid_vol_20=5.0, ask_vol_20=0.0, imbalance_ratio=None, source="test-fixture",
+            )
+
+        client = self._patched_client_with_uptrend_btc()
+        with patch("nero_core.execution.live_scheduler.fetch_and_cache_snapshot", side_effect=_undefined_ratio_snapshot):
+            result = live_scheduler.run_once(client=client, now=NOT_DUE_UTC, db_path=self.db_path)
+
+        self.assertIn("ORDERFLOW_IMBALANCE:BTC", result.assets_evaluated)
+        rows = list_execution_log(db_path=self.db_path, asset="BTC", strategy="ORDERFLOW_IMBALANCE")
+        self.assertEqual(rows, [])
 
 
 if __name__ == "__main__":

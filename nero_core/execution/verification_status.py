@@ -24,6 +24,11 @@ VERIFICATION_STATUS: dict[tuple[str, str], str] = {
     ("BREAKOUT_MOMENTUM", "SILVER"): "promising-watchlist — forward-testing, not verified",
     ("TREND_PULLBACK", "SILVER"): "promising-watchlist — forward-testing, not verified",
     ("VOLATILITY_SQUEEZE", "SILVER"): "promising-watchlist — forward-testing, not verified",
+    # Comprehensive Asset Expansion, Part C: Crypto, Task C1 — order-book depth has no
+    # historical replay, so there is literally no backtest to run, not merely one that
+    # hasn't been done yet.
+    ("ORDERFLOW_IMBALANCE", "BTC"): "experimental — snapshot-based, forward-testing only, no backtest exists",
+    ("ORDERFLOW_IMBALANCE", "ETH"): "experimental — snapshot-based, forward-testing only, no backtest exists",
 }
 
 DEFAULT_VERIFICATION_STATUS = "unverified"

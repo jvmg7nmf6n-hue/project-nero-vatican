@@ -210,6 +210,8 @@ class RoundTripStatsTest(unittest.TestCase):
                 "VOLATILITY_SQUEEZE",
                 "VOLATILITY_SQUEEZE",
                 PAIRS_STRATEGY,
+                "ORDERFLOW_IMBALANCE",
+                "ORDERFLOW_IMBALANCE",
             ],
         )
 

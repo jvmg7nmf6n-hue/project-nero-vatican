@@ -59,6 +59,8 @@ DISPLAY_NAMES: dict[tuple[str, str], tuple[str, str]] = {
     ("BREAKOUT_MOMENTUM", "SILVER"): ("SILVER Momentum (watchlist)", "SILVER/24h"),
     ("TREND_PULLBACK", "SILVER"): ("SILVER TrendPullback (watchlist)", "SILVER/24h"),
     ("VOLATILITY_SQUEEZE", "SILVER"): ("SILVER VolSqueeze (watchlist)", "SILVER/24h"),
+    ("ORDERFLOW_IMBALANCE", "BTC"): ("BTC OrderflowImbalance (experimental)", "BTC/snapshot"),
+    ("ORDERFLOW_IMBALANCE", "ETH"): ("ETH OrderflowImbalance (experimental)", "ETH/snapshot"),
 }
 NEWS_SENTIMENT_LABEL = "News Sentiment"
 

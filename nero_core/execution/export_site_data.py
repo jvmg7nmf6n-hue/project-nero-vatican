@@ -48,6 +48,9 @@ from nero_core.execution.live_scheduler import (
     COINTEGRATION_PAIRS_VERSION,
     NEWS_SENTIMENT_ASSETS,
     NEWS_SENTIMENT_ID,
+    ORDERFLOW_BINANCE_SYMBOLS,
+    ORDERFLOW_ID,
+    ORDERFLOW_VERSION,
     PAIRS_ASSETS,
     PAIRS_TIMEFRAME,
     SINGLE_ASSET_CONFIGS,
@@ -194,6 +197,7 @@ def _trading_roster_keys() -> list[tuple[str, str, str]]:
     round-trip pairing has no meaning for it; it still appears in strategies.json)."""
     keys = [(c.strategy_id, c.strategy_version, c.asset) for c in SINGLE_ASSET_CONFIGS]
     keys.append((COINTEGRATION_PAIRS_ID, COINTEGRATION_PAIRS_VERSION, "-".join(PAIRS_ASSETS)))
+    keys.extend((ORDERFLOW_ID, ORDERFLOW_VERSION, asset) for asset in ORDERFLOW_BINANCE_SYMBOLS)
     return keys
 
 
@@ -242,6 +246,16 @@ def _roster_entries() -> list[dict[str, object]]:
                 "asset": asset,
                 "timeframe": "daily",
                 "verification_status": verification_status_for(NEWS_SENTIMENT_ID, asset),
+            }
+        )
+    for asset in ORDERFLOW_BINANCE_SYMBOLS:
+        entries.append(
+            {
+                "name": ORDERFLOW_ID,
+                "version": ORDERFLOW_VERSION,
+                "asset": asset,
+                "timeframe": "snapshot",
+                "verification_status": verification_status_for(ORDERFLOW_ID, asset),
             }
         )
     return entries

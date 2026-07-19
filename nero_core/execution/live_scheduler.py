@@ -28,12 +28,21 @@ nero_core/execution/verification_status.py):
   8. SILVER / 24h / VOLATILITY_SQUEEZE volatility-squeeze-v1.1.0-ma150-silver-calibrated-24h
   9. SILVER / 24h / VOLATILITY_SQUEEZE volatility-squeeze-v1.1.0-ma100-silver-calibrated-24h
 
+ORDERFLOW_IMBALANCE (Comprehensive Asset Expansion, Part C: Crypto, Task C1) — EXPERIMENTAL,
+snapshot-based, forward-testing only, NO BACKTEST EXISTS (see
+nero_core/strategies/orderflow_imbalance.py's module docstring for why: Binance's
+public order-book REST endpoint has no historical replay). Evaluated EVERY run (no
+candle_boundary_due gate — an order-book snapshot is fresh every 30 minutes, not tied
+to a candle close), for BTC and ETH. State is reconstructed from execution_log itself
+each run rather than replayed from candles — see _reconstruct_open_position.
+
 Usage:
     python -m nero_core.execution.live_scheduler
 """
 from __future__ import annotations
 
 import os
+import re
 import sys
 import time
 import traceback
@@ -43,13 +52,26 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+import pandas as pd
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from nero_core.config import load_dotenv
 from nero_core.data_sources.market_data import MarketDataClient, MarketDataUnavailableError
 from nero_core.data_sources.news_feed import NewsFeedClient
+from nero_core.data_sources.orderbook_data import OrderbookDataUnavailableError, fetch_and_cache_snapshot
 from nero_core.execution.candle_schedule import candle_boundary_due, daily_time_due
 from nero_core.execution.replay import replay_pairs_events, replay_single_asset_events
+from nero_core.strategies.mean_reversion import atr as compute_atr
+from nero_core.strategies.orderflow_imbalance import (
+    DEFAULT_PARAMETERS as ORDERFLOW_PARAMETERS,
+    STRATEGY_ID as ORDERFLOW_ID,
+    STRATEGY_VERSION as ORDERFLOW_VERSION,
+    OrderflowIndicators,
+)
+from nero_core.strategies.orderflow_imbalance import evaluate_entry as orderflow_evaluate_entry
+from nero_core.strategies.orderflow_imbalance import evaluate_exit as orderflow_evaluate_exit
+from nero_core.strategies.orderflow_imbalance import size_entry as orderflow_size_entry
 from nero_core.strategies.breakout_momentum import STRATEGY_ID as BREAKOUT_MOMENTUM_ID
 from nero_core.strategies.breakout_momentum_gold_calibrated_1week import STRATEGY_VERSION as GOLD_BM_VERSION
 from nero_core.strategies.breakout_momentum_silver_calibrated import STRATEGY_VERSION as SILVER_BM_VERSION
@@ -83,6 +105,7 @@ from nero_core.truth_ledger.execution_log import (
     insert_execution_metadata,
     insert_news_sentiment_log,
     latest_logged_candle_timestamp,
+    list_execution_log,
 )
 from tools.backtest_compare import INDICATOR_COLUMNS_TO_CHECK, VARIANT_SPECS
 from tools.timeframe_data import fetch_timeframe_candles
@@ -92,6 +115,18 @@ load_dotenv()
 RETRY_BACKOFF_SECONDS = (1, 3, 10)
 NEWS_SENTIMENT_ASSETS = ("GOLD", "BTC")
 PAIRS_TIMEFRAME = "12h"
+
+# ORDERFLOW_IMBALANCE (Task C1) — this project's own asset naming (BTC, ETH) mapped to
+# the Binance SPOT symbols orderbook_data.py's REST endpoint actually expects.
+ORDERFLOW_BINANCE_SYMBOLS = {"BTC": "BTCUSDT", "ETH": "ETHUSDT"}
+ORDERFLOW_MA_ATR_WARMUP_CANDLES = 20
+
+# Encoded into an ENTRY row's reasoning text at insert time (see process_orderflow_
+# imbalance) and parsed back out here on the next run — entry_price already has its
+# own execution_log column, but direction/stop_loss do not, so they're recovered from
+# text the same way notify_ntfy.py already recovers r_multiple from EXIT reasoning.
+_ORDERFLOW_DIRECTION_PATTERN = re.compile(r"direction=(LONG|SHORT)")
+_ORDERFLOW_STOP_LOSS_PATTERN = re.compile(r"stop_loss=([-+]?\d*\.?\d+)")
 
 
 @dataclass(frozen=True)
@@ -243,6 +278,124 @@ def process_pairs(
     return "EVALUATED", None
 
 
+def _reconstruct_open_position(asset: str, db_path: Path) -> tuple[str | None, float | None]:
+    """Returns (direction, stop_loss) if the most recently logged ORDERFLOW_IMBALANCE
+    signal for this asset is an unresolved ENTRY, else (None, None). Order-book
+    snapshots have no history to replay from (unlike every candle-driven strategy —
+    see nero_core.execution.replay), so this is the strategy's own state model: read
+    the last logged row back, don't rebuild state from a data series that doesn't
+    exist. See nero_core/strategies/orderflow_imbalance.py's module docstring."""
+    rows = [
+        r for r in list_execution_log(db_path=db_path, asset=asset, strategy=ORDERFLOW_ID)
+        if r.strategy_version == ORDERFLOW_VERSION
+    ]
+    if not rows:
+        return None, None
+    last = rows[-1]
+    if last.signal_type != "ENTRY":
+        return None, None
+    direction_match = _ORDERFLOW_DIRECTION_PATTERN.search(last.reasoning)
+    stop_match = _ORDERFLOW_STOP_LOSS_PATTERN.search(last.reasoning)
+    if direction_match is None or stop_match is None:
+        return None, None
+    return direction_match.group(1), float(stop_match.group(1))
+
+
+def process_orderflow_imbalance(
+    client: MarketDataClient,
+    run_id: str,
+    now: datetime,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> tuple[list[str], list[dict[str, Any]]]:
+    """EXPERIMENTAL, snapshot-based, forward-testing only — see
+    nero_core/strategies/orderflow_imbalance.py's module docstring. Evaluated every
+    run for BTC and ETH; a failure fetching either the 1h candle data or the
+    order-book snapshot is classified DATA_UNAVAILABLE and that asset is skipped for
+    this run only — never crashes the scheduler, never fabricates a snapshot."""
+    evaluated: list[str] = []
+    errors: list[dict[str, Any]] = []
+
+    for asset, binance_symbol in ORDERFLOW_BINANCE_SYMBOLS.items():
+        try:
+            # "1h" isn't part of tools.timeframe_data's standard {2h,4h,12h,24h,1week}
+            # rotation, so this fetches directly via MarketDataClient.load_intraday
+            # (which supports "1h" as an ordinary Binance interval) rather than through
+            # fetch_timeframe_candles.
+            candles = client.load_intraday(asset, interval="1h", candles=240).prices
+        except MarketDataUnavailableError as exc:
+            errors.append({"asset": asset, "strategy": ORDERFLOW_ID, "classification": "DATA_UNAVAILABLE", "message": str(exc)})
+            continue
+        if len(candles) < ORDERFLOW_MA_ATR_WARMUP_CANDLES:
+            errors.append({
+                "asset": asset, "strategy": ORDERFLOW_ID, "classification": "DATA_QUALITY",
+                "message": "insufficient 1h history for MA20/ATR14 warmup",
+            })
+            continue
+
+        closes = candles["close"].astype(float)
+        ma20 = closes.rolling(ORDERFLOW_PARAMETERS.ma_period).mean().iloc[-1]
+        atr14 = compute_atr(candles, ORDERFLOW_PARAMETERS.atr_period).iloc[-1]
+        if pd.isna(ma20) or pd.isna(atr14):
+            errors.append({
+                "asset": asset, "strategy": ORDERFLOW_ID, "classification": "DATA_QUALITY",
+                "message": "MA20/ATR14 not yet available (insufficient warmup)",
+            })
+            continue
+
+        latest_close = float(closes.iloc[-1])
+        latest_candle_time = int(candles["close_time"].iloc[-1])
+        indicators = OrderflowIndicators(close=latest_close, ma20=float(ma20), atr=float(atr14))
+
+        try:
+            snapshot = fetch_and_cache_snapshot(binance_symbol, now=now, db_path=db_path)
+        except OrderbookDataUnavailableError as exc:
+            errors.append({"asset": asset, "strategy": ORDERFLOW_ID, "classification": "DATA_UNAVAILABLE", "message": str(exc)})
+            continue
+
+        direction, stop_loss = _reconstruct_open_position(asset, db_path)
+        if direction is not None:
+            open_position = _OrderflowOpenPositionView(direction=direction, stop_loss=stop_loss)
+            decision = orderflow_evaluate_exit(open_position, snapshot.imbalance_ratio, indicators, ORDERFLOW_PARAMETERS)
+            if decision.should_exit:
+                ratio_text = "n/a" if snapshot.imbalance_ratio is None else f"{snapshot.imbalance_ratio:.4f}"
+                insert_execution_log_row(
+                    run_id=run_id, strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset=asset,
+                    signal_type="EXIT", reasoning=f"{decision.exit_reason} exit, imbalance_ratio={ratio_text}",
+                    candle_timestamp=latest_candle_time, entry_price=None, exit_price=latest_close,
+                    timestamp=now, db_path=db_path,
+                )
+            evaluated.append(asset)
+            continue
+
+        evaluation = orderflow_evaluate_entry(snapshot.imbalance_ratio, indicators, has_open_position=False, params=ORDERFLOW_PARAMETERS)
+        if evaluation.passed:
+            trade = orderflow_size_entry(
+                evaluation.direction, latest_close, indicators.atr, ORDERFLOW_PARAMETERS.initial_equity, ORDERFLOW_PARAMETERS
+            )
+            if trade is not None:
+                ratio_text = "n/a" if snapshot.imbalance_ratio is None else f"{snapshot.imbalance_ratio:.4f}"
+                insert_execution_log_row(
+                    run_id=run_id, strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset=asset,
+                    signal_type="ENTRY",
+                    reasoning=f"direction={trade.direction} stop_loss={trade.stop_loss:.8f} imbalance_ratio={ratio_text}",
+                    candle_timestamp=latest_candle_time, entry_price=trade.entry_price, exit_price=None,
+                    timestamp=now, db_path=db_path,
+                )
+        evaluated.append(asset)
+
+    return evaluated, errors
+
+
+@dataclass(frozen=True)
+class _OrderflowOpenPositionView:
+    """Minimal duck-typed stand-in for orderflow_imbalance.OpenPosition — only
+    direction/stop_loss are ever recoverable from the ledger (see
+    _reconstruct_open_position), and evaluate_exit only ever reads those two fields."""
+
+    direction: str
+    stop_loss: float
+
+
 def process_news_sentiment(
     run_id: str, now: datetime, db_path: Path = DEFAULT_DB_PATH, news_client: NewsFeedClient | None = None
 ) -> tuple[list[str], list[dict[str, Any]]]:
@@ -332,6 +485,15 @@ def run_once(
             )
     else:
         assets_skipped.append({"asset": "NEWS_SENTIMENT", "strategy": NEWS_SENTIMENT_ID, "classification": "NOT_DUE"})
+
+    try:
+        orderflow_evaluated, orderflow_errors = process_orderflow_imbalance(client, run_id, now, db_path)
+        assets_evaluated.extend(f"ORDERFLOW_IMBALANCE:{a}" for a in orderflow_evaluated)
+        errors_encountered.extend(orderflow_errors)
+    except Exception as exc:  # noqa: BLE001 - a bug here must never abort the rest of the run
+        errors_encountered.append(
+            {"asset": "ORDERFLOW_IMBALANCE", "strategy": ORDERFLOW_ID, "classification": "FATAL", "message": f"{exc.__class__.__name__}: {exc}"}
+        )
 
     end_time = datetime.now(timezone.utc)
     insert_execution_metadata(run_id, start_time, end_time, assets_evaluated, assets_skipped, errors_encountered, db_path)
