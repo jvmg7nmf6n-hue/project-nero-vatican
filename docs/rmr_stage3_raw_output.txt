@@ -1,0 +1,18 @@
+BTC/1d v1.4.0-long-only-confirmation: done (17.7s)
+ETH/4h v1.1.0-long-only (control grid): done (83.5s)
+
+=== RMR Variant Research Cycle — Stage 3 ===
+
+--- Refinement 1: RMR_LONG_ONLY_CONFIRMATION_BTC_1D ---
+  BTC/1d v1.4.0-long-only-confirmation (RMR_LONG_ONLY_CONFIRMATION_BTC_1D) (3258 candles)
+    TRAIN: N=8* ExpR=0.090
+    TEST:  N=7* ExpR=0.219
+    Positive both halves: True
+    Grid-shift: NOT_APPLICABLE — native daily data, structurally limited per this task's own grid-shift rule for 1d configs; capped at PROMISING-WATCHLIST if positive both halves, not tested.
+
+--- Refinement 2: v1.1.0-long-only on ETH/4h ---
+  ETH/4h v1.1.0-long-only (Stage 3 Refinement 2) — control grid (12491 candles)
+    TRAIN: N=87 ExpR=-0.071
+    TEST:  N=31 ExpR=-0.050
+    Qualifies for grid-shift: False
+    (control grid did not qualify — no grid-shift run)

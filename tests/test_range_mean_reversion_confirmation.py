@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 
 import pandas as pd
 
@@ -85,6 +86,29 @@ class EvaluateConfirmationEntryTest(unittest.TestCase):
         evaluation = evaluate_confirmation_entry(evaluable, 2, state)
         self.assertFalse(evaluation.passed)
         self.assertIn("NO_CONFIRMATION_PATTERN", evaluation.reasons)
+
+    def test_short_confirmation_disabled_when_allow_short_false(self) -> None:
+        # RMR Variant Research Cycle, Stage 3: range_mean_reversion_long_only_
+        # confirmation.py stacks allow_short=False onto this confirmation entry.
+        rows = [
+            _row(0, open_=106.0, close=110.0, bb_lower=95.0, bb_upper=105.0, adx=30.0),
+            _row(3_600_000, open_=110.0, close=100.0, bb_lower=95.0, bb_upper=105.0, adx=20.0),
+            _row(7_200_000, open_=99.0, close=98.0, bb_lower=95.0, bb_upper=105.0, adx=20.0),
+        ]
+        evaluable = pd.DataFrame(rows)
+        state = RangeMeanReversionState(equity=10000.0)
+        params = replace(CONFIRMATION_PARAMETERS, allow_short=False)
+        evaluation = evaluate_confirmation_entry(evaluable, 2, state, params)
+        self.assertFalse(evaluation.passed)
+        self.assertIn("SHORT_DISABLED", evaluation.reasons)
+
+    def test_long_confirmation_still_works_when_allow_short_false(self) -> None:
+        evaluable = _long_confirmation_evaluable()
+        state = RangeMeanReversionState(equity=10000.0)
+        params = replace(CONFIRMATION_PARAMETERS, allow_short=False)
+        evaluation = evaluate_confirmation_entry(evaluable, 2, state, params)
+        self.assertTrue(evaluation.passed)
+        self.assertEqual(evaluation.direction, "LONG")
 
     def test_rejected_when_open_trade_exists(self) -> None:
         evaluable = _long_confirmation_evaluable()

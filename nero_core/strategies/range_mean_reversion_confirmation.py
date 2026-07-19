@@ -92,7 +92,14 @@ def evaluate_confirmation_entry(
     elif close_t > float(bb_upper_t) and close_t1 < float(bb_upper_t) and adx_t1 < params.adx_entry_threshold:
         direction = "SHORT"
 
-    if direction is None:
+    if direction == "SHORT" and not params.allow_short:
+        # RMR Variant Research Cycle, Stage 3: reuses the same allow_short flag
+        # v1.1.0-long-only introduced — see range_mean_reversion_long_only_
+        # confirmation.py, which stacks this with the confirmation entry pattern.
+        reasons.append("SHORT_DISABLED")
+        direction = None
+
+    if direction is None and "SHORT_DISABLED" not in reasons:
         reasons.append("NO_CONFIRMATION_PATTERN")
 
     passed = direction is not None and not reasons
