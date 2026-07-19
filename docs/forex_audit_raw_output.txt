@@ -1,0 +1,70 @@
+=== Task B1: Forex Data Calibration Audit ===
+
+Universe: 10 pairs x 4 timeframes = 40 configs
+Unresolved pairs: 0
+
+--- EUR/USD ---
+     1h: ADEQUATE — 4990 candles, 2025-12-12 18:00:00+00:00 -> 2026-07-19 12:00:00+00:00
+     4h: ADEQUATE — 4998 candles, 2023-08-02 15:00:00+00:00 -> 2026-07-19 11:00:00+00:00
+   1day: ADEQUATE — 5000 candles, 2007-08-01 00:00:00+00:00 -> 2026-07-19 00:00:00+00:00
+  1week: ADEQUATE — 2201 candles, 1974-12-30 00:00:00+00:00 -> 2026-07-13 00:00:00+00:00
+
+--- GBP/USD ---
+     1h: ADEQUATE — 4990 candles, 2025-12-12 17:00:00+00:00 -> 2026-07-19 12:00:00+00:00
+     4h: ADEQUATE — 4998 candles, 2023-08-03 23:00:00+00:00 -> 2026-07-19 11:00:00+00:00
+   1day: ADEQUATE — 5000 candles, 2007-09-03 00:00:00+00:00 -> 2026-07-19 00:00:00+00:00
+  1week: ADEQUATE — 2898 candles, 1971-01-04 00:00:00+00:00 -> 2026-07-13 00:00:00+00:00
+
+--- USD/JPY ---
+     1h: ADEQUATE — 4990 candles, 2025-12-12 14:00:00+00:00 -> 2026-07-19 12:00:00+00:00
+     4h: ADEQUATE — 4998 candles, 2023-07-28 03:00:00+00:00 -> 2026-07-19 11:00:00+00:00
+   1day: ADEQUATE — 5000 candles, 2007-10-18 00:00:00+00:00 -> 2026-07-19 00:00:00+00:00
+  1week: ADEQUATE — 2897 candles, 1971-01-04 00:00:00+00:00 -> 2026-07-13 00:00:00+00:00
+
+--- USD/CHF ---
+     1h: ADEQUATE — 4990 candles, 2025-12-12 14:00:00+00:00 -> 2026-07-19 12:00:00+00:00
+     4h: ADEQUATE — 4998 candles, 2023-07-31 11:00:00+00:00 -> 2026-07-19 11:00:00+00:00
+   1day: ADEQUATE — 5000 candles, 2007-10-26 00:00:00+00:00 -> 2026-07-19 00:00:00+00:00
+  1week: ADEQUATE — 2898 candles, 1971-01-04 00:00:00+00:00 -> 2026-07-13 00:00:00+00:00
+
+--- EUR/GBP ---
+     1h: ADEQUATE — 4990 candles, 2025-12-12 14:00:00+00:00 -> 2026-07-19 12:00:00+00:00
+     4h: ADEQUATE — 4998 candles, 2023-08-03 03:00:00+00:00 -> 2026-07-19 11:00:00+00:00
+   1day: ADEQUATE — 5000 candles, 2007-11-19 00:00:00+00:00 -> 2026-07-19 00:00:00+00:00
+  1week: ADEQUATE — 2099 candles, 1986-05-05 00:00:00+00:00 -> 2026-07-13 00:00:00+00:00
+
+--- EUR/JPY ---
+     1h: ADEQUATE — 4990 candles, 2025-12-12 14:00:00+00:00 -> 2026-07-19 12:00:00+00:00
+     4h: ADEQUATE — 4998 candles, 2023-08-03 07:00:00+00:00 -> 2026-07-19 11:00:00+00:00
+   1day: ADEQUATE — 5000 candles, 2007-11-19 00:00:00+00:00 -> 2026-07-19 00:00:00+00:00
+  1week: ADEQUATE — 2691 candles, 1974-12-30 00:00:00+00:00 -> 2026-07-13 00:00:00+00:00
+
+--- GBP/JPY ---
+     1h: ADEQUATE — 4990 candles, 2025-12-12 14:00:00+00:00 -> 2026-07-19 12:00:00+00:00
+     4h: ADEQUATE — 4998 candles, 2023-08-03 03:00:00+00:00 -> 2026-07-19 11:00:00+00:00
+   1day: ADEQUATE — 5000 candles, 2007-11-19 00:00:00+00:00 -> 2026-07-19 00:00:00+00:00
+  1week: ADEQUATE — 2897 candles, 1971-01-04 00:00:00+00:00 -> 2026-07-13 00:00:00+00:00
+
+--- AUD/USD ---
+     1h: ADEQUATE — 4990 candles, 2025-12-12 14:00:00+00:00 -> 2026-07-19 12:00:00+00:00
+     4h: ADEQUATE — 4998 candles, 2023-08-03 07:00:00+00:00 -> 2026-07-19 11:00:00+00:00
+   1day: ADEQUATE — 5000 candles, 2007-11-19 00:00:00+00:00 -> 2026-07-19 00:00:00+00:00
+  1week: ADEQUATE — 2898 candles, 1971-01-04 00:00:00+00:00 -> 2026-07-13 00:00:00+00:00
+
+--- NZD/USD ---
+     1h: ADEQUATE — 4990 candles, 2025-12-12 20:00:00+00:00 -> 2026-07-19 12:00:00+00:00
+     4h: ADEQUATE — 4998 candles, 2023-08-04 11:00:00+00:00 -> 2026-07-19 11:00:00+00:00
+   1day: ADEQUATE — 5000 candles, 2007-11-19 00:00:00+00:00 -> 2026-07-19 00:00:00+00:00
+  1week: ADEQUATE — 2897 candles, 1971-01-04 00:00:00+00:00 -> 2026-07-13 00:00:00+00:00
+
+--- USD/CAD ---
+     1h: ADEQUATE — 4990 candles, 2025-12-12 14:00:00+00:00 -> 2026-07-19 12:00:00+00:00
+     4h: ADEQUATE — 4998 candles, 2023-08-02 23:00:00+00:00 -> 2026-07-19 11:00:00+00:00
+   1day: ADEQUATE — 5000 candles, 2007-11-16 00:00:00+00:00 -> 2026-07-19 00:00:00+00:00
+  1week: ADEQUATE — 2325 candles, 1982-01-04 00:00:00+00:00 -> 2026-07-13 00:00:00+00:00
+
+=== Depth cap note ===
+Twelve Data caps a single request at 5000 rows on this plan (OUTPUTSIZE_CAP). For 1h (forex trades ~24h/day, 5 days/week), that bounds a single-call fetch to roughly ~219 days of history — confirmed directly. Older intraday history DOES exist further back (confirmed via the end_date pagination parameter) but this module does not paginate, matching the same single-call convention every other Twelve Data asset in this project uses. Daily/weekly depth is far beyond this cap for every pair (EUR/USD 1day confirmed back to 2007).
+
+=== 24/5 market gap note ===
+Forex trades continuously from Monday open to Friday close — the only real gap is Friday close -> Sunday/Monday open. Any grid-shift verification run against this data must not cross that boundary.
