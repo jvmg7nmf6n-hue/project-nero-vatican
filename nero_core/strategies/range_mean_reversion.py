@@ -89,6 +89,12 @@ class RangeMeanReversionParameters:
     fee_bps: float = 10.0
     slippage_bps: float = 2.0
     max_notional_pct: float = 1.0
+    # RMR Variant Research Cycle additions (v1.1.0/v1.2.0) — both default to v1.0.0's
+    # exact original behavior, so DEFAULT_PARAMETERS (and every pre-existing caller)
+    # is completely unchanged; only a variant module that explicitly sets these differs.
+    allow_short: bool = True  # False disables the SHORT side entirely (long-only variants)
+    require_adx_falling: bool = False  # extra entry condition: ADX[t] < ADX[t - adx_falling_lookback]
+    adx_falling_lookback: int = 3  # in CLOSED candles, not 1-candle noise
 
 
 DEFAULT_PARAMETERS = RangeMeanReversionParameters()
@@ -200,6 +206,12 @@ def add_indicators(candles: pd.DataFrame, params: RangeMeanReversionParameters =
     frame["bb_width_pct"] = (frame["bb_upper"] - frame["bb_lower"]) / frame["sma20"].replace(0, math.nan) * 100.0
     frame["adx"] = adx(frame, params.adx_period)
     frame["atr"] = atr(frame, params.atr_period)
+    # RMR Variant Research Cycle: a 3-CLOSED-candle ADX decline (not 1-candle noise),
+    # always computed (harmless when params.require_adx_falling is False — it's simply
+    # never consulted by evaluate_entry in that case). NaN wherever fewer than
+    # adx_falling_lookback prior candles exist; comparing against NaN correctly
+    # evaluates False (never satisfied), not a crash.
+    frame["adx_falling"] = frame["adx"] < frame["adx"].shift(params.adx_falling_lookback)
     return frame
 
 
@@ -238,6 +250,16 @@ def evaluate_entry(
         direction = "SHORT"
     else:
         reasons.append("NO_BAND_BREACH")
+
+    if direction == "SHORT" and not params.allow_short:
+        reasons.append("SHORT_DISABLED")
+        direction = None
+
+    if direction is not None and params.require_adx_falling:
+        adx_falling = candle.get("adx_falling")
+        if adx_falling is None or pd.isna(adx_falling) or not bool(adx_falling):
+            reasons.append("ADX_NOT_FALLING")
+            direction = None
 
     passed = direction is not None and not reasons
     return EntryEvaluation(

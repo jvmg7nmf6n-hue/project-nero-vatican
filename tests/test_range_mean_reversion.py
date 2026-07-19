@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 
 import pandas as pd
 
@@ -23,10 +24,11 @@ from nero_core.strategies.registry import StrategyAlreadyRegisteredError, Strate
 
 
 def _make_candle(close_time=0, close=100.0, high=None, low=None, sma20=100.0,
-                  bb_lower=95.0, bb_upper=105.0, adx=20.0, atr_value=2.0) -> pd.Series:
+                  bb_lower=95.0, bb_upper=105.0, adx=20.0, atr_value=2.0, adx_falling=None) -> pd.Series:
     high = high if high is not None else close + 1
     low = low if low is not None else close - 1
     return pd.Series({
+        "adx_falling": adx_falling,
         "date": pd.Timestamp(close_time, unit="ms", tz="UTC"),
         "close_time": close_time,
         "close": close,
@@ -334,6 +336,79 @@ class RegistrationTest(unittest.TestCase):
         self.assertEqual(DEFAULT_PARAMETERS.atr_stop_multiple, 2.0)
         self.assertEqual(DEFAULT_PARAMETERS.risk_per_trade, 0.01)
         self.assertFalse(hasattr(DEFAULT_PARAMETERS, "max_holding_hours"))
+
+    def test_default_parameters_preserve_v1_0_0_behavior(self) -> None:
+        # The RMR Variant Research Cycle additions must never change v1.0.0's own
+        # behavior by default.
+        self.assertTrue(DEFAULT_PARAMETERS.allow_short)
+        self.assertFalse(DEFAULT_PARAMETERS.require_adx_falling)
+        self.assertEqual(DEFAULT_PARAMETERS.adx_falling_lookback, 3)
+
+
+class AllowShortFlagTest(unittest.TestCase):
+    def test_long_only_still_allows_long_entry(self) -> None:
+        params = replace(DEFAULT_PARAMETERS, allow_short=False)
+        candle = _make_candle(close=90.0, adx=20.0)  # below lower band -> LONG
+        state = RangeMeanReversionState(equity=10000.0)
+        evaluation = evaluate_entry(candle, state, params)
+        self.assertTrue(evaluation.passed)
+        self.assertEqual(evaluation.direction, "LONG")
+
+    def test_long_only_rejects_short_entry(self) -> None:
+        params = replace(DEFAULT_PARAMETERS, allow_short=False)
+        candle = _make_candle(close=110.0, adx=20.0)  # above upper band -> would be SHORT
+        state = RangeMeanReversionState(equity=10000.0)
+        evaluation = evaluate_entry(candle, state, params)
+        self.assertFalse(evaluation.passed)
+        self.assertIn("SHORT_DISABLED", evaluation.reasons)
+
+    def test_default_params_still_allow_short(self) -> None:
+        candle = _make_candle(close=110.0, adx=20.0)
+        state = RangeMeanReversionState(equity=10000.0)
+        evaluation = evaluate_entry(candle, state, DEFAULT_PARAMETERS)
+        self.assertTrue(evaluation.passed)
+        self.assertEqual(evaluation.direction, "SHORT")
+
+
+class RequireAdxFallingFlagTest(unittest.TestCase):
+    def test_rejects_entry_when_adx_not_falling(self) -> None:
+        params = replace(DEFAULT_PARAMETERS, require_adx_falling=True)
+        candle = _make_candle(close=90.0, adx=20.0, adx_falling=False)
+        state = RangeMeanReversionState(equity=10000.0)
+        evaluation = evaluate_entry(candle, state, params)
+        self.assertFalse(evaluation.passed)
+        self.assertIn("ADX_NOT_FALLING", evaluation.reasons)
+
+    def test_allows_entry_when_adx_is_falling(self) -> None:
+        params = replace(DEFAULT_PARAMETERS, require_adx_falling=True)
+        candle = _make_candle(close=90.0, adx=20.0, adx_falling=True)
+        state = RangeMeanReversionState(equity=10000.0)
+        evaluation = evaluate_entry(candle, state, params)
+        self.assertTrue(evaluation.passed)
+
+    def test_default_params_ignore_adx_falling_column_entirely(self) -> None:
+        candle = _make_candle(close=90.0, adx=20.0, adx_falling=False)
+        state = RangeMeanReversionState(equity=10000.0)
+        evaluation = evaluate_entry(candle, state, DEFAULT_PARAMETERS)
+        self.assertTrue(evaluation.passed)  # ignored since require_adx_falling=False
+
+    def test_missing_adx_falling_column_rejects_rather_than_crashing(self) -> None:
+        params = replace(DEFAULT_PARAMETERS, require_adx_falling=True)
+        candle = _make_candle(close=90.0, adx=20.0, adx_falling=None)
+        state = RangeMeanReversionState(equity=10000.0)
+        evaluation = evaluate_entry(candle, state, params)
+        self.assertFalse(evaluation.passed)
+        self.assertIn("ADX_NOT_FALLING", evaluation.reasons)
+
+
+class AdxFallingColumnTest(unittest.TestCase):
+    def test_add_indicators_computes_adx_falling_column(self) -> None:
+        candles = _trending_series(n=120)
+        enriched = add_indicators(candles, replace(DEFAULT_PARAMETERS, adx_falling_lookback=3))
+        self.assertIn("adx_falling", enriched.columns)
+        # A sustained uptrend has monotonically RISING adx (not falling) once warmed up.
+        valid = enriched.dropna(subset=["adx"])
+        self.assertFalse(bool(valid["adx_falling"].iloc[-1]))
 
 
 if __name__ == "__main__":
