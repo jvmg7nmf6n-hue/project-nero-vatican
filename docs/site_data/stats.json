@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-19T07:21:59.480737+00:00",
+  "last_updated": "2026-07-19T09:24:36.979489+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -22,6 +22,86 @@
       "strategy": "TREND_PULLBACK",
       "strategy_version": "trend-pullback-v1.0.0",
       "asset": "BNB",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "BREAKOUT_MOMENTUM",
+      "strategy_version": "breakout-momentum-v1.6.0-silver-calibrated-24h",
+      "asset": "SILVER",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "TREND_PULLBACK",
+      "strategy_version": "trend-pullback-v1.5.0-silver-calibrated-24h",
+      "asset": "SILVER",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "VOLATILITY_SQUEEZE",
+      "strategy_version": "volatility-squeeze-v1.1.0-ma200-silver-calibrated-24h",
+      "asset": "SILVER",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "VOLATILITY_SQUEEZE",
+      "strategy_version": "volatility-squeeze-v1.1.0-ma150-silver-calibrated-24h",
+      "asset": "SILVER",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "VOLATILITY_SQUEEZE",
+      "strategy_version": "volatility-squeeze-v1.1.0-ma100-silver-calibrated-24h",
+      "asset": "SILVER",
       "resolved_trades": 0,
       "win_rate": null,
       "expectancy_r": null,

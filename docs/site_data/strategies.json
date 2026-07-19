@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-19T07:21:59.480740+00:00",
+  "last_updated": "2026-07-19T09:24:36.979493+00:00",
   "strategies": [
     {
       "name": "BREAKOUT_MOMENTUM",
@@ -15,6 +15,41 @@
       "asset": "BNB",
       "timeframe": "12h",
       "verification_status": "verified — sample-limited"
+    },
+    {
+      "name": "BREAKOUT_MOMENTUM",
+      "version": "breakout-momentum-v1.6.0-silver-calibrated-24h",
+      "asset": "SILVER",
+      "timeframe": "24h",
+      "verification_status": "promising-watchlist — forward-testing, not verified"
+    },
+    {
+      "name": "TREND_PULLBACK",
+      "version": "trend-pullback-v1.5.0-silver-calibrated-24h",
+      "asset": "SILVER",
+      "timeframe": "24h",
+      "verification_status": "promising-watchlist — forward-testing, not verified"
+    },
+    {
+      "name": "VOLATILITY_SQUEEZE",
+      "version": "volatility-squeeze-v1.1.0-ma200-silver-calibrated-24h",
+      "asset": "SILVER",
+      "timeframe": "24h",
+      "verification_status": "promising-watchlist — forward-testing, not verified"
+    },
+    {
+      "name": "VOLATILITY_SQUEEZE",
+      "version": "volatility-squeeze-v1.1.0-ma150-silver-calibrated-24h",
+      "asset": "SILVER",
+      "timeframe": "24h",
+      "verification_status": "promising-watchlist — forward-testing, not verified"
+    },
+    {
+      "name": "VOLATILITY_SQUEEZE",
+      "version": "volatility-squeeze-v1.1.0-ma100-silver-calibrated-24h",
+      "asset": "SILVER",
+      "timeframe": "24h",
+      "verification_status": "promising-watchlist — forward-testing, not verified"
     },
     {
       "name": "COINTEGRATION_PAIRS",
