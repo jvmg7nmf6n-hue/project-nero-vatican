@@ -1,0 +1,15 @@
+
+=== RMR Variant Research Cycle — Stage 2 Diagnosis Support ===
+
+--- Exit-reason distribution / holding-hours (full history, not split) ---
+  EUR/USD_4h_baseline: N=86 (full history) exit_reasons=[REVERSION_TARGET=24, STOP=27, REGIME_BREAK=35] mean_holding_hours=24.7 median=20.0
+  EUR/USD_4h_long_only: N=42 (full history) exit_reasons=[STOP=13, REVERSION_TARGET=17, REGIME_BREAK=12] mean_holding_hours=25.3 median=20.0
+  ETH_4h_baseline: N=368 (full history) exit_reasons=[REGIME_BREAK=144, STOP=123, REVERSION_TARGET=101] mean_holding_hours=20.8 median=16.0
+  ETH_4h_adx_falling: N=203 (full history) exit_reasons=[STOP=70, REVERSION_TARGET=67, REGIME_BREAK=66] mean_holding_hours=23.3 median=20.0
+  BTC_1d_baseline: N=62 (full history) exit_reasons=[STOP=18, REGIME_BREAK=24, REVERSION_TARGET=20] mean_holding_hours=112.6 median=96.0
+  BTC_1d_long_only: N=27 (full history) exit_reasons=[REGIME_BREAK=12, REVERSION_TARGET=11, STOP=4] mean_holding_hours=133.3 median=120.0
+  BTC_1d_confirmation: N=25 (full history) exit_reasons=[STOP=4, REVERSION_TARGET=17, REGIME_BREAK=4] mean_holding_hours=98.9 median=72.0
+
+--- Implied short-leg cost (baseline total R - long-only total R) ---
+  EUR/USD_4h_short_leg_cost: baseline N=86 totalR=-30.40 | long_only N=42 totalR=-10.65 | implied short-leg: N~=44 totalR=-19.74 (avg~=-0.449 R/trade)
+  BTC_1d_short_leg_cost: baseline N=62 totalR=-3.98 | long_only N=27 totalR=5.26 | implied short-leg: N~=35 totalR=-9.24 (avg~=-0.264 R/trade)
