@@ -2,7 +2,9 @@
 
 `nero_core/execution/live_scheduler.py` runs every 30 minutes (GitHub Actions cron
 `0,30 * * * *`, see `.github/workflows/live_scheduler.yml`) and produces an append-only
-audit trail of live paper-tracking signals for the four Phase 1 survivors.
+audit trail of live paper-tracking signals for the four Phase 1 survivors, plus (as of
+the Asset Expansion Phase A follow-up) five SILVER PROMISING-WATCHLIST forward-tests —
+see the section below.
 
 ## Why these four, and why THIS GOLD version
 
@@ -20,6 +22,40 @@ version and is the one that actually produced every GOLD/1week positive-expectan
 result referenced in this project's research phase. Wiring `v1.1.0` live would mean
 generating real signals from a configuration with no validated track record at all —
 confirmed with the user before building this scheduler.
+
+## SILVER additions (Asset Expansion Phase A follow-up) — NOT survivors
+
+Five more configs were added at the user's explicit request, to forward-test the
+Asset Expansion Phase A metals sweep's PROMISING-WATCHLIST candidates and accrue live
+evidence (see `docs/metals_phase_a_full_sweep.md`, `docs/metals_grid_shift_verification.md`,
+`docs/metals_phase_a_report.md`):
+
+5. `SILVER` / `24h` / `BREAKOUT_MOMENTUM` `breakout-momentum-v1.6.0-silver-calibrated-24h`
+6. `SILVER` / `24h` / `TREND_PULLBACK` `trend-pullback-v1.5.0-silver-calibrated-24h`
+7. `SILVER` / `24h` / `VOLATILITY_SQUEEZE` `volatility-squeeze-v1.1.0-ma200-silver-calibrated-24h`
+8. `SILVER` / `24h` / `VOLATILITY_SQUEEZE` `volatility-squeeze-v1.1.0-ma150-silver-calibrated-24h`
+9. `SILVER` / `24h` / `VOLATILITY_SQUEEZE` `volatility-squeeze-v1.1.0-ma100-silver-calibrated-24h`
+
+Unlike the four above, none of these earned SURVIVED status — zero of the 76 Phase A
+configs did. Each is positive in both backtest halves with an adequate sample, but
+grid-shift verification does not apply at 24h (COMEX/NYMEX daily settlement gap breaks
+`resample_hourly_to_grid`'s contract for any 24h bin — a genuine structural property of
+exchange-settled futures, not a bug). `nero_core/execution/verification_status.py`
+labels all five `"promising-watchlist — forward-testing, not verified"` and
+`nero_core/execution/notify_ntfy.py` appends `"(watchlist)"` to their display names, so
+this distinction stays visible everywhere a signal from one of them surfaces — never
+worded as equivalent to the four proven survivors above.
+
+BOS_CONTINUATION and MACRO_RISK_ON — the two other strategy families the Phase A sweep
+also flagged PROMISING-WATCHLIST for SILVER (MACRO_RISK_ON/24h was in fact the
+single best-sampled result in the whole sweep) — are NOT wired here. Both have their
+own bespoke `evaluate_exit`/`OpenTrade` shapes (direction-aware sizing for BOS,
+regime-driven exit for MACRO) incompatible with `replay_single_asset_events`'s hardcoded
+call to `nero_core.strategies.mean_reversion.evaluate_exit`. Wiring either live would
+require new bespoke replay functions (mirroring `replay_pairs_events`'s existing
+precedent) rather than a config addition — a larger, riskier change to code that writes
+directly to the Truth Ledger, left as a follow-up rather than rushed in alongside the
+five straightforward additions above.
 
 ## No persisted mutable state — replay from the ledger, always
 

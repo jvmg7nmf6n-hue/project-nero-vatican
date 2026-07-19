@@ -199,7 +199,19 @@ class RoundTripStatsTest(unittest.TestCase):
     def test_roster_order_is_stable(self) -> None:
         export = build_stats_export([], now=NOW)
         names = [s["strategy"] for s in export["strategies"]]
-        self.assertEqual(names, [GOLD_STRATEGY, BNB_STRATEGY, PAIRS_STRATEGY])
+        self.assertEqual(
+            names,
+            [
+                GOLD_STRATEGY,
+                BNB_STRATEGY,
+                "BREAKOUT_MOMENTUM",
+                "TREND_PULLBACK",
+                "VOLATILITY_SQUEEZE",
+                "VOLATILITY_SQUEEZE",
+                "VOLATILITY_SQUEEZE",
+                PAIRS_STRATEGY,
+            ],
+        )
 
 
 class BuildStrategiesExportTest(unittest.TestCase):

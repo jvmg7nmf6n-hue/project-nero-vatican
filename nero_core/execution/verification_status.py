@@ -16,6 +16,14 @@ VERIFICATION_STATUS: dict[tuple[str, str], str] = {
     ("COINTEGRATION_PAIRS", "BTC-ETH"): "verified — weakest, live-proving",
     ("NEWS_SENTIMENT", "GOLD"): "forward-test-only, no historical backtest",
     ("NEWS_SENTIMENT", "BTC"): "forward-test-only, no historical backtest",
+    # Asset Expansion Phase A metals sweep (docs/metals_phase_a_full_sweep.md,
+    # docs/metals_grid_shift_verification.md): positive both backtest halves, adequate
+    # sample, but grid-shift verification does not apply at 24h and NO Phase A config
+    # reached SURVIVED. Wired live at the user's explicit request to accrue forward
+    # evidence — must never be worded as "verified".
+    ("BREAKOUT_MOMENTUM", "SILVER"): "promising-watchlist — forward-testing, not verified",
+    ("TREND_PULLBACK", "SILVER"): "promising-watchlist — forward-testing, not verified",
+    ("VOLATILITY_SQUEEZE", "SILVER"): "promising-watchlist — forward-testing, not verified",
 }
 
 DEFAULT_VERIFICATION_STATUS = "unverified"

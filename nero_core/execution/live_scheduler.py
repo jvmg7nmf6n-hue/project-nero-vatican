@@ -14,6 +14,20 @@ docs/grid_shift_robustness_followup.md for how each earned this status):
   3. BTC-ETH / 12h    / COINTEGRATION_PAIRS cointegration-pairs-v1.0.0
   4. NEWS_SENTIMENT (GOLD, BTC) news-sentiment-v1.0.0 — forward-test-only, no backtest
 
+SILVER PROMISING-WATCHLIST FORWARD-TESTS WIRED (Asset Expansion Phase A follow-up —
+NOT survivors; wired at the user's explicit request to accrue live evidence on the
+metals sweep's PROMISING-WATCHLIST candidates. See docs/metals_phase_a_full_sweep.md
+and docs/metals_grid_shift_verification.md: all 5 are positive in both backtest
+halves with an adequate sample, but grid-shift verification does not apply at 24h
+(COMEX/NYMEX daily settlement gap) and ZERO Phase A configs reached SURVIVED. Do not
+present these as proven edges anywhere — see
+nero_core/execution/verification_status.py):
+  5. SILVER / 24h / BREAKOUT_MOMENTUM breakout-momentum-v1.6.0-silver-calibrated-24h
+  6. SILVER / 24h / TREND_PULLBACK trend-pullback-v1.5.0-silver-calibrated-24h
+  7. SILVER / 24h / VOLATILITY_SQUEEZE volatility-squeeze-v1.1.0-ma200-silver-calibrated-24h
+  8. SILVER / 24h / VOLATILITY_SQUEEZE volatility-squeeze-v1.1.0-ma150-silver-calibrated-24h
+  9. SILVER / 24h / VOLATILITY_SQUEEZE volatility-squeeze-v1.1.0-ma100-silver-calibrated-24h
+
 Usage:
     python -m nero_core.execution.live_scheduler
 """
@@ -38,6 +52,14 @@ from nero_core.execution.candle_schedule import candle_boundary_due, daily_time_
 from nero_core.execution.replay import replay_pairs_events, replay_single_asset_events
 from nero_core.strategies.breakout_momentum import STRATEGY_ID as BREAKOUT_MOMENTUM_ID
 from nero_core.strategies.breakout_momentum_gold_calibrated_1week import STRATEGY_VERSION as GOLD_BM_VERSION
+from nero_core.strategies.breakout_momentum_silver_calibrated import STRATEGY_VERSION as SILVER_BM_VERSION
+from nero_core.strategies.volatility_squeeze import STRATEGY_ID as VOLATILITY_SQUEEZE_ID
+from nero_core.strategies.volatility_squeeze_silver_calibrated import (
+    STRATEGY_VERSION_MA100 as SILVER_VS_MA100_VERSION,
+    STRATEGY_VERSION_MA150 as SILVER_VS_MA150_VERSION,
+    STRATEGY_VERSION_MA200 as SILVER_VS_MA200_VERSION,
+)
+from nero_core.strategies.trend_pullback_silver_calibrated import STRATEGY_VERSION as SILVER_TP_VERSION
 from nero_core.strategies.cointegration_pairs import (
     DEFAULT_PARAMETERS as PAIRS_PARAMETERS,
     PAIR as PAIRS_ASSETS,
@@ -84,6 +106,14 @@ class SingleAssetConfig:
 SINGLE_ASSET_CONFIGS = (
     SingleAssetConfig("GOLD", "1week", "breakout_momentum_gold_calibrated_1week", BREAKOUT_MOMENTUM_ID, GOLD_BM_VERSION),
     SingleAssetConfig("BNB", "12h", "trend_pullback", TREND_PULLBACK_ID, TREND_PULLBACK_VERSION),
+    # SILVER PROMISING-WATCHLIST forward-tests (Asset Expansion Phase A follow-up) — see
+    # module docstring above and nero_core/execution/verification_status.py. None of
+    # these is a proven edge; they are wired to accrue live evidence, per user request.
+    SingleAssetConfig("SILVER", "24h", "breakout_momentum_silver_calibrated_24h", BREAKOUT_MOMENTUM_ID, SILVER_BM_VERSION),
+    SingleAssetConfig("SILVER", "24h", "trend_pullback_silver_calibrated_24h", TREND_PULLBACK_ID, SILVER_TP_VERSION),
+    SingleAssetConfig("SILVER", "24h", "volatility_squeeze_ma200_silver_calibrated_24h", VOLATILITY_SQUEEZE_ID, SILVER_VS_MA200_VERSION),
+    SingleAssetConfig("SILVER", "24h", "volatility_squeeze_ma150_silver_calibrated_24h", VOLATILITY_SQUEEZE_ID, SILVER_VS_MA150_VERSION),
+    SingleAssetConfig("SILVER", "24h", "volatility_squeeze_ma100_silver_calibrated_24h", VOLATILITY_SQUEEZE_ID, SILVER_VS_MA100_VERSION),
 )
 
 

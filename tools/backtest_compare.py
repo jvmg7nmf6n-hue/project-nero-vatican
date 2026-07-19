@@ -73,11 +73,22 @@ from nero_core.strategies.mean_reversion_relaxed_pullback import PARAMETERS as M
 from nero_core.strategies.mean_reversion_deep_value import PARAMETERS as MR_DEEP_VALUE_PARAMETERS
 from nero_core.strategies.mean_reversion_target_1r import PARAMETERS as MR_TARGET_1R_PARAMETERS
 from nero_core.strategies.mean_reversion_regime_filter import PARAMETERS as MR_REGIME_FILTER_PARAMETERS
+from nero_core.strategies.breakout_momentum_silver_calibrated import (
+    SILVER_CALIBRATED_PARAMETERS as BM_SILVER_PARAMETERS,
+)
+from nero_core.strategies.trend_pullback_silver_calibrated import (
+    SILVER_CALIBRATED_PARAMETERS as TP_SILVER_PARAMETERS,
+)
+from nero_core.strategies.volatility_squeeze_silver_calibrated import (
+    SILVER_CALIBRATED_PARAMETERS_MA100 as VS_MA100_SILVER_PARAMETERS,
+    SILVER_CALIBRATED_PARAMETERS_MA150 as VS_MA150_SILVER_PARAMETERS,
+    SILVER_CALIBRATED_PARAMETERS_MA200 as VS_MA200_SILVER_PARAMETERS,
+)
 
 # Matches the "insufficient_sample" convention from the original agent's report_row().
 MIN_SAMPLE_SIZE = 20
 
-DEFAULT_ASSETS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "NEAR", "GOLD"]
+DEFAULT_ASSETS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "NEAR", "GOLD", "SILVER"]
 
 # The volatility-regime filter only needs recent history to judge "current" conditions
 # (build_garch_volatility_report's own EWMA fallback already only looks at the trailing
@@ -252,6 +263,51 @@ VARIANT_SPECS: dict[str, VariantSpec] = {
         add_indicators_fn=bm_add_indicators,
         evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: bm_evaluate_entry(candle, state, params),
         size_entry_fn=bm_size_entry,
+        needs_daily=False,
+    ),
+    "breakout_momentum_silver_calibrated_24h": VariantSpec(
+        key="breakout_momentum_silver_calibrated_24h",
+        label="BREAKOUT_MOMENTUM silver-calibrated 24h (breakout-momentum-v1.6.0-silver-calibrated-24h)",
+        params=BM_SILVER_PARAMETERS,
+        add_indicators_fn=bm_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: bm_evaluate_entry(candle, state, params),
+        size_entry_fn=bm_size_entry,
+        needs_daily=False,
+    ),
+    "trend_pullback_silver_calibrated_24h": VariantSpec(
+        key="trend_pullback_silver_calibrated_24h",
+        label="TREND_PULLBACK silver-calibrated 24h (trend-pullback-v1.5.0-silver-calibrated-24h)",
+        params=TP_SILVER_PARAMETERS,
+        add_indicators_fn=tp_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: tp_evaluate_entry(candle, state, params),
+        size_entry_fn=tp_size_entry,
+        needs_daily=False,
+    ),
+    "volatility_squeeze_ma200_silver_calibrated_24h": VariantSpec(
+        key="volatility_squeeze_ma200_silver_calibrated_24h",
+        label="VOLATILITY_SQUEEZE ma200 silver-calibrated 24h (volatility-squeeze-v1.1.0-ma200-silver-calibrated-24h)",
+        params=VS_MA200_SILVER_PARAMETERS,
+        add_indicators_fn=vs_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: vs_evaluate_entry(candle, state, params),
+        size_entry_fn=vs_size_entry,
+        needs_daily=False,
+    ),
+    "volatility_squeeze_ma150_silver_calibrated_24h": VariantSpec(
+        key="volatility_squeeze_ma150_silver_calibrated_24h",
+        label="VOLATILITY_SQUEEZE ma150 silver-calibrated 24h (volatility-squeeze-v1.1.0-ma150-silver-calibrated-24h)",
+        params=VS_MA150_SILVER_PARAMETERS,
+        add_indicators_fn=vs_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: vs_evaluate_entry(candle, state, params),
+        size_entry_fn=vs_size_entry,
+        needs_daily=False,
+    ),
+    "volatility_squeeze_ma100_silver_calibrated_24h": VariantSpec(
+        key="volatility_squeeze_ma100_silver_calibrated_24h",
+        label="VOLATILITY_SQUEEZE ma100 silver-calibrated 24h (volatility-squeeze-v1.1.0-ma100-silver-calibrated-24h)",
+        params=VS_MA100_SILVER_PARAMETERS,
+        add_indicators_fn=vs_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: vs_evaluate_entry(candle, state, params),
+        size_entry_fn=vs_size_entry,
         needs_daily=False,
     ),
 }

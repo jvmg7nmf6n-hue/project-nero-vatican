@@ -44,6 +44,18 @@ def _flat_history(n: int = 260) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _silver_daily_history(n: int = 300) -> pd.DataFrame:
+    """300 daily candles, enough warmup past every SILVER config's MA200 requirement
+    (BREAKOUT_MOMENTUM/TREND_PULLBACK/VOLATILITY_SQUEEZE ma200) — mild oscillation
+    (not perfectly flat) so ATR is non-zero, matching _flat_history's convention."""
+    rows = []
+    close_time = 0
+    for i in range(n):
+        rows.append(_make_candle_row(close_time, 100.0 + (i % 5) * 0.1))
+        close_time += 86_400_000
+    return pd.DataFrame(rows)
+
+
 class LiveSchedulerTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
@@ -55,6 +67,7 @@ class LiveSchedulerTestCase(unittest.TestCase):
         self.btc_history = btc_df
         self.eth_history = eth_df
         self.bnb_history = _flat_history()
+        self.silver_history = _silver_daily_history()
 
     def _fake_load_intraday(self, asset, interval="1h", candles=240, twelve_data_api_key=None):
         source_map = {
@@ -67,26 +80,38 @@ class LiveSchedulerTestCase(unittest.TestCase):
             raise MarketDataUnavailableError(f"no fixture configured for {asset}")
         return MarketDataResult(prices=source_map[asset], source="test-fixture", asset=asset, interval=interval)
 
+    def _fake_load_daily(self, asset, days=365, twelve_data_api_key=None):
+        source_map = {"SILVER": self.silver_history}
+        if asset not in source_map:
+            raise MarketDataUnavailableError(f"no fixture configured for {asset}")
+        return MarketDataResult(prices=source_map[asset], source="test-fixture", asset=asset, interval="1d")
+
     def _patched_client(self):
-        patcher = patch.object(MarketDataClient, "load_intraday", side_effect=self._fake_load_intraday)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        intraday_patcher = patch.object(MarketDataClient, "load_intraday", side_effect=self._fake_load_intraday)
+        intraday_patcher.start()
+        self.addCleanup(intraday_patcher.stop)
+        daily_patcher = patch.object(MarketDataClient, "load_daily", side_effect=self._fake_load_daily)
+        daily_patcher.start()
+        self.addCleanup(daily_patcher.stop)
         return MarketDataClient()
 
 
 class NotDueSkipsWithoutFetchingTest(LiveSchedulerTestCase):
     def test_no_network_call_attempted_when_nothing_is_due(self) -> None:
         def _explode(*_args, **_kwargs):
-            raise AssertionError("load_intraday must not be called when nothing is due")
+            raise AssertionError("load_intraday/load_daily must not be called when nothing is due")
 
-        with patch.object(MarketDataClient, "load_intraday", side_effect=_explode):
+        with patch.object(MarketDataClient, "load_intraday", side_effect=_explode), patch.object(
+            MarketDataClient, "load_daily", side_effect=_explode
+        ):
             client = MarketDataClient()
             result = live_scheduler.run_once(client=client, now=NOT_DUE_UTC, db_path=self.db_path)
 
         self.assertEqual(result.assets_evaluated, [])
         skipped_reasons = {r["classification"] for r in result.assets_skipped}
         self.assertEqual(skipped_reasons, {"NOT_DUE"})
-        self.assertEqual(len(result.assets_skipped), 4)  # GOLD, pairs, BNB, NEWS_SENTIMENT
+        # GOLD, BNB, 5x SILVER, pairs, NEWS_SENTIMENT
+        self.assertEqual(len(result.assets_skipped), 9)
 
 
 class FullRunTest(LiveSchedulerTestCase):
@@ -98,10 +123,15 @@ class FullRunTest(LiveSchedulerTestCase):
         self.assertIn("GOLD", result.assets_evaluated)
         self.assertIn("BNB", result.assets_evaluated)
         self.assertIn("BTC-ETH", result.assets_evaluated)
+        self.assertEqual(result.assets_evaluated.count("SILVER"), 5)
         self.assertEqual(result.errors_encountered, [])
 
         gold_rows = list_execution_log(db_path=self.db_path, asset="GOLD")
         self.assertGreaterEqual(len(gold_rows), 1)
+        silver_rows = list_execution_log(db_path=self.db_path, asset="SILVER")
+        self.assertGreaterEqual(len(silver_rows), 1)
+        silver_strategy_versions = {(r.strategy, r.strategy_version) for r in silver_rows}
+        self.assertEqual(len(silver_strategy_versions), 5)  # 5 distinct SILVER configs, none colliding
 
         metadata_rows = list_execution_metadata(db_path=self.db_path)
         self.assertEqual(len(metadata_rows), 1)
@@ -130,7 +160,9 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
             source_map = {"BNB": self.bnb_history, "BTC": self.btc_history, "ETH": self.eth_history}
             return MarketDataResult(prices=source_map[asset], source="test-fixture", asset=asset, interval=interval)
 
-        with patch.object(MarketDataClient, "load_intraday", side_effect=_fake_load_intraday):
+        with patch.object(MarketDataClient, "load_intraday", side_effect=_fake_load_intraday), patch.object(
+            MarketDataClient, "load_daily", side_effect=self._fake_load_daily
+        ):
             client = MarketDataClient()
             result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
 
@@ -155,7 +187,9 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
             return MarketDataResult(prices=source_map[asset], source="test-fixture", asset=asset, interval=interval)
 
         sleeps: list[float] = []
-        with patch.object(MarketDataClient, "load_intraday", side_effect=_fake_load_intraday):
+        with patch.object(MarketDataClient, "load_intraday", side_effect=_fake_load_intraday), patch.object(
+            MarketDataClient, "load_daily", side_effect=self._fake_load_daily
+        ):
             client = MarketDataClient()
             result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=sleeps.append)
 
@@ -170,7 +204,9 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
             source_map = {"BNB": self.bnb_history, "BTC": self.btc_history, "ETH": self.eth_history}
             return MarketDataResult(prices=source_map[asset], source="test-fixture", asset=asset, interval=interval)
 
-        with patch.object(MarketDataClient, "load_intraday", side_effect=_fake_load_intraday):
+        with patch.object(MarketDataClient, "load_intraday", side_effect=_fake_load_intraday), patch.object(
+            MarketDataClient, "load_daily", side_effect=self._fake_load_daily
+        ):
             client = MarketDataClient()
             result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
 

@@ -41,16 +41,24 @@ NTFY_URL = "https://ntfy.sh/Terminal3039"
 NTFY_TIMEOUT_SECONDS = 10
 ZERO_SIGNAL_MESSAGE = "Vatican | Scheduler ran | Zero trades evaluated"
 
-# (strategy_id, asset) -> (display label, display asset/timeframe) for the 3 wired
-# trading configs (nero_core/execution/live_scheduler.py SINGLE_ASSET_CONFIGS + the
-# pairs config). Deliberately a closed lookup, not a generic formatter, because this
-# scheduler only ever wires these specific configs (see nero_core/execution/DESIGN.md) —
-# an unrecognized (strategy, asset) combination falls back to the raw values rather than
+# (strategy_id, asset) -> (display label, display asset/timeframe) for the wired trading
+# configs (nero_core/execution/live_scheduler.py SINGLE_ASSET_CONFIGS + the pairs
+# config). Deliberately a closed lookup, not a generic formatter, because this scheduler
+# only ever wires these specific configs (see nero_core/execution/DESIGN.md) — an
+# unrecognized (strategy, asset) combination falls back to the raw values rather than
 # guessing a display name.
+#
+# The 5 SILVER entries below are PROMISING-WATCHLIST forward-tests (Asset Expansion
+# Phase A follow-up), not survivors — the "(watchlist)" suffix keeps that visible in
+# every notification, matching verification_status.py's wording rather than presenting
+# these next to GOLD/BNB/BTC-ETH's proven labels unqualified.
 DISPLAY_NAMES: dict[tuple[str, str], tuple[str, str]] = {
     ("BREAKOUT_MOMENTUM", "GOLD"): ("GOLD Momentum", "GOLD/1week"),
     ("TREND_PULLBACK", "BNB"): ("BNB TrendPullback", "BNB/12h"),
     ("COINTEGRATION_PAIRS", "BTC-ETH"): ("BTC-ETH Pairs", "BTC-ETH/12h"),
+    ("BREAKOUT_MOMENTUM", "SILVER"): ("SILVER Momentum (watchlist)", "SILVER/24h"),
+    ("TREND_PULLBACK", "SILVER"): ("SILVER TrendPullback (watchlist)", "SILVER/24h"),
+    ("VOLATILITY_SQUEEZE", "SILVER"): ("SILVER VolSqueeze (watchlist)", "SILVER/24h"),
 }
 NEWS_SENTIMENT_LABEL = "News Sentiment"
 
