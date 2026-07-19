@@ -1,5 +1,7 @@
 # Vatican website
 
+<!-- redeploy trigger -->
+
 Public-facing Next.js site for Project Vatican. Reads the Truth Ledger export
 produced by `nero_core/execution/export_site_data.py` (committed to
 `docs/site_data/*.json` on the `main` branch) via GitHub raw URLs, with ISR
