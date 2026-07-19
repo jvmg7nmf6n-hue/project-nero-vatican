@@ -109,3 +109,64 @@ def compare_multiplier_on_off(
     off_metrics = compute_metrics(asset, f"{spec.label} (multiplier OFF)", off_state, off_trades)
     on_metrics = compute_metrics(asset, f"{spec.label} (multiplier ON)", on_state, on_trades)
     return MultiplierComparison(asset=asset, variant=spec.label, off=off_metrics, on=on_metrics)
+
+
+def run_bos_continuation_with_multiplier(
+    candles: pd.DataFrame,
+    params: Any,
+    multiplier_on: bool,
+    cluster_lookback: int = DEFAULT_CLUSTER_LOOKBACK,
+) -> tuple[list[Any], MeanReversionState]:
+    """BOS_CONTINUATION (and any other direction-aware family whose size_entry takes
+    an extra `direction` argument, e.g. FVG_REVERSION) doesn't fit VariantSpec's
+    fixed (candle, state, params) size_entry_fn signature or its shared mean_reversion
+    evaluate_exit — it has its own OpenTrade/ExitEvent shapes and its own
+    add_indicators/evaluate_entry/evaluate_exit/size_entry. This is the same
+    multiplier-at-sizing-only technique as run_variant_with_multiplier, just calling
+    BOS_CONTINUATION's own functions instead of going through a VariantSpec."""
+    from nero_core.strategies.bos_continuation import INDICATOR_COLUMNS_TO_CHECK as BOS_INDICATOR_COLUMNS
+    from nero_core.strategies.bos_continuation import add_indicators as bos_add_indicators
+    from nero_core.strategies.bos_continuation import evaluate_entry as bos_evaluate_entry
+    from nero_core.strategies.bos_continuation import evaluate_exit as bos_evaluate_exit
+    from nero_core.strategies.bos_continuation import size_entry as bos_size_entry
+
+    state = MeanReversionState(equity=params.initial_equity)
+    enriched = bos_add_indicators(candles, params)
+    evaluable = enriched.dropna(subset=BOS_INDICATOR_COLUMNS).reset_index(drop=True)
+    closed_trades: list[Any] = []
+
+    for i in range(len(evaluable)):
+        candle = evaluable.iloc[i]
+        reset_daily_guard_if_needed(state, candle["date"])
+
+        exit_event = bos_evaluate_exit(candle, state, params)
+        if exit_event is not None:
+            closed_trades.append(exit_event)
+
+        evaluation = bos_evaluate_entry(candle, state, params)
+        if evaluation.passed:
+            sizing_params = params
+            if multiplier_on:
+                closes_as_of = evaluable["close"].iloc[max(0, i + 1 - cluster_lookback) : i + 1]
+                score = volatility_cluster_score(closes_as_of, lookback=cluster_lookback)
+                multiplier = position_multiplier(score)
+                sizing_params = replace(params, risk_per_trade=params.risk_per_trade * multiplier)
+            trade = bos_size_entry(candle, state, sizing_params, evaluation.direction)
+            if trade is not None:
+                state.open_trade = trade
+
+    return closed_trades, state
+
+
+def compare_bos_continuation_multiplier_on_off(
+    candles: pd.DataFrame,
+    params: Any,
+    asset: str = "",
+    label: str = "BOS_CONTINUATION",
+    cluster_lookback: int = DEFAULT_CLUSTER_LOOKBACK,
+) -> MultiplierComparison:
+    off_trades, off_state = run_bos_continuation_with_multiplier(candles, params, multiplier_on=False, cluster_lookback=cluster_lookback)
+    on_trades, on_state = run_bos_continuation_with_multiplier(candles, params, multiplier_on=True, cluster_lookback=cluster_lookback)
+    off_metrics = compute_metrics(asset, f"{label} (multiplier OFF)", off_state, off_trades)
+    on_metrics = compute_metrics(asset, f"{label} (multiplier ON)", on_state, on_trades)
+    return MultiplierComparison(asset=asset, variant=label, off=off_metrics, on=on_metrics)
