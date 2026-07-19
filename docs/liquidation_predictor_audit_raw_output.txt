@@ -1,0 +1,53 @@
+=== Task C3 STEP 1: LIQUIDATION_PREDICTOR Data Audit ===
+
+--- liquidation_sources ---
+  [NOT USABLE] Binance futures allForceOrders (public liquidation feed)
+    https://fapi.binance.com/fapi/v1/allForceOrders
+    status=400: {"code":400,"msg":"The endpoint has been out of maintenance"}
+  [NOT USABLE] Bybit v5 /v5/market/liquidation
+    https://api.bybit.com/v5/market/liquidation
+    status=404: 
+  [NOT USABLE] Bybit v5 /v5/market/recent-liq
+    https://api.bybit.com/v5/market/recent-liq
+    status=404: 
+  [NOT USABLE] Bybit v5 /v5/market/liq-records
+    https://api.bybit.com/v5/market/liq-records
+    status=404: 
+  [NOT USABLE] Bybit v5 /v5/market/all-liquidation
+    https://api.bybit.com/v5/market/all-liquidation
+    status=404: 
+  [NOT USABLE] OKX public liquidation-orders
+    https://www.okx.com/api/v5/public/liquidation-orders
+    status=None: ConnectionError: HTTPSConnectionPool(host='www.okx.com', port=443): Max retries exceeded with url: /api/v5/public/liquidation-orders?instType=SWAP&uly=BTC-USDT&state=filled (Caused by NameResolutionError("HTTPSConnection(host='www.okx.com', port=443): Failed to resolve 'www.okx.com' ([Errno 11001] getaddrinfo failed)"))
+  [NOT USABLE] Coinalyze liquidation-history (requires API key)
+    https://api.coinalyze.net/v1/liquidation-history
+    status=401: {"message":"Invalid/Missing API key"}
+
+--- diagnostics_not_liquidation_sources ---
+  [NOT USABLE] Bybit v5 recent-trade (reachability sanity check, NOT a liquidation source)
+    https://api.bybit.com/v5/market/recent-trade
+    status=200: {"retCode":0,"retMsg":"OK","result":{"category":"linear","list":[{"execId":"1ecf8142-cc28-53b9-bd6e-73551e1e42a7","symbol":"BTCUSDT","price":"64337.90","size":"0.001","side":"Sell","time":"1784466424730","isBlockTrade":false,"isRPITrade":false,"seq":"698602285921"}]},"retExtInfo":{},"time":178446642
+
+--- funding_pipeline ---
+  [VERIFIED FREE+USABLE] Binance fapi.binance.com fundingRate (existing pipeline)
+    https://fapi.binance.com/fapi/v1/fundingRate
+    status=200: [{"symbol":"BTCUSDT","fundingTime":1784419200003,"fundingRate":"0.00000406","markPrice":"64806.70000000"},{"symbol":"BTCUSDT","fundingTime":1784448000000,"fundingRate":"0.00006905","markPrice":"64692.20000000"}]
+
+--- whale_transfer_sources ---
+  [NOT USABLE] Glassnode transfers_volume_large_sum (whale transfer proxy)
+    https://api.glassnode.com/v1/metrics/transactions/transfers_volume_large_sum
+    status=401: <html>
+<head><title>401 Authorization Required</title></head>
+<body>
+<center><h1>401 Authorization Required</h1></center>
+<hr><center>nginx</center>
+</body>
+</html>
+
+  [NOT USABLE] Whale Alert transactions (whale transfer)
+    https://api.whale-alert.io/v1/transactions
+    status=401: {"result":"error","message":"required parameter: api_key"}
+
+
+=== Conclusion ===
+NO free, pollable, keyless REST liquidation-data source verified. Per the task's own instruction, LIQUIDATION_PREDICTOR is marked BLOCKED-ON-DATA — only this audit is committed, no strategy code, never a proxy-faked signal.
