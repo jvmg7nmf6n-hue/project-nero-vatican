@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-19T17:30:56.069431+00:00",
+  "last_updated": "2026-07-19T18:48:08.624466+00:00",
   "strategies": [
     {
       "name": "BREAKOUT_MOMENTUM",
@@ -71,6 +71,20 @@
       "asset": "BTC",
       "timeframe": "daily",
       "verification_status": "forward-test-only, no historical backtest"
+    },
+    {
+      "name": "ORDERFLOW_IMBALANCE",
+      "version": "orderflow-imbalance-v1.0.0",
+      "asset": "BTC",
+      "timeframe": "snapshot",
+      "verification_status": "experimental — snapshot-based, forward-testing only, no backtest exists"
+    },
+    {
+      "name": "ORDERFLOW_IMBALANCE",
+      "version": "orderflow-imbalance-v1.0.0",
+      "asset": "ETH",
+      "timeframe": "snapshot",
+      "verification_status": "experimental — snapshot-based, forward-testing only, no backtest exists"
     }
   ]
 }
