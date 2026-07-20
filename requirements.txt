@@ -5,6 +5,7 @@ pydantic>=2.0,<3
 statsmodels>=0.14,<1
 yfinance>=0.2,<1
 requests>=2.31,<3
+lxml>=5.0,<7  # required by yfinance's Ticker.get_earnings_dates() (PEAD, Three New Hypothesis Batch)
 
 # arch>=7.0,<8  # GARCH(1,1) support — optional. No prebuilt wheel for this Python version on
 # Windows yet, and building from source requires MSVC C++ Build Tools. quant_intelligence.py
