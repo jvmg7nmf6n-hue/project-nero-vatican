@@ -28,7 +28,7 @@ from nero_core.strategies.cointegration_pairs import (
     determine_entry_side,
     determine_exit_reason,
 )
-from nero_core.strategies.mean_reversion import MeanReversionState, apply_slippage, evaluate_exit, reset_daily_guard_if_needed
+from nero_core.strategies.mean_reversion import apply_slippage, reset_daily_guard_if_needed
 
 
 @dataclass(frozen=True)
@@ -64,13 +64,19 @@ def replay_single_asset_events(
     asset: str,
     inception_close_time_ms: int | None,
     already_logged_close_time_ms: int | None,
-) -> tuple[list[ReplayEvent], MeanReversionState]:
+) -> tuple[list[ReplayEvent], object]:
     """Deterministically replays one single-asset strategy (a tools.backtest_compare.
     VariantSpec) from its account inception row to the newest evaluable row. Returns
     (new_events, final_state) where new_events covers only rows strictly after
-    `already_logged_close_time_ms`."""
+    `already_logged_close_time_ms`.
+
+    State and exit mechanics are pluggable per `spec` (Replay Machinery
+    Generalization) via `spec.state_factory`/`spec.evaluate_exit_fn` — both default,
+    on every VariantSpec entry that doesn't set them, to exactly the
+    MeanReversionState/mean_reversion.evaluate_exit this function hardcoded before
+    that generalization, so this is byte-identical for every pre-existing strategy."""
     start_index = find_account_start_index(evaluable, inception_close_time_ms)
-    state = MeanReversionState(equity=spec.params.initial_equity)
+    state = spec.state_factory(spec.params.initial_equity)
     events: list[ReplayEvent] = []
     if start_index is None:
         return events, state
@@ -81,7 +87,7 @@ def replay_single_asset_events(
         reset_daily_guard_if_needed(state, candle["date"])
         should_emit = already_logged_close_time_ms is None or close_time > already_logged_close_time_ms
 
-        exit_event = evaluate_exit(candle, state, spec.params)
+        exit_event = spec.evaluate_exit_fn(candle, state, spec.params)
         if exit_event is not None and should_emit:
             events.append(
                 ReplayEvent(
@@ -99,7 +105,10 @@ def replay_single_asset_events(
         as_of = evaluable.iloc[: i + 1]
         evaluation = spec.evaluate_entry_fn(candle, as_of, None, state, spec.params, asset)
         if evaluation.passed:
-            trade = spec.size_entry_fn(candle, state, spec.params)
+            if spec.direction_aware_sizing:
+                trade = spec.size_entry_fn(candle, state, spec.params, getattr(evaluation, "direction", "LONG"))
+            else:
+                trade = spec.size_entry_fn(candle, state, spec.params)
             if trade is not None:
                 state.open_trade = trade
                 if should_emit:

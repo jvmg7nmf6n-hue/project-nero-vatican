@@ -79,6 +79,19 @@ from nero_core.strategies.breakout_momentum_silver_calibrated import (
 from nero_core.strategies.trend_pullback_silver_calibrated import (
     SILVER_CALIBRATED_PARAMETERS as TP_SILVER_PARAMETERS,
 )
+from nero_core.strategies.range_mean_reversion import (
+    DEFAULT_PARAMETERS as RMR_V1_PARAMETERS,
+    RangeMeanReversionState,
+)
+from nero_core.strategies.range_mean_reversion import add_indicators as rmr_add_indicators
+from nero_core.strategies.range_mean_reversion import evaluate_entry as rmr_evaluate_entry
+from nero_core.strategies.range_mean_reversion import evaluate_exit as rmr_evaluate_exit
+from nero_core.strategies.range_mean_reversion import size_entry as rmr_size_entry
+from nero_core.strategies.range_mean_reversion_long_only import LONG_ONLY_PARAMETERS as RMR_LONG_ONLY_PARAMETERS
+from nero_core.strategies.range_mean_reversion_confirmation import CONFIRMATION_PARAMETERS as RMR_CONFIRMATION_PARAMETERS
+from nero_core.strategies.range_mean_reversion_confirmation import evaluate_confirmation_entry
+from nero_core.strategies.range_mean_reversion_confirmation import size_confirmation_entry
+from nero_core.strategies.timeframe_calibration import scaled_fees_for_asset
 from nero_core.strategies.volatility_squeeze_silver_calibrated import (
     SILVER_CALIBRATED_PARAMETERS_MA100 as VS_MA100_SILVER_PARAMETERS,
     SILVER_CALIBRATED_PARAMETERS_MA150 as VS_MA150_SILVER_PARAMETERS,
@@ -97,16 +110,24 @@ DEFAULT_ASSETS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "NEAR", "GOLD", "SI
 # giving it access to anything it wouldn't otherwise use, and without introducing lookahead.
 GARCH_LOOKBACK_CANDLES = 300
 
-INDICATOR_COLUMNS_TO_CHECK = ["rsi", "bb_lower", "ma20", "ma200", "atr", "breakout_high", "trend_ma", "ma50"]
+INDICATOR_COLUMNS_TO_CHECK = [
+    "rsi", "bb_lower", "ma20", "ma200", "atr", "breakout_high", "trend_ma", "ma50",
+    # RANGE_MEAN_REVERSION family (Replay Machinery Generalization) -- additive only,
+    # inert for every strategy that doesn't produce these columns.
+    "sma20", "adx",
+]
 
 
 @dataclass(frozen=True)
 class VariantSpec:
     """Everything the generic backtest loop needs to run one registered strategy variant.
     Each strategy family plugs in its own add_indicators/evaluate_entry/size_entry;
-    evaluate_exit and reset_daily_guard_if_needed are genuinely shared across all of them
-    (see nero_core.strategies.mean_reversion) since exit/state mechanics don't vary by
-    entry family."""
+    evaluate_exit and reset_daily_guard_if_needed were, before the Replay Machinery
+    Generalization, hardcoded as genuinely shared across every family (see
+    nero_core.strategies.mean_reversion) since exit/state mechanics didn't vary by entry
+    family for any strategy wired until RANGE_MEAN_REVERSION -- state_factory/
+    evaluate_exit_fn/direction_aware_sizing below make that pluggable per-spec instead,
+    while defaulting to the exact prior hardcoded behavior for every existing entry."""
 
     key: str
     label: str
@@ -114,8 +135,36 @@ class VariantSpec:
     add_indicators_fn: Callable[[pd.DataFrame, Any], pd.DataFrame]
     # (candle, as_of_intraday, as_of_daily, state, params, asset) -> entry evaluation with a `.passed` attribute
     evaluate_entry_fn: Callable[[pd.Series, pd.DataFrame, pd.DataFrame, MeanReversionState, Any, str], Any]
-    size_entry_fn: Callable[[pd.Series, MeanReversionState, Any], Any]
+    # (candle, state, params) -> trade, OR (candle, state, params, direction) -> trade
+    # when direction_aware_sizing is True -- see that field.
+    size_entry_fn: Callable[..., Any]
     needs_daily: bool
+    # Replay Machinery Generalization additions -- all three default to the exact
+    # behavior every pre-existing VariantSpec entry relied on when these fields didn't
+    # exist, so none of the 17 pre-existing entries need to change.
+    state_factory: Callable[[float], Any] = lambda equity: MeanReversionState(equity=equity)
+    evaluate_exit_fn: Callable[[pd.Series, Any, Any], Any] = evaluate_exit
+    # RANGE_MEAN_REVERSION is genuinely bidirectional (LONG or SHORT); every strategy
+    # wired before it is long-only or has direction baked into the entry rule, so this
+    # defaults False (unused 3-arg size_entry_fn call, unchanged) and only RANGE_MEAN_
+    # REVERSION-family specs set it True (4-arg call, direction taken from the entry
+    # evaluation's own `.direction`, defaulting to "LONG" for evaluation types that
+    # don't carry one at all).
+    direction_aware_sizing: bool = False
+
+
+# RANGE_MEAN_REVERSION v1.0.0's own fee/slippage scaling for GOLD/SILVER -- the SAME
+# scaled_fees_for_asset(DEFAULT_PARAMETERS, asset) every RMR backtest this project has
+# ever run for these two assets used (tools/backtest_range_mean_reversion_sweep.py's
+# own calibrated_params_for, reused throughout the RMR Variant Research Cycle and
+# Ranging-Regime Research Batch docs). Unlike BREAKOUT_MOMENTUM/TREND_PULLBACK's own
+# GOLD/SILVER-calibrated variants, this does NOT get a new registered STRATEGY_VERSION:
+# RANGE_MEAN_REVERSION has no max_holding_hours field (no timeframe-hours bug to fix,
+# the reason those OTHER strategies needed a new version), so fee-scaling alone -- pure
+# execution-cost realism, not a signal-logic change -- stays labeled v1.0.0, matching
+# every prior RMR doc's own convention for these exact two configs.
+RMR_V1_GOLD_PARAMETERS = scaled_fees_for_asset(RMR_V1_PARAMETERS, "GOLD")
+RMR_V1_SILVER_PARAMETERS = scaled_fees_for_asset(RMR_V1_PARAMETERS, "SILVER")
 
 
 VARIANT_SPECS: dict[str, VariantSpec] = {
@@ -310,6 +359,71 @@ VARIANT_SPECS: dict[str, VariantSpec] = {
         size_entry_fn=vs_size_entry,
         needs_daily=False,
     ),
+    # RANGE_MEAN_REVERSION family -- Replay Machinery Generalization. All four reuse
+    # range_mean_reversion's own evaluate_exit (ADX regime-break, SMA20 reversion
+    # target, short-side P&L) via evaluate_exit_fn, and RangeMeanReversionState (needs
+    # consecutive_high_adx_bars) via state_factory -- NEVER the mean_reversion.
+    # evaluate_exit/MeanReversionState every other entry above defaults to.
+    # direction_aware_sizing=True since RANGE_MEAN_REVERSION is genuinely bidirectional.
+    "range_mean_reversion_gold_1week": VariantSpec(
+        key="range_mean_reversion_gold_1week",
+        label="RANGE_MEAN_REVERSION GOLD-fee-calibrated 1week (range-mean-reversion-v1.0.0)",
+        params=RMR_V1_GOLD_PARAMETERS,
+        add_indicators_fn=rmr_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: rmr_evaluate_entry(candle, state, params),
+        size_entry_fn=lambda candle, state, params, direction: rmr_size_entry(candle, state, params, direction),
+        needs_daily=False,
+        state_factory=lambda equity: RangeMeanReversionState(equity=equity),
+        evaluate_exit_fn=rmr_evaluate_exit,
+        direction_aware_sizing=True,
+    ),
+    "range_mean_reversion_silver_1week": VariantSpec(
+        key="range_mean_reversion_silver_1week",
+        label="RANGE_MEAN_REVERSION SILVER-fee-calibrated 1week (range-mean-reversion-v1.0.0)",
+        params=RMR_V1_SILVER_PARAMETERS,
+        add_indicators_fn=rmr_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: rmr_evaluate_entry(candle, state, params),
+        size_entry_fn=lambda candle, state, params, direction: rmr_size_entry(candle, state, params, direction),
+        needs_daily=False,
+        state_factory=lambda equity: RangeMeanReversionState(equity=equity),
+        evaluate_exit_fn=rmr_evaluate_exit,
+        direction_aware_sizing=True,
+    ),
+    "range_mean_reversion_long_only_btc_1d": VariantSpec(
+        key="range_mean_reversion_long_only_btc_1d",
+        label="RANGE_MEAN_REVERSION long-only (range-mean-reversion-v1.1.0-long-only)",
+        params=RMR_LONG_ONLY_PARAMETERS,
+        add_indicators_fn=rmr_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: rmr_evaluate_entry(candle, state, params),
+        size_entry_fn=lambda candle, state, params, direction: rmr_size_entry(candle, state, params, direction),
+        needs_daily=False,
+        state_factory=lambda equity: RangeMeanReversionState(equity=equity),
+        evaluate_exit_fn=rmr_evaluate_exit,
+        direction_aware_sizing=True,
+    ),
+    "range_mean_reversion_confirmation_btc_1d": VariantSpec(
+        key="range_mean_reversion_confirmation_btc_1d",
+        label="RANGE_MEAN_REVERSION confirmation (range-mean-reversion-v1.3.0-confirmation)",
+        params=RMR_CONFIRMATION_PARAMETERS,
+        add_indicators_fn=rmr_add_indicators,
+        # as_of_intraday IS evaluable.iloc[:i+1] at the call site (replay_single_asset_
+        # events / backtest_compare.run_backtest both already build it that way for
+        # every spec) -- evaluate_confirmation_entry only ever reads rows i-2/i-1, both
+        # strictly inside that slice, so len(as_of_intraday)-1 as the "current index"
+        # is exactly equivalent to passing the untruncated frame + i, not an approximation.
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: evaluate_confirmation_entry(
+            as_of_intraday, len(as_of_intraday) - 1, state, params
+        ),
+        # size_confirmation_entry reads candle["open"] (the confirmation candle's own
+        # open, not its close) -- `candle` here is the same evaluable.iloc[i] every
+        # other spec's size_entry_fn already receives, so no adapter logic is needed
+        # beyond the direction passthrough.
+        size_entry_fn=lambda candle, state, params, direction: size_confirmation_entry(candle, state, params, direction),
+        needs_daily=False,
+        state_factory=lambda equity: RangeMeanReversionState(equity=equity),
+        evaluate_exit_fn=rmr_evaluate_exit,
+        direction_aware_sizing=True,
+    ),
 }
 
 DEFAULT_VARIANTS = ["mean_reversion_v1", "mean_reversion_v2"]
@@ -343,7 +457,7 @@ def run_backtest(
     future candle can influence a past decision. Variants that don't need daily context
     (v1, breakout momentum) simply ignore the as-of slices their adapter receives.
     """
-    state = MeanReversionState(equity=spec.params.initial_equity)
+    state = spec.state_factory(spec.params.initial_equity)
     enriched = spec.add_indicators_fn(intraday, spec.params)
     dropna_columns = [c for c in INDICATOR_COLUMNS_TO_CHECK if c in enriched.columns]
     evaluable = enriched.dropna(subset=dropna_columns).reset_index(drop=True)
@@ -355,7 +469,7 @@ def run_backtest(
         candle = evaluable.iloc[i]
         reset_daily_guard_if_needed(state, candle["date"])
 
-        exit_event = evaluate_exit(candle, state, spec.params)
+        exit_event = spec.evaluate_exit_fn(candle, state, spec.params)
         if exit_event is not None:
             closed_trades.append(exit_event)
 
@@ -364,7 +478,10 @@ def run_backtest(
         evaluation = spec.evaluate_entry_fn(candle, as_of_intraday, as_of_daily, state, spec.params, asset)
 
         if evaluation.passed:
-            trade = spec.size_entry_fn(candle, state, spec.params)
+            if spec.direction_aware_sizing:
+                trade = spec.size_entry_fn(candle, state, spec.params, getattr(evaluation, "direction", "LONG"))
+            else:
+                trade = spec.size_entry_fn(candle, state, spec.params)
             if trade is not None:
                 state.open_trade = trade
 
