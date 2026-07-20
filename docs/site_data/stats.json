@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-20T15:13:33.395189+00:00",
+  "last_updated": "2026-07-20T16:51:08.937264+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -150,21 +150,17 @@
       "strategy": "ORDERFLOW_IMBALANCE",
       "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
-      "resolved_trades": 2,
-      "win_rate": 0.5,
+      "resolved_trades": 3,
+      "win_rate": 0.6666666666666666,
       "expectancy_r": null,
-      "avg_return_pct": -0.018955843216806323,
+      "avg_return_pct": 0.5068243262255441,
       "signal_counts": {
         "ENTRY": 3,
-        "EXIT": 2,
+        "EXIT": 3,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": {
-        "entry_price": 1871.81,
-        "entry_timestamp": "2026-07-20T13:00:23.719026+00:00",
-        "candle_timestamp": "2026-07-20T13:00:00+00:00"
-      }
+      "open_position": null
     }
   ]
 }
