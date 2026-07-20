@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-20T10:39:30.079674+00:00",
+  "last_updated": "2026-07-20T13:00:26.867481+00:00",
   "strategies": [
     {
       "name": "BREAKOUT_MOMENTUM",
