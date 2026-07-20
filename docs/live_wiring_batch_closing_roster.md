@@ -1,5 +1,12 @@
 # Live Wiring Batch — Closing: Full Current Live Roster
 
+**SUPERSEDED — the 4 deferred configs below were wired in a later batch.** See
+`docs/replay_machinery_generalization_closing_report.md` for the current roster (16
+configs) — the replay machinery was generalized (pluggable state/exit/direction)
+specifically to unblock these 4 configs, and all 4 are now live. This document is
+kept as the historical record of the original deferral decision and its reasoning,
+not as the current state of the roster.
+
 **This batch added nothing to the live roster.** All 4 requested RMR watchlist
 configs were deferred — see `docs/live_wiring_batch_rmr_watchlist_deferral.md` for
 the full technical reason (a compounding, three-way incompatibility with
