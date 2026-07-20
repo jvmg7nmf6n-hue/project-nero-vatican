@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-20T21:38:36.924441+00:00",
+  "last_updated": "2026-07-20T22:45:10.575320+00:00",
   "strategies": [
     {
       "name": "BREAKOUT_MOMENTUM",
@@ -50,6 +50,34 @@
       "asset": "SILVER",
       "timeframe": "24h",
       "verification_status": "promising-watchlist — forward-testing, not verified"
+    },
+    {
+      "name": "RANGE_MEAN_REVERSION",
+      "version": "range-mean-reversion-v1.0.0",
+      "asset": "GOLD",
+      "timeframe": "1week",
+      "verification_status": "watchlist — forward-testing, not verified (band-timing beat random both halves; N below 20-trade bar)"
+    },
+    {
+      "name": "RANGE_MEAN_REVERSION",
+      "version": "range-mean-reversion-v1.0.0",
+      "asset": "SILVER",
+      "timeframe": "1week",
+      "verification_status": "watchlist — forward-testing, not verified (band-timing beat random both halves; N below 20-trade bar)"
+    },
+    {
+      "name": "RANGE_MEAN_REVERSION",
+      "version": "range-mean-reversion-v1.1.0-long-only",
+      "asset": "BTC",
+      "timeframe": "24h",
+      "verification_status": "watchlist — forward-testing, not verified (mechanism-backed, LOW SAMPLE, CI crosses zero, 1d grid-shift structurally unavailable)"
+    },
+    {
+      "name": "RANGE_MEAN_REVERSION",
+      "version": "range-mean-reversion-v1.3.0-confirmation",
+      "asset": "BTC",
+      "timeframe": "24h",
+      "verification_status": "watchlist — forward-testing, not verified (68% reversion-target exit rate vs 32% baseline; LOW SAMPLE, CI crosses zero, 1d grid-shift structurally unavailable)"
     },
     {
       "name": "COINTEGRATION_PAIRS",
