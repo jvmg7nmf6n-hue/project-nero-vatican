@@ -209,6 +209,12 @@ class RoundTripStatsTest(unittest.TestCase):
                 "VOLATILITY_SQUEEZE",
                 "VOLATILITY_SQUEEZE",
                 "VOLATILITY_SQUEEZE",
+                # RMR watchlist configs (Replay Machinery Generalization) -- GOLD/1week,
+                # SILVER/1week, BTC/24h long-only, BTC/24h confirmation.
+                "RANGE_MEAN_REVERSION",
+                "RANGE_MEAN_REVERSION",
+                "RANGE_MEAN_REVERSION",
+                "RANGE_MEAN_REVERSION",
                 PAIRS_STRATEGY,
                 "ORDERFLOW_IMBALANCE",
                 "ORDERFLOW_IMBALANCE",

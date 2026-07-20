@@ -224,7 +224,7 @@ def _roster_entries() -> list[dict[str, object]]:
             "version": config.strategy_version,
             "asset": config.asset,
             "timeframe": config.timeframe,
-            "verification_status": verification_status_for(config.strategy_id, config.asset),
+            "verification_status": verification_status_for(config.strategy_id, config.strategy_version, config.asset),
         }
         for config in SINGLE_ASSET_CONFIGS
     ]
@@ -235,7 +235,7 @@ def _roster_entries() -> list[dict[str, object]]:
             "version": COINTEGRATION_PAIRS_VERSION,
             "asset": pairs_label,
             "timeframe": PAIRS_TIMEFRAME,
-            "verification_status": verification_status_for(COINTEGRATION_PAIRS_ID, pairs_label),
+            "verification_status": verification_status_for(COINTEGRATION_PAIRS_ID, COINTEGRATION_PAIRS_VERSION, pairs_label),
         }
     )
     for asset in NEWS_SENTIMENT_ASSETS:
@@ -245,7 +245,7 @@ def _roster_entries() -> list[dict[str, object]]:
                 "version": NEWS_SENTIMENT_VERSION,
                 "asset": asset,
                 "timeframe": "daily",
-                "verification_status": verification_status_for(NEWS_SENTIMENT_ID, asset),
+                "verification_status": verification_status_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_VERSION, asset),
             }
         )
     for asset in ORDERFLOW_BINANCE_SYMBOLS:
@@ -255,7 +255,7 @@ def _roster_entries() -> list[dict[str, object]]:
                 "version": ORDERFLOW_VERSION,
                 "asset": asset,
                 "timeframe": "snapshot",
-                "verification_status": verification_status_for(ORDERFLOW_ID, asset),
+                "verification_status": verification_status_for(ORDERFLOW_ID, ORDERFLOW_VERSION, asset),
             }
         )
     return entries

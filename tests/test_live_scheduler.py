@@ -71,18 +71,25 @@ class LiveSchedulerTestCase(unittest.TestCase):
         self.silver_history = _silver_daily_history()
 
     def _fake_load_intraday(self, asset, interval="1h", candles=240, twelve_data_api_key=None):
+        # RMR GOLD/1week and SILVER/1week (Replay Machinery Generalization) both fetch
+        # via load_intraday(interval="1week") -- SILVER now needs a fixture entry here
+        # too (its other 5 configs are all 24h, fetched via load_daily instead).
         source_map = {
             "GOLD": self.gold_history,
             "BNB": self.bnb_history,
             "BTC": self.btc_history,
             "ETH": self.eth_history,
+            "SILVER": self.silver_history,
         }
         if asset not in source_map:
             raise MarketDataUnavailableError(f"no fixture configured for {asset}")
         return MarketDataResult(prices=source_map[asset], source="test-fixture", asset=asset, interval=interval)
 
     def _fake_load_daily(self, asset, days=365, twelve_data_api_key=None):
-        source_map = {"SILVER": self.silver_history}
+        # RMR BTC/24h (long-only, confirmation) fetch via load_daily -- BTC needs a
+        # fixture entry here too (its other config, COINTEGRATION_PAIRS, is 12h,
+        # fetched via load_intraday instead).
+        source_map = {"SILVER": self.silver_history, "BTC": self.btc_history}
         if asset not in source_map:
             raise MarketDataUnavailableError(f"no fixture configured for {asset}")
         return MarketDataResult(prices=source_map[asset], source="test-fixture", asset=asset, interval="1d")
@@ -133,9 +140,10 @@ class NotDueSkipsWithoutFetchingTest(LiveSchedulerTestCase):
         self.assertEqual(result.assets_evaluated, [])
         skipped_reasons = {r["classification"] for r in result.assets_skipped}
         self.assertEqual(skipped_reasons, {"NOT_DUE"})
-        # GOLD, BNB, 5x SILVER, pairs, NEWS_SENTIMENT (ORDERFLOW_IMBALANCE isn't
+        # GOLD, BNB, 5x SILVER, 4x RMR (GOLD/1week, SILVER/1week, BTC/24h long-only,
+        # BTC/24h confirmation), pairs, NEWS_SENTIMENT (ORDERFLOW_IMBALANCE isn't
         # candle-gated, so it never appears among these NOT_DUE skips).
-        self.assertEqual(len(result.assets_skipped), 9)
+        self.assertEqual(len(result.assets_skipped), 13)
         orderflow_errors = [e for e in result.errors_encountered if e["strategy"] == "ORDERFLOW_IMBALANCE"]
         self.assertEqual(len(orderflow_errors), 2)  # BTC and ETH each fail their own fetch
         self.assertTrue(all(e["classification"] == "DATA_UNAVAILABLE" for e in orderflow_errors))
@@ -150,15 +158,24 @@ class FullRunTest(LiveSchedulerTestCase):
         self.assertIn("GOLD", result.assets_evaluated)
         self.assertIn("BNB", result.assets_evaluated)
         self.assertIn("BTC-ETH", result.assets_evaluated)
-        self.assertEqual(result.assets_evaluated.count("SILVER"), 5)
+        # 5 pre-existing SILVER configs + RANGE_MEAN_REVERSION's own SILVER/1week
+        # (Replay Machinery Generalization).
+        self.assertEqual(result.assets_evaluated.count("SILVER"), 6)
+        # RANGE_MEAN_REVERSION's own BTC/24h long-only and confirmation configs.
+        self.assertEqual(result.assets_evaluated.count("BTC"), 2)
         self.assertEqual(result.errors_encountered, [])
 
         gold_rows = list_execution_log(db_path=self.db_path, asset="GOLD")
         self.assertGreaterEqual(len(gold_rows), 1)
+        gold_strategy_versions = {(r.strategy, r.strategy_version) for r in gold_rows}
+        self.assertEqual(len(gold_strategy_versions), 2)  # BREAKOUT_MOMENTUM + RANGE_MEAN_REVERSION, none colliding
         silver_rows = list_execution_log(db_path=self.db_path, asset="SILVER")
         self.assertGreaterEqual(len(silver_rows), 1)
         silver_strategy_versions = {(r.strategy, r.strategy_version) for r in silver_rows}
-        self.assertEqual(len(silver_strategy_versions), 5)  # 5 distinct SILVER configs, none colliding
+        self.assertEqual(len(silver_strategy_versions), 6)  # 6 distinct SILVER configs, none colliding
+        btc_rows = list_execution_log(db_path=self.db_path, asset="BTC")
+        btc_strategy_versions = {(r.strategy, r.strategy_version) for r in btc_rows}
+        self.assertEqual(len(btc_strategy_versions), 2)  # long-only + confirmation, none colliding
 
         metadata_rows = list_execution_metadata(db_path=self.db_path)
         self.assertEqual(len(metadata_rows), 1)
@@ -184,7 +201,7 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
         def _fake_load_intraday(asset, interval="1h", candles=240, twelve_data_api_key=None):
             if asset == "GOLD":
                 raise MarketDataUnavailableError("Twelve Data: missing API key")
-            source_map = {"BNB": self.bnb_history, "BTC": self.btc_history, "ETH": self.eth_history}
+            source_map = {"BNB": self.bnb_history, "BTC": self.btc_history, "ETH": self.eth_history, "SILVER": self.silver_history}
             return MarketDataResult(prices=source_map[asset], source="test-fixture", asset=asset, interval=interval)
 
         with patch.object(MarketDataClient, "load_intraday", side_effect=_fake_load_intraday), patch.object(
@@ -199,9 +216,12 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
         self.assertIn("BNB", result.assets_evaluated)
         self.assertIn("BTC-ETH", result.assets_evaluated)
 
+        # TWO configs now fetch GOLD/1week (BREAKOUT_MOMENTUM and, since the Replay
+        # Machinery Generalization, RANGE_MEAN_REVERSION) -- both fail from the same
+        # fixture's missing-API-key GOLD error.
         gold_errors = [e for e in result.errors_encountered if e["asset"] == "GOLD"]
-        self.assertEqual(len(gold_errors), 1)
-        self.assertEqual(gold_errors[0]["classification"], "FATAL")
+        self.assertEqual(len(gold_errors), 2)
+        self.assertTrue(all(e["classification"] == "FATAL" for e in gold_errors))
 
     def test_transient_failure_retries_then_succeeds(self) -> None:
         call_count = {"GOLD": 0}
@@ -212,7 +232,7 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
                 if call_count["GOLD"] < 3:
                     raise MarketDataUnavailableError("Binance: ConnectionError: timed out")
                 return MarketDataResult(prices=self.gold_history, source="test-fixture", asset="GOLD", interval=interval)
-            source_map = {"BNB": self.bnb_history, "BTC": self.btc_history, "ETH": self.eth_history}
+            source_map = {"BNB": self.bnb_history, "BTC": self.btc_history, "ETH": self.eth_history, "SILVER": self.silver_history}
             return MarketDataResult(prices=source_map[asset], source="test-fixture", asset=asset, interval=interval)
 
         sleeps: list[float] = []
@@ -225,14 +245,19 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
             result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=sleeps.append)
 
         self.assertIn("GOLD", result.assets_evaluated)
-        self.assertEqual(call_count["GOLD"], 3)
+        # BREAKOUT_MOMENTUM's GOLD/1week fetch fails twice then succeeds on the 3rd
+        # call (clearing call_count["GOLD"] to 3); RANGE_MEAN_REVERSION's own GOLD/
+        # 1week fetch runs afterward and succeeds immediately on its first call (the
+        # counter has already cleared the < 3 failure threshold) -- 4 calls total,
+        # only the first config's 2 failures produce backoff sleeps.
+        self.assertEqual(call_count["GOLD"], 4)
         self.assertEqual(sleeps, [1, 3])
 
     def test_transient_failure_exhausting_all_retries_is_skipped_not_fatal(self) -> None:
         def _fake_load_intraday(asset, interval="1h", candles=240, twelve_data_api_key=None):
             if asset == "GOLD":
                 raise MarketDataUnavailableError("Binance: ConnectionError: timed out")
-            source_map = {"BNB": self.bnb_history, "BTC": self.btc_history, "ETH": self.eth_history}
+            source_map = {"BNB": self.bnb_history, "BTC": self.btc_history, "ETH": self.eth_history, "SILVER": self.silver_history}
             return MarketDataResult(prices=source_map[asset], source="test-fixture", asset=asset, interval=interval)
 
         with patch.object(MarketDataClient, "load_intraday", side_effect=_fake_load_intraday), patch.object(
@@ -244,9 +269,11 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
             result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
 
         self.assertNotIn("GOLD", result.assets_evaluated)
+        # Both GOLD/1week configs (BREAKOUT_MOMENTUM and RANGE_MEAN_REVERSION) exhaust
+        # their retries and get skipped.
         gold_skips = [r for r in result.assets_skipped if r["asset"] == "GOLD"]
-        self.assertEqual(len(gold_skips), 1)
-        self.assertEqual(gold_skips[0]["classification"], "FETCH_INCOMPLETE")
+        self.assertEqual(len(gold_skips), 2)
+        self.assertTrue(all(s["classification"] == "FETCH_INCOMPLETE" for s in gold_skips))
         self.assertEqual(result.errors_encountered, [])
 
 

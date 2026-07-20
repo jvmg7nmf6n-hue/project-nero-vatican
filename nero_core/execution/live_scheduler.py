@@ -28,6 +28,19 @@ nero_core/execution/verification_status.py):
   8. SILVER / 24h / VOLATILITY_SQUEEZE volatility-squeeze-v1.1.0-ma150-silver-calibrated-24h
   9. SILVER / 24h / VOLATILITY_SQUEEZE volatility-squeeze-v1.1.0-ma100-silver-calibrated-24h
 
+RMR (RANGE_MEAN_REVERSION) WATCHLIST FORWARD-TESTS WIRED (Replay Machinery
+Generalization — unblocked from an earlier deferral once the replay machinery below
+was generalized to support a pluggable state class, exit function, and
+direction-aware sizing; see docs/replay_machinery_generalization_stage0_design.md
+and docs/live_wiring_batch_rmr_watchlist_deferral.md for the full history). NOT
+survivors — same discipline as the SILVER rows above, wired to accrue live forward
+evidence on thin-sample, CI-crosses-zero backtest results, never presented as
+proven:
+  10. GOLD   / 1week / RANGE_MEAN_REVERSION range-mean-reversion-v1.0.0
+  11. SILVER / 1week / RANGE_MEAN_REVERSION range-mean-reversion-v1.0.0
+  12. BTC    / 24h   / RANGE_MEAN_REVERSION range-mean-reversion-v1.1.0-long-only
+  13. BTC    / 24h   / RANGE_MEAN_REVERSION range-mean-reversion-v1.3.0-confirmation
+
 ORDERFLOW_IMBALANCE (Comprehensive Asset Expansion, Part C: Crypto, Task C1) — EXPERIMENTAL,
 snapshot-based, forward-testing only, NO BACKTEST EXISTS (see
 nero_core/strategies/orderflow_imbalance.py's module docstring for why: Binance's
@@ -97,6 +110,10 @@ from nero_core.strategies.news_sentiment import (
 )
 from nero_core.strategies.trend_pullback import STRATEGY_ID as TREND_PULLBACK_ID
 from nero_core.strategies.trend_pullback import STRATEGY_VERSION as TREND_PULLBACK_VERSION
+from nero_core.strategies.range_mean_reversion import STRATEGY_ID as RANGE_MEAN_REVERSION_ID
+from nero_core.strategies.range_mean_reversion import STRATEGY_VERSION as RMR_V1_VERSION
+from nero_core.strategies.range_mean_reversion_long_only import STRATEGY_VERSION as RMR_LONG_ONLY_VERSION
+from nero_core.strategies.range_mean_reversion_confirmation import STRATEGY_VERSION as RMR_CONFIRMATION_VERSION
 from nero_core.truth_ledger.execution_log import (
     DEFAULT_DB_PATH,
     earliest_logged_candle_timestamp,
@@ -149,6 +166,13 @@ SINGLE_ASSET_CONFIGS = (
     SingleAssetConfig("SILVER", "24h", "volatility_squeeze_ma200_silver_calibrated_24h", VOLATILITY_SQUEEZE_ID, SILVER_VS_MA200_VERSION),
     SingleAssetConfig("SILVER", "24h", "volatility_squeeze_ma150_silver_calibrated_24h", VOLATILITY_SQUEEZE_ID, SILVER_VS_MA150_VERSION),
     SingleAssetConfig("SILVER", "24h", "volatility_squeeze_ma100_silver_calibrated_24h", VOLATILITY_SQUEEZE_ID, SILVER_VS_MA100_VERSION),
+    # RMR watchlist forward-tests (Replay Machinery Generalization) — see module
+    # docstring above and nero_core/execution/verification_status.py. None of these
+    # is a proven edge; wired to accrue live evidence, per user request.
+    SingleAssetConfig("GOLD", "1week", "range_mean_reversion_gold_1week", RANGE_MEAN_REVERSION_ID, RMR_V1_VERSION),
+    SingleAssetConfig("SILVER", "1week", "range_mean_reversion_silver_1week", RANGE_MEAN_REVERSION_ID, RMR_V1_VERSION),
+    SingleAssetConfig("BTC", "24h", "range_mean_reversion_long_only_btc_1d", RANGE_MEAN_REVERSION_ID, RMR_LONG_ONLY_VERSION),
+    SingleAssetConfig("BTC", "24h", "range_mean_reversion_confirmation_btc_1d", RANGE_MEAN_REVERSION_ID, RMR_CONFIRMATION_VERSION),
 )
 
 
