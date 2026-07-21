@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-21T04:42:58.913021+00:00",
+  "last_updated": "2026-07-21T07:27:37.723677+00:00",
   "strategies": [
     {
       "name": "BREAKOUT_MOMENTUM",
@@ -113,6 +113,111 @@
       "asset": "ETH",
       "timeframe": "snapshot",
       "verification_status": "experimental — snapshot-based, forward-testing only, no backtest exists"
+    },
+    {
+      "name": "GOLD_SILVER_RATIO_MR",
+      "version": "gold-silver-ratio-mr-v1.0.0",
+      "asset": "GOLD-SILVER",
+      "timeframe": "24h",
+      "verification_status": "watchlist — forward-testing, not verified (positive both halves, edge-over-random positive 3/4 configs; pairs-aware stop; vendor-timestamp fix applied; 1day grid-shift structurally unavailable)"
+    },
+    {
+      "name": "PEAD",
+      "version": "pead-v1.0.0-surprise3pct-hold10",
+      "asset": "AAPL",
+      "timeframe": "1day",
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+    },
+    {
+      "name": "PEAD",
+      "version": "pead-v1.0.0-surprise3pct-hold10",
+      "asset": "MSFT",
+      "timeframe": "1day",
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+    },
+    {
+      "name": "PEAD",
+      "version": "pead-v1.0.0-surprise3pct-hold10",
+      "asset": "GOOGL",
+      "timeframe": "1day",
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+    },
+    {
+      "name": "PEAD",
+      "version": "pead-v1.0.0-surprise3pct-hold10",
+      "asset": "TSLA",
+      "timeframe": "1day",
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+    },
+    {
+      "name": "PEAD",
+      "version": "pead-v1.0.0-surprise3pct-hold10",
+      "asset": "AMZN",
+      "timeframe": "1day",
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+    },
+    {
+      "name": "PEAD",
+      "version": "pead-v1.0.0-surprise3pct-hold10",
+      "asset": "NVDA",
+      "timeframe": "1day",
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+    },
+    {
+      "name": "PEAD",
+      "version": "pead-v1.0.0-surprise3pct-hold10",
+      "asset": "META",
+      "timeframe": "1day",
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+    },
+    {
+      "name": "PEAD",
+      "version": "pead-v1.0.0-surprise8pct-hold10",
+      "asset": "AAPL",
+      "timeframe": "1day",
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+    },
+    {
+      "name": "PEAD",
+      "version": "pead-v1.0.0-surprise8pct-hold10",
+      "asset": "MSFT",
+      "timeframe": "1day",
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+    },
+    {
+      "name": "PEAD",
+      "version": "pead-v1.0.0-surprise8pct-hold10",
+      "asset": "GOOGL",
+      "timeframe": "1day",
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+    },
+    {
+      "name": "PEAD",
+      "version": "pead-v1.0.0-surprise8pct-hold10",
+      "asset": "TSLA",
+      "timeframe": "1day",
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+    },
+    {
+      "name": "PEAD",
+      "version": "pead-v1.0.0-surprise8pct-hold10",
+      "asset": "AMZN",
+      "timeframe": "1day",
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+    },
+    {
+      "name": "PEAD",
+      "version": "pead-v1.0.0-surprise8pct-hold10",
+      "asset": "NVDA",
+      "timeframe": "1day",
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+    },
+    {
+      "name": "PEAD",
+      "version": "pead-v1.0.0-surprise8pct-hold10",
+      "asset": "META",
+      "timeframe": "1day",
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
     }
   ]
 }

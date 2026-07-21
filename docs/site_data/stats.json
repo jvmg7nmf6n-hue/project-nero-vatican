@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-21T04:42:58.913016+00:00",
+  "last_updated": "2026-07-21T07:27:37.723673+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -219,8 +219,252 @@
       "expectancy_r": null,
       "avg_return_pct": 0.6956386610180747,
       "signal_counts": {
-        "ENTRY": 5,
+        "ENTRY": 6,
         "EXIT": 5,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": {
+        "entry_price": 1933.59,
+        "entry_timestamp": "2026-07-21T07:27:34.805946+00:00",
+        "candle_timestamp": "2026-07-21T07:00:00+00:00"
+      }
+    },
+    {
+      "strategy": "GOLD_SILVER_RATIO_MR",
+      "strategy_version": "gold-silver-ratio-mr-v1.0.0",
+      "asset": "GOLD-SILVER",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "PEAD",
+      "strategy_version": "pead-v1.0.0-surprise3pct-hold10",
+      "asset": "AAPL",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "PEAD",
+      "strategy_version": "pead-v1.0.0-surprise3pct-hold10",
+      "asset": "MSFT",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "PEAD",
+      "strategy_version": "pead-v1.0.0-surprise3pct-hold10",
+      "asset": "GOOGL",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "PEAD",
+      "strategy_version": "pead-v1.0.0-surprise3pct-hold10",
+      "asset": "TSLA",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "PEAD",
+      "strategy_version": "pead-v1.0.0-surprise3pct-hold10",
+      "asset": "AMZN",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "PEAD",
+      "strategy_version": "pead-v1.0.0-surprise3pct-hold10",
+      "asset": "NVDA",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "PEAD",
+      "strategy_version": "pead-v1.0.0-surprise3pct-hold10",
+      "asset": "META",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "PEAD",
+      "strategy_version": "pead-v1.0.0-surprise8pct-hold10",
+      "asset": "AAPL",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "PEAD",
+      "strategy_version": "pead-v1.0.0-surprise8pct-hold10",
+      "asset": "MSFT",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "PEAD",
+      "strategy_version": "pead-v1.0.0-surprise8pct-hold10",
+      "asset": "GOOGL",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "PEAD",
+      "strategy_version": "pead-v1.0.0-surprise8pct-hold10",
+      "asset": "TSLA",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "PEAD",
+      "strategy_version": "pead-v1.0.0-surprise8pct-hold10",
+      "asset": "AMZN",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "PEAD",
+      "strategy_version": "pead-v1.0.0-surprise8pct-hold10",
+      "asset": "NVDA",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "PEAD",
+      "strategy_version": "pead-v1.0.0-surprise8pct-hold10",
+      "asset": "META",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
         "WATCH": 0,
         "NO_TRADE": 0
       },
