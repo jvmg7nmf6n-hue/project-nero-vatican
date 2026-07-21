@@ -7,6 +7,13 @@
     "source_doc": "docs/fvg_reversion_report.md"
   },
   {
+    "name": "FVG_REVERSION (cross-asset extension)",
+    "family": "Fair Value Gap",
+    "what_was_tested": "The identical FVG_REVERSION v1.0.0 logic re-tested against every other asset class this project covers, extending the original crypto-only verdict above: 6 metals configs (SILVER, PLATINUM x 2h/4h/12h), 30 forex configs (10 pairs x {1h,4h,1day,1week}), and ~90 stock configs (27 stocks + 3 index ETFs x 4 timeframes).",
+    "why_it_died": "DIED on effectively every additional config tested. All 6 metals configs DIED (every train half negative, several with a CI clearing zero on the negative side). All 30 forex configs DIED outright - every pair, every timeframe. Stocks showed only 9 of 90 configs reaching PROMISING-WATCHLIST (81 DIED). Four independent asset-class tests all confirm the same crypto-native finding: the gap-touch trigger carries no durable edge anywhere this project has looked.",
+    "source_doc": "docs/comprehensive_asset_expansion_closing_report.md"
+  },
+  {
     "name": "BOS_CONTINUATION",
     "family": "Break of Structure",
     "what_was_tested": "BOS_CONTINUATION v1.0.0 (structure-break continuation, MA200 trend filter, ATR-capped structural stop) across 7 crypto assets x {4h, 12h, 24h} = 21 configs, 70/30 chronological split, bootstrap CI + random-entry baseline.",
@@ -54,5 +61,82 @@
     "what_was_tested": "Dollar-proxy (UUP/DXY/EUR-USD cascade) + FRED DFII10 real-yield regime-following strategy on BTC and GOLD, full available daily history, 70/30 chronological split.",
     "why_it_died": "BTC's expectancy flipped from +0.191R (train) to -0.140R (test). GOLD's train half was itself negative (-0.019R) before the test half even mattered (+0.018R). Neither asset passed the strict positive-both-halves filter.",
     "source_doc": "docs/macro_risk_on_report.md"
+  },
+  {
+    "name": "MACRO_RISK_ON (metals extension: SILVER/PLATINUM)",
+    "family": "Macro Regime",
+    "what_was_tested": "The same dollar-proxy + DFII10 regime logic re-tested on SILVER and PLATINUM/24h during Asset Expansion Phase A, alongside 8 other strategy families.",
+    "why_it_died": "PLATINUM DIED outright (train ExpR +0.210 flipped to -0.061 in test). SILVER reached PROMISING-WATCHLIST (train N=158 ExpR=0.051, test N=94 ExpR=0.162) but its test-half CI still crosses zero, and it was NOT among the 5 SILVER configs ultimately selected for live paper-tracking wiring - a mixed, unconvincing result on the one metal that didn't die outright.",
+    "source_doc": "docs/metals_phase_a_full_sweep.md"
+  },
+  {
+    "name": "MACRO_RISK_ON (stocks extension: SPY/QQQ/IWM)",
+    "family": "Macro Regime",
+    "what_was_tested": "The same regime logic applied to the 3 major index ETFs (SPY, QQQ, IWM) during the Comprehensive Asset Expansion Stocks task - the natural bias-free universe for a broad macro-regime signal.",
+    "why_it_died": "SPY DIED (train negative, test barely positive). IWM DIED the same way. Only QQQ reached PROMISING-WATCHLIST (train N=159 ExpR=0.010, test N=102 ExpR=0.076) - the best-sampled of the three, but the expectancy itself is thin. 2 of 3 index ETFs show no edge at all; the one exception is weak.",
+    "source_doc": "docs/stock_task_a2_full_sweep.md"
+  },
+  {
+    "name": "MACRO_RISK_ON (forex extension: EUR/USD, USD/JPY)",
+    "family": "Macro Regime",
+    "what_was_tested": "The same regime logic applied to EUR/USD and USD/JPY at 1day during the Comprehensive Asset Expansion Forex task.",
+    "why_it_died": "Both pairs DIED outright with both train AND test strongly negative (EUR/USD: -0.168/-0.204 ExpR; USD/JPY: -0.171/-0.064 ExpR) - a clean, uniform failure with no ambiguity, matching FVG_REVERSION's own clean forex failure in the same batch.",
+    "source_doc": "docs/forex_task_b2_full_sweep.md"
+  },
+  {
+    "name": "MACRO_RISK_ON (PSX extension: HBL)",
+    "family": "Macro Regime",
+    "what_was_tested": "A Pakistan-adapted regime variant (USD/PKR + WTI oil in place of the dollar-proxy/DFII10 pair) applied to HBL, the one PSX ticker that cleared the corporate-action guard in the PSX Strategy Sweep.",
+    "why_it_died": "DIED with a genuinely adequate sample (train N=216 ExpR=-0.053, test N=112 ExpR=+0.092) - not a thin, inconclusive result, a real negative one on real sample size. OGDC and LUCK could not even be tested (both halted by the corporate-action guard before a backtest could run).",
+    "source_doc": "docs/psx_task2_full_sweep.md"
+  },
+  {
+    "name": "CARRY_MOMENTUM",
+    "family": "Forex Carry",
+    "what_was_tested": "CARRY_MOMENTUM v1.0.0 (rank-and-select the top-3 forex pairs by interest-rate differential among momentum-passing candidates) across all 7 audited forex pairs, {1day, 1week}, 70/30 chronological split.",
+    "why_it_died": "Both timeframes DIED with an adequate, well-sampled negative result - not a thin one. 1day's train-half CI is entirely negative ([-0.211, -0.041], N=653) and clears the 20-trade bar by a wide margin on both halves. Edge over random was negative in 3 of 4 half-configs: ranking by rate differential performed WORSE than picking randomly among momentum-passing candidates. STOP dominated the exit mix everywhere (roughly half of all positions), consistent with a momentum filter that wasn't actually confirming the carry was durable.",
+    "source_doc": "docs/carry_momentum_results.md"
+  },
+  {
+    "name": "RANGE_MEAN_REVERSION variant experiments (EUR/USD 4h long-only, ETH 4h adx-falling)",
+    "family": "Range Mean Reversion",
+    "what_was_tested": "Four RMR variant hypotheses tested against fresh baselines on identical data: RMR_LONG_ONLY_EURUSD_4H, RMR_ADX_FALLING_ETH_4H, RMR_LONG_ONLY_BTC_1D, RMR_CONFIRMATION_BTC_1D. A follow-up Stage 3 refinement then applied the already-registered long-only filter to ETH specifically, to test whether its own weakness was also short-side driven.",
+    "why_it_died": "RMR_LONG_ONLY_EURUSD_4H stayed DIED (improved over baseline, but still negative). RMR_ADX_FALLING_ETH_4H stayed DIED (test flipped positive but train worsened - an inconsistent, non-robust pattern). The Stage 3 ETH refinement DIED outright, refuting the long-only hypothesis for ETH specifically - this was also the ONE config in the entire cycle genuinely eligible for grid-shift testing (crypto's continuous trading has no structural gap blocking it), and it didn't even reach the point of qualifying for that test. Only the BTC/1d variants (long-only, confirmation) reached PROMISING-WATCHLIST, and even a Stage 3 attempt to stack both BTC filters together only shrank the sample further without improving the result.",
+    "source_doc": "docs/rmr_variant_research_closing_report.md"
+  },
+  {
+    "name": "REGIME_TRANSITION",
+    "family": "Range Mean Reversion",
+    "what_was_tested": "A new strategy built on RANGE_MEAN_REVERSION's own regime concept: does trading the regime CHANGE itself (a mature range ending) work, rather than trading inside the range as RMR does? Full state machine (mature-range detection, ceiling/floor stop, range-height target, failed-transition exit), swept across 14 asset/timeframe configs with a bespoke random-entry baseline isolating the boundary-break trigger.",
+    "why_it_died": "11 of 14 configs DIED, 0 SURVIVED. The 3 PROMISING-WATCHLIST configs (ETH/4h, ETH/1d, EURUSD/1d) all carry a LOW SAMPLE flag on at least one half - this mechanism (a 10-candle mature range followed by a qualifying transition) is low-frequency by construction on every timeframe tested, and 0 configs reached the grid-shift qualifying bar. The mechanism works exactly as designed (30 passing unit tests); the live-market signal is not yet distinguishable from noise at the sample sizes available.",
+    "source_doc": "docs/ranging_regime_batch_r1_regime_transition.md"
+  },
+  {
+    "name": "RANGE_MATURITY gate",
+    "family": "Range Mean Reversion",
+    "what_was_tested": "A single new gate bolted onto RANGE_MEAN_REVERSION v1.0.0 (unchanged otherwise): entry requires ADX<25 for >= N consecutive closed candles beforehand (N=20 for 4h/1d, N=8 for 1week) - testing whether range AGE was the missing variable behind RMR's own thin results. Compared against fresh v1.0.0 baselines across 7 targeted configs.",
+    "why_it_died": "The gate never rescued a single DIED baseline, and it actively WORSENED GOLD/1week - RMR's single best result across the whole project - flipping train-half expectancy from +0.026 to -0.038. SILVER/1week is the one config that held its PROMISING-WATCHLIST status under the gate, but with a smaller sample (23->18 train, 15->11 test) and a smaller edge (train ExpR 0.320->0.187), the same 'shrinks without concentrating' signature that already counted as evidence against a robust effect elsewhere in this project. Range age is not the missing variable.",
+    "source_doc": "docs/ranging_regime_batch_r2_range_maturity.md"
+  },
+  {
+    "name": "REGIME_ALLOCATOR (ADX-gating existing survivors)",
+    "family": "Range Mean Reversion",
+    "what_was_tested": "ADX(14)>=20-gated, append-only new versions of two already-verified, LIVE survivors (BREAKOUT_MOMENTUM GOLD/1week, TREND_PULLBACK BNB/12h), each compared against a fresh ungated baseline on identical data - testing whether regime-gating improves strategies that already work.",
+    "why_it_died": "Neither config's classification changed under gating (GOLD/1week stayed SURVIVED; BNB/12h stayed PROMISING-WATCHLIST). Gating traded away roughly 10% of the sample for a marginal, split-direction shift in expectancy (worse train, better test, on BOTH configs) - not the consistent, both-halves improvement a genuine regime-gating effect would produce. A clean null result: regime-gating neither helps nor meaningfully hurts either survivor, so simplicity wins and neither live registration was touched.",
+    "source_doc": "docs/ranging_regime_batch_r3_regime_allocator.md"
+  },
+  {
+    "name": "Vol-Clustering position-size multiplier (H2)",
+    "family": "Position Sizing",
+    "what_was_tested": "A volatility-clustering-based position-size multiplier (scales risk_per_trade up during high-cluster-score periods) applied to 7 configs across all 3 asset classes tested in this project: crypto (GOLD/1week BREAKOUT_MOMENTUM, BNB/12h TREND_PULLBACK), stocks (INTU/1day MEAN_REVERSION, NVDA/1week and AAPL/1week BREAKOUT_MOMENTUM), and forex (EUR/JPY/1week BREAKOUT_MOMENTUM, EUR/JPY/1day BOS_CONTINUATION).",
+    "why_it_died": "Not a backtest failure but a mathematical one: R-multiple expectancy and win-rate are PROVABLY invariant to this multiplier everywhere (it scales risk_dollars and net_pnl by the same factor, so their ratio - the R-multiple - cannot change; confirmed exactly 0.0 or floating-point noise across all 7 configs, 3 asset classes, 4 strategy families). Max drawdown WORSENS in 6 of 7 configs. Net dollar P&L improves in 6 of 7, but this is leverage amplifying whatever the underlying trade sequence already contained, not evidence of skill or edge. Not recommended for production deployment as a live position-sizing enhancement.",
+    "source_doc": "docs/vol_clustering_c2_comparative.md"
+  },
+  {
+    "name": "LIQUIDATION_PREDICTOR",
+    "family": "Order-Book / Liquidation",
+    "what_was_tested": "A data-availability audit for a proposed liquidation-cascade prediction strategy, checking for any free, pollable, keyless REST liquidation feed across major crypto exchanges - never reached strategy code or backtesting.",
+    "why_it_died": "BLOCKED-ON-DATA before any strategy could be built: Binance's public liquidation feed is discontinued, Bybit v5 has no equivalent route, OKX was inconclusive (DNS failure from the test environment, would need re-testing from a different network), and Coinalyze requires a paid-tier-style registered API key this project doesn't have. No strategy code was written - only the audit is committed, exactly as intended for a data-blocked hypothesis.",
+    "source_doc": "docs/liquidation_predictor_data_audit.md"
   }
 ]
