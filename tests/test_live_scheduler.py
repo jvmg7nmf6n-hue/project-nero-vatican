@@ -88,11 +88,33 @@ class LiveSchedulerTestCase(unittest.TestCase):
     def _fake_load_daily(self, asset, days=365, twelve_data_api_key=None):
         # RMR BTC/24h (long-only, confirmation) fetch via load_daily -- BTC needs a
         # fixture entry here too (its other config, COINTEGRATION_PAIRS, is 12h,
-        # fetched via load_intraday instead).
-        source_map = {"SILVER": self.silver_history, "BTC": self.btc_history}
+        # fetched via load_intraday instead). GOLD_SILVER_RATIO_MR's own GOLD/24h
+        # leg also fetches via load_daily (GOLD's other config, BREAKOUT_MOMENTUM/
+        # 1week, uses load_intraday instead) -- needs its own fixture entry here too.
+        source_map = {"SILVER": self.silver_history, "BTC": self.btc_history, "GOLD": self.gold_history}
         if asset not in source_map:
             raise MarketDataUnavailableError(f"no fixture configured for {asset}")
         return MarketDataResult(prices=source_map[asset], source="test-fixture", asset=asset, interval="1d")
+
+    @staticmethod
+    def _fake_fetch_earnings_surprises(ticker, limit=100):
+        # PEAD isn't the subject of these general scheduler tests -- cleanly
+        # SKIPPED (FETCH_INCOMPLETE, same TRANSIENT classification every other
+        # missing-fixture asset in this file gets -- see classify_market_data_
+        # error). Callers using this fixture with PEAD in scope MUST pass
+        # sleep_fn=lambda s: None (see _patched_client's own docstring below)
+        # -- otherwise each of PEAD's 14 configs retries 3x with REAL
+        # time.sleep (1+3+10=14s), the exact real-sleep-contamination bug this
+        # project has hit twice before with other missing test fixtures.
+        # Dedicated PEAD behavior (mocked earnings response, NO_SIGNAL,
+        # pairs-leg accounting) is covered in tests/test_live_wiring_post_batch.py.
+        from nero_core.data_sources.earnings_data import EarningsDataUnavailableError
+        raise EarningsDataUnavailableError(f"no fixture configured for {ticker}")
+
+    @staticmethod
+    def _fake_fetch_stock_ohlcv(symbol, timeframe, start=None, end=None, sleep_fn=None):
+        from nero_core.data_sources.stock_data import StockDataUnavailableError
+        raise StockDataUnavailableError(f"no fixture configured for {symbol}")
 
     @staticmethod
     def _fake_fetch_and_cache_snapshot(binance_symbol, now=None, db_path=None):
@@ -103,6 +125,23 @@ class LiveSchedulerTestCase(unittest.TestCase):
             timestamp=now or datetime(2026, 7, 17, 0, 5, tzinfo=timezone.utc), symbol=binance_symbol,
             best_bid=100.0, best_ask=100.1, bid_vol_20=1.0, ask_vol_20=1.0, imbalance_ratio=None, source="test-fixture",
         )
+
+    def _patch_pead_fetchers(self) -> None:
+        """Shared by _patched_client() and every PartialFailureResilienceTest
+        method's own local patch set -- PEAD's fetchers are never mocked to
+        real data in these general scheduler tests (see
+        _fake_fetch_earnings_surprises), so PEAD's 14 configs are always
+        cleanly SKIPPED here, never hitting real yfinance calls."""
+        earnings_patcher = patch(
+            "nero_core.execution.live_scheduler.fetch_earnings_surprises", side_effect=self._fake_fetch_earnings_surprises
+        )
+        earnings_patcher.start()
+        self.addCleanup(earnings_patcher.stop)
+        stock_patcher = patch(
+            "nero_core.execution.live_scheduler.fetch_stock_ohlcv", side_effect=self._fake_fetch_stock_ohlcv
+        )
+        stock_patcher.start()
+        self.addCleanup(stock_patcher.stop)
 
     def _patched_client(self):
         intraday_patcher = patch.object(MarketDataClient, "load_intraday", side_effect=self._fake_load_intraday)
@@ -116,6 +155,7 @@ class LiveSchedulerTestCase(unittest.TestCase):
         )
         orderbook_patcher.start()
         self.addCleanup(orderbook_patcher.stop)
+        self._patch_pead_fetchers()
         return MarketDataClient()
 
 
@@ -141,9 +181,10 @@ class NotDueSkipsWithoutFetchingTest(LiveSchedulerTestCase):
         skipped_reasons = {r["classification"] for r in result.assets_skipped}
         self.assertEqual(skipped_reasons, {"NOT_DUE"})
         # GOLD, BNB, 5x SILVER, 4x RMR (GOLD/1week, SILVER/1week, BTC/24h long-only,
-        # BTC/24h confirmation), pairs, NEWS_SENTIMENT (ORDERFLOW_IMBALANCE isn't
+        # BTC/24h confirmation), pairs, GOLD-SILVER (GOLD_SILVER_RATIO_MR), 14x PEAD
+        # (7 tickers x 2 configs), NEWS_SENTIMENT (ORDERFLOW_IMBALANCE isn't
         # candle-gated, so it never appears among these NOT_DUE skips).
-        self.assertEqual(len(result.assets_skipped), 13)
+        self.assertEqual(len(result.assets_skipped), 28)
         orderflow_errors = [e for e in result.errors_encountered if e["strategy"] == "ORDERFLOW_IMBALANCE"]
         self.assertEqual(len(orderflow_errors), 2)  # BTC and ETH each fail their own fetch
         self.assertTrue(all(e["classification"] == "DATA_UNAVAILABLE" for e in orderflow_errors))
@@ -153,7 +194,11 @@ class FullRunTest(LiveSchedulerTestCase):
     def test_due_configs_are_evaluated_and_logged(self) -> None:
         client = self._patched_client()
 
-        result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path)
+        # sleep_fn=lambda s: None -- PEAD's 14 configs all hit the shared "no
+        # fixture configured" TRANSIENT classification (real earnings/stock
+        # data isn't mocked in this general scheduler test), which would
+        # otherwise retry 3x with REAL time.sleep (1+3+10=14s) EACH.
+        result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda s: None)
 
         self.assertIn("GOLD", result.assets_evaluated)
         self.assertIn("BNB", result.assets_evaluated)
@@ -184,10 +229,10 @@ class FullRunTest(LiveSchedulerTestCase):
     def test_running_twice_with_identical_data_produces_no_duplicate_rows(self) -> None:
         client = self._patched_client()
 
-        live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path)
+        live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda s: None)
         first_count = len(list_execution_log(db_path=self.db_path))
 
-        second_result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path)
+        second_result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda s: None)
         second_count = len(list_execution_log(db_path=self.db_path))
 
         self.assertEqual(first_count, second_count)
@@ -204,6 +249,7 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
             source_map = {"BNB": self.bnb_history, "BTC": self.btc_history, "ETH": self.eth_history, "SILVER": self.silver_history}
             return MarketDataResult(prices=source_map[asset], source="test-fixture", asset=asset, interval=interval)
 
+        self._patch_pead_fetchers()
         with patch.object(MarketDataClient, "load_intraday", side_effect=_fake_load_intraday), patch.object(
             MarketDataClient, "load_daily", side_effect=self._fake_load_daily
         ), patch(
@@ -236,10 +282,30 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
             return MarketDataResult(prices=source_map[asset], source="test-fixture", asset=asset, interval=interval)
 
         sleeps: list[float] = []
+
+        # This test tracks RAW sleep calls to isolate GOLD's own retry sequence --
+        # the shared _patch_pead_fetchers' "no fixture configured" TRANSIENT
+        # mock would otherwise append its own 3-attempt backoff (1, 3, 10) per
+        # one of PEAD's 14 configs onto this SAME sleeps list. A PERMANENT-
+        # classified message (matching classify_market_data_error's own
+        # "missing api key" marker) skips PEAD immediately, contributing zero
+        # sleep calls, without needing to fabricate a successful PEAD fetch.
+        def _fake_earnings_permanent(ticker, limit=100):
+            from nero_core.data_sources.earnings_data import EarningsDataUnavailableError
+            raise EarningsDataUnavailableError(f"missing api key style skip for {ticker}")
+
+        def _fake_stock_permanent(symbol, timeframe, start=None, end=None, sleep_fn=None):
+            from nero_core.data_sources.stock_data import StockDataUnavailableError
+            raise StockDataUnavailableError(f"missing api key style skip for {symbol}")
+
         with patch.object(MarketDataClient, "load_intraday", side_effect=_fake_load_intraday), patch.object(
             MarketDataClient, "load_daily", side_effect=self._fake_load_daily
         ), patch(
             "nero_core.execution.live_scheduler.fetch_and_cache_snapshot", side_effect=self._fake_fetch_and_cache_snapshot
+        ), patch(
+            "nero_core.execution.live_scheduler.fetch_earnings_surprises", side_effect=_fake_earnings_permanent
+        ), patch(
+            "nero_core.execution.live_scheduler.fetch_stock_ohlcv", side_effect=_fake_stock_permanent
         ):
             client = MarketDataClient()
             result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=sleeps.append)
@@ -260,6 +326,7 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
             source_map = {"BNB": self.bnb_history, "BTC": self.btc_history, "ETH": self.eth_history, "SILVER": self.silver_history}
             return MarketDataResult(prices=source_map[asset], source="test-fixture", asset=asset, interval=interval)
 
+        self._patch_pead_fetchers()
         with patch.object(MarketDataClient, "load_intraday", side_effect=_fake_load_intraday), patch.object(
             MarketDataClient, "load_daily", side_effect=self._fake_load_daily
         ), patch(
@@ -304,7 +371,7 @@ class NewsSentimentSchedulingTest(LiveSchedulerTestCase):
     def test_news_sentiment_not_due_outside_its_daily_hour(self) -> None:
         client = self._patched_client()
 
-        result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path)
+        result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda s: None)
 
         news_skips = [r for r in result.assets_skipped if r["asset"] == "NEWS_SENTIMENT"]
         self.assertEqual(len(news_skips), 1)

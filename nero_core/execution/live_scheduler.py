@@ -41,6 +41,23 @@ proven:
   12. BTC    / 24h   / RANGE_MEAN_REVERSION range-mean-reversion-v1.1.0-long-only
   13. BTC    / 24h   / RANGE_MEAN_REVERSION range-mean-reversion-v1.3.0-confirmation
 
+THREE NEW HYPOTHESIS BATCH — POST-BATCH PROMOTION LIST (see
+docs/three_new_hypothesis_batch_closing_report.md for the full backtest
+results this promotion list is based on):
+  14. GOLD-SILVER / 1day / GOLD_SILVER_RATIO_MR gold-silver-ratio-mr-v1.0.0 --
+      watchlist, NOT a survivor. Genuine two-leg pairs trade (both LONG and
+      SHORT legs), reusing the strategy's own evaluate_entry/size_entry/
+      evaluate_exit via replay_gold_silver_ratio_events (see
+      nero_core/execution/replay.py).
+  15-28. PEAD (7 tickers x 2 configs: pead-v1.0.0-surprise3pct-hold10,
+      pead-v1.0.0-surprise8pct-hold10) -- "verified" with a PERMANENT
+      survivor-bias caveat (7 large, currently-successful companies only, see
+      nero_core/data_sources/earnings_data.py's own SURVIVOR_BIAS_CAVEAT).
+      Event-driven (quarterly earnings, not every closed candle) via
+      replay_pead_events -- see PEAD_CONFIGS below. Most 30-min runs correctly
+      find no new qualifying earnings event and write nothing to the ledger;
+      this is NO_SIGNAL, not a bug.
+
 ORDERFLOW_IMBALANCE (Comprehensive Asset Expansion, Part C: Crypto, Task C1) — EXPERIMENTAL,
 snapshot-based, forward-testing only, NO BACKTEST EXISTS (see
 nero_core/strategies/orderflow_imbalance.py's module docstring for why: Binance's
@@ -70,11 +87,18 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from nero_core.config import load_dotenv
+from nero_core.data_sources.earnings_data import EarningsDataUnavailableError, fetch_earnings_surprises
 from nero_core.data_sources.market_data import MarketDataClient, MarketDataUnavailableError
 from nero_core.data_sources.news_feed import NewsFeedClient
 from nero_core.data_sources.orderbook_data import OrderbookDataUnavailableError, fetch_and_cache_snapshot
+from nero_core.data_sources.stock_data import StockDataUnavailableError, fetch_stock_ohlcv
 from nero_core.execution.candle_schedule import candle_boundary_due, daily_time_due
-from nero_core.execution.replay import replay_pairs_events, replay_single_asset_events
+from nero_core.execution.replay import (
+    replay_gold_silver_ratio_events,
+    replay_pairs_events,
+    replay_pead_events,
+    replay_single_asset_events,
+)
 from nero_core.strategies.mean_reversion import atr as compute_atr
 from nero_core.strategies.orderflow_imbalance import (
     DEFAULT_PARAMETERS as ORDERFLOW_PARAMETERS,
@@ -114,6 +138,17 @@ from nero_core.strategies.range_mean_reversion import STRATEGY_ID as RANGE_MEAN_
 from nero_core.strategies.range_mean_reversion import STRATEGY_VERSION as RMR_V1_VERSION
 from nero_core.strategies.range_mean_reversion_long_only import STRATEGY_VERSION as RMR_LONG_ONLY_VERSION
 from nero_core.strategies.range_mean_reversion_confirmation import STRATEGY_VERSION as RMR_CONFIRMATION_VERSION
+from nero_core.strategies.gold_silver_ratio_mr import DEFAULT_PARAMETERS as GSR_PARAMETERS
+from nero_core.strategies.gold_silver_ratio_mr import INDICATOR_COLUMNS_TO_CHECK as GSR_INDICATOR_COLUMNS_TO_CHECK
+from nero_core.strategies.gold_silver_ratio_mr import STRATEGY_ID as GOLD_SILVER_RATIO_ID
+from nero_core.strategies.gold_silver_ratio_mr import STRATEGY_VERSION as GOLD_SILVER_RATIO_VERSION
+from nero_core.strategies.gold_silver_ratio_mr import add_indicators as gsr_add_indicators
+from nero_core.strategies.gold_silver_ratio_mr import align_gold_silver_candles
+from nero_core.strategies.pead import STRATEGY_ID as PEAD_ID
+from nero_core.strategies.pead import TICKERS as PEAD_TICKERS
+from nero_core.strategies.pead import PeadParameters
+from nero_core.strategies.pead import add_atr as pead_add_atr
+from nero_core.strategies.pead import strategy_version_for as pead_strategy_version_for
 from nero_core.truth_ledger.execution_log import (
     DEFAULT_DB_PATH,
     earliest_logged_candle_timestamp,
@@ -132,6 +167,36 @@ load_dotenv()
 RETRY_BACKOFF_SECONDS = (1, 3, 10)
 NEWS_SENTIMENT_ASSETS = ("GOLD", "BTC")
 PAIRS_TIMEFRAME = "12h"
+
+# GOLD_SILVER_RATIO_MR (Three New Hypothesis Batch, Hypothesis 1) — only the 1day
+# config was recommended for wiring (docs/three_new_hypothesis_batch_closing_
+# report.md); 1week was deprioritized as thinner-sampled, not wired.
+GOLD_SILVER_RATIO_TIMEFRAME = "24h"
+GOLD_SILVER_RATIO_LABEL = "GOLD-SILVER"  # matches COINTEGRATION_PAIRS' own hyphenated pair-label convention
+
+# PEAD (Three New Hypothesis Batch, Hypothesis 3) — only 2 of the 6 backtested
+# configs were recommended for wiring (the other 4 SURVIVED too but would be
+# redundant coverage of the same signal per the closing report's own
+# recommendation): 3%/hold10 (broadest net) and 8%/hold10 (highest conviction).
+PEAD_WIRED_CONFIGS = ((0.03, 10), (0.08, 10))
+
+
+@dataclass(frozen=True)
+class PeadLiveConfig:
+    ticker: str
+    strategy_version: str
+    params: PeadParameters
+
+
+PEAD_CONFIGS = tuple(
+    PeadLiveConfig(
+        ticker=ticker,
+        strategy_version=pead_strategy_version_for(threshold, window),
+        params=PeadParameters(surprise_threshold_pct=threshold, holding_window_sessions=window),
+    )
+    for threshold, window in PEAD_WIRED_CONFIGS
+    for ticker in PEAD_TICKERS
+)
 
 # ORDERFLOW_IMBALANCE (Task C1) — this project's own asset naming (BTC, ETH) mapped to
 # the Binance SPOT symbols orderbook_data.py's REST endpoint actually expects.
@@ -198,18 +263,24 @@ def classify_market_data_error(exc: Exception) -> str:
 
 
 def fetch_with_retry(
-    fetch_fn: Callable[[], Any], sleep_fn: Callable[[float], None] = time.sleep
+    fetch_fn: Callable[[], Any],
+    sleep_fn: Callable[[float], None] = time.sleep,
+    retryable_exceptions: tuple[type[Exception], ...] = (MarketDataUnavailableError,),
 ) -> tuple[Any | None, dict[str, Any] | None]:
-    """Attempts `fetch_fn`, retrying a classified TRANSIENT MarketDataUnavailableError up
-    to len(RETRY_BACKOFF_SECONDS) times with the given backoff. A PERMANENT
-    classification never retries. Returns (result, None) on success, or
-    (None, {"classification": ..., "message": ...}) once retries are exhausted or on an
-    immediate permanent failure."""
+    """Attempts `fetch_fn`, retrying a classified TRANSIENT exception (any type in
+    `retryable_exceptions` -- defaults to MarketDataUnavailableError alone, so
+    every pre-existing caller is unchanged) up to len(RETRY_BACKOFF_SECONDS) times
+    with the given backoff. A PERMANENT classification never retries. Returns
+    (result, None) on success, or (None, {"classification": ..., "message": ...})
+    once retries are exhausted or on an immediate permanent failure.
+    classify_market_data_error is a pure string-pattern heuristic on str(exc) --
+    exception-type-agnostic, so it works unchanged for PEAD's
+    EarningsDataUnavailableError/StockDataUnavailableError too."""
     last_exc: Exception | None = None
     for attempt in range(len(RETRY_BACKOFF_SECONDS) + 1):
         try:
             return fetch_fn(), None
-        except MarketDataUnavailableError as exc:
+        except retryable_exceptions as exc:
             last_exc = exc
             if classify_market_data_error(exc) == "PERMANENT":
                 return None, {"classification": "FATAL", "message": str(exc)}
@@ -296,6 +367,107 @@ def process_pairs(
         insert_execution_log_row(
             run_id=run_id, strategy=COINTEGRATION_PAIRS_ID, strategy_version=COINTEGRATION_PAIRS_VERSION,
             asset=label, signal_type=event.signal_type, reasoning=event.reasoning,
+            candle_timestamp=event.candle_close_time, entry_price=event.entry_price, exit_price=event.exit_price,
+            timestamp=now, db_path=db_path,
+        )
+    return "EVALUATED", None
+
+
+def process_gold_silver_ratio(
+    client: MarketDataClient,
+    run_id: str,
+    now: datetime,
+    sleep_fn: Callable[[float], None] = time.sleep,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> tuple[str, dict[str, Any] | None]:
+    """GOLD_SILVER_RATIO_MR/1day (watchlist) -- a genuine two-leg pairs trade
+    (both LONG and SHORT legs), unlike COINTEGRATION_PAIRS' own long-leg-only
+    simplification. Reuses the strategy's own evaluate_entry/size_entry/
+    evaluate_exit via replay_gold_silver_ratio_events -- the short-accounting
+    for the SHORT leg is the SAME standard convention (apply_slippage direction,
+    inverted gross_pnl) used everywhere else in this project, not new code."""
+    def _fetch() -> tuple:
+        gold, _ = fetch_timeframe_candles(client, "GOLD", GOLD_SILVER_RATIO_TIMEFRAME)
+        silver, _ = fetch_timeframe_candles(client, "SILVER", GOLD_SILVER_RATIO_TIMEFRAME)
+        return gold, silver
+
+    fetch_result, fetch_error = fetch_with_retry(_fetch, sleep_fn)
+    if fetch_error is not None:
+        return "SKIPPED", {"asset": GOLD_SILVER_RATIO_LABEL, "strategy": GOLD_SILVER_RATIO_ID, **fetch_error}
+
+    gold_candles, silver_candles = fetch_result
+    # align_gold_silver_candles joins on CALENDAR DATE, not raw close_time -- the
+    # vendor-timestamp fix (GOLD/Twelve Data closes at 00:00 UTC, SILVER/yfinance
+    # futures at 04:00 UTC) committed with the strategy itself. This IS the live
+    # evaluation path calling that same function, not a raw close_time join.
+    aligned = align_gold_silver_candles(gold_candles, silver_candles)
+    enriched = gsr_add_indicators(aligned, GSR_PARAMETERS)
+    evaluable = enriched.dropna(subset=GSR_INDICATOR_COLUMNS_TO_CHECK).reset_index(drop=True)
+    if evaluable.empty:
+        return "SKIPPED", {
+            "asset": GOLD_SILVER_RATIO_LABEL, "strategy": GOLD_SILVER_RATIO_ID,
+            "classification": "DATA_QUALITY", "message": "insufficient indicator warmup history",
+        }
+
+    inception = earliest_logged_candle_timestamp(GOLD_SILVER_RATIO_ID, GOLD_SILVER_RATIO_VERSION, GOLD_SILVER_RATIO_LABEL, db_path)
+    already_logged = latest_logged_candle_timestamp(GOLD_SILVER_RATIO_ID, GOLD_SILVER_RATIO_VERSION, GOLD_SILVER_RATIO_LABEL, db_path)
+    events, _state = replay_gold_silver_ratio_events(evaluable, GSR_PARAMETERS, inception, already_logged)
+
+    for event in events:
+        insert_execution_log_row(
+            run_id=run_id, strategy=GOLD_SILVER_RATIO_ID, strategy_version=GOLD_SILVER_RATIO_VERSION,
+            asset=GOLD_SILVER_RATIO_LABEL, signal_type=event.signal_type, reasoning=event.reasoning,
+            candle_timestamp=event.candle_close_time, entry_price=event.entry_price, exit_price=event.exit_price,
+            timestamp=now, db_path=db_path,
+        )
+    return "EVALUATED", None
+
+
+def process_pead_config(
+    config: PeadLiveConfig,
+    run_id: str,
+    now: datetime,
+    sleep_fn: Callable[[float], None] = time.sleep,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> tuple[str, dict[str, Any] | None]:
+    """PEAD (3%/hold10 and 8%/hold10, both survivor-bias-caveated) -- one
+    (ticker, config) at a time, matching the other 14 = 7 tickers x 2 configs
+    entries in PEAD_CONFIGS. Earnings announcements happen quarterly, so the
+    OVERWHELMING majority of runs find NO qualifying new event for a given
+    ticker -- replay_pead_events correctly returns an EMPTY events list in that
+    case (NO_SIGNAL, not an error; see that function's own docstring for why no
+    ledger row is written on an ordinary non-event day, unlike candle-driven
+    strategies' own ENTRY/NO_TRADE-every-candle convention). The t+1 (next
+    trading day's open) execution rule is enforced by build_entry_plan (called
+    inside replay_pead_events) exactly as it is in the backtest -- same function,
+    not a re-derived live-path copy."""
+    def _fetch() -> tuple:
+        events_df = fetch_earnings_surprises(config.ticker, limit=100)
+        candles = fetch_stock_ohlcv(config.ticker, "1day").prices
+        return events_df, candles
+
+    fetch_result, fetch_error = fetch_with_retry(
+        _fetch, sleep_fn, retryable_exceptions=(EarningsDataUnavailableError, StockDataUnavailableError)
+    )
+    if fetch_error is not None:
+        return "SKIPPED", {"asset": config.ticker, "strategy": PEAD_ID, **fetch_error}
+
+    events_df, candles = fetch_result
+    enriched = pead_add_atr(candles, config.params)
+    if enriched.dropna(subset=["atr"]).empty:
+        return "SKIPPED", {
+            "asset": config.ticker, "strategy": PEAD_ID,
+            "classification": "DATA_QUALITY", "message": "insufficient ATR(14) warmup history",
+        }
+
+    inception = earliest_logged_candle_timestamp(PEAD_ID, config.strategy_version, config.ticker, db_path)
+    already_logged = latest_logged_candle_timestamp(PEAD_ID, config.strategy_version, config.ticker, db_path)
+    events, _state = replay_pead_events(enriched, events_df, config.ticker, config.params, inception, already_logged)
+
+    for event in events:
+        insert_execution_log_row(
+            run_id=run_id, strategy=PEAD_ID, strategy_version=config.strategy_version,
+            asset=config.ticker, signal_type=event.signal_type, reasoning=event.reasoning,
             candle_timestamp=event.candle_close_time, entry_price=event.entry_price, exit_price=event.exit_price,
             timestamp=now, db_path=db_path,
         )
@@ -497,6 +669,42 @@ def run_once(
                 assets_skipped.append(record)
     else:
         assets_skipped.append({"asset": pairs_label, "strategy": COINTEGRATION_PAIRS_ID, "classification": "NOT_DUE"})
+
+    if candle_boundary_due(GOLD_SILVER_RATIO_TIMEFRAME, now):
+        try:
+            status, record = process_gold_silver_ratio(client, run_id, now, sleep_fn, db_path)
+        except Exception as exc:  # noqa: BLE001
+            errors_encountered.append(
+                {"asset": GOLD_SILVER_RATIO_LABEL, "strategy": GOLD_SILVER_RATIO_ID, "classification": "FATAL", "message": f"{exc.__class__.__name__}: {exc}"}
+            )
+        else:
+            if status == "EVALUATED":
+                assets_evaluated.append(GOLD_SILVER_RATIO_LABEL)
+            elif record["classification"] == "FATAL":
+                errors_encountered.append(record)
+            else:
+                assets_skipped.append(record)
+    else:
+        assets_skipped.append({"asset": GOLD_SILVER_RATIO_LABEL, "strategy": GOLD_SILVER_RATIO_ID, "classification": "NOT_DUE"})
+
+    if candle_boundary_due("24h", now):
+        for pead_config in PEAD_CONFIGS:
+            try:
+                status, record = process_pead_config(pead_config, run_id, now, sleep_fn, db_path)
+            except Exception as exc:  # noqa: BLE001 - one ticker/config's unexpected failure must not abort the others
+                errors_encountered.append(
+                    {"asset": pead_config.ticker, "strategy": PEAD_ID, "classification": "FATAL", "message": f"{exc.__class__.__name__}: {exc}"}
+                )
+                continue
+            if status == "EVALUATED":
+                assets_evaluated.append(f"PEAD:{pead_config.strategy_version}:{pead_config.ticker}")
+            elif record["classification"] == "FATAL":
+                errors_encountered.append(record)
+            else:
+                assets_skipped.append(record)
+    else:
+        for pead_config in PEAD_CONFIGS:
+            assets_skipped.append({"asset": pead_config.ticker, "strategy": PEAD_ID, "classification": "NOT_DUE"})
 
     if daily_time_due(NEWS_PARAMS.daily_run_hour_utc, now):
         try:

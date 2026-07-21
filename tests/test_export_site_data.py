@@ -218,6 +218,10 @@ class RoundTripStatsTest(unittest.TestCase):
                 PAIRS_STRATEGY,
                 "ORDERFLOW_IMBALANCE",
                 "ORDERFLOW_IMBALANCE",
+                # Three New Hypothesis Batch, post-batch promotion list --
+                # GOLD_SILVER_RATIO_MR/1day + PEAD (7 tickers x 2 configs).
+                "GOLD_SILVER_RATIO_MR",
+                *(["PEAD"] * 14),
             ],
         )
 

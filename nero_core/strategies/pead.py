@@ -192,6 +192,83 @@ def build_entry_plan(
     return entry_plan
 
 
+def _check_pead_exit(
+    candle: dict | pd.Series, i: int, state: PeadState, params: PeadParameters, close_time: int,
+) -> ExitEvent | None:
+    """Shared exit-check step (STOP then TIME), reused by both
+    run_pead_backtest_rows and nero_core.execution.replay.replay_pead_events so
+    the live path can never silently diverge from the tested backtest logic.
+    Mutates state (via _close_trade) and returns the ExitEvent if a position
+    closed, else None. No-op if nothing is open."""
+    trade = state.open_trade
+    if trade is None:
+        return None
+    sessions_held = i - trade.entry_index
+    low, high, close = float(candle["low"]), float(candle["high"]), float(candle["close"])
+    exit_reason: str | None = None
+    raw_exit: float | None = None
+    if trade.direction == "LONG":
+        if low <= trade.stop_loss:
+            exit_reason, raw_exit = "STOP", trade.stop_loss
+        elif sessions_held >= params.holding_window_sessions:
+            exit_reason, raw_exit = "TIME", close
+    else:
+        if high >= trade.stop_loss:
+            exit_reason, raw_exit = "STOP", trade.stop_loss
+        elif sessions_held >= params.holding_window_sessions:
+            exit_reason, raw_exit = "TIME", close
+    if exit_reason is None:
+        return None
+    return _close_trade(trade, exit_reason, raw_exit, state, params, sessions_held, close_time)
+
+
+def _try_open_pead_trade(
+    candle: dict | pd.Series, i: int, n: int, entry_plan: dict[int, tuple[str, float]], ticker: str,
+    state: PeadState, params: PeadParameters, close_time: int,
+) -> OpenTrade | None:
+    """Shared entry-opening step, reused by both run_pead_backtest_rows and
+    nero_core.execution.replay.replay_pead_events. Mutates state.open_trade and
+    returns the OpenTrade if one was opened, else None (no qualifying event at
+    this candle, a position is already open, insufficient forward history, or
+    invalid risk geometry)."""
+    if state.open_trade is not None or i not in entry_plan:
+        return None
+    direction, surprise_fraction = entry_plan[i]
+    if i + params.holding_window_sessions >= n:
+        return None  # insufficient forward history -- discard, not counted either way
+
+    atr_value = candle.get("atr")
+    if atr_value is None or pd.isna(atr_value) or float(atr_value) <= 0:
+        return None
+    atr_value = float(atr_value)
+
+    raw_entry = float(candle["open"])
+    entry_price = apply_slippage(raw_entry, params.slippage_bps, "buy" if direction == "LONG" else "sell")
+    stop_distance = params.atr_stop_multiple * atr_value
+    if stop_distance <= 0:
+        return None
+    stop_loss = entry_price - stop_distance if direction == "LONG" else entry_price + stop_distance
+
+    risk_dollars = state.equity * params.risk_per_trade
+    quantity = risk_dollars / stop_distance
+    max_notional = state.equity * params.max_notional_pct
+    notional = quantity * entry_price
+    if notional > max_notional:
+        quantity = max_notional / entry_price
+        notional = max_notional
+        risk_dollars = quantity * stop_distance
+    entry_fee = notional * params.fee_bps / 10000.0
+
+    trade = OpenTrade(
+        direction=direction, entry_price=entry_price, stop_loss=stop_loss, quantity=quantity,
+        notional=notional, risk_dollars=risk_dollars, entry_fee=entry_fee,
+        open_close_time=close_time, entry_atr=atr_value, entry_index=i,
+        surprise_pct=surprise_fraction * 100.0, ticker=ticker,
+    )
+    state.open_trade = trade
+    return trade
+
+
 def run_pead_backtest_rows(
     rows: list[pd.Series], entry_plan: dict[int, tuple[str, float]], ticker: str, params: PeadParameters = DEFAULT_PARAMETERS,
 ) -> tuple[list[ExitEvent], PeadState]:
@@ -212,59 +289,10 @@ def run_pead_backtest_rows(
 
     for i, candle in enumerate(rows):
         close_time = int(candle["close_time"])
-
-        if state.open_trade is not None:
-            trade = state.open_trade
-            sessions_held = i - trade.entry_index
-            low, high, close = float(candle["low"]), float(candle["high"]), float(candle["close"])
-            exit_reason: str | None = None
-            raw_exit: float | None = None
-            if trade.direction == "LONG":
-                if low <= trade.stop_loss:
-                    exit_reason, raw_exit = "STOP", trade.stop_loss
-                elif sessions_held >= params.holding_window_sessions:
-                    exit_reason, raw_exit = "TIME", close
-            else:
-                if high >= trade.stop_loss:
-                    exit_reason, raw_exit = "STOP", trade.stop_loss
-                elif sessions_held >= params.holding_window_sessions:
-                    exit_reason, raw_exit = "TIME", close
-            if exit_reason is not None:
-                closed_trades.append(_close_trade(trade, exit_reason, raw_exit, state, params, sessions_held, close_time))
-
-        if state.open_trade is None and i in entry_plan:
-            direction, surprise_fraction = entry_plan[i]
-            if i + params.holding_window_sessions >= n:
-                continue  # insufficient forward history -- discard, not counted either way
-
-            atr_value = candle.get("atr")
-            if atr_value is None or pd.isna(atr_value) or float(atr_value) <= 0:
-                continue
-            atr_value = float(atr_value)
-
-            raw_entry = float(candle["open"])
-            entry_price = apply_slippage(raw_entry, params.slippage_bps, "buy" if direction == "LONG" else "sell")
-            stop_distance = params.atr_stop_multiple * atr_value
-            if stop_distance <= 0:
-                continue
-            stop_loss = entry_price - stop_distance if direction == "LONG" else entry_price + stop_distance
-
-            risk_dollars = state.equity * params.risk_per_trade
-            quantity = risk_dollars / stop_distance
-            max_notional = state.equity * params.max_notional_pct
-            notional = quantity * entry_price
-            if notional > max_notional:
-                quantity = max_notional / entry_price
-                notional = max_notional
-                risk_dollars = quantity * stop_distance
-            entry_fee = notional * params.fee_bps / 10000.0
-
-            state.open_trade = OpenTrade(
-                direction=direction, entry_price=entry_price, stop_loss=stop_loss, quantity=quantity,
-                notional=notional, risk_dollars=risk_dollars, entry_fee=entry_fee,
-                open_close_time=close_time, entry_atr=atr_value, entry_index=i,
-                surprise_pct=surprise_fraction * 100.0, ticker=ticker,
-            )
+        exit_event = _check_pead_exit(candle, i, state, params, close_time)
+        if exit_event is not None:
+            closed_trades.append(exit_event)
+        _try_open_pead_trade(candle, i, n, entry_plan, ticker, state, params, close_time)
 
     return closed_trades, state
 

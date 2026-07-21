@@ -46,6 +46,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from nero_core.execution.live_scheduler import (
     COINTEGRATION_PAIRS_ID,
     COINTEGRATION_PAIRS_VERSION,
+    GOLD_SILVER_RATIO_ID,
+    GOLD_SILVER_RATIO_LABEL,
+    GOLD_SILVER_RATIO_TIMEFRAME,
+    GOLD_SILVER_RATIO_VERSION,
     NEWS_SENTIMENT_ASSETS,
     NEWS_SENTIMENT_ID,
     ORDERFLOW_BINANCE_SYMBOLS,
@@ -53,6 +57,8 @@ from nero_core.execution.live_scheduler import (
     ORDERFLOW_VERSION,
     PAIRS_ASSETS,
     PAIRS_TIMEFRAME,
+    PEAD_CONFIGS,
+    PEAD_ID,
     SINGLE_ASSET_CONFIGS,
 )
 from nero_core.execution.verification_status import verification_status_for
@@ -198,6 +204,8 @@ def _trading_roster_keys() -> list[tuple[str, str, str]]:
     keys = [(c.strategy_id, c.strategy_version, c.asset) for c in SINGLE_ASSET_CONFIGS]
     keys.append((COINTEGRATION_PAIRS_ID, COINTEGRATION_PAIRS_VERSION, "-".join(PAIRS_ASSETS)))
     keys.extend((ORDERFLOW_ID, ORDERFLOW_VERSION, asset) for asset in ORDERFLOW_BINANCE_SYMBOLS)
+    keys.append((GOLD_SILVER_RATIO_ID, GOLD_SILVER_RATIO_VERSION, GOLD_SILVER_RATIO_LABEL))
+    keys.extend((PEAD_ID, c.strategy_version, c.ticker) for c in PEAD_CONFIGS)
     return keys
 
 
@@ -256,6 +264,25 @@ def _roster_entries() -> list[dict[str, object]]:
                 "asset": asset,
                 "timeframe": "snapshot",
                 "verification_status": verification_status_for(ORDERFLOW_ID, ORDERFLOW_VERSION, asset),
+            }
+        )
+    entries.append(
+        {
+            "name": GOLD_SILVER_RATIO_ID,
+            "version": GOLD_SILVER_RATIO_VERSION,
+            "asset": GOLD_SILVER_RATIO_LABEL,
+            "timeframe": GOLD_SILVER_RATIO_TIMEFRAME,
+            "verification_status": verification_status_for(GOLD_SILVER_RATIO_ID, GOLD_SILVER_RATIO_VERSION, GOLD_SILVER_RATIO_LABEL),
+        }
+    )
+    for config in PEAD_CONFIGS:
+        entries.append(
+            {
+                "name": PEAD_ID,
+                "version": config.strategy_version,
+                "asset": config.ticker,
+                "timeframe": "1day",
+                "verification_status": verification_status_for(PEAD_ID, config.strategy_version, config.ticker),
             }
         )
     return entries

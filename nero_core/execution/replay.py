@@ -28,7 +28,15 @@ from nero_core.strategies.cointegration_pairs import (
     determine_entry_side,
     determine_exit_reason,
 )
+from nero_core.strategies.gold_silver_ratio_mr import GoldSilverRatioParameters, GoldSilverRatioState
+from nero_core.strategies.gold_silver_ratio_mr import evaluate_entry as gsr_evaluate_entry
+from nero_core.strategies.gold_silver_ratio_mr import evaluate_exit as gsr_evaluate_exit
+from nero_core.strategies.gold_silver_ratio_mr import size_entry as gsr_size_entry
 from nero_core.strategies.mean_reversion import apply_slippage, reset_daily_guard_if_needed
+from nero_core.strategies.pead import PeadParameters, PeadState
+from nero_core.strategies.pead import _check_pead_exit as pead_check_exit
+from nero_core.strategies.pead import _try_open_pead_trade as pead_try_open_trade
+from nero_core.strategies.pead import build_entry_plan as pead_build_entry_plan
 
 
 @dataclass(frozen=True)
@@ -245,3 +253,153 @@ def replay_pairs_events(
                     )
 
     return events, state
+
+
+def replay_gold_silver_ratio_events(
+    evaluable: pd.DataFrame,
+    params: GoldSilverRatioParameters,
+    inception_close_time_ms: int | None,
+    already_logged_close_time_ms: int | None,
+) -> tuple[list[ReplayEvent], GoldSilverRatioState]:
+    """Deterministically replays GOLD_SILVER_RATIO_MR the same way
+    replay_single_asset_events does for single-asset strategies -- unlike
+    replay_pairs_events (which reimplements COINTEGRATION_PAIRS' own z-score/
+    cointegration logic inline because run_pairs_backtest's return contract only
+    exposes closed trades), this reuses the strategy's own evaluate_entry/
+    size_entry/evaluate_exit directly, since gold_silver_ratio_mr.py already
+    fully expresses its own entry/exit/state mechanics as reusable functions.
+
+    Both legs are logged in one ReplayEvent's `reasoning` text (there is no
+    schema column for a second price) -- entry_price/exit_price carry the GOLD
+    leg's own price as a representative reference value; the true combined P&L
+    (both legs) is in `r_multiple=`/`net_pnl=` within reasoning, which IS
+    reliably parseable for this strategy (unlike COINTEGRATION_PAIRS' own
+    single-leg-only reasoning) -- so `expectancy_r` in the site export is
+    accurate for this strategy; `avg_return_pct` (computed from entry_price/
+    exit_price alone) is NOT, since it only reflects the GOLD leg's own price
+    change, not the pair's combined return -- the same class of limitation
+    COINTEGRATION_PAIRS' own single-leg entry_price/exit_price already has."""
+    start_index = find_account_start_index(evaluable, inception_close_time_ms)
+    state = GoldSilverRatioState(equity=params.initial_equity)
+    events: list[ReplayEvent] = []
+    if start_index is None:
+        return events, state
+
+    for i in range(start_index, len(evaluable)):
+        row = evaluable.iloc[i]
+        close_time = int(row["close_time"])
+        should_emit = already_logged_close_time_ms is None or close_time > already_logged_close_time_ms
+
+        exit_event = gsr_evaluate_exit(row, state, params)
+        if exit_event is not None and should_emit:
+            events.append(
+                ReplayEvent(
+                    candle_close_time=close_time,
+                    signal_type="EXIT",
+                    entry_price=None,
+                    exit_price=exit_event.gold_exit_price,
+                    reasoning=(
+                        f"{exit_event.exit_reason} exit, ratio={exit_event.exit_ratio:.4f}, "
+                        f"gold_exit={exit_event.gold_exit_price:.2f}, silver_exit={exit_event.silver_exit_price:.2f}, "
+                        f"r_multiple={exit_event.r_multiple:.3f}, net_pnl={exit_event.net_pnl:.2f}"
+                    ),
+                )
+            )
+
+        evaluation = gsr_evaluate_entry(row, state, params)
+        if evaluation.passed:
+            trade = gsr_size_entry(row, state, params, evaluation.direction)
+            if trade is not None:
+                state.open_trade = trade
+                if should_emit:
+                    events.append(
+                        ReplayEvent(
+                            candle_close_time=close_time,
+                            signal_type="ENTRY",
+                            entry_price=trade.gold_leg.entry_price,
+                            exit_price=None,
+                            reasoning=(
+                                f"{evaluation.direction}: GOLD {trade.gold_leg.direction}@{trade.gold_leg.entry_price:.2f}, "
+                                f"SILVER {trade.silver_leg.direction}@{trade.silver_leg.entry_price:.2f}, ratio={evaluation.ratio:.4f}"
+                            ),
+                        )
+                    )
+            elif should_emit:
+                events.append(
+                    ReplayEvent(
+                        candle_close_time=close_time,
+                        signal_type="NO_TRADE",
+                        entry_price=None,
+                        exit_price=None,
+                        reasoning="entry conditions passed but position sizing produced invalid risk geometry",
+                    )
+                )
+        elif should_emit:
+            reasons = ", ".join(evaluation.reasons) if evaluation.reasons else "no entry"
+            events.append(
+                ReplayEvent(candle_close_time=close_time, signal_type="NO_TRADE", entry_price=None, exit_price=None, reasoning=reasons)
+            )
+
+    return events, state
+
+
+def replay_pead_events(
+    candles: pd.DataFrame,
+    events_df: pd.DataFrame,
+    ticker: str,
+    params: PeadParameters,
+    inception_close_time_ms: int | None,
+    already_logged_close_time_ms: int | None,
+) -> tuple[list[ReplayEvent], PeadState]:
+    """Deterministically replays one PEAD (ticker, config) the same way
+    replay_single_asset_events does -- reuses pead.build_entry_plan +
+    pead.run_pead_backtest_rows's own per-row mechanics, but (unlike
+    run_pead_backtest_rows, which only returns closed trades) also emits an
+    ENTRY ReplayEvent when a position opens, matching every other replay
+    function's audit-log contract.
+
+    NO event is emitted on an ordinary day with no qualifying earnings event --
+    unlike candle-driven strategies (which log a NO_TRADE row every closed
+    candle), PEAD's real decision points are the sparse set of earnings
+    announcements themselves; logging a "nothing happened" row on every one of
+    PEAD's ~250 evaluable trading days per ticker between quarterly events would
+    be ledger noise, not a meaningful decision record. Silently returning zero
+    events on a no-earnings day is the correct NO_SIGNAL behavior, not a bug."""
+    frame = candles.sort_values("close_time").reset_index(drop=True)
+    entry_plan = pead_build_entry_plan(frame, events_df, params)
+    rows = frame.to_dict("records")
+
+    start_index = find_account_start_index(frame, inception_close_time_ms)
+    state = PeadState(equity=params.initial_equity)
+    replay_events: list[ReplayEvent] = []
+    if start_index is None:
+        return replay_events, state
+
+    n = len(rows)
+    for i in range(n):
+        candle = rows[i]
+        close_time = int(candle["close_time"])
+        should_emit = i >= start_index and (already_logged_close_time_ms is None or close_time > already_logged_close_time_ms)
+
+        exit_event = pead_check_exit(candle, i, state, params, close_time)
+        if exit_event is not None and should_emit:
+            replay_events.append(
+                ReplayEvent(
+                    candle_close_time=close_time, signal_type="EXIT", entry_price=None, exit_price=exit_event.exit_price,
+                    reasoning=(
+                        f"{exit_event.exit_reason} exit, surprise_pct={exit_event.surprise_pct:.2f}, "
+                        f"r_multiple={exit_event.r_multiple:.3f}, net_pnl={exit_event.net_pnl:.2f}"
+                    ),
+                )
+            )
+
+        trade = pead_try_open_trade(candle, i, n, entry_plan, ticker, state, params, close_time)
+        if trade is not None and should_emit:
+            replay_events.append(
+                ReplayEvent(
+                    candle_close_time=close_time, signal_type="ENTRY", entry_price=trade.entry_price, exit_price=None,
+                    reasoning=f"{trade.direction} PEAD entry, surprise_pct={trade.surprise_pct:.2f}",
+                )
+            )
+
+    return replay_events, state

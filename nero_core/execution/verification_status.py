@@ -14,6 +14,20 @@ strategy_version here closes that gap.
 """
 from __future__ import annotations
 
+from nero_core.strategies.pead import TICKERS as _PEAD_TICKERS
+
+# Three New Hypothesis Batch, post-batch promotion list (docs/three_new_
+# hypothesis_batch_closing_report.md) -- exact wording as specified in that
+# batch's own status strings, never reworded here.
+_GOLD_SILVER_RATIO_STATUS = (
+    "watchlist — forward-testing, not verified (positive both halves, edge-over-random positive 3/4 configs; "
+    "pairs-aware stop; vendor-timestamp fix applied; 1day grid-shift structurally unavailable)"
+)
+_PEAD_SURVIVED_STATUS = (
+    "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; "
+    "edge-over-random +0.35 to +0.60; real-world performance may differ"
+)
+
 VERIFICATION_STATUS: dict[tuple[str, str, str], str] = {
     ("BREAKOUT_MOMENTUM", "breakout-momentum-v1.2.0-gold-calibrated-1week", "GOLD"): "triple-verified",
     ("TREND_PULLBACK", "trend-pullback-v1.0.0", "BNB"): "verified — sample-limited",
@@ -50,6 +64,15 @@ VERIFICATION_STATUS: dict[tuple[str, str, str], str] = {
         "watchlist — forward-testing, not verified (mechanism-backed, LOW SAMPLE, CI crosses zero, 1d grid-shift structurally unavailable)",
     ("RANGE_MEAN_REVERSION", "range-mean-reversion-v1.3.0-confirmation", "BTC"):
         "watchlist — forward-testing, not verified (68% reversion-target exit rate vs 32% baseline; LOW SAMPLE, CI crosses zero, 1d grid-shift structurally unavailable)",
+    # Three New Hypothesis Batch, post-batch promotion list -- GOLD_SILVER_RATIO_MR
+    # (watchlist, not a survivor) and PEAD (verified, permanent survivor-bias
+    # caveat) -- see docs/three_new_hypothesis_batch_closing_report.md.
+    ("GOLD_SILVER_RATIO_MR", "gold-silver-ratio-mr-v1.0.0", "GOLD-SILVER"): _GOLD_SILVER_RATIO_STATUS,
+    **{
+        ("PEAD", version, ticker): _PEAD_SURVIVED_STATUS
+        for version in ("pead-v1.0.0-surprise3pct-hold10", "pead-v1.0.0-surprise8pct-hold10")
+        for ticker in _PEAD_TICKERS
+    },
 }
 
 DEFAULT_VERIFICATION_STATUS = "unverified"
