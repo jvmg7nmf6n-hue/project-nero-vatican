@@ -215,6 +215,9 @@ class RoundTripStatsTest(unittest.TestCase):
                 "RANGE_MEAN_REVERSION",
                 "RANGE_MEAN_REVERSION",
                 "RANGE_MEAN_REVERSION",
+                # Donchian Cross-Asset Deep-Dive promotion list -- GOLD/1week/N20 is
+                # the last entry appended to SINGLE_ASSET_CONFIGS.
+                "DONCHIAN_TREND",
                 PAIRS_STRATEGY,
                 "ORDERFLOW_IMBALANCE",
                 "ORDERFLOW_IMBALANCE",
@@ -222,6 +225,10 @@ class RoundTripStatsTest(unittest.TestCase):
                 # GOLD_SILVER_RATIO_MR/1day + PEAD (7 tickers x 2 configs).
                 "GOLD_SILVER_RATIO_MR",
                 *(["PEAD"] * 14),
+                # Donchian Cross-Asset Deep-Dive promotion list -- EUR/USD, GBP/USD
+                # (N20), USD/JPY (N40), fetched via a separate DONCHIAN_FOREX_CONFIGS
+                # list (MarketDataClient has no forex routing), appended last.
+                *(["DONCHIAN_TREND"] * 3),
             ],
         )
 

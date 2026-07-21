@@ -92,6 +92,16 @@ from nero_core.strategies.range_mean_reversion_confirmation import CONFIRMATION_
 from nero_core.strategies.range_mean_reversion_confirmation import evaluate_confirmation_entry
 from nero_core.strategies.range_mean_reversion_confirmation import size_confirmation_entry
 from nero_core.strategies.timeframe_calibration import scaled_fees_for_asset
+from nero_core.strategies.donchian_breakout_bracket import add_indicators as donchian_bracket_add_indicators
+from nero_core.strategies.donchian_breakout_bracket import evaluate_entry as donchian_bracket_evaluate_entry
+from nero_core.strategies.donchian_breakout_bracket import evaluate_exit as donchian_bracket_evaluate_exit
+from nero_core.strategies.donchian_breakout_bracket import size_entry as donchian_bracket_size_entry
+from nero_core.strategies.donchian_bracket_live_configs import (
+    EURUSD_N20_PARAMETERS as DONCHIAN_EURUSD_N20_PARAMETERS,
+    GBPUSD_N20_PARAMETERS as DONCHIAN_GBPUSD_N20_PARAMETERS,
+    GOLD_N20_PARAMETERS as DONCHIAN_GOLD_N20_PARAMETERS,
+    USDJPY_N40_PARAMETERS as DONCHIAN_USDJPY_N40_PARAMETERS,
+)
 from nero_core.strategies.volatility_squeeze_silver_calibrated import (
     SILVER_CALIBRATED_PARAMETERS_MA100 as VS_MA100_SILVER_PARAMETERS,
     SILVER_CALIBRATED_PARAMETERS_MA150 as VS_MA150_SILVER_PARAMETERS,
@@ -115,6 +125,9 @@ INDICATOR_COLUMNS_TO_CHECK = [
     # RANGE_MEAN_REVERSION family (Replay Machinery Generalization) -- additive only,
     # inert for every strategy that doesn't produce these columns.
     "sma20", "adx",
+    # DONCHIAN_TREND bracket-exit live-wiring configs -- additive only, inert for
+    # every strategy that doesn't produce these columns.
+    "donchian_high", "donchian_low",
 ]
 
 
@@ -423,6 +436,59 @@ VARIANT_SPECS: dict[str, VariantSpec] = {
         state_factory=lambda equity: RangeMeanReversionState(equity=equity),
         evaluate_exit_fn=rmr_evaluate_exit,
         direction_aware_sizing=True,
+    ),
+    # DONCHIAN_TREND bracket-exit live-wiring configs (Donchian Cross-Asset Deep-Dive
+    # promotion list) -- bidirectional (LONG/SHORT) entry is resolved INSIDE
+    # donchian_bracket_size_entry itself (direction inferred from the candle's own
+    # proximity to the N-period high/low -- see donchian_breakout_bracket.py's module
+    # docstring), so direction_aware_sizing stays False (the default) and
+    # size_entry_fn is passed directly with its native 3-arg signature -- NOT the
+    # RMR-style 4-arg direction-aware wrapper above. evaluate_exit_fn MUST be
+    # overridden to donchian_bracket_evaluate_exit: the default long-only
+    # mean_reversion.evaluate_exit would run without error against a
+    # donchian_breakout_bracket.OpenTrade (it has a .target field too) but would
+    # silently apply LONG-only stop/target logic to SHORT trades, corrupting SHORT
+    # P&L -- exactly the "runs without error but wrong" failure mode flagged in
+    # docs/live_wiring_batch_rmr_watchlist_deferral.md.
+    "donchian_bracket_gold_n20_1week": VariantSpec(
+        key="donchian_bracket_gold_n20_1week",
+        label="DONCHIAN_TREND bracket GOLD N20 1week (donchian-trend-v2.0.0-bracket-gold-n20-1week)",
+        params=DONCHIAN_GOLD_N20_PARAMETERS,
+        add_indicators_fn=donchian_bracket_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: donchian_bracket_evaluate_entry(candle, state, params),
+        size_entry_fn=donchian_bracket_size_entry,
+        needs_daily=False,
+        evaluate_exit_fn=donchian_bracket_evaluate_exit,
+    ),
+    "donchian_bracket_eurusd_n20_1week": VariantSpec(
+        key="donchian_bracket_eurusd_n20_1week",
+        label="DONCHIAN_TREND bracket EUR/USD N20 1week (donchian-trend-v2.0.0-bracket-eurusd-n20-1week)",
+        params=DONCHIAN_EURUSD_N20_PARAMETERS,
+        add_indicators_fn=donchian_bracket_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: donchian_bracket_evaluate_entry(candle, state, params),
+        size_entry_fn=donchian_bracket_size_entry,
+        needs_daily=False,
+        evaluate_exit_fn=donchian_bracket_evaluate_exit,
+    ),
+    "donchian_bracket_gbpusd_n20_1week": VariantSpec(
+        key="donchian_bracket_gbpusd_n20_1week",
+        label="DONCHIAN_TREND bracket GBP/USD N20 1week (donchian-trend-v2.0.0-bracket-gbpusd-n20-1week)",
+        params=DONCHIAN_GBPUSD_N20_PARAMETERS,
+        add_indicators_fn=donchian_bracket_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: donchian_bracket_evaluate_entry(candle, state, params),
+        size_entry_fn=donchian_bracket_size_entry,
+        needs_daily=False,
+        evaluate_exit_fn=donchian_bracket_evaluate_exit,
+    ),
+    "donchian_bracket_usdjpy_n40_1week": VariantSpec(
+        key="donchian_bracket_usdjpy_n40_1week",
+        label="DONCHIAN_TREND bracket USD/JPY N40 1week (donchian-trend-v2.0.0-bracket-usdjpy-n40-1week)",
+        params=DONCHIAN_USDJPY_N40_PARAMETERS,
+        add_indicators_fn=donchian_bracket_add_indicators,
+        evaluate_entry_fn=lambda candle, as_of_intraday, as_of_daily, state, params, asset: donchian_bracket_evaluate_entry(candle, state, params),
+        size_entry_fn=donchian_bracket_size_entry,
+        needs_daily=False,
+        evaluate_exit_fn=donchian_bracket_evaluate_exit,
     ),
 }
 

@@ -41,6 +41,34 @@ proven:
   12. BTC    / 24h   / RANGE_MEAN_REVERSION range-mean-reversion-v1.1.0-long-only
   13. BTC    / 24h   / RANGE_MEAN_REVERSION range-mean-reversion-v1.3.0-confirmation
 
+DONCHIAN CROSS-ASSET DEEP-DIVE — PROMOTION LIST WIRED (see
+docs/donchian_deep_dive_closing_report.md for the full backtest results this
+promotion list is based on). NOT survivors -- watchlist forward-tests, same
+discipline as the SILVER/RMR rows above: GOLD/1week/N20's raw statistics clear
+every SURVIVED bar (positive both halves, adequate sample, CI clears zero both
+halves) but the FINAL classification stays PROMISING-WATCHLIST because grid-shift
+is structurally NOT_APPLICABLE at 1week (settlement gaps, no finer native source
+to resample from) -- a verification-method ceiling, not a data/CI shortfall. Do
+NOT present any of these 4 as "Vatican's first new verified strategy family" --
+that claim requires clearing grid-shift too, which no 1week config can do
+structurally. See nero_core/execution/verification_status.py for each config's
+exact status wording:
+  29. GOLD    / 1week / DONCHIAN_TREND donchian-trend-v2.0.0-bracket-gold-n20-1week
+      -- wired via SINGLE_ASSET_CONFIGS (fetch_timeframe_candles), same path as
+      every other GOLD config above.
+  30-32. EUR/USD, GBP/USD / 1week (N20) and USD/JPY / 1week (N40) DONCHIAN_TREND
+      -- fetched via nero_core.data_sources.forex_data.fetch_forex_ohlcv (Twelve
+      Data), NOT MarketDataClient (which has no forex routing at all) -- see
+      DONCHIAN_FOREX_CONFIGS / process_donchian_forex_config below, structurally
+      the same shape as PEAD_CONFIGS / process_pead_config.
+  All 4 are genuinely bidirectional (DONCHIAN_TREND's bracket variant opens LONG
+  on an N-period-high breakout and SHORT on an N-period-low breakout) --
+  direction is inferred INSIDE donchian_breakout_bracket.size_entry itself (not
+  passed externally), so these use direction_aware_sizing=False (the default)
+  in tools/backtest_compare.py's VARIANT_SPECS, unlike RANGE_MEAN_REVERSION's
+  direction_aware_sizing=True convention -- see that module's own docstring for
+  why the two bidirectional strategies wire differently.
+
 THREE NEW HYPOTHESIS BATCH — POST-BATCH PROMOTION LIST (see
 docs/three_new_hypothesis_batch_closing_report.md for the full backtest
 results this promotion list is based on):
@@ -88,6 +116,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from nero_core.config import load_dotenv
 from nero_core.data_sources.earnings_data import EarningsDataUnavailableError, fetch_earnings_surprises
+from nero_core.data_sources.forex_data import ForexDataUnavailableError, fetch_forex_ohlcv
 from nero_core.data_sources.market_data import MarketDataClient, MarketDataUnavailableError
 from nero_core.data_sources.news_feed import NewsFeedClient
 from nero_core.data_sources.orderbook_data import OrderbookDataUnavailableError, fetch_and_cache_snapshot
@@ -138,6 +167,11 @@ from nero_core.strategies.range_mean_reversion import STRATEGY_ID as RANGE_MEAN_
 from nero_core.strategies.range_mean_reversion import STRATEGY_VERSION as RMR_V1_VERSION
 from nero_core.strategies.range_mean_reversion_long_only import STRATEGY_VERSION as RMR_LONG_ONLY_VERSION
 from nero_core.strategies.range_mean_reversion_confirmation import STRATEGY_VERSION as RMR_CONFIRMATION_VERSION
+from nero_core.strategies.donchian_breakout_bracket import STRATEGY_ID as DONCHIAN_TREND_ID
+from nero_core.strategies.donchian_bracket_live_configs import STRATEGY_VERSION_GOLD_N20 as DONCHIAN_GOLD_N20_VERSION
+from nero_core.strategies.donchian_bracket_live_configs import STRATEGY_VERSION_EURUSD_N20 as DONCHIAN_EURUSD_N20_VERSION
+from nero_core.strategies.donchian_bracket_live_configs import STRATEGY_VERSION_GBPUSD_N20 as DONCHIAN_GBPUSD_N20_VERSION
+from nero_core.strategies.donchian_bracket_live_configs import STRATEGY_VERSION_USDJPY_N40 as DONCHIAN_USDJPY_N40_VERSION
 from nero_core.strategies.gold_silver_ratio_mr import DEFAULT_PARAMETERS as GSR_PARAMETERS
 from nero_core.strategies.gold_silver_ratio_mr import INDICATOR_COLUMNS_TO_CHECK as GSR_INDICATOR_COLUMNS_TO_CHECK
 from nero_core.strategies.gold_silver_ratio_mr import STRATEGY_ID as GOLD_SILVER_RATIO_ID
@@ -238,6 +272,28 @@ SINGLE_ASSET_CONFIGS = (
     SingleAssetConfig("SILVER", "1week", "range_mean_reversion_silver_1week", RANGE_MEAN_REVERSION_ID, RMR_V1_VERSION),
     SingleAssetConfig("BTC", "24h", "range_mean_reversion_long_only_btc_1d", RANGE_MEAN_REVERSION_ID, RMR_LONG_ONLY_VERSION),
     SingleAssetConfig("BTC", "24h", "range_mean_reversion_confirmation_btc_1d", RANGE_MEAN_REVERSION_ID, RMR_CONFIRMATION_VERSION),
+    # Donchian Cross-Asset Deep-Dive promotion list (docs/donchian_deep_dive_closing_
+    # report.md) -- watchlist, not a survivor; see module docstring above. GOLD fits
+    # the standard fetch_timeframe_candles path, unlike the 3 forex configs below
+    # (DONCHIAN_FOREX_CONFIGS), which need their own fetch (MarketDataClient has no
+    # forex routing at all).
+    SingleAssetConfig("GOLD", "1week", "donchian_bracket_gold_n20_1week", DONCHIAN_TREND_ID, DONCHIAN_GOLD_N20_VERSION),
+)
+
+DONCHIAN_FOREX_TIMEFRAME = "1week"
+
+
+@dataclass(frozen=True)
+class DonchianForexLiveConfig:
+    pair: str
+    variant_key: str
+    strategy_version: str
+
+
+DONCHIAN_FOREX_CONFIGS = (
+    DonchianForexLiveConfig("EUR/USD", "donchian_bracket_eurusd_n20_1week", DONCHIAN_EURUSD_N20_VERSION),
+    DonchianForexLiveConfig("GBP/USD", "donchian_bracket_gbpusd_n20_1week", DONCHIAN_GBPUSD_N20_VERSION),
+    DonchianForexLiveConfig("USD/JPY", "donchian_bracket_usdjpy_n40_1week", DONCHIAN_USDJPY_N40_VERSION),
 )
 
 
@@ -468,6 +524,53 @@ def process_pead_config(
         insert_execution_log_row(
             run_id=run_id, strategy=PEAD_ID, strategy_version=config.strategy_version,
             asset=config.ticker, signal_type=event.signal_type, reasoning=event.reasoning,
+            candle_timestamp=event.candle_close_time, entry_price=event.entry_price, exit_price=event.exit_price,
+            timestamp=now, db_path=db_path,
+        )
+    return "EVALUATED", None
+
+
+def process_donchian_forex_config(
+    config: DonchianForexLiveConfig,
+    run_id: str,
+    now: datetime,
+    sleep_fn: Callable[[float], None] = time.sleep,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> tuple[str, dict[str, Any] | None]:
+    """DONCHIAN_TREND bracket-exit, forex leg of the Donchian Cross-Asset Deep-Dive
+    promotion list (EUR/USD, GBP/USD @ N20; USD/JPY @ N40 -- see DONCHIAN_FOREX_CONFIGS).
+    Structurally the same shape as process_pead_config: a bespoke fetch (Twelve Data's
+    fetch_forex_ohlcv, since MarketDataClient has no forex routing at all) feeding the
+    SAME generic replay_single_asset_events used by process_single_asset -- the only
+    reason this isn't just another SINGLE_ASSET_CONFIGS entry is the fetch source, not
+    the strategy mechanics."""
+    spec = VARIANT_SPECS[config.variant_key]
+
+    def _fetch() -> pd.DataFrame:
+        return fetch_forex_ohlcv(config.pair, DONCHIAN_FOREX_TIMEFRAME).prices
+
+    fetch_result, fetch_error = fetch_with_retry(_fetch, sleep_fn, retryable_exceptions=(ForexDataUnavailableError,))
+    if fetch_error is not None:
+        return "SKIPPED", {"asset": config.pair, "strategy": DONCHIAN_TREND_ID, **fetch_error}
+
+    candles = fetch_result
+    enriched = spec.add_indicators_fn(candles, spec.params)
+    dropna_columns = [c for c in INDICATOR_COLUMNS_TO_CHECK if c in enriched.columns]
+    evaluable = enriched.dropna(subset=dropna_columns).reset_index(drop=True)
+    if evaluable.empty:
+        return "SKIPPED", {
+            "asset": config.pair, "strategy": DONCHIAN_TREND_ID,
+            "classification": "DATA_QUALITY", "message": "insufficient indicator warmup history",
+        }
+
+    inception = earliest_logged_candle_timestamp(DONCHIAN_TREND_ID, config.strategy_version, config.pair, db_path)
+    already_logged = latest_logged_candle_timestamp(DONCHIAN_TREND_ID, config.strategy_version, config.pair, db_path)
+    events, _state = replay_single_asset_events(evaluable, spec, config.pair, inception, already_logged)
+
+    for event in events:
+        insert_execution_log_row(
+            run_id=run_id, strategy=DONCHIAN_TREND_ID, strategy_version=config.strategy_version,
+            asset=config.pair, signal_type=event.signal_type, reasoning=event.reasoning,
             candle_timestamp=event.candle_close_time, entry_price=event.entry_price, exit_price=event.exit_price,
             timestamp=now, db_path=db_path,
         )
@@ -705,6 +808,25 @@ def run_once(
     else:
         for pead_config in PEAD_CONFIGS:
             assets_skipped.append({"asset": pead_config.ticker, "strategy": PEAD_ID, "classification": "NOT_DUE"})
+
+    if candle_boundary_due(DONCHIAN_FOREX_TIMEFRAME, now):
+        for donchian_config in DONCHIAN_FOREX_CONFIGS:
+            try:
+                status, record = process_donchian_forex_config(donchian_config, run_id, now, sleep_fn, db_path)
+            except Exception as exc:  # noqa: BLE001 - one pair's unexpected failure must not abort the others
+                errors_encountered.append(
+                    {"asset": donchian_config.pair, "strategy": DONCHIAN_TREND_ID, "classification": "FATAL", "message": f"{exc.__class__.__name__}: {exc}"}
+                )
+                continue
+            if status == "EVALUATED":
+                assets_evaluated.append(donchian_config.pair)
+            elif record["classification"] == "FATAL":
+                errors_encountered.append(record)
+            else:
+                assets_skipped.append(record)
+    else:
+        for donchian_config in DONCHIAN_FOREX_CONFIGS:
+            assets_skipped.append({"asset": donchian_config.pair, "strategy": DONCHIAN_TREND_ID, "classification": "NOT_DUE"})
 
     if daily_time_due(NEWS_PARAMS.daily_run_hour_utc, now):
         try:

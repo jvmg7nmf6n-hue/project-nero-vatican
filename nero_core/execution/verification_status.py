@@ -73,6 +73,21 @@ VERIFICATION_STATUS: dict[tuple[str, str, str], str] = {
         for version in ("pead-v1.0.0-surprise3pct-hold10", "pead-v1.0.0-surprise8pct-hold10")
         for ticker in _PEAD_TICKERS
     },
+    # Donchian Cross-Asset Deep-Dive promotion list (docs/donchian_deep_dive_closing_
+    # report.md) -- watchlist, not a survivor. GOLD/1week/N20's raw statistics clear
+    # every SURVIVED bar, but grid-shift is structurally unavailable at 1week (a
+    # verification-method ceiling, not a data/CI shortfall) -- see that closing
+    # report's own explicit refusal to call this "Vatican's first new verified
+    # strategy family". Exact wording per the live wiring batch instructions.
+    ("DONCHIAN_TREND", "donchian-trend-v2.0.0-bracket-gold-n20-1week", "GOLD"):
+        "watchlist — CI clears zero both halves, adequate sample, breakout-timing edge confirmed vs random baseline; "
+        "grid-shift structurally unavailable at 1week (settlement gaps) — this is the ceiling, not a data shortfall",
+    ("DONCHIAN_TREND", "donchian-trend-v2.0.0-bracket-eurusd-n20-1week", "EUR/USD"):
+        "watchlist — positive both halves, N20 cross-asset pattern confirmed; grid-shift structurally unavailable at 1week",
+    ("DONCHIAN_TREND", "donchian-trend-v2.0.0-bracket-gbpusd-n20-1week", "GBP/USD"):
+        "watchlist — positive both halves, N20 cross-asset pattern confirmed; grid-shift structurally unavailable at 1week",
+    ("DONCHIAN_TREND", "donchian-trend-v2.0.0-bracket-usdjpy-n40-1week", "USD/JPY"):
+        "watchlist — positive both halves, structural-trend parameter; grid-shift structurally unavailable at 1week",
 }
 
 DEFAULT_VERIFICATION_STATUS = "unverified"

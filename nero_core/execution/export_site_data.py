@@ -46,6 +46,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from nero_core.execution.live_scheduler import (
     COINTEGRATION_PAIRS_ID,
     COINTEGRATION_PAIRS_VERSION,
+    DONCHIAN_FOREX_CONFIGS,
+    DONCHIAN_FOREX_TIMEFRAME,
+    DONCHIAN_TREND_ID,
     GOLD_SILVER_RATIO_ID,
     GOLD_SILVER_RATIO_LABEL,
     GOLD_SILVER_RATIO_TIMEFRAME,
@@ -206,6 +209,7 @@ def _trading_roster_keys() -> list[tuple[str, str, str]]:
     keys.extend((ORDERFLOW_ID, ORDERFLOW_VERSION, asset) for asset in ORDERFLOW_BINANCE_SYMBOLS)
     keys.append((GOLD_SILVER_RATIO_ID, GOLD_SILVER_RATIO_VERSION, GOLD_SILVER_RATIO_LABEL))
     keys.extend((PEAD_ID, c.strategy_version, c.ticker) for c in PEAD_CONFIGS)
+    keys.extend((DONCHIAN_TREND_ID, c.strategy_version, c.pair) for c in DONCHIAN_FOREX_CONFIGS)
     return keys
 
 
@@ -283,6 +287,16 @@ def _roster_entries() -> list[dict[str, object]]:
                 "asset": config.ticker,
                 "timeframe": "1day",
                 "verification_status": verification_status_for(PEAD_ID, config.strategy_version, config.ticker),
+            }
+        )
+    for config in DONCHIAN_FOREX_CONFIGS:
+        entries.append(
+            {
+                "name": DONCHIAN_TREND_ID,
+                "version": config.strategy_version,
+                "asset": config.pair,
+                "timeframe": DONCHIAN_FOREX_TIMEFRAME,
+                "verification_status": verification_status_for(DONCHIAN_TREND_ID, config.strategy_version, config.pair),
             }
         )
     return entries

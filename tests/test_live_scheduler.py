@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
+from nero_core.data_sources.forex_data import ForexDataResult, ForexDataUnavailableError
 from nero_core.data_sources.market_data import MarketDataClient, MarketDataResult, MarketDataUnavailableError
 from nero_core.data_sources.news_feed import NewsFeedResult, NewsItem
 from nero_core.data_sources.orderbook_data import OrderbookSnapshot
@@ -45,6 +46,19 @@ def _flat_history(n: int = 260) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _forex_weekly_history(n: int = 260) -> pd.DataFrame:
+    """Weekly forex history, mildly oscillating (matches _flat_history's non-zero-ATR
+    convention) -- none of the 3 Donchian forex configs are the subject of these
+    general scheduler tests (see tests/test_live_wiring_donchian_deep_dive.py for
+    that), so this just needs to evaluate cleanly (NO_TRADE is fine)."""
+    rows = []
+    close_time = 0
+    for i in range(n):
+        rows.append(_make_candle_row(close_time, 100.0 + (i % 5) * 0.1))
+        close_time += 7 * 86_400_000
+    return pd.DataFrame(rows)
+
+
 def _silver_daily_history(n: int = 300) -> pd.DataFrame:
     """300 daily candles, enough warmup past every SILVER config's MA200 requirement
     (BREAKOUT_MOMENTUM/TREND_PULLBACK/VOLATILITY_SQUEEZE ma200) — mild oscillation
@@ -69,6 +83,7 @@ class LiveSchedulerTestCase(unittest.TestCase):
         self.eth_history = eth_df
         self.bnb_history = _flat_history()
         self.silver_history = _silver_daily_history()
+        self.forex_history = _forex_weekly_history()
 
     def _fake_load_intraday(self, asset, interval="1h", candles=240, twelve_data_api_key=None):
         # RMR GOLD/1week and SILVER/1week (Replay Machinery Generalization) both fetch
@@ -116,6 +131,12 @@ class LiveSchedulerTestCase(unittest.TestCase):
         from nero_core.data_sources.stock_data import StockDataUnavailableError
         raise StockDataUnavailableError(f"no fixture configured for {symbol}")
 
+    def _fake_fetch_forex_ohlcv(self, pair, timeframe, *args, **kwargs):
+        source_map = {"EUR/USD": self.forex_history, "GBP/USD": self.forex_history, "USD/JPY": self.forex_history}
+        if pair not in source_map:
+            raise ForexDataUnavailableError(f"no fixture configured for {pair}")
+        return ForexDataResult(prices=source_map[pair], source="test-fixture", pair=pair, timeframe=timeframe)
+
     @staticmethod
     def _fake_fetch_and_cache_snapshot(binance_symbol, now=None, db_path=None):
         # imbalance_ratio=None -> ORDERFLOW_IMBALANCE never enters in these tests
@@ -155,6 +176,11 @@ class LiveSchedulerTestCase(unittest.TestCase):
         )
         orderbook_patcher.start()
         self.addCleanup(orderbook_patcher.stop)
+        forex_patcher = patch(
+            "nero_core.execution.live_scheduler.fetch_forex_ohlcv", side_effect=self._fake_fetch_forex_ohlcv
+        )
+        forex_patcher.start()
+        self.addCleanup(forex_patcher.stop)
         self._patch_pead_fetchers()
         return MarketDataClient()
 
@@ -181,10 +207,11 @@ class NotDueSkipsWithoutFetchingTest(LiveSchedulerTestCase):
         skipped_reasons = {r["classification"] for r in result.assets_skipped}
         self.assertEqual(skipped_reasons, {"NOT_DUE"})
         # GOLD, BNB, 5x SILVER, 4x RMR (GOLD/1week, SILVER/1week, BTC/24h long-only,
-        # BTC/24h confirmation), pairs, GOLD-SILVER (GOLD_SILVER_RATIO_MR), 14x PEAD
-        # (7 tickers x 2 configs), NEWS_SENTIMENT (ORDERFLOW_IMBALANCE isn't
+        # BTC/24h confirmation), 1x DONCHIAN_TREND/GOLD/1week, pairs, GOLD-SILVER
+        # (GOLD_SILVER_RATIO_MR), 14x PEAD (7 tickers x 2 configs), 3x DONCHIAN_TREND
+        # forex (EUR/USD, GBP/USD, USD/JPY), NEWS_SENTIMENT (ORDERFLOW_IMBALANCE isn't
         # candle-gated, so it never appears among these NOT_DUE skips).
-        self.assertEqual(len(result.assets_skipped), 28)
+        self.assertEqual(len(result.assets_skipped), 32)
         orderflow_errors = [e for e in result.errors_encountered if e["strategy"] == "ORDERFLOW_IMBALANCE"]
         self.assertEqual(len(orderflow_errors), 2)  # BTC and ETH each fail their own fetch
         self.assertTrue(all(e["classification"] == "DATA_UNAVAILABLE" for e in orderflow_errors))
@@ -203,6 +230,9 @@ class FullRunTest(LiveSchedulerTestCase):
         self.assertIn("GOLD", result.assets_evaluated)
         self.assertIn("BNB", result.assets_evaluated)
         self.assertIn("BTC-ETH", result.assets_evaluated)
+        self.assertIn("EUR/USD", result.assets_evaluated)
+        self.assertIn("GBP/USD", result.assets_evaluated)
+        self.assertIn("USD/JPY", result.assets_evaluated)
         # 5 pre-existing SILVER configs + RANGE_MEAN_REVERSION's own SILVER/1week
         # (Replay Machinery Generalization).
         self.assertEqual(result.assets_evaluated.count("SILVER"), 6)
@@ -213,7 +243,7 @@ class FullRunTest(LiveSchedulerTestCase):
         gold_rows = list_execution_log(db_path=self.db_path, asset="GOLD")
         self.assertGreaterEqual(len(gold_rows), 1)
         gold_strategy_versions = {(r.strategy, r.strategy_version) for r in gold_rows}
-        self.assertEqual(len(gold_strategy_versions), 2)  # BREAKOUT_MOMENTUM + RANGE_MEAN_REVERSION, none colliding
+        self.assertEqual(len(gold_strategy_versions), 3)  # BREAKOUT_MOMENTUM + RANGE_MEAN_REVERSION + DONCHIAN_TREND, none colliding
         silver_rows = list_execution_log(db_path=self.db_path, asset="SILVER")
         self.assertGreaterEqual(len(silver_rows), 1)
         silver_strategy_versions = {(r.strategy, r.strategy_version) for r in silver_rows}
@@ -254,6 +284,8 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
             MarketDataClient, "load_daily", side_effect=self._fake_load_daily
         ), patch(
             "nero_core.execution.live_scheduler.fetch_and_cache_snapshot", side_effect=self._fake_fetch_and_cache_snapshot
+        ), patch(
+            "nero_core.execution.live_scheduler.fetch_forex_ohlcv", side_effect=self._fake_fetch_forex_ohlcv
         ):
             client = MarketDataClient()
             result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
@@ -262,11 +294,11 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
         self.assertIn("BNB", result.assets_evaluated)
         self.assertIn("BTC-ETH", result.assets_evaluated)
 
-        # TWO configs now fetch GOLD/1week (BREAKOUT_MOMENTUM and, since the Replay
-        # Machinery Generalization, RANGE_MEAN_REVERSION) -- both fail from the same
-        # fixture's missing-API-key GOLD error.
+        # THREE configs now fetch GOLD/1week (BREAKOUT_MOMENTUM, RANGE_MEAN_REVERSION,
+        # and the Donchian Cross-Asset Deep-Dive's DONCHIAN_TREND) -- all three fail
+        # from the same fixture's missing-API-key GOLD error.
         gold_errors = [e for e in result.errors_encountered if e["asset"] == "GOLD"]
-        self.assertEqual(len(gold_errors), 2)
+        self.assertEqual(len(gold_errors), 3)
         self.assertTrue(all(e["classification"] == "FATAL" for e in gold_errors))
 
     def test_transient_failure_retries_then_succeeds(self) -> None:
@@ -306,17 +338,21 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
             "nero_core.execution.live_scheduler.fetch_earnings_surprises", side_effect=_fake_earnings_permanent
         ), patch(
             "nero_core.execution.live_scheduler.fetch_stock_ohlcv", side_effect=_fake_stock_permanent
+        ), patch(
+            "nero_core.execution.live_scheduler.fetch_forex_ohlcv", side_effect=self._fake_fetch_forex_ohlcv
         ):
             client = MarketDataClient()
             result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=sleeps.append)
 
         self.assertIn("GOLD", result.assets_evaluated)
         # BREAKOUT_MOMENTUM's GOLD/1week fetch fails twice then succeeds on the 3rd
-        # call (clearing call_count["GOLD"] to 3); RANGE_MEAN_REVERSION's own GOLD/
-        # 1week fetch runs afterward and succeeds immediately on its first call (the
-        # counter has already cleared the < 3 failure threshold) -- 4 calls total,
-        # only the first config's 2 failures produce backoff sleeps.
-        self.assertEqual(call_count["GOLD"], 4)
+        # call (clearing call_count["GOLD"] to 3); RANGE_MEAN_REVERSION's own and
+        # DONCHIAN_TREND's own GOLD/1week fetches both run afterward and succeed
+        # immediately on their first calls (the counter has already cleared the < 3
+        # failure threshold) -- 5 calls total, only the first config's 2 failures
+        # produce backoff sleeps. Forex fetches succeed cleanly (test fixture), adding
+        # no further sleep calls.
+        self.assertEqual(call_count["GOLD"], 5)
         self.assertEqual(sleeps, [1, 3])
 
     def test_transient_failure_exhausting_all_retries_is_skipped_not_fatal(self) -> None:
@@ -331,15 +367,17 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
             MarketDataClient, "load_daily", side_effect=self._fake_load_daily
         ), patch(
             "nero_core.execution.live_scheduler.fetch_and_cache_snapshot", side_effect=self._fake_fetch_and_cache_snapshot
+        ), patch(
+            "nero_core.execution.live_scheduler.fetch_forex_ohlcv", side_effect=self._fake_fetch_forex_ohlcv
         ):
             client = MarketDataClient()
             result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
 
         self.assertNotIn("GOLD", result.assets_evaluated)
-        # Both GOLD/1week configs (BREAKOUT_MOMENTUM and RANGE_MEAN_REVERSION) exhaust
-        # their retries and get skipped.
+        # All three GOLD/1week configs (BREAKOUT_MOMENTUM, RANGE_MEAN_REVERSION, and
+        # DONCHIAN_TREND) exhaust their retries and get skipped.
         gold_skips = [r for r in result.assets_skipped if r["asset"] == "GOLD"]
-        self.assertEqual(len(gold_skips), 2)
+        self.assertEqual(len(gold_skips), 3)
         self.assertTrue(all(s["classification"] == "FETCH_INCOMPLETE" for s in gold_skips))
         self.assertEqual(result.errors_encountered, [])
 
