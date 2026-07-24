@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-24T11:29:48.875093+00:00",
+  "last_updated": "2026-07-24T12:58:22.889580+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -198,41 +198,33 @@
       "strategy": "ORDERFLOW_IMBALANCE",
       "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
-      "resolved_trades": 13,
-      "win_rate": 0.3076923076923077,
+      "resolved_trades": 14,
+      "win_rate": 0.35714285714285715,
       "expectancy_r": null,
-      "avg_return_pct": -0.1362823204186949,
+      "avg_return_pct": -0.11355046885844233,
       "signal_counts": {
         "ENTRY": 14,
-        "EXIT": 13,
+        "EXIT": 14,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": {
-        "entry_price": 64903.09,
-        "entry_timestamp": "2026-07-24T11:29:46.203880+00:00",
-        "candle_timestamp": "2026-07-24T11:00:00+00:00"
-      }
+      "open_position": null
     },
     {
       "strategy": "ORDERFLOW_IMBALANCE",
       "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
-      "resolved_trades": 11,
-      "win_rate": 0.5454545454545454,
+      "resolved_trades": 12,
+      "win_rate": 0.5,
       "expectancy_r": null,
-      "avg_return_pct": 0.28729683933260985,
+      "avg_return_pct": 0.24475996398608632,
       "signal_counts": {
         "ENTRY": 12,
-        "EXIT": 11,
+        "EXIT": 12,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": {
-        "entry_price": 1886.66,
-        "entry_timestamp": "2026-07-24T09:42:01.487793+00:00",
-        "candle_timestamp": "2026-07-24T09:00:00+00:00"
-      }
+      "open_position": null
     },
     {
       "strategy": "GOLD_SILVER_RATIO_MR",
