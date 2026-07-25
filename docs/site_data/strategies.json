@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-25T14:44:16.816547+00:00",
+  "last_updated": "2026-07-25T23:26:41.359957+00:00",
   "strategies": [
     {
       "name": "BREAKOUT_MOMENTUM",
@@ -78,6 +78,13 @@
       "asset": "BTC",
       "timeframe": "24h",
       "verification_status": "watchlist — forward-testing, not verified (68% reversion-target exit rate vs 32% baseline; LOW SAMPLE, CI crosses zero, 1d grid-shift structurally unavailable)"
+    },
+    {
+      "name": "DONCHIAN_TREND",
+      "version": "donchian-trend-v2.0.0-bracket-gold-n20-1week",
+      "asset": "GOLD",
+      "timeframe": "1week",
+      "verification_status": "watchlist — CI clears zero both halves, adequate sample, breakout-timing edge confirmed vs random baseline; grid-shift structurally unavailable at 1week (settlement gaps) — this is the ceiling, not a data shortfall"
     },
     {
       "name": "COINTEGRATION_PAIRS",
@@ -218,6 +225,27 @@
       "asset": "META",
       "timeframe": "1day",
       "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+    },
+    {
+      "name": "DONCHIAN_TREND",
+      "version": "donchian-trend-v2.0.0-bracket-eurusd-n20-1week",
+      "asset": "EUR/USD",
+      "timeframe": "1week",
+      "verification_status": "watchlist — positive both halves, N20 cross-asset pattern confirmed; grid-shift structurally unavailable at 1week"
+    },
+    {
+      "name": "DONCHIAN_TREND",
+      "version": "donchian-trend-v2.0.0-bracket-gbpusd-n20-1week",
+      "asset": "GBP/USD",
+      "timeframe": "1week",
+      "verification_status": "watchlist — positive both halves, N20 cross-asset pattern confirmed; grid-shift structurally unavailable at 1week"
+    },
+    {
+      "name": "DONCHIAN_TREND",
+      "version": "donchian-trend-v2.0.0-bracket-usdjpy-n40-1week",
+      "asset": "USD/JPY",
+      "timeframe": "1week",
+      "verification_status": "watchlist — positive both halves, structural-trend parameter; grid-shift structurally unavailable at 1week"
     }
   ]
 }

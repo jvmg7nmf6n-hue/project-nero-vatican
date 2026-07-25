@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-25T14:44:16.816543+00:00",
+  "last_updated": "2026-07-25T23:26:41.359951+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -179,6 +179,22 @@
       "open_position": null
     },
     {
+      "strategy": "DONCHIAN_TREND",
+      "strategy_version": "donchian-trend-v2.0.0-bracket-gold-n20-1week",
+      "asset": "GOLD",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
       "strategy": "COINTEGRATION_PAIRS",
       "strategy_version": "cointegration-pairs-v1.0.0",
       "asset": "BTC-ETH",
@@ -198,41 +214,33 @@
       "strategy": "ORDERFLOW_IMBALANCE",
       "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
-      "resolved_trades": 16,
-      "win_rate": 0.375,
+      "resolved_trades": 19,
+      "win_rate": 0.47368421052631576,
       "expectancy_r": null,
-      "avg_return_pct": -0.10806596881456121,
+      "avg_return_pct": -0.08262175430253466,
       "signal_counts": {
-        "ENTRY": 17,
-        "EXIT": 16,
+        "ENTRY": 19,
+        "EXIT": 19,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": {
-        "entry_price": 64103.89,
-        "entry_timestamp": "2026-07-25T14:44:14.253515+00:00",
-        "candle_timestamp": "2026-07-25T14:00:00+00:00"
-      }
+      "open_position": null
     },
     {
       "strategy": "ORDERFLOW_IMBALANCE",
       "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
-      "resolved_trades": 14,
-      "win_rate": 0.5,
+      "resolved_trades": 17,
+      "win_rate": 0.5882352941176471,
       "expectancy_r": null,
-      "avg_return_pct": 0.22215507643664018,
+      "avg_return_pct": 0.22998441307449843,
       "signal_counts": {
-        "ENTRY": 15,
-        "EXIT": 14,
+        "ENTRY": 17,
+        "EXIT": 17,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": {
-        "entry_price": 1858.37,
-        "entry_timestamp": "2026-07-25T13:01:53.927561+00:00",
-        "candle_timestamp": "2026-07-25T13:00:00+00:00"
-      }
+      "open_position": null
     },
     {
       "strategy": "GOLD_SILVER_RATIO_MR",
@@ -462,6 +470,54 @@
       "strategy": "PEAD",
       "strategy_version": "pead-v1.0.0-surprise8pct-hold10",
       "asset": "META",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "DONCHIAN_TREND",
+      "strategy_version": "donchian-trend-v2.0.0-bracket-eurusd-n20-1week",
+      "asset": "EUR/USD",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "DONCHIAN_TREND",
+      "strategy_version": "donchian-trend-v2.0.0-bracket-gbpusd-n20-1week",
+      "asset": "GBP/USD",
+      "resolved_trades": 0,
+      "win_rate": null,
+      "expectancy_r": null,
+      "avg_return_pct": null,
+      "signal_counts": {
+        "ENTRY": 0,
+        "EXIT": 0,
+        "WATCH": 0,
+        "NO_TRADE": 0
+      },
+      "open_position": null
+    },
+    {
+      "strategy": "DONCHIAN_TREND",
+      "strategy_version": "donchian-trend-v2.0.0-bracket-usdjpy-n40-1week",
+      "asset": "USD/JPY",
       "resolved_trades": 0,
       "win_rate": null,
       "expectancy_r": null,
