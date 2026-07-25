@@ -1,7 +1,517 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-21T04:42:58.912852+00:00",
+  "last_updated": "2026-07-25T14:44:16.816003+00:00",
   "rows": [
+    {
+      "timestamp": "2026-07-25T14:44:14.253515+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "ENTRY",
+      "entry_price": 64103.89,
+      "exit_price": null,
+      "reasoning": "direction=LONG stop_loss=63845.85000000 imbalance_ratio=9.7541",
+      "candle_timestamp": "2026-07-25T14:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-25T13:01:53.927561+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "ETH",
+      "signal_type": "ENTRY",
+      "entry_price": 1858.37,
+      "exit_price": null,
+      "reasoning": "direction=LONG stop_loss=1849.01142857 imbalance_ratio=4.5463",
+      "candle_timestamp": "2026-07-25T13:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-25T11:56:04.396160+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 64000.08,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=10.1635",
+      "candle_timestamp": "2026-07-25T11:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-25T10:50:24.238284+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "ENTRY",
+      "entry_price": 63941.23,
+      "exit_price": null,
+      "reasoning": "direction=SHORT stop_loss=64197.94285714 imbalance_ratio=0.2371",
+      "candle_timestamp": "2026-07-25T10:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-25T07:09:30.305589+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "ETH",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 1857.0,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=0.8415",
+      "candle_timestamp": "2026-07-25T07:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-25T07:09:30.305589+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 63952.2,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=2.5201",
+      "candle_timestamp": "2026-07-25T07:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-25T01:29:59.682854+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "ETH",
+      "signal_type": "ENTRY",
+      "entry_price": 1858.51,
+      "exit_price": null,
+      "reasoning": "direction=SHORT stop_loss=1880.23142857 imbalance_ratio=0.1965",
+      "candle_timestamp": "2026-07-25T01:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-24T23:54:35.214820+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "ENTRY",
+      "entry_price": 64100.52,
+      "exit_price": null,
+      "reasoning": "direction=SHORT stop_loss=64741.20857143 imbalance_ratio=0.0622",
+      "candle_timestamp": "2026-07-24T23:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-24T19:17:58.795154+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "ETH",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 1860.8,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=1.3663",
+      "candle_timestamp": "2026-07-24T19:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-24T14:52:46.360200+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "ETH",
+      "signal_type": "ENTRY",
+      "entry_price": 1856.08,
+      "exit_price": null,
+      "reasoning": "direction=SHORT stop_loss=1881.96857143 imbalance_ratio=0.1850",
+      "candle_timestamp": "2026-07-24T14:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-24T12:58:19.918804+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "ETH",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 1882.45,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=0.0958",
+      "candle_timestamp": "2026-07-24T12:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-24T12:58:19.918804+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 65021.19,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=1.5146",
+      "candle_timestamp": "2026-07-24T12:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-24T11:29:46.203880+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "ENTRY",
+      "entry_price": 64903.09,
+      "exit_price": null,
+      "reasoning": "direction=SHORT stop_loss=65443.06428571 imbalance_ratio=0.2139",
+      "candle_timestamp": "2026-07-24T11:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-24T09:42:01.487793+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "ETH",
+      "signal_type": "ENTRY",
+      "entry_price": 1886.66,
+      "exit_price": null,
+      "reasoning": "direction=LONG stop_loss=1862.63571429 imbalance_ratio=3.0420",
+      "candle_timestamp": "2026-07-24T09:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-24T09:42:01.487793+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 65255.44,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=0.4969",
+      "candle_timestamp": "2026-07-24T09:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-24T07:25:26.220551+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "ENTRY",
+      "entry_price": 65426.94,
+      "exit_price": null,
+      "reasoning": "direction=LONG stop_loss=64894.40142857 imbalance_ratio=37.0367",
+      "candle_timestamp": "2026-07-24T07:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-24T01:30:05.515985+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 64927.99,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=1.1313",
+      "candle_timestamp": "2026-07-24T01:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-23T21:32:59.709547+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "ENTRY",
+      "entry_price": 65097.6,
+      "exit_price": null,
+      "reasoning": "direction=SHORT stop_loss=65741.28142857 imbalance_ratio=0.1016",
+      "candle_timestamp": "2026-07-23T21:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-23T20:09:12.846659+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "ETH",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 1874.13,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=1.5041",
+      "candle_timestamp": "2026-07-23T20:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-23T18:57:10.139228+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "ETH",
+      "signal_type": "ENTRY",
+      "entry_price": 1876.7,
+      "exit_price": null,
+      "reasoning": "direction=SHORT stop_loss=1902.06571429 imbalance_ratio=0.2631",
+      "candle_timestamp": "2026-07-23T18:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-23T17:53:24.263417+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "ETH",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 1886.34,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=8.4010",
+      "candle_timestamp": "2026-07-23T17:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-23T17:53:24.263417+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 64691.59,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=1.6692",
+      "candle_timestamp": "2026-07-23T17:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-23T16:18:45.828516+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "ETH",
+      "signal_type": "ENTRY",
+      "entry_price": 1893.82,
+      "exit_price": null,
+      "reasoning": "direction=SHORT stop_loss=1917.81285714 imbalance_ratio=0.0494",
+      "candle_timestamp": "2026-07-23T16:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-23T14:39:01.868098+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "ETH",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 1897.34,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=4.1152",
+      "candle_timestamp": "2026-07-23T14:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-23T14:39:01.868098+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "ENTRY",
+      "entry_price": 64831.16,
+      "exit_price": null,
+      "reasoning": "direction=SHORT stop_loss=65404.74857143 imbalance_ratio=0.3125",
+      "candle_timestamp": "2026-07-23T14:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-23T12:08:26.772137+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "ETH",
+      "signal_type": "ENTRY",
+      "entry_price": 1925.26,
+      "exit_price": null,
+      "reasoning": "direction=SHORT stop_loss=1944.29714286 imbalance_ratio=0.1805",
+      "candle_timestamp": "2026-07-23T12:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-23T12:08:26.772137+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 65525.22,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=1.3532",
+      "candle_timestamp": "2026-07-23T12:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-23T10:10:29.835128+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "ENTRY",
+      "entry_price": 65607.07,
+      "exit_price": null,
+      "reasoning": "direction=SHORT stop_loss=66106.64857143 imbalance_ratio=0.0906",
+      "candle_timestamp": "2026-07-23T10:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-23T05:14:45.550995+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 65576.15,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=0.1598",
+      "candle_timestamp": "2026-07-23T05:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-22T22:52:26.623346+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "ENTRY",
+      "entry_price": 66044.16,
+      "exit_price": null,
+      "reasoning": "direction=LONG stop_loss=65357.85285714 imbalance_ratio=16.5571",
+      "candle_timestamp": "2026-07-22T22:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-22T20:11:40.836908+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 65894.99,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=9.1923",
+      "candle_timestamp": "2026-07-22T20:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-22T18:55:59.425923+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "ENTRY",
+      "entry_price": 65993.8,
+      "exit_price": null,
+      "reasoning": "direction=SHORT stop_loss=66687.43571429 imbalance_ratio=0.3060",
+      "candle_timestamp": "2026-07-22T18:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-22T17:46:46.414430+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "ETH",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 1949.3,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=0.4430",
+      "candle_timestamp": "2026-07-22T17:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-22T16:13:37.142459+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 66013.78,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=1.3445",
+      "candle_timestamp": "2026-07-22T16:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-22T12:53:59.968358+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "ETH",
+      "signal_type": "ENTRY",
+      "entry_price": 1926.16,
+      "exit_price": null,
+      "reasoning": "direction=LONG stop_loss=1904.12714286 imbalance_ratio=8.0260",
+      "candle_timestamp": "2026-07-22T12:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-22T12:53:59.968358+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "ENTRY",
+      "entry_price": 65972.5,
+      "exit_price": null,
+      "reasoning": "direction=SHORT stop_loss=66497.65857143 imbalance_ratio=0.2412",
+      "candle_timestamp": "2026-07-22T12:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-22T11:23:52.910772+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "ETH",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 1929.42,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=2.0814",
+      "candle_timestamp": "2026-07-22T11:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-22T09:06:13.811348+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "ETH",
+      "signal_type": "ENTRY",
+      "entry_price": 1919.8,
+      "exit_price": null,
+      "reasoning": "direction=SHORT stop_loss=1940.87857143 imbalance_ratio=0.0533",
+      "candle_timestamp": "2026-07-22T09:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-22T06:21:04.051040+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 65937.32,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=0.2966",
+      "candle_timestamp": "2026-07-22T06:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-22T00:14:37.357962+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "ENTRY",
+      "entry_price": 66516.18,
+      "exit_price": null,
+      "reasoning": "direction=LONG stop_loss=65921.49000000 imbalance_ratio=10.7362",
+      "candle_timestamp": "2026-07-22T00:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-22T00:14:37.357962+00:00",
+      "strategy": "RANGE_MEAN_REVERSION",
+      "asset": "BTC",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NO_CONFIRMATION_PATTERN",
+      "candle_timestamp": "2026-07-22T00:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-22T00:14:37.357962+00:00",
+      "strategy": "RANGE_MEAN_REVERSION",
+      "asset": "BTC",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "SHORT_DISABLED",
+      "candle_timestamp": "2026-07-22T00:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-21T11:47:03.654230+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "ETH",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 1932.85,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=0.0823",
+      "candle_timestamp": "2026-07-21T11:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-21T11:47:03.654230+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 66148.21,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=0.1333",
+      "candle_timestamp": "2026-07-21T11:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-21T09:59:40.477317+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "signal_type": "ENTRY",
+      "entry_price": 66186.39,
+      "exit_price": null,
+      "reasoning": "direction=LONG stop_loss=65577.87285714 imbalance_ratio=11.8541",
+      "candle_timestamp": "2026-07-21T09:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-21T07:27:34.805946+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "ETH",
+      "signal_type": "ENTRY",
+      "entry_price": 1933.59,
+      "exit_price": null,
+      "reasoning": "direction=LONG stop_loss=1907.93571429 imbalance_ratio=10.2948",
+      "candle_timestamp": "2026-07-21T07:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-22T00:14:37.357962+00:00",
+      "strategy": "VOLATILITY_SQUEEZE",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "SQUEEZE_STREAK_TOO_SHORT, CLOSE_NOT_ABOVE_SQUEEZE_HIGH, CLOSE_NOT_ABOVE_TREND_MA",
+      "candle_timestamp": "2026-07-21T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-22T00:14:37.357962+00:00",
+      "strategy": "VOLATILITY_SQUEEZE",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "SQUEEZE_STREAK_TOO_SHORT, CLOSE_NOT_ABOVE_SQUEEZE_HIGH, CLOSE_NOT_ABOVE_TREND_MA",
+      "candle_timestamp": "2026-07-21T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-22T00:14:37.357962+00:00",
+      "strategy": "VOLATILITY_SQUEEZE",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "SQUEEZE_STREAK_TOO_SHORT, CLOSE_NOT_ABOVE_SQUEEZE_HIGH, CLOSE_NOT_ABOVE_TREND_MA",
+      "candle_timestamp": "2026-07-21T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-22T00:14:37.357962+00:00",
+      "strategy": "TREND_PULLBACK",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NOT_IN_ESTABLISHED_UPTREND, NO_RECENT_PULLBACK_TO_MA50, CLOSE_NOT_BACK_ABOVE_MA50",
+      "candle_timestamp": "2026-07-21T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-22T00:14:37.357962+00:00",
+      "strategy": "BREAKOUT_MOMENTUM",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "CLOSE_NOT_ABOVE_BREAKOUT_HIGH, CLOSE_NOT_ABOVE_MA200, RSI_NOT_MOMENTUM_SUPPORTIVE",
+      "candle_timestamp": "2026-07-21T04:00:00+00:00"
+    },
     {
       "timestamp": "2026-07-21T04:42:55.393529+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
