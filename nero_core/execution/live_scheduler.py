@@ -122,6 +122,7 @@ from nero_core.data_sources.news_feed import NewsFeedClient
 from nero_core.data_sources.orderbook_data import OrderbookDataUnavailableError, fetch_and_cache_snapshot
 from nero_core.data_sources.stock_data import StockDataUnavailableError, fetch_stock_ohlcv
 from nero_core.execution.candle_schedule import candle_boundary_due, daily_time_due
+from nero_core.execution.heartbeat import write_heartbeat
 from nero_core.execution.replay import (
     replay_gold_silver_ratio_events,
     replay_pairs_events,
@@ -868,6 +869,10 @@ def main() -> None:
             print(f"  SKIPPED: {record}")
         for record in result.errors_encountered:
             print(f"  ERROR: {record}")
+        # run_once() completing (even with some per-config errors, which it swallows
+        # internally) is what "successful run" means for the heartbeat -- see
+        # nero_core/execution/heartbeat.py's own docstring.
+        write_heartbeat()
     except Exception:  # noqa: BLE001
         traceback.print_exc()
 

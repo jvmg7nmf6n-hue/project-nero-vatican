@@ -1,5 +1,6 @@
 import type {
   GraveyardEntry,
+  HeartbeatStatus,
   LedgerExport,
   SiteSummary,
   StatsExport,
@@ -52,4 +53,11 @@ export function fetchSiteSummary(): Promise<SiteSummary | null> {
 
 export function fetchGraveyard(): Promise<GraveyardEntry[] | null> {
   return fetchJson<GraveyardEntry[]>("graveyard.json");
+}
+
+// null is expected (not an error) until the scheduler's first successful run
+// after this file was introduced, or on any fetch failure -- callers must treat
+// null as "no status to show," never as "down."
+export function fetchHeartbeat(): Promise<HeartbeatStatus | null> {
+  return fetchJson<HeartbeatStatus>("heartbeat.json");
 }

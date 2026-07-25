@@ -1,9 +1,10 @@
 "use client";
 
 import Logo from "./Logo";
+import SystemStatus from "./SystemStatus";
 import { useCountUp } from "@/lib/useCountUp";
 import { classifyTier } from "@/lib/tier";
-import type { SiteSummary, StrategyRosterEntry } from "@/lib/types";
+import type { HeartbeatStatus, SiteSummary, StrategyRosterEntry } from "@/lib/types";
 
 function daysSince(isoDate: string): number | null {
   const then = new Date(isoDate);
@@ -40,9 +41,10 @@ function StatTile({ label, value, sublabel }: StatTileProps) {
 export interface HeroStatsProps {
   summary: SiteSummary | null;
   roster: StrategyRosterEntry[];
+  heartbeat?: HeartbeatStatus | null;
 }
 
-export default function HeroStats({ summary, roster }: HeroStatsProps) {
+export default function HeroStats({ summary, roster, heartbeat = null }: HeroStatsProps) {
   const configsTested = summary?.configs_tested ?? null;
   const liveSignals = roster.length;
   const verifiedEntries = roster.filter(
@@ -96,6 +98,9 @@ export default function HeroStats({ summary, roster }: HeroStatsProps) {
           }
         />
         <StatTile label="Tracking days" value={trackingDays} />
+      </div>
+      <div className="mt-6 flex justify-center">
+        <SystemStatus heartbeat={heartbeat} />
       </div>
     </section>
   );

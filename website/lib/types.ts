@@ -74,3 +74,11 @@ export interface GraveyardEntry {
   why_it_died: string;
   source_doc: string;
 }
+
+// Written by nero_core/execution/heartbeat.py after every successful live
+// scheduler run -- absence of this file (a fresh deploy, or the scheduler having
+// never run) is a valid, non-error state, not something to fabricate a value for.
+export interface HeartbeatStatus {
+  last_successful_run: string;
+  run_count_24h: number;
+}

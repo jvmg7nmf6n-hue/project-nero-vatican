@@ -4,6 +4,7 @@ import HeroStats from "@/components/HeroStats";
 import LedgerTable from "@/components/LedgerTable";
 import {
   fetchGraveyard,
+  fetchHeartbeat,
   fetchLedgerRecent,
   fetchSiteSummary,
   fetchStats,
@@ -13,12 +14,13 @@ import {
 export const revalidate = 300;
 
 export default async function HomePage() {
-  const [ledger, strategies, summary, graveyard, stats] = await Promise.all([
+  const [ledger, strategies, summary, graveyard, stats, heartbeat] = await Promise.all([
     fetchLedgerRecent(),
     fetchStrategies(),
     fetchSiteSummary(),
     fetchGraveyard(),
     fetchStats(),
+    fetchHeartbeat(),
   ]);
 
   const rows = ledger?.rows ?? [];
@@ -28,7 +30,7 @@ export default async function HomePage() {
 
   return (
     <div className="flex flex-col gap-16">
-      <HeroStats summary={summary} roster={roster} />
+      <HeroStats summary={summary} roster={roster} heartbeat={heartbeat} />
 
       <section>
         <h2 className="font-serif text-2xl text-parchment mb-4">Live council verdicts</h2>

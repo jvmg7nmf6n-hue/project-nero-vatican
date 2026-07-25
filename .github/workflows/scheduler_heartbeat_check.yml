@@ -1,0 +1,23 @@
+name: Scheduler Heartbeat Check
+
+on:
+  schedule:
+    - cron: "0 */3 * * *"
+  workflow_dispatch:
+
+jobs:
+  heartbeat-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Deliberately not `pip install -r requirements.txt` -- this watchdog only
+      # reads a committed JSON file and posts to ntfy, so it stays lightweight and
+      # can't be broken by an unrelated dependency (pandas, streamlit, etc.) failing
+      # to install.
+      - name: Install dependencies
+        run: pip install "pydantic>=2.0,<3" "requests>=2.31,<3"
+      - name: Check scheduler heartbeat
+        run: python -m nero_core.execution.scheduler_heartbeat_alert
