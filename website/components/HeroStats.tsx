@@ -17,9 +17,10 @@ function daysSince(isoDate: string): number | null {
 interface StatTileProps {
   label: string;
   value: number | null;
+  sublabel?: string;
 }
 
-function StatTile({ label, value }: StatTileProps) {
+function StatTile({ label, value, sublabel }: StatTileProps) {
   const displayValue = useCountUp(value ?? 0);
 
   return (
@@ -31,6 +32,7 @@ function StatTile({ label, value }: StatTileProps) {
         {value === null ? "—" : displayValue}
       </div>
       <div className="mt-1 text-xs uppercase tracking-wide text-muted">{label}</div>
+      {sublabel ? <div className="mt-0.5 text-[11px] text-muted/80">{sublabel}</div> : null}
     </div>
   );
 }
@@ -43,9 +45,14 @@ export interface HeroStatsProps {
 export default function HeroStats({ summary, roster }: HeroStatsProps) {
   const configsTested = summary?.configs_tested ?? null;
   const liveSignals = roster.length;
-  const verifiedCount = roster.filter(
+  const verifiedEntries = roster.filter(
     (entry) => classifyTier(entry.verification_status) === "verified"
-  ).length;
+  );
+  // Computed live from the roster (not read from summary.strategy_families_verified)
+  // so this can never drift out of sync with the cards rendered just below it -- the
+  // exact class of contradiction that prompted adding this subtext in the first place.
+  const verifiedConfigCount = verifiedEntries.length;
+  const verifiedFamilyCount = new Set(verifiedEntries.map((entry) => entry.name)).size;
   const trackingDays = summary ? daysSince(summary.tracking_since) : null;
 
   return (
@@ -79,7 +86,15 @@ export default function HeroStats({ summary, roster }: HeroStatsProps) {
       >
         <StatTile label="Configs tested" value={configsTested} />
         <StatTile label="Live signals" value={liveSignals} />
-        <StatTile label="Verified strategies" value={verifiedCount} />
+        <StatTile
+          label="Verified configs"
+          value={verifiedConfigCount}
+          sublabel={
+            verifiedConfigCount > 0
+              ? `${verifiedFamilyCount} distinct famil${verifiedFamilyCount === 1 ? "y" : "ies"}`
+              : undefined
+          }
+        />
         <StatTile label="Tracking days" value={trackingDays} />
       </div>
     </section>

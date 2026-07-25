@@ -1,6 +1,7 @@
 {
-  "configs_tested": 67,
-  "strategies_survived": 1,
+  "configs_tested": 1515,
+  "strategies_survived": 17,
+  "strategy_families_verified": 4,
   "tracking_since": "2026-07-17",
-  "last_curated": "2026-07-18"
+  "last_curated": "2026-07-25"
 }

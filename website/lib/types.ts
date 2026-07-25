@@ -62,6 +62,7 @@ export interface StatsExport {
 export interface SiteSummary {
   configs_tested: number;
   strategies_survived: number;
+  strategy_families_verified: number;
   tracking_since: string;
   last_curated: string;
 }
