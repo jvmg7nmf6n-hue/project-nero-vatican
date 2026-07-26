@@ -103,6 +103,8 @@ describe("StrategyDetailPage", () => {
     expect(screen.getByTestId("performance-awaiting")).toBeInTheDocument();
     expect(screen.queryByTestId("performance-summary")).not.toBeInTheDocument();
     expect(screen.getByTestId("trade-history-empty")).toBeInTheDocument();
+    expect(screen.getByTestId("equity-curve-awaiting")).toBeInTheDocument();
+    expect(screen.queryByTestId("equity-curve-chart")).not.toBeInTheDocument();
   });
 
   it("renders the performance summary and trade history table when trades exist", async () => {
@@ -133,6 +135,9 @@ describe("StrategyDetailPage", () => {
     expect(screen.getByTestId("trade-history-table")).toBeInTheDocument();
     expect(screen.getByText("WIN")).toBeInTheDocument();
     expect(screen.getByText("1.50R")).toBeInTheDocument();
+    expect(screen.getByTestId("equity-curve-chart")).toBeInTheDocument();
+    expect(screen.queryByTestId("equity-curve-awaiting")).not.toBeInTheDocument();
+    expect(screen.getAllByTestId("equity-curve-point")).toHaveLength(1);
   });
 
   it("falls back to a generic message when strategy_descriptions.json has no entry for this family", async () => {

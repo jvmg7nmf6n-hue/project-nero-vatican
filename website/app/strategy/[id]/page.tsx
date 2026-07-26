@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import EquityCurveChart from "@/components/EquityCurveChart";
 import TierBadge from "@/components/TierBadge";
 import { formatTimestamp } from "@/components/LedgerTable";
 import {
@@ -8,6 +9,7 @@ import {
   fetchStrategies,
   fetchStrategyDescriptions,
 } from "@/lib/data";
+import { buildEquityCurve } from "@/lib/equityCurve";
 import { findEntryByStrategyId } from "@/lib/strategyId";
 import { classifyTier } from "@/lib/tier";
 import { buildTradeHistory, type ResolvedTrade, type TradeResult } from "@/lib/tradeHistory";
@@ -79,6 +81,8 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
     (s) => s.strategy === entry.name && s.strategy_version === entry.version && s.asset === entry.asset
   );
   const trades = buildTradeHistory(entry, ledgerExport?.rows ?? []);
+  const hasResolvedTrades = (statsRow?.resolved_trades ?? 0) > 0;
+  const equityCurve = hasResolvedTrades ? buildEquityCurve(trades) : null;
 
   return (
     <div className="flex flex-col gap-10">
@@ -119,6 +123,17 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
               value={statsRow.expectancy_r !== null ? statsRow.expectancy_r.toFixed(3) : "n/a"}
             />
           </div>
+        )}
+      </section>
+
+      <section>
+        <h2 className="font-serif text-xl text-parchment mb-4">Equity curve</h2>
+        {!equityCurve ? (
+          <p data-testid="equity-curve-awaiting" className="text-muted">
+            Awaiting first trade for chart.
+          </p>
+        ) : (
+          <EquityCurveChart curve={equityCurve} />
         )}
       </section>
 
