@@ -138,5 +138,12 @@
     "what_was_tested": "A data-availability audit for a proposed liquidation-cascade prediction strategy, checking for any free, pollable, keyless REST liquidation feed across major crypto exchanges - never reached strategy code or backtesting.",
     "why_it_died": "BLOCKED-ON-DATA before any strategy could be built: Binance's public liquidation feed is discontinued, Bybit v5 has no equivalent route, OKX was inconclusive (DNS failure from the test environment, would need re-testing from a different network), and Coinalyze requires a paid-tier-style registered API key this project doesn't have. No strategy code was written - only the audit is committed, exactly as intended for a data-blocked hypothesis.",
     "source_doc": "docs/liquidation_predictor_data_audit.md"
+  },
+  {
+    "name": "REPAIR_BREAKOUT_QUALITY",
+    "family": "Momentum",
+    "what_was_tested": "A user-supplied external spec (display name FIX_BREAKOUT_QUALITY): 4H long-only breakout above the prior 30-candle high, MA200/MA20>MA200 trend support, ATR/close<=4%, a multi-candle retest confirmation (entry deferred to the candle AFTER a later candle retests and closes back above the breakout level), 1.0x-ATR stop with no gap tolerance (a candle closing through the stop defers the exit to the next candle's open rather than fictionally filling at the stop price), fixed 1.5R target. Tested fresh via Vatican's own harness (70/30 chronological split, bootstrap CI, random-entry baseline, exhaustive 4-offset grid-shift) across BTC/XRP/BNB, last 3 years of native 4H candles - the external testers' own 12-trade, +0.158R stats were never reused as evidence.",
+    "why_it_died": "DIED on all 3 assets: BTC (train N=41 ExpR=-0.473, test N=9 ExpR=-0.232), XRP (train N=25 ExpR=-0.351, test N=9 ExpR=+0.032), BNB (train N=50 ExpR=-0.356, test N=7 ExpR=-0.553). Unlike many thin/ambiguous graveyard entries, the negative signal here sits on the LARGER (train) half specifically for every asset, with adequate sample size (25-50 trades) - not a small-N inconclusive result. Edge over a random-entry baseline within the same regime was also mixed-to-negative on most halves, giving no sign the elaborate breakout+retest timing mechanism is adding value beyond the regime filter alone. Not wired to live paper trading.",
+    "source_doc": "docs/repair_breakout_quality_verification_report.md"
   }
 ]
