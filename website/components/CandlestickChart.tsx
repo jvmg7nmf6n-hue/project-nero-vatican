@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { ColorType, createChart } from "lightweight-charts";
+import { ColorType, createChart, type Time } from "lightweight-charts";
 import type { Candle } from "@/lib/candleData";
 import type { ChartMarker } from "@/lib/chartMarkers";
 
@@ -56,9 +56,12 @@ export default function CandlestickChart({ candles, markers }: CandlestickChartP
       wickDownColor: CHART_COLORS.downCandle,
     });
 
-    series.setData(candles);
+    // candleData.ts / chartMarkers.ts deliberately keep `time` as a plain `number`
+    // (framework-free, no lightweight-charts import) -- the branded `Time` cast
+    // happens only here, at the boundary where data is actually handed to the chart.
+    series.setData(candles.map((c) => ({ ...c, time: c.time as Time })));
     if (markers.length > 0) {
-      series.setMarkers(markers);
+      series.setMarkers(markers.map((m) => ({ ...m, time: m.time as Time })));
     }
 
     const handleResize = () => {
