@@ -1,9 +1,10 @@
 import Link from "next/link";
-import AssetTabs from "@/components/AssetTabs";
 import HeroStats from "@/components/HeroStats";
 import LedgerTable from "@/components/LedgerTable";
+import MarketsSection from "@/components/MarketsSection";
 import SplashScreen from "@/components/SplashScreen";
 import {
+  fetchCandleData,
   fetchGraveyard,
   fetchHeartbeat,
   fetchLedgerRecent,
@@ -11,6 +12,7 @@ import {
   fetchStats,
   fetchStrategies,
 } from "@/lib/data";
+import { buildMarketAssetList, buildMarketTiles } from "@/lib/marketsOverview";
 
 export const revalidate = 300;
 
@@ -35,21 +37,28 @@ export default async function HomePage({
   // Set by /heatmap's "?asset=" tile links -- narrows the dashboard to one asset.
   const assetFilter = typeof searchParams?.asset === "string" ? searchParams.asset : null;
 
+  // Markets Overview terminal (Day 3): one tile per distinct single asset, each
+  // fetched independently -- fetchCandleData never throws (see lib/data.ts), so one
+  // asset's fetch failing can never take down Promise.all or any other tile.
+  const marketAssetSpecs = buildMarketAssetList(roster);
+  const candleResults = await Promise.all(
+    marketAssetSpecs.map((spec) => fetchCandleData(spec.asset, spec.timeframe))
+  );
+  const marketTiles = buildMarketTiles(marketAssetSpecs, candleResults, roster);
+
   return (
     <div className="flex flex-col gap-16">
       <SplashScreen />
 
       <HeroStats summary={summary} roster={roster} heartbeat={heartbeat} />
 
-      <section>
-        <h2 className="font-serif text-2xl text-parchment mb-4">Live council verdicts</h2>
-        <AssetTabs
-          roster={roster}
-          recentRows={rows}
-          stats={strategyStats}
-          initialAssetFilter={assetFilter}
-        />
-      </section>
+      <MarketsSection
+        roster={roster}
+        recentRows={rows}
+        stats={strategyStats}
+        tiles={marketTiles}
+        initialAssetFilter={assetFilter}
+      />
 
       <section id="ledger">
         <h2 className="font-serif text-2xl text-parchment mb-4">Truth Ledger</h2>
