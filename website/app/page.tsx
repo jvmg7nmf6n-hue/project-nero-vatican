@@ -13,7 +13,11 @@ import {
 
 export const revalidate = 300;
 
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams?: { asset?: string };
+}) {
   const [ledger, strategies, summary, graveyard, stats, heartbeat] = await Promise.all([
     fetchLedgerRecent(),
     fetchStrategies(),
@@ -27,6 +31,8 @@ export default async function HomePage() {
   const roster = strategies?.strategies ?? [];
   const graveyardEntries = graveyard ?? [];
   const strategyStats = stats?.strategies ?? [];
+  // Set by /heatmap's "?asset=" tile links -- narrows the dashboard to one asset.
+  const assetFilter = typeof searchParams?.asset === "string" ? searchParams.asset : null;
 
   return (
     <div className="flex flex-col gap-16">
@@ -34,7 +40,12 @@ export default async function HomePage() {
 
       <section>
         <h2 className="font-serif text-2xl text-parchment mb-4">Live council verdicts</h2>
-        <AssetTabs roster={roster} recentRows={rows} stats={strategyStats} />
+        <AssetTabs
+          roster={roster}
+          recentRows={rows}
+          stats={strategyStats}
+          initialAssetFilter={assetFilter}
+        />
       </section>
 
       <section id="ledger">

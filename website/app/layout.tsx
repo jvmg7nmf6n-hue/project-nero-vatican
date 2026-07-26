@@ -23,6 +23,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/#ledger" className="hover:text-parchment">
                 Ledger
               </Link>
+              <Link href="/heatmap" className="hover:text-parchment">
+                Heatmap
+              </Link>
               <Link href="/graveyard" className="hover:text-parchment">
                 Graveyard
               </Link>

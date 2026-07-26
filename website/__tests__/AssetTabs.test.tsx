@@ -98,6 +98,39 @@ describe("AssetTabs filter chips", () => {
   });
 });
 
+describe("AssetTabs initialAssetFilter (from /heatmap tile clicks)", () => {
+  it("selects the matching asset-class tab and narrows to just that asset", () => {
+    render(<AssetTabs roster={ROSTER} recentRows={[]} stats={[]} initialAssetFilter="BTC" />);
+
+    // BTC is Crypto -- so the Crypto tab should be active, and only the BTC
+    // card shown, not the BTC-ETH pair or any other Crypto-class entry.
+    expect(screen.getByTestId("tab-Crypto")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getAllByTestId("strategy-card")).toHaveLength(1);
+    expect(screen.getByText("ORDERFLOW_IMBALANCE")).toBeInTheDocument();
+  });
+
+  it("shows a 'showing only X' banner with a working clear-filter control", () => {
+    render(<AssetTabs roster={ROSTER} recentRows={[]} stats={[]} initialAssetFilter="BTC" />);
+
+    expect(screen.getByTestId("asset-filter-banner")).toHaveTextContent("BTC");
+    expect(screen.getAllByTestId("strategy-card")).toHaveLength(1);
+
+    fireEvent.click(screen.getByTestId("clear-asset-filter"));
+
+    expect(screen.queryByTestId("asset-filter-banner")).not.toBeInTheDocument();
+    // Still on the Crypto tab (tab selection isn't reset), but no longer
+    // narrowed to just BTC -- all 3 Crypto-class entries reappear (BNB, BTC,
+    // and the BTC-ETH pair).
+    expect(screen.getAllByTestId("strategy-card")).toHaveLength(3);
+  });
+
+  it("shows no banner and no narrowing when initialAssetFilter is omitted", () => {
+    render(<AssetTabs roster={ROSTER} recentRows={[]} stats={[]} />);
+    expect(screen.queryByTestId("asset-filter-banner")).not.toBeInTheDocument();
+    expect(screen.getAllByTestId("strategy-card")).toHaveLength(4);
+  });
+});
+
 describe("AssetTabs empty states", () => {
   it("renders a no-strategies message when the roster is empty", () => {
     render(<AssetTabs roster={[]} recentRows={[]} stats={[]} />);

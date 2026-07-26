@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import StrategyCard from "./StrategyCard";
 import {
   ASSET_CLASS_ORDER,
+  classifyAsset,
   groupRosterByAssetClass,
   type AssetClass,
 } from "@/lib/assetClass";
@@ -18,10 +19,23 @@ export interface AssetTabsProps {
   roster: StrategyRosterEntry[];
   recentRows: LedgerRow[];
   stats: StrategyStats[];
+  // Set when arriving from the /heatmap page's "?asset=" link -- selects that
+  // asset's class tab and narrows the visible cards to just that one asset,
+  // reusing this component's existing tier/tab filtering machinery rather than
+  // building a separate filtered view.
+  initialAssetFilter?: string | null;
 }
 
-export default function AssetTabs({ roster, recentRows, stats }: AssetTabsProps) {
-  const [activeTab, setActiveTab] = useState<TabKey>("All");
+export default function AssetTabs({
+  roster,
+  recentRows,
+  stats,
+  initialAssetFilter = null,
+}: AssetTabsProps) {
+  const [activeTab, setActiveTab] = useState<TabKey>(() =>
+    initialAssetFilter ? classifyAsset(initialAssetFilter).assetClass : "All"
+  );
+  const [assetFilter, setAssetFilter] = useState<string | null>(initialAssetFilter);
   const [visibleTiers, setVisibleTiers] = useState<Set<Tier>>(
     () => new Set(TIER_ORDER)
   );
@@ -50,6 +64,9 @@ export default function AssetTabs({ roster, recentRows, stats }: AssetTabsProps)
   }
 
   function passesFilter(entry: StrategyRosterEntry): boolean {
+    if (assetFilter && entry.asset !== assetFilter) {
+      return false;
+    }
     return visibleTiers.has(classifyTier(entry.verification_status));
   }
 
@@ -62,6 +79,25 @@ export default function AssetTabs({ roster, recentRows, stats }: AssetTabsProps)
 
   return (
     <div>
+      {assetFilter ? (
+        <div
+          data-testid="asset-filter-banner"
+          className="mb-4 flex items-center gap-2 text-sm text-muted"
+        >
+          <span>
+            Showing only <span className="text-parchment">{assetFilter}</span>
+          </span>
+          <button
+            type="button"
+            data-testid="clear-asset-filter"
+            onClick={() => setAssetFilter(null)}
+            className="text-teal underline"
+          >
+            Clear filter
+          </button>
+        </div>
+      ) : null}
+
       <div data-testid="filter-chips" className="flex flex-wrap gap-2 mb-4">
         {TIER_ORDER.map((tier) => {
           const active = visibleTiers.has(tier);
