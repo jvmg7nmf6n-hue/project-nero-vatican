@@ -1,4 +1,4 @@
-import { deriveCurrentStatus } from "@/lib/status";
+import { deriveSignalState, SIGNAL_STATE_LABELS, type SignalState } from "@/lib/signalState";
 import { deriveStatLine } from "@/lib/statLine";
 import { classifyTier, TIER_LABELS, type Tier } from "@/lib/tier";
 import type { LedgerRow, StrategyRosterEntry, StrategyStats } from "@/lib/types";
@@ -15,6 +15,21 @@ const TIER_BADGE_STYLES: Record<Tier, string> = {
   experimental: "border-muted/60 text-muted",
 };
 
+interface SignalStateStyle {
+  dot: string;
+  text: string;
+}
+
+// Lives here (not in lib/signalState.ts) so tailwind.config.ts's content
+// scanner -- which only reads app/**/*.{ts,tsx} and components/**/*.{ts,tsx} --
+// actually sees these literal class-name strings at build time.
+const SIGNAL_STATE_STYLES: Record<SignalState, SignalStateStyle> = {
+  entry: { dot: "bg-teal", text: "text-teal" },
+  exit: { dot: "bg-amber-400", text: "text-amber-400" },
+  watching: { dot: "bg-gray-400", text: "text-gray-300" },
+  no_signal_yet: { dot: "bg-muted/50", text: "text-muted" },
+};
+
 export interface StrategyCardProps {
   entry: StrategyRosterEntry;
   recentRows: LedgerRow[];
@@ -23,28 +38,51 @@ export interface StrategyCardProps {
 
 export default function StrategyCard({ entry, recentRows, stats }: StrategyCardProps) {
   const tier = classifyTier(entry.verification_status);
-  const status = deriveCurrentStatus(entry, recentRows);
+  const signalState = deriveSignalState(entry, recentRows);
   const statLine = deriveStatLine(entry, stats);
+  const signalStyle = SIGNAL_STATE_STYLES[signalState];
 
   return (
     <div
       data-testid="strategy-card"
       data-tier={tier}
+      data-signal-state={signalState}
       className={`rounded-lg p-4 ${TIER_CARD_STYLES[tier]}`}
     >
-      <h3 className="font-serif text-lg text-parchment">{entry.name}</h3>
-      <p className="text-muted text-sm">
-        {entry.asset} &middot; {entry.timeframe}
-      </p>
-      <span
-        className={`inline-block mt-2 rounded-full border px-2 py-0.5 text-xs ${TIER_BADGE_STYLES[tier]}`}
+      {/* RESEARCH STATUS -- "has this strategy earned trust?" Static, backtest-derived,
+          unrelated to whatever the ledger logged most recently. */}
+      <div data-testid="research-status">
+        <h3 className="font-serif text-lg text-parchment">{entry.name}</h3>
+        <p className="text-muted text-sm">
+          {entry.asset} &middot; {entry.timeframe}
+        </p>
+        <div className="mt-2 text-[10px] uppercase tracking-wide text-muted">
+          Research status
+        </div>
+        <span
+          className={`inline-block mt-1 rounded-full border px-2 py-0.5 text-xs ${TIER_BADGE_STYLES[tier]}`}
+        >
+          {TIER_LABELS[tier]}
+        </span>
+      </div>
+
+      {/* CURRENT SIGNAL -- "what is it doing right now?" Dynamic, ledger-derived.
+          Separated by a divider and its own color language so it can never read as
+          part of the research-status verdict above. */}
+      <div
+        data-testid="current-signal"
+        className="mt-3 flex items-center gap-2 border-t border-muted/20 pt-3"
       >
-        {TIER_LABELS[tier]}
-      </span>
-      <p className="mt-3 text-sm text-parchment">
-        Current status: <span className="text-teal">{status}</span>
-      </p>
-      <p className="mt-1 text-xs text-muted">{statLine}</p>
+        <span className={`h-2 w-2 rounded-full ${signalStyle.dot}`} aria-hidden="true" />
+        <p className="text-sm">
+          <span className="text-muted">Current signal: </span>
+          <span className={`font-medium ${signalStyle.text}`}>
+            {SIGNAL_STATE_LABELS[signalState]}
+          </span>
+        </p>
+      </div>
+
+      <p className="mt-2 text-xs text-muted">{statLine}</p>
     </div>
   );
 }
