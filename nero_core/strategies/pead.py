@@ -225,16 +225,36 @@ def _check_pead_exit(
 def _try_open_pead_trade(
     candle: dict | pd.Series, i: int, n: int, entry_plan: dict[int, tuple[str, float]], ticker: str,
     state: PeadState, params: PeadParameters, close_time: int,
+    require_full_forward_history: bool = True,
 ) -> OpenTrade | None:
     """Shared entry-opening step, reused by both run_pead_backtest_rows and
     nero_core.execution.replay.replay_pead_events. Mutates state.open_trade and
     returns the OpenTrade if one was opened, else None (no qualifying event at
     this candle, a position is already open, insufficient forward history, or
-    invalid risk geometry)."""
+    invalid risk geometry).
+
+    `require_full_forward_history` (default True, matching the original,
+    backtest-only behavior): when True, refuses to open a position unless
+    `holding_window_sessions` MORE candles already exist past the entry candle
+    in `rows` -- necessary for run_pead_backtest_rows, whose contract only
+    reports fully-resolved closed_trades (an unresolved trailing position has
+    nowhere to go in that return shape). BUG FOUND 2026-07-26 (live diagnostic:
+    GOOGL/TSLA both had clearly-qualifying 2026-07-22 earnings surprises,
+    +214%/-38%, that produced zero ledger rows): replay_pead_events was reusing
+    this SAME check, which made every live PEAD entry permanently unrecognizable
+    until `holding_window_sessions` MORE trading days had already elapsed past
+    the entry candle -- at which point the position would open using that MUCH
+    LATER day's open price, not the correct "first trading day after the
+    announcement" price the strategy is specifically built around. The live
+    path doesn't need this guard at all: state.open_trade already persists
+    correctly across separate scheduler runs (see PeadState/replay_pead_events),
+    so an exit found on a LATER day's run is completely normal, exactly like
+    every other continuously-evaluated strategy's open-position handling.
+    replay_pead_events now passes False."""
     if state.open_trade is not None or i not in entry_plan:
         return None
     direction, surprise_fraction = entry_plan[i]
-    if i + params.holding_window_sessions >= n:
+    if require_full_forward_history and i + params.holding_window_sessions >= n:
         return None  # insufficient forward history -- discard, not counted either way
 
     atr_value = candle.get("atr")

@@ -13,6 +13,16 @@ at a cutoff, not at the dawn of history" design, just anchored to the immutable 
 (nero_core.truth_ledger.execution_log) instead of a lookback-days parameter — so there is
 nothing to persist beyond the ledger itself, and a missed/delayed run self-heals on the
 next one.
+
+EXCEPTION: replay_pead_events does NOT use this module's generic "fresh account starts
+at the newest candle only" rule (find_account_start_index's inception_close_time_ms=None
+case). PEAD is event-driven, not continuously evaluated — its entries are tied to a
+specific, one-time calendar event (an earnings announcement), not a recurring per-candle
+opportunity — so "self-heals on the next one" does not hold for it: if a fresh account's
+first-ever look at a (ticker, config) happens even one trading day after the entry
+candle, "newest candle only" would permanently and silently drop that entry, with no
+future candle able to resurrect it. See replay_pead_events's own docstring for the fix
+(found via live diagnostic, 2026-07-26).
 """
 from __future__ import annotations
 
@@ -364,12 +374,36 @@ def replay_pead_events(
     announcements themselves; logging a "nothing happened" row on every one of
     PEAD's ~250 evaluable trading days per ticker between quarterly events would
     be ledger noise, not a meaningful decision record. Silently returning zero
-    events on a no-earnings day is the correct NO_SIGNAL behavior, not a bug."""
+    events on a no-earnings day is the correct NO_SIGNAL behavior, not a bug.
+
+    FRESH-ACCOUNT START INDEX IS PEAD-SPECIFIC, NOT find_account_start_index's
+    generic "newest row only" rule -- found via direct live investigation
+    (2026-07-26, GOOGL/TSLA both had clearly-qualifying 2026-07-22 earnings
+    surprises of +214%/-38% that silently produced zero ledger rows). That
+    generic rule (this module's own docstring: "a missed/delayed run self-heals
+    on the next one") is correct for continuously-evaluated candle-driven
+    strategies, where tomorrow's candle is always a fresh look. It is WRONG for
+    PEAD: an earnings event is a ONE-TIME entry opportunity tied to a specific
+    calendar date, not a recurring per-candle one. If a fresh account's very
+    first evaluation of a given (ticker, config) happens even one trading day
+    after the qualifying entry candle -- entirely plausible, since inception is
+    None until this exact (strategy, version, ticker) triple has ever logged
+    anything, and rare per-ticker qualifying surprises mean that can be true for
+    a long time -- "start at the newest row only" permanently and silently
+    drops the entry; there is no "next candle" chance to catch a historical
+    event that already happened. Instead, a fresh PEAD account looks back
+    exactly one holding window from the newest row: any entry within that
+    window could still plausibly be open (or just closed) and gets a chance to
+    replay; anything older would already have fully exited under any reasonable
+    evaluation cadence, so it's correctly left alone rather than backfilled."""
     frame = candles.sort_values("close_time").reset_index(drop=True)
     entry_plan = pead_build_entry_plan(frame, events_df, params)
     rows = frame.to_dict("records")
 
-    start_index = find_account_start_index(frame, inception_close_time_ms)
+    if inception_close_time_ms is None:
+        start_index = None if len(frame) == 0 else max(0, len(frame) - 1 - params.holding_window_sessions)
+    else:
+        start_index = find_account_start_index(frame, inception_close_time_ms)
     state = PeadState(equity=params.initial_equity)
     replay_events: list[ReplayEvent] = []
     if start_index is None:
@@ -393,7 +427,13 @@ def replay_pead_events(
                 )
             )
 
-        trade = pead_try_open_trade(candle, i, n, entry_plan, ticker, state, params, close_time)
+        # require_full_forward_history=False: unlike backtesting, the live path
+        # doesn't need holding_window_sessions of future candles to already exist
+        # in this fetch -- an exit found on a later day's separate run is normal
+        # (see _try_open_pead_trade's own docstring for the bug this fixed).
+        trade = pead_try_open_trade(
+            candle, i, n, entry_plan, ticker, state, params, close_time, require_full_forward_history=False
+        )
         if trade is not None and should_emit:
             replay_events.append(
                 ReplayEvent(

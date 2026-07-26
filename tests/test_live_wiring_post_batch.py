@@ -154,17 +154,59 @@ class PeadLiveReplayTest(unittest.TestCase):
         self.assertEqual(events, [])
         self.assertIsNone(state.open_trade)
 
-    def test_fresh_deployment_never_backfills_history(self) -> None:
-        """inception=None (a brand new deployment) must start at the NEWEST
-        candle only -- matching every other strategy's own "never backfill a
-        fake trading history" convention -- even if a real qualifying
-        historical event exists further back."""
+    def test_fresh_deployment_ignores_a_qualifying_event_older_than_the_holding_window(self) -> None:
+        """inception=None (a brand new deployment) must not backfill a real
+        qualifying event once its entire holding window has already elapsed
+        relative to the newest available candle -- matching every other
+        strategy's own "never backfill a fake trading history" convention."""
         candles = add_atr(_pead_candles(n=40))
-        ann_time = candles.iloc[self.ATR_WARMUP + 5]["date"]
+        ann_time = candles.iloc[self.ATR_WARMUP + 5]["date"]  # far before the newest candle (idx 39)
         events_df = _pead_events([(ann_time, 1.0, 1.10, 10.0)])
         params = PeadParameters(surprise_threshold_pct=0.05, holding_window_sessions=5)
         replay_events, _state = replay_pead_events(candles, events_df, "AAPL", params, None, None)
         self.assertEqual(replay_events, [])
+
+    def test_fresh_deployment_still_catches_a_recent_qualifying_event(self) -> None:
+        """BUG FIX (2026-07-26 live diagnostic): GOOGL and TSLA both had clearly
+        qualifying 2026-07-22 earnings surprises (+214%/-38%) that produced zero
+        ledger rows for days. Root cause #1: find_account_start_index's generic
+        "fresh account starts at the newest candle only" rule -- correct for
+        continuously-evaluated strategies, where tomorrow's candle is always a
+        fresh look -- silently and PERMANENTLY drops a PEAD entry whenever the
+        very first live evaluation of a (ticker, config) happens even one
+        trading day after the entry candle, since an earnings event is a
+        one-time opportunity, not a recurring one. A fresh PEAD account must
+        instead look back a full holding window from the newest candle."""
+        candles = add_atr(_pead_candles(n=40))
+        ann_idx = 34  # within holding_window_sessions=5 of the newest candle (idx 39)
+        ann_time = candles.iloc[ann_idx]["date"]
+        events_df = _pead_events([(ann_time, 1.0, 1.10, 10.0)])
+        params = PeadParameters(surprise_threshold_pct=0.05, holding_window_sessions=5)
+        replay_events, _state = replay_pead_events(candles, events_df, "AAPL", params, None, None)
+        entries = [e for e in replay_events if e.signal_type == "ENTRY"]
+        self.assertEqual(len(entries), 1)
+        self.assertIn("LONG", entries[0].reasoning)
+
+    def test_fresh_deployment_catches_a_recent_event_even_without_full_forward_history(self) -> None:
+        """Root cause #2 of the same bug: _try_open_pead_trade's "insufficient
+        forward history" guard (necessary for run_pead_backtest_rows, whose
+        contract only reports fully-resolved closed_trades) was being reused
+        unmodified by replay_pead_events, where it made a live entry
+        unrecognizable until holding_window_sessions MORE trading days had
+        already elapsed past the entry candle -- entering, once finally
+        "recognized," at that much-later day's price rather than the correct
+        next-day-after-announcement price. This entry candle (idx 36, holding
+        window 5) has only 3 more candles after it (37, 38, 39), not 5 --
+        the exact shape that used to be silently discarded."""
+        candles = add_atr(_pead_candles(n=40))
+        ann_idx = 35
+        ann_time = candles.iloc[ann_idx]["date"]
+        events_df = _pead_events([(ann_time, 1.0, 1.10, 10.0)])
+        params = PeadParameters(surprise_threshold_pct=0.05, holding_window_sessions=5)
+        replay_events, _state = replay_pead_events(candles, events_df, "AAPL", params, None, None)
+        entries = [e for e in replay_events if e.signal_type == "ENTRY"]
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0].candle_close_time, int(candles.iloc[ann_idx + 1]["close_time"]))
 
     def test_mocked_earnings_response_produces_an_entry(self) -> None:
         """The earnings-fetcher live path (mocked earnings response, as the
