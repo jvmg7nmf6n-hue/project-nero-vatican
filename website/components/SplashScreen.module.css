@@ -1,0 +1,101 @@
+.scanlines {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(212, 175, 55, 0.035) 0px,
+    rgba(212, 175, 55, 0.035) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  background-size: 100% 3px;
+  animation: scanlineDrift 6s linear infinite;
+}
+
+@keyframes scanlineDrift {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 60px;
+  }
+}
+
+.reticle {
+  padding: 4px;
+}
+
+.corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-color: rgba(212, 175, 55, 0.6);
+  border-style: solid;
+  border-width: 0;
+  animation: cornerPulse 2.4s ease-in-out infinite;
+}
+
+.cornerTopLeft {
+  top: -12px;
+  left: -12px;
+  border-top-width: 2px;
+  border-left-width: 2px;
+}
+
+.cornerTopRight {
+  top: -12px;
+  right: -12px;
+  border-top-width: 2px;
+  border-right-width: 2px;
+}
+
+.cornerBottomLeft {
+  bottom: -12px;
+  left: -12px;
+  border-bottom-width: 2px;
+  border-left-width: 2px;
+}
+
+.cornerBottomRight {
+  bottom: -12px;
+  right: -12px;
+  border-bottom-width: 2px;
+  border-right-width: 2px;
+}
+
+@keyframes cornerPulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.loadingBarFill {
+  display: block;
+  width: 0%;
+  animation: loadingFill 1.8s ease-out forwards;
+}
+
+@keyframes loadingFill {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scanlines {
+    animation: none;
+    background-image: none;
+  }
+  .corner {
+    animation: none;
+  }
+  .loadingBarFill {
+    animation: none;
+    width: 100%;
+  }
+}

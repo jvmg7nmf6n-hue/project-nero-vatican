@@ -2,6 +2,7 @@ import Link from "next/link";
 import AssetTabs from "@/components/AssetTabs";
 import HeroStats from "@/components/HeroStats";
 import LedgerTable from "@/components/LedgerTable";
+import SplashScreen from "@/components/SplashScreen";
 import {
   fetchGraveyard,
   fetchHeartbeat,
@@ -36,6 +37,8 @@ export default async function HomePage({
 
   return (
     <div className="flex flex-col gap-16">
+      <SplashScreen />
+
       <HeroStats summary={summary} roster={roster} heartbeat={heartbeat} />
 
       <section>
