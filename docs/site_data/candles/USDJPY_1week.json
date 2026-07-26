@@ -2,7 +2,7 @@
   "schema_version": 1,
   "asset": "USD/JPY",
   "timeframe": "1week",
-  "last_updated": "2026-07-26T15:33:46.748585+00:00",
+  "last_updated": "2026-07-26T17:44:28.101015+00:00",
   "candles": [
     {
       "time": 1663545600,
@@ -1601,7 +1601,7 @@
       "open": 162.43392,
       "high": 164.08805,
       "low": 162.26786,
-      "close": 163.85272,
+      "close": 163.85736,
       "volume": null
     }
   ]

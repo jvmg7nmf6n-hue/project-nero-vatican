@@ -2,7 +2,7 @@
   "schema_version": 1,
   "asset": "GBP/USD",
   "timeframe": "1week",
-  "last_updated": "2026-07-26T15:33:46.748585+00:00",
+  "last_updated": "2026-07-26T17:44:28.101015+00:00",
   "candles": [
     {
       "time": 1663545600,
@@ -1601,7 +1601,7 @@
       "open": 1.34512,
       "high": 1.34804,
       "low": 1.33003,
-      "close": 1.33209,
+      "close": 1.33242,
       "volume": null
     }
   ]

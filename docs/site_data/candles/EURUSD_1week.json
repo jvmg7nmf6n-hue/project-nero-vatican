@@ -2,7 +2,7 @@
   "schema_version": 1,
   "asset": "EUR/USD",
   "timeframe": "1week",
-  "last_updated": "2026-07-26T15:33:46.748585+00:00",
+  "last_updated": "2026-07-26T17:44:28.101015+00:00",
   "candles": [
     {
       "time": 1663545600,
@@ -1601,7 +1601,7 @@
       "open": 1.14319,
       "high": 1.14496,
       "low": 1.13645,
-      "close": 1.13684,
+      "close": 1.13732,
       "volume": null
     }
   ]

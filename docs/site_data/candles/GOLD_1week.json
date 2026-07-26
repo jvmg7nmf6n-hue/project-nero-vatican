@@ -2,7 +2,7 @@
   "schema_version": 1,
   "asset": "GOLD",
   "timeframe": "1week",
-  "last_updated": "2026-07-26T15:33:46.748585+00:00",
+  "last_updated": "2026-07-26T17:44:28.101015+00:00",
   "candles": [
     {
       "time": 1664064000,
@@ -1601,7 +1601,7 @@
       "open": 4010.53029,
       "high": 4165.68194,
       "low": 3983.42894,
-      "close": 4055.90391,
+      "close": 4055.91487,
       "volume": null
     }
   ]
