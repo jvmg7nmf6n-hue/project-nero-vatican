@@ -95,3 +95,30 @@ export interface HeartbeatStatus {
   last_successful_run: string;
   run_count_24h: number;
 }
+
+// Day 4/7 Quant Intelligence Panel, Part 1 -- one entry per candle FILE (i.e. per
+// (asset, timeframe) pair, not per asset: GOLD and SILVER each have two files at
+// two different timeframes with genuinely different metrics). Every metric is
+// nullable independently -- insufficient history or an unrecognized timeframe
+// nulls out just that field, never the whole entry, and never a fabricated
+// number. There is deliberately no composite/overall score field here.
+export interface QuantMetricsEntry {
+  asset: string;
+  timeframe: string;
+  periods_per_year: number | null;
+  window_used: number;
+  rf_annual: number;
+  rf_source: string;
+  log_return_annualized: number | null;
+  zscore_current: number | null;
+  realized_vol_annualized: number | null;
+  sharpe: number | null;
+  sortino: number | null;
+  computed_at: string;
+}
+
+export interface QuantMetricsExport {
+  schema_version: number;
+  last_updated: string;
+  metrics: QuantMetricsEntry[];
+}

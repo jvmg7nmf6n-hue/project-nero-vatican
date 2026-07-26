@@ -2,17 +2,20 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import ChartTabs from "@/components/ChartTabs";
 import EquityCurveChart from "@/components/EquityCurveChart";
+import QuantPanel from "@/components/QuantPanel";
 import TierBadge from "@/components/TierBadge";
 import { formatTimestamp } from "@/components/LedgerTable";
 import { buildChartMarkers } from "@/lib/chartMarkers";
 import {
   fetchCandleData,
   fetchLedgerFull,
+  fetchQuantMetrics,
   fetchStats,
   fetchStrategies,
   fetchStrategyDescriptions,
 } from "@/lib/data";
 import { buildEquityCurve } from "@/lib/equityCurve";
+import { findQuantMetricsForAsset } from "@/lib/quantPanel";
 import { findEntryByStrategyId } from "@/lib/strategyId";
 import { classifyTier } from "@/lib/tier";
 import { buildTradeHistory, type ResolvedTrade, type TradeResult } from "@/lib/tradeHistory";
@@ -63,11 +66,12 @@ function TradeRow({ trade }: { trade: ResolvedTrade }) {
 }
 
 export default async function StrategyDetailPage({ params }: { params: { id: string } }) {
-  const [strategiesExport, statsExport, ledgerExport, descriptions] = await Promise.all([
+  const [strategiesExport, statsExport, ledgerExport, descriptions, quantMetricsExport] = await Promise.all([
     fetchStrategies(),
     fetchStats(),
     fetchLedgerFull(),
     fetchStrategyDescriptions(),
+    fetchQuantMetrics(),
   ]);
 
   const roster = strategiesExport?.strategies ?? [];
@@ -97,6 +101,11 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
   const priceChartUnavailableReason =
     candleResult?.status === "error" ? "error" : candleResult?.status === "not_found" ? "missing" : null;
   const markers = candles ? buildChartMarkers(trades, candles) : [];
+
+  // Per-asset(+timeframe), not per-strategy -- see lib/quantPanel.ts's own
+  // docstring for why two strategies sharing this same pair correctly resolve to
+  // the identical entry, rather than showing two different panels.
+  const quantMetricsEntry = findQuantMetricsForAsset(quantMetricsExport?.metrics ?? [], entry.asset, entry.timeframe);
 
   return (
     <div className="flex flex-col gap-10">
@@ -170,6 +179,8 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
           />
         )}
       </section>
+
+      <QuantPanel entry={quantMetricsEntry} />
 
       <section>
         <h2 className="font-serif text-xl text-parchment mb-4">Trade history</h2>

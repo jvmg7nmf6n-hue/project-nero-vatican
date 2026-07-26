@@ -4,6 +4,7 @@ import type {
   GraveyardEntry,
   HeartbeatStatus,
   LedgerExport,
+  QuantMetricsExport,
   SiteSummary,
   StatsExport,
   StrategiesExport,
@@ -70,6 +71,13 @@ export function fetchHeartbeat(): Promise<HeartbeatStatus | null> {
 // error; callers fall back to a generic "no description yet" message.
 export function fetchStrategyDescriptions(): Promise<StrategyDescriptions | null> {
   return fetchJson<StrategyDescriptions>("strategy_descriptions.json");
+}
+
+// Day 4/7 Quant Intelligence Panel data -- null (not an error) until the
+// scheduler's export_quant_metrics step has run at least once, same convention
+// as fetchHeartbeat.
+export function fetchQuantMetrics(): Promise<QuantMetricsExport | null> {
+  return fetchJson<QuantMetricsExport>("quant_metrics.json");
 }
 
 export type CandleFetchResult =

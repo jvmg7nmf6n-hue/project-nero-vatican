@@ -5,6 +5,7 @@ import type { CandleFetchResult } from "@/lib/data";
 import type {
   LedgerExport,
   LedgerRow,
+  QuantMetricsExport,
   StatsExport,
   StrategiesExport,
   StrategyDescriptions,
@@ -18,6 +19,7 @@ const mockFetchStats = jest.mocked(data.fetchStats);
 const mockFetchLedgerFull = jest.mocked(data.fetchLedgerFull);
 const mockFetchStrategyDescriptions = jest.mocked(data.fetchStrategyDescriptions);
 const mockFetchCandleData = jest.mocked(data.fetchCandleData);
+const mockFetchQuantMetrics = jest.mocked(data.fetchQuantMetrics);
 
 const STRATEGY_ID = "breakout-momentum--gold--breakout-momentum-v1-2-0-gold-calibrated-1week";
 
@@ -72,6 +74,7 @@ function setupMocks(overrides: {
   ledger?: LedgerExport | null;
   descriptions?: StrategyDescriptions | null;
   candle?: CandleFetchResult;
+  quantMetrics?: QuantMetricsExport | null;
 } = {}) {
   mockFetchStrategies.mockResolvedValue(
     overrides.strategies ?? { schema_version: 1, last_updated: "x", strategies: [ROSTER_ENTRY] }
@@ -84,6 +87,9 @@ function setupMocks(overrides: {
   // Default: no candle file provisioned for this test roster -- matches most
   // existing tests, which predate Day 2 and never intended to exercise the chart.
   mockFetchCandleData.mockResolvedValue(overrides.candle ?? { status: "not_found" });
+  // Default: no quant_metrics.json entry -- matches every test that predates Day 4
+  // and never intended to exercise the Quant Panel.
+  mockFetchQuantMetrics.mockResolvedValue(overrides.quantMetrics !== undefined ? overrides.quantMetrics : null);
 }
 
 describe("StrategyDetailPage", () => {
@@ -320,5 +326,82 @@ describe("StrategyDetailPage candlestick chart (Day 2)", () => {
     fireEvent.click(screen.getByTestId("tab-equity-curve"));
     expect(screen.getByTestId("equity-curve-chart")).toBeInTheDocument();
     expect(screen.queryByTestId("candlestick-chart")).not.toBeInTheDocument();
+  });
+});
+
+describe("StrategyDetailPage Quant Panel (Day 4)", () => {
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it("renders the Quant Panel with real metrics when a matching quant_metrics.json entry exists", async () => {
+    setupMocks({
+      quantMetrics: {
+        schema_version: 1,
+        last_updated: "x",
+        metrics: [
+          {
+            asset: "GOLD",
+            timeframe: "1week",
+            periods_per_year: 52,
+            window_used: 199,
+            rf_annual: 0.0363,
+            rf_source: "fred_dff",
+            log_return_annualized: 0.2335,
+            zscore_current: -1.43,
+            realized_vol_annualized: 17.18,
+            sharpe: 1.15,
+            sortino: 1.8,
+            computed_at: "2026-07-27T00:00:00+00:00",
+          },
+        ],
+      },
+    });
+
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    expect(screen.getByText("Quant Panel")).toBeInTheDocument();
+    expect(screen.getByTestId("quant-panel-grid")).toBeInTheDocument();
+    expect(screen.getByTestId("quant-card-sharpe-value")).toHaveTextContent("1.15");
+  });
+
+  it("shows the graceful unavailable message when quant_metrics.json has no entry for this asset/timeframe", async () => {
+    setupMocks(); // default: quantMetrics null
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    expect(screen.getByTestId("quant-panel-unavailable")).toBeInTheDocument();
+    expect(screen.queryByTestId("quant-panel-grid")).not.toBeInTheDocument();
+  });
+
+  it("does not match a quant_metrics entry for a different asset or timeframe", async () => {
+    setupMocks({
+      quantMetrics: {
+        schema_version: 1,
+        last_updated: "x",
+        metrics: [
+          {
+            asset: "GOLD",
+            timeframe: "24h", // this strategy is 1week -- must not match
+            periods_per_year: 365,
+            window_used: 199,
+            rf_annual: 0.0363,
+            rf_source: "fred_dff",
+            log_return_annualized: -0.17,
+            zscore_current: 0.08,
+            realized_vol_annualized: 29.9,
+            sharpe: -0.69,
+            sortino: -0.91,
+            computed_at: "2026-07-27T00:00:00+00:00",
+          },
+        ],
+      },
+    });
+
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    expect(screen.getByTestId("quant-panel-unavailable")).toBeInTheDocument();
   });
 });

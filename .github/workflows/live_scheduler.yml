@@ -39,6 +39,11 @@ jobs:
         env:
           TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
         continue-on-error: true
+      - name: Export quant metrics
+        run: python -m nero_core.execution.export_quant_metrics
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        continue-on-error: true
       - name: Save Truth Ledger
         run: |
           git config user.name "nero-live-scheduler"

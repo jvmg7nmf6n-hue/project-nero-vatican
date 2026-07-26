@@ -11,3 +11,6 @@ lxml>=5.0,<7  # required by yfinance's Ticker.get_earnings_dates() (PEAD, Three 
 # Windows yet, and building from source requires MSVC C++ Build Tools. quant_intelligence.py
 # already falls back to an EWMA volatility estimate when `arch` is unavailable, so this is a
 # soft dependency: uncomment and install once GARCH(1,1) is needed and build tools are present.
+
+empyrical-reloaded>=0.5,<1  # test-only: cross-validation reference for nero_core/quant/quant_panel.py
+# (maintained fork of the now-dead empyrical; Quantopian's original is unmaintained and not used).
