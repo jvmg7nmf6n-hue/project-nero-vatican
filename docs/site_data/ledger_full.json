@@ -1,10 +1,11 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-25T23:26:41.359052+00:00",
+  "last_updated": "2026-07-26T00:15:19.133341+00:00",
   "rows": [
     {
       "timestamp": "2026-07-25T23:26:38.311798+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -15,6 +16,7 @@
     {
       "timestamp": "2026-07-25T23:26:38.311798+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -25,6 +27,7 @@
     {
       "timestamp": "2026-07-25T20:04:55.182058+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "ENTRY",
       "entry_price": 1873.06,
@@ -35,6 +38,7 @@
     {
       "timestamp": "2026-07-25T20:04:55.182058+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "ENTRY",
       "entry_price": 64328.71,
@@ -45,6 +49,7 @@
     {
       "timestamp": "2026-07-25T18:49:27.973320+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -55,6 +60,7 @@
     {
       "timestamp": "2026-07-25T17:48:52.877010+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "ENTRY",
       "entry_price": 1866.4,
@@ -65,6 +71,7 @@
     {
       "timestamp": "2026-07-25T17:48:52.877010+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -75,6 +82,7 @@
     {
       "timestamp": "2026-07-25T16:44:13.120393+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "ENTRY",
       "entry_price": 64117.69,
@@ -85,6 +93,7 @@
     {
       "timestamp": "2026-07-25T15:55:26.906666+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -95,6 +104,7 @@
     {
       "timestamp": "2026-07-25T15:55:26.906666+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -105,6 +115,7 @@
     {
       "timestamp": "2026-07-25T14:44:14.253515+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "ENTRY",
       "entry_price": 64103.89,
@@ -115,6 +126,7 @@
     {
       "timestamp": "2026-07-25T13:01:53.927561+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "ENTRY",
       "entry_price": 1858.37,
@@ -125,6 +137,7 @@
     {
       "timestamp": "2026-07-25T11:56:04.396160+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -135,6 +148,7 @@
     {
       "timestamp": "2026-07-25T10:50:24.238284+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "ENTRY",
       "entry_price": 63941.23,
@@ -145,6 +159,7 @@
     {
       "timestamp": "2026-07-25T07:09:30.305589+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -155,6 +170,7 @@
     {
       "timestamp": "2026-07-25T07:09:30.305589+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -165,6 +181,7 @@
     {
       "timestamp": "2026-07-25T01:29:59.682854+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "ENTRY",
       "entry_price": 1858.51,
@@ -175,6 +192,7 @@
     {
       "timestamp": "2026-07-24T23:54:35.214820+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "ENTRY",
       "entry_price": 64100.52,
@@ -185,6 +203,7 @@
     {
       "timestamp": "2026-07-24T19:17:58.795154+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -195,6 +214,7 @@
     {
       "timestamp": "2026-07-24T14:52:46.360200+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "ENTRY",
       "entry_price": 1856.08,
@@ -205,6 +225,7 @@
     {
       "timestamp": "2026-07-24T12:58:19.918804+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -215,6 +236,7 @@
     {
       "timestamp": "2026-07-24T12:58:19.918804+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -225,6 +247,7 @@
     {
       "timestamp": "2026-07-24T11:29:46.203880+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "ENTRY",
       "entry_price": 64903.09,
@@ -235,6 +258,7 @@
     {
       "timestamp": "2026-07-24T09:42:01.487793+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "ENTRY",
       "entry_price": 1886.66,
@@ -245,6 +269,7 @@
     {
       "timestamp": "2026-07-24T09:42:01.487793+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -255,6 +280,7 @@
     {
       "timestamp": "2026-07-24T07:25:26.220551+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "ENTRY",
       "entry_price": 65426.94,
@@ -265,6 +291,7 @@
     {
       "timestamp": "2026-07-24T01:30:05.515985+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -275,6 +302,7 @@
     {
       "timestamp": "2026-07-23T21:32:59.709547+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "ENTRY",
       "entry_price": 65097.6,
@@ -285,6 +313,7 @@
     {
       "timestamp": "2026-07-23T20:09:12.846659+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -295,6 +324,7 @@
     {
       "timestamp": "2026-07-23T18:57:10.139228+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "ENTRY",
       "entry_price": 1876.7,
@@ -305,6 +335,7 @@
     {
       "timestamp": "2026-07-23T17:53:24.263417+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -315,6 +346,7 @@
     {
       "timestamp": "2026-07-23T17:53:24.263417+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -325,6 +357,7 @@
     {
       "timestamp": "2026-07-23T16:18:45.828516+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "ENTRY",
       "entry_price": 1893.82,
@@ -335,6 +368,7 @@
     {
       "timestamp": "2026-07-23T14:39:01.868098+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -345,6 +379,7 @@
     {
       "timestamp": "2026-07-23T14:39:01.868098+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "ENTRY",
       "entry_price": 64831.16,
@@ -355,6 +390,7 @@
     {
       "timestamp": "2026-07-23T12:08:26.772137+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "ENTRY",
       "entry_price": 1925.26,
@@ -365,6 +401,7 @@
     {
       "timestamp": "2026-07-23T12:08:26.772137+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -375,6 +412,7 @@
     {
       "timestamp": "2026-07-23T10:10:29.835128+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "ENTRY",
       "entry_price": 65607.07,
@@ -385,6 +423,7 @@
     {
       "timestamp": "2026-07-23T05:14:45.550995+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -395,6 +434,7 @@
     {
       "timestamp": "2026-07-22T22:52:26.623346+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "ENTRY",
       "entry_price": 66044.16,
@@ -405,6 +445,7 @@
     {
       "timestamp": "2026-07-22T20:11:40.836908+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -415,6 +456,7 @@
     {
       "timestamp": "2026-07-22T18:55:59.425923+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "ENTRY",
       "entry_price": 65993.8,
@@ -425,6 +467,7 @@
     {
       "timestamp": "2026-07-22T17:46:46.414430+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -435,6 +478,7 @@
     {
       "timestamp": "2026-07-22T16:13:37.142459+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -445,6 +489,7 @@
     {
       "timestamp": "2026-07-22T12:53:59.968358+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "ENTRY",
       "entry_price": 1926.16,
@@ -455,6 +500,7 @@
     {
       "timestamp": "2026-07-22T12:53:59.968358+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "ENTRY",
       "entry_price": 65972.5,
@@ -465,6 +511,7 @@
     {
       "timestamp": "2026-07-22T11:23:52.910772+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -475,6 +522,7 @@
     {
       "timestamp": "2026-07-22T09:06:13.811348+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "ENTRY",
       "entry_price": 1919.8,
@@ -485,6 +533,7 @@
     {
       "timestamp": "2026-07-22T06:21:04.051040+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -495,6 +544,7 @@
     {
       "timestamp": "2026-07-22T00:14:37.357962+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "ENTRY",
       "entry_price": 66516.18,
@@ -505,6 +555,7 @@
     {
       "timestamp": "2026-07-22T00:14:37.357962+00:00",
       "strategy": "RANGE_MEAN_REVERSION",
+      "strategy_version": "range-mean-reversion-v1.3.0-confirmation",
       "asset": "BTC",
       "signal_type": "NO_TRADE",
       "entry_price": null,
@@ -515,6 +566,7 @@
     {
       "timestamp": "2026-07-22T00:14:37.357962+00:00",
       "strategy": "RANGE_MEAN_REVERSION",
+      "strategy_version": "range-mean-reversion-v1.1.0-long-only",
       "asset": "BTC",
       "signal_type": "NO_TRADE",
       "entry_price": null,
@@ -525,6 +577,7 @@
     {
       "timestamp": "2026-07-21T11:47:03.654230+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -535,6 +588,7 @@
     {
       "timestamp": "2026-07-21T11:47:03.654230+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -545,6 +599,7 @@
     {
       "timestamp": "2026-07-21T09:59:40.477317+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "ENTRY",
       "entry_price": 66186.39,
@@ -555,6 +610,7 @@
     {
       "timestamp": "2026-07-21T07:27:34.805946+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "ENTRY",
       "entry_price": 1933.59,
@@ -565,6 +621,7 @@
     {
       "timestamp": "2026-07-22T00:14:37.357962+00:00",
       "strategy": "VOLATILITY_SQUEEZE",
+      "strategy_version": "volatility-squeeze-v1.1.0-ma100-silver-calibrated-24h",
       "asset": "SILVER",
       "signal_type": "NO_TRADE",
       "entry_price": null,
@@ -575,6 +632,7 @@
     {
       "timestamp": "2026-07-22T00:14:37.357962+00:00",
       "strategy": "VOLATILITY_SQUEEZE",
+      "strategy_version": "volatility-squeeze-v1.1.0-ma150-silver-calibrated-24h",
       "asset": "SILVER",
       "signal_type": "NO_TRADE",
       "entry_price": null,
@@ -585,6 +643,7 @@
     {
       "timestamp": "2026-07-22T00:14:37.357962+00:00",
       "strategy": "VOLATILITY_SQUEEZE",
+      "strategy_version": "volatility-squeeze-v1.1.0-ma200-silver-calibrated-24h",
       "asset": "SILVER",
       "signal_type": "NO_TRADE",
       "entry_price": null,
@@ -595,6 +654,7 @@
     {
       "timestamp": "2026-07-22T00:14:37.357962+00:00",
       "strategy": "TREND_PULLBACK",
+      "strategy_version": "trend-pullback-v1.5.0-silver-calibrated-24h",
       "asset": "SILVER",
       "signal_type": "NO_TRADE",
       "entry_price": null,
@@ -605,6 +665,7 @@
     {
       "timestamp": "2026-07-22T00:14:37.357962+00:00",
       "strategy": "BREAKOUT_MOMENTUM",
+      "strategy_version": "breakout-momentum-v1.6.0-silver-calibrated-24h",
       "asset": "SILVER",
       "signal_type": "NO_TRADE",
       "entry_price": null,
@@ -615,6 +676,7 @@
     {
       "timestamp": "2026-07-21T04:42:55.393529+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -625,6 +687,7 @@
     {
       "timestamp": "2026-07-21T04:42:55.393529+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -635,6 +698,7 @@
     {
       "timestamp": "2026-07-21T01:27:09.592930+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "ENTRY",
       "entry_price": 65520.95,
@@ -645,6 +709,7 @@
     {
       "timestamp": "2026-07-20T23:45:55.016147+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "ENTRY",
       "entry_price": 1894.59,
@@ -655,6 +720,7 @@
     {
       "timestamp": "2026-07-20T21:38:33.817815+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -665,6 +731,7 @@
     {
       "timestamp": "2026-07-20T20:16:04.793032+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "ENTRY",
       "entry_price": 1897.4,
@@ -675,6 +742,7 @@
     {
       "timestamp": "2026-07-20T16:51:05.837170+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -685,6 +753,7 @@
     {
       "timestamp": "2026-07-20T13:00:23.719026+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "ENTRY",
       "entry_price": 1871.81,
@@ -695,6 +764,7 @@
     {
       "timestamp": "2026-07-20T10:39:27.043661+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -705,6 +775,7 @@
     {
       "timestamp": "2026-07-20T10:39:27.043661+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -715,6 +786,7 @@
     {
       "timestamp": "2026-07-20T07:51:06.789319+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "ENTRY",
       "entry_price": 63860.34,
@@ -725,6 +797,7 @@
     {
       "timestamp": "2026-07-19T23:25:01.126235+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "ENTRY",
       "entry_price": 1869.24,
@@ -735,6 +808,7 @@
     {
       "timestamp": "2026-07-19T23:25:01.126235+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -745,6 +819,7 @@
     {
       "timestamp": "2026-07-19T22:13:53.078273+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "ENTRY",
       "entry_price": 64372.61,
@@ -755,6 +830,7 @@
     {
       "timestamp": "2026-07-19T21:12:03.294487+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -765,6 +841,7 @@
     {
       "timestamp": "2026-07-19T21:12:03.294487+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "EXIT",
       "entry_price": null,
@@ -775,6 +852,7 @@
     {
       "timestamp": "2026-07-19T20:01:43.613414+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "signal_type": "ENTRY",
       "entry_price": 1859.67,
@@ -785,6 +863,7 @@
     {
       "timestamp": "2026-07-19T18:48:05.822288+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "signal_type": "ENTRY",
       "entry_price": 64502.4,

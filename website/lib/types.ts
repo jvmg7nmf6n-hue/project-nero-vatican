@@ -7,6 +7,7 @@ export type SignalType = "ENTRY" | "EXIT" | "WATCH" | "NO_TRADE";
 export interface LedgerRow {
   timestamp: string;
   strategy: string;
+  strategy_version: string;
   asset: string;
   signal_type: SignalType;
   entry_price: number | null;
@@ -27,7 +28,13 @@ export interface StrategyRosterEntry {
   asset: string;
   timeframe: string;
   verification_status: string;
+  source_report: string | null;
 }
+
+// Manually-curated docs/site_data/strategy_descriptions.json -- keyed by strategy_id
+// (the family name, e.g. "PEAD"), one plain-language mechanism description per
+// family, not per individual config/version/asset.
+export type StrategyDescriptions = Record<string, string>;
 
 export interface StrategiesExport {
   schema_version: number;

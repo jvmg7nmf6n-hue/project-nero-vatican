@@ -64,6 +64,7 @@ from nero_core.execution.live_scheduler import (
     PEAD_ID,
     SINGLE_ASSET_CONFIGS,
 )
+from nero_core.execution.source_reports import source_report_for
 from nero_core.execution.verification_status import verification_status_for
 from nero_core.strategies.news_sentiment import STRATEGY_VERSION as NEWS_SENTIMENT_VERSION
 from nero_core.truth_ledger.execution_log import DEFAULT_DB_PATH, ExecutionLogRow, list_execution_log
@@ -87,6 +88,7 @@ def _row_to_ledger_dict(row: ExecutionLogRow) -> dict[str, object]:
     return {
         "timestamp": row.timestamp.isoformat(),
         "strategy": row.strategy,
+        "strategy_version": row.strategy_version,
         "asset": row.asset,
         "signal_type": row.signal_type,
         "entry_price": row.entry_price,
@@ -237,6 +239,7 @@ def _roster_entries() -> list[dict[str, object]]:
             "asset": config.asset,
             "timeframe": config.timeframe,
             "verification_status": verification_status_for(config.strategy_id, config.strategy_version, config.asset),
+            "source_report": source_report_for(config.strategy_id, config.strategy_version, config.asset),
         }
         for config in SINGLE_ASSET_CONFIGS
     ]
@@ -248,6 +251,7 @@ def _roster_entries() -> list[dict[str, object]]:
             "asset": pairs_label,
             "timeframe": PAIRS_TIMEFRAME,
             "verification_status": verification_status_for(COINTEGRATION_PAIRS_ID, COINTEGRATION_PAIRS_VERSION, pairs_label),
+            "source_report": source_report_for(COINTEGRATION_PAIRS_ID, COINTEGRATION_PAIRS_VERSION, pairs_label),
         }
     )
     for asset in NEWS_SENTIMENT_ASSETS:
@@ -258,6 +262,7 @@ def _roster_entries() -> list[dict[str, object]]:
                 "asset": asset,
                 "timeframe": "daily",
                 "verification_status": verification_status_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_VERSION, asset),
+                "source_report": source_report_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_VERSION, asset),
             }
         )
     for asset in ORDERFLOW_BINANCE_SYMBOLS:
@@ -268,6 +273,7 @@ def _roster_entries() -> list[dict[str, object]]:
                 "asset": asset,
                 "timeframe": "snapshot",
                 "verification_status": verification_status_for(ORDERFLOW_ID, ORDERFLOW_VERSION, asset),
+                "source_report": source_report_for(ORDERFLOW_ID, ORDERFLOW_VERSION, asset),
             }
         )
     entries.append(
@@ -277,6 +283,7 @@ def _roster_entries() -> list[dict[str, object]]:
             "asset": GOLD_SILVER_RATIO_LABEL,
             "timeframe": GOLD_SILVER_RATIO_TIMEFRAME,
             "verification_status": verification_status_for(GOLD_SILVER_RATIO_ID, GOLD_SILVER_RATIO_VERSION, GOLD_SILVER_RATIO_LABEL),
+            "source_report": source_report_for(GOLD_SILVER_RATIO_ID, GOLD_SILVER_RATIO_VERSION, GOLD_SILVER_RATIO_LABEL),
         }
     )
     for config in PEAD_CONFIGS:
@@ -287,6 +294,7 @@ def _roster_entries() -> list[dict[str, object]]:
                 "asset": config.ticker,
                 "timeframe": "1day",
                 "verification_status": verification_status_for(PEAD_ID, config.strategy_version, config.ticker),
+                "source_report": source_report_for(PEAD_ID, config.strategy_version, config.ticker),
             }
         )
     for config in DONCHIAN_FOREX_CONFIGS:
@@ -297,6 +305,7 @@ def _roster_entries() -> list[dict[str, object]]:
                 "asset": config.pair,
                 "timeframe": DONCHIAN_FOREX_TIMEFRAME,
                 "verification_status": verification_status_for(DONCHIAN_TREND_ID, config.strategy_version, config.pair),
+                "source_report": source_report_for(DONCHIAN_TREND_ID, config.strategy_version, config.pair),
             }
         )
     return entries

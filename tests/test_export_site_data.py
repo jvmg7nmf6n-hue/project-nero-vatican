@@ -60,14 +60,27 @@ class BuildLedgerExportTest(unittest.TestCase):
     def test_only_the_specified_fields_are_present(self) -> None:
         rows = [_row(1, "r1", GOLD_STRATEGY, GOLD_VERSION, "GOLD", "ENTRY", candle_timestamp=1000, entry_price=2400.0)]
         export = build_ledger_export(rows, now=NOW)
-        expected_fields = {"timestamp", "strategy", "asset", "signal_type", "entry_price", "exit_price", "reasoning", "candle_timestamp"}
+        expected_fields = {
+            "timestamp", "strategy", "strategy_version", "asset", "signal_type",
+            "entry_price", "exit_price", "reasoning", "candle_timestamp",
+        }
         self.assertEqual(set(export["rows"][0].keys()), expected_fields)
 
-    def test_strategy_version_and_run_id_are_not_leaked(self) -> None:
+    def test_run_id_is_not_leaked(self) -> None:
         rows = [_row(1, "secret-run-id", GOLD_STRATEGY, GOLD_VERSION, "GOLD", "ENTRY", candle_timestamp=1000, entry_price=2400.0)]
         export = build_ledger_export(rows, now=NOW)
         self.assertNotIn("run_id", export["rows"][0])
-        self.assertNotIn("strategy_version", export["rows"][0])
+
+    def test_strategy_version_is_included_for_individual_strategy_pages(self) -> None:
+        # Added for Step 4 (individual strategy pages): without it, two configs that
+        # share a (strategy, asset) but differ only by version -- e.g.
+        # RANGE_MEAN_REVERSION long-only vs confirmation, both on BTC -- would have
+        # their trade histories silently merged on the public ledger export. Unlike
+        # run_id (pure internal bookkeeping), strategy_version is already public in
+        # stats.json and strategies.json, so exposing it here leaks nothing new.
+        rows = [_row(1, "r1", GOLD_STRATEGY, GOLD_VERSION, "GOLD", "ENTRY", candle_timestamp=1000, entry_price=2400.0)]
+        export = build_ledger_export(rows, now=NOW)
+        self.assertEqual(export["rows"][0]["strategy_version"], GOLD_VERSION)
 
     def test_limit_caps_the_row_count(self) -> None:
         rows = [
@@ -257,6 +270,18 @@ class BuildStrategiesExportTest(unittest.TestCase):
         export = build_strategies_export(now=NOW)
         self.assertEqual(export["schema_version"], SCHEMA_VERSION)
         self.assertEqual(export["last_updated"], NOW.isoformat())
+
+    def test_roster_includes_source_report_from_the_mapping(self) -> None:
+        export = build_strategies_export(now=NOW)
+        gold_entry = next(e for e in export["strategies"] if e["name"] == GOLD_STRATEGY)
+        self.assertEqual(gold_entry["source_report"], "docs/statistical_harness_upgrade.md")
+
+    def test_configs_with_no_historical_backtest_export_a_null_source_report(self) -> None:
+        export = build_strategies_export(now=NOW)
+        news_entries = [e for e in export["strategies"] if e["name"] == "NEWS_SENTIMENT"]
+        self.assertEqual(len(news_entries), 2)
+        for entry in news_entries:
+            self.assertIsNone(entry["source_report"])
 
 
 class WriteSiteDataTest(unittest.TestCase):

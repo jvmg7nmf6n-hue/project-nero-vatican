@@ -6,6 +6,7 @@ function makeRow(overrides: Partial<LedgerRow> = {}): LedgerRow {
   return {
     timestamp: "2026-07-17T12:00:00Z",
     strategy: "BREAKOUT_MOMENTUM",
+    strategy_version: "breakout-momentum-v1.2.0-gold-calibrated-1week",
     asset: "GOLD",
     signal_type: "EXIT",
     entry_price: 100,

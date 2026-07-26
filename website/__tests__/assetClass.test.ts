@@ -12,6 +12,7 @@ function makeEntry(overrides: Partial<StrategyRosterEntry> = {}): StrategyRoster
     asset: "GOLD",
     timeframe: "1week",
     verification_status: "verified",
+    source_report: null,
     ...overrides,
   };
 }

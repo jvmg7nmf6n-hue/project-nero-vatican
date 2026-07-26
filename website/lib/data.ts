@@ -5,6 +5,7 @@ import type {
   SiteSummary,
   StatsExport,
   StrategiesExport,
+  StrategyDescriptions,
 } from "./types";
 
 export const GITHUB_RAW_BASE =
@@ -60,4 +61,11 @@ export function fetchGraveyard(): Promise<GraveyardEntry[] | null> {
 // null as "no status to show," never as "down."
 export function fetchHeartbeat(): Promise<HeartbeatStatus | null> {
   return fetchJson<HeartbeatStatus>("heartbeat.json");
+}
+
+// Manually-curated (see docs/site_data/README.md) -- a missing entry for a given
+// strategy_id is expected for any family not yet written up, never treated as an
+// error; callers fall back to a generic "no description yet" message.
+export function fetchStrategyDescriptions(): Promise<StrategyDescriptions | null> {
+  return fetchJson<StrategyDescriptions>("strategy_descriptions.json");
 }

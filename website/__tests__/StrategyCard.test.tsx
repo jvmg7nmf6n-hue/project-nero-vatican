@@ -9,6 +9,7 @@ function makeEntry(overrides: Partial<StrategyRosterEntry> = {}): StrategyRoster
     asset: "GOLD",
     timeframe: "1week",
     verification_status: "triple-verified",
+    source_report: "docs/statistical_harness_upgrade.md",
     ...overrides,
   };
 }
@@ -17,6 +18,7 @@ function makeRow(overrides: Partial<LedgerRow> = {}): LedgerRow {
   return {
     timestamp: "2026-07-26T00:00:00Z",
     strategy: "BREAKOUT_MOMENTUM",
+    strategy_version: "breakout-momentum-v1.2.0-gold-calibrated-1week",
     asset: "GOLD",
     signal_type: "ENTRY",
     entry_price: 100,

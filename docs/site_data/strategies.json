@@ -1,251 +1,286 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-25T23:26:41.359957+00:00",
+  "last_updated": "2026-07-26T00:15:19.133910+00:00",
   "strategies": [
     {
       "name": "BREAKOUT_MOMENTUM",
       "version": "breakout-momentum-v1.2.0-gold-calibrated-1week",
       "asset": "GOLD",
       "timeframe": "1week",
-      "verification_status": "triple-verified"
+      "verification_status": "triple-verified",
+      "source_report": "docs/statistical_harness_upgrade.md"
     },
     {
       "name": "TREND_PULLBACK",
       "version": "trend-pullback-v1.0.0",
       "asset": "BNB",
       "timeframe": "12h",
-      "verification_status": "verified — sample-limited"
+      "verification_status": "verified — sample-limited",
+      "source_report": "docs/statistical_harness_upgrade.md"
     },
     {
       "name": "BREAKOUT_MOMENTUM",
       "version": "breakout-momentum-v1.6.0-silver-calibrated-24h",
       "asset": "SILVER",
       "timeframe": "24h",
-      "verification_status": "promising-watchlist — forward-testing, not verified"
+      "verification_status": "promising-watchlist — forward-testing, not verified",
+      "source_report": "docs/metals_phase_a_full_sweep.md"
     },
     {
       "name": "TREND_PULLBACK",
       "version": "trend-pullback-v1.5.0-silver-calibrated-24h",
       "asset": "SILVER",
       "timeframe": "24h",
-      "verification_status": "promising-watchlist — forward-testing, not verified"
+      "verification_status": "promising-watchlist — forward-testing, not verified",
+      "source_report": "docs/metals_phase_a_full_sweep.md"
     },
     {
       "name": "VOLATILITY_SQUEEZE",
       "version": "volatility-squeeze-v1.1.0-ma200-silver-calibrated-24h",
       "asset": "SILVER",
       "timeframe": "24h",
-      "verification_status": "promising-watchlist — forward-testing, not verified"
+      "verification_status": "promising-watchlist — forward-testing, not verified",
+      "source_report": "docs/metals_phase_a_full_sweep.md"
     },
     {
       "name": "VOLATILITY_SQUEEZE",
       "version": "volatility-squeeze-v1.1.0-ma150-silver-calibrated-24h",
       "asset": "SILVER",
       "timeframe": "24h",
-      "verification_status": "promising-watchlist — forward-testing, not verified"
+      "verification_status": "promising-watchlist — forward-testing, not verified",
+      "source_report": "docs/metals_phase_a_full_sweep.md"
     },
     {
       "name": "VOLATILITY_SQUEEZE",
       "version": "volatility-squeeze-v1.1.0-ma100-silver-calibrated-24h",
       "asset": "SILVER",
       "timeframe": "24h",
-      "verification_status": "promising-watchlist — forward-testing, not verified"
+      "verification_status": "promising-watchlist — forward-testing, not verified",
+      "source_report": "docs/metals_phase_a_full_sweep.md"
     },
     {
       "name": "RANGE_MEAN_REVERSION",
       "version": "range-mean-reversion-v1.0.0",
       "asset": "GOLD",
       "timeframe": "1week",
-      "verification_status": "watchlist — forward-testing, not verified (band-timing beat random both halves; N below 20-trade bar)"
+      "verification_status": "watchlist — forward-testing, not verified (band-timing beat random both halves; N below 20-trade bar)",
+      "source_report": "docs/range_mean_reversion_task2_sweep.md"
     },
     {
       "name": "RANGE_MEAN_REVERSION",
       "version": "range-mean-reversion-v1.0.0",
       "asset": "SILVER",
       "timeframe": "1week",
-      "verification_status": "watchlist — forward-testing, not verified (band-timing beat random both halves; N below 20-trade bar)"
+      "verification_status": "watchlist — forward-testing, not verified (band-timing beat random both halves; N below 20-trade bar)",
+      "source_report": "docs/range_mean_reversion_task2_sweep.md"
     },
     {
       "name": "RANGE_MEAN_REVERSION",
       "version": "range-mean-reversion-v1.1.0-long-only",
       "asset": "BTC",
       "timeframe": "24h",
-      "verification_status": "watchlist — forward-testing, not verified (mechanism-backed, LOW SAMPLE, CI crosses zero, 1d grid-shift structurally unavailable)"
+      "verification_status": "watchlist — forward-testing, not verified (mechanism-backed, LOW SAMPLE, CI crosses zero, 1d grid-shift structurally unavailable)",
+      "source_report": "docs/rmr_variant_research_stage1.md"
     },
     {
       "name": "RANGE_MEAN_REVERSION",
       "version": "range-mean-reversion-v1.3.0-confirmation",
       "asset": "BTC",
       "timeframe": "24h",
-      "verification_status": "watchlist — forward-testing, not verified (68% reversion-target exit rate vs 32% baseline; LOW SAMPLE, CI crosses zero, 1d grid-shift structurally unavailable)"
+      "verification_status": "watchlist — forward-testing, not verified (68% reversion-target exit rate vs 32% baseline; LOW SAMPLE, CI crosses zero, 1d grid-shift structurally unavailable)",
+      "source_report": "docs/rmr_variant_research_stage1.md"
     },
     {
       "name": "DONCHIAN_TREND",
       "version": "donchian-trend-v2.0.0-bracket-gold-n20-1week",
       "asset": "GOLD",
       "timeframe": "1week",
-      "verification_status": "watchlist — CI clears zero both halves, adequate sample, breakout-timing edge confirmed vs random baseline; grid-shift structurally unavailable at 1week (settlement gaps) — this is the ceiling, not a data shortfall"
+      "verification_status": "watchlist — CI clears zero both halves, adequate sample, breakout-timing edge confirmed vs random baseline; grid-shift structurally unavailable at 1week (settlement gaps) — this is the ceiling, not a data shortfall",
+      "source_report": "docs/donchian_deep_dive_closing_report.md"
     },
     {
       "name": "COINTEGRATION_PAIRS",
       "version": "cointegration-pairs-v1.0.0",
       "asset": "BTC-ETH",
       "timeframe": "12h",
-      "verification_status": "verified — weakest, live-proving"
+      "verification_status": "verified — weakest, live-proving",
+      "source_report": "docs/statistical_harness_upgrade.md"
     },
     {
       "name": "NEWS_SENTIMENT",
       "version": "news-sentiment-v1.0.0",
       "asset": "GOLD",
       "timeframe": "daily",
-      "verification_status": "forward-test-only, no historical backtest"
+      "verification_status": "forward-test-only, no historical backtest",
+      "source_report": null
     },
     {
       "name": "NEWS_SENTIMENT",
       "version": "news-sentiment-v1.0.0",
       "asset": "BTC",
       "timeframe": "daily",
-      "verification_status": "forward-test-only, no historical backtest"
+      "verification_status": "forward-test-only, no historical backtest",
+      "source_report": null
     },
     {
       "name": "ORDERFLOW_IMBALANCE",
       "version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "timeframe": "snapshot",
-      "verification_status": "experimental — snapshot-based, forward-testing only, no backtest exists"
+      "verification_status": "experimental — snapshot-based, forward-testing only, no backtest exists",
+      "source_report": null
     },
     {
       "name": "ORDERFLOW_IMBALANCE",
       "version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "timeframe": "snapshot",
-      "verification_status": "experimental — snapshot-based, forward-testing only, no backtest exists"
+      "verification_status": "experimental — snapshot-based, forward-testing only, no backtest exists",
+      "source_report": null
     },
     {
       "name": "GOLD_SILVER_RATIO_MR",
       "version": "gold-silver-ratio-mr-v1.0.0",
       "asset": "GOLD-SILVER",
       "timeframe": "24h",
-      "verification_status": "watchlist — forward-testing, not verified (positive both halves, edge-over-random positive 3/4 configs; pairs-aware stop; vendor-timestamp fix applied; 1day grid-shift structurally unavailable)"
+      "verification_status": "watchlist — forward-testing, not verified (positive both halves, edge-over-random positive 3/4 configs; pairs-aware stop; vendor-timestamp fix applied; 1day grid-shift structurally unavailable)",
+      "source_report": "docs/gold_silver_ratio_mr_results.md"
     },
     {
       "name": "PEAD",
       "version": "pead-v1.0.0-surprise3pct-hold10",
       "asset": "AAPL",
       "timeframe": "1day",
-      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
+      "source_report": "docs/pead_results.md"
     },
     {
       "name": "PEAD",
       "version": "pead-v1.0.0-surprise3pct-hold10",
       "asset": "MSFT",
       "timeframe": "1day",
-      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
+      "source_report": "docs/pead_results.md"
     },
     {
       "name": "PEAD",
       "version": "pead-v1.0.0-surprise3pct-hold10",
       "asset": "GOOGL",
       "timeframe": "1day",
-      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
+      "source_report": "docs/pead_results.md"
     },
     {
       "name": "PEAD",
       "version": "pead-v1.0.0-surprise3pct-hold10",
       "asset": "TSLA",
       "timeframe": "1day",
-      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
+      "source_report": "docs/pead_results.md"
     },
     {
       "name": "PEAD",
       "version": "pead-v1.0.0-surprise3pct-hold10",
       "asset": "AMZN",
       "timeframe": "1day",
-      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
+      "source_report": "docs/pead_results.md"
     },
     {
       "name": "PEAD",
       "version": "pead-v1.0.0-surprise3pct-hold10",
       "asset": "NVDA",
       "timeframe": "1day",
-      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
+      "source_report": "docs/pead_results.md"
     },
     {
       "name": "PEAD",
       "version": "pead-v1.0.0-surprise3pct-hold10",
       "asset": "META",
       "timeframe": "1day",
-      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
+      "source_report": "docs/pead_results.md"
     },
     {
       "name": "PEAD",
       "version": "pead-v1.0.0-surprise8pct-hold10",
       "asset": "AAPL",
       "timeframe": "1day",
-      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
+      "source_report": "docs/pead_results.md"
     },
     {
       "name": "PEAD",
       "version": "pead-v1.0.0-surprise8pct-hold10",
       "asset": "MSFT",
       "timeframe": "1day",
-      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
+      "source_report": "docs/pead_results.md"
     },
     {
       "name": "PEAD",
       "version": "pead-v1.0.0-surprise8pct-hold10",
       "asset": "GOOGL",
       "timeframe": "1day",
-      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
+      "source_report": "docs/pead_results.md"
     },
     {
       "name": "PEAD",
       "version": "pead-v1.0.0-surprise8pct-hold10",
       "asset": "TSLA",
       "timeframe": "1day",
-      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
+      "source_report": "docs/pead_results.md"
     },
     {
       "name": "PEAD",
       "version": "pead-v1.0.0-surprise8pct-hold10",
       "asset": "AMZN",
       "timeframe": "1day",
-      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
+      "source_report": "docs/pead_results.md"
     },
     {
       "name": "PEAD",
       "version": "pead-v1.0.0-surprise8pct-hold10",
       "asset": "NVDA",
       "timeframe": "1day",
-      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
+      "source_report": "docs/pead_results.md"
     },
     {
       "name": "PEAD",
       "version": "pead-v1.0.0-surprise8pct-hold10",
       "asset": "META",
       "timeframe": "1day",
-      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ"
+      "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
+      "source_report": "docs/pead_results.md"
     },
     {
       "name": "DONCHIAN_TREND",
       "version": "donchian-trend-v2.0.0-bracket-eurusd-n20-1week",
       "asset": "EUR/USD",
       "timeframe": "1week",
-      "verification_status": "watchlist — positive both halves, N20 cross-asset pattern confirmed; grid-shift structurally unavailable at 1week"
+      "verification_status": "watchlist — positive both halves, N20 cross-asset pattern confirmed; grid-shift structurally unavailable at 1week",
+      "source_report": "docs/donchian_deep_dive_closing_report.md"
     },
     {
       "name": "DONCHIAN_TREND",
       "version": "donchian-trend-v2.0.0-bracket-gbpusd-n20-1week",
       "asset": "GBP/USD",
       "timeframe": "1week",
-      "verification_status": "watchlist — positive both halves, N20 cross-asset pattern confirmed; grid-shift structurally unavailable at 1week"
+      "verification_status": "watchlist — positive both halves, N20 cross-asset pattern confirmed; grid-shift structurally unavailable at 1week",
+      "source_report": "docs/donchian_deep_dive_closing_report.md"
     },
     {
       "name": "DONCHIAN_TREND",
       "version": "donchian-trend-v2.0.0-bracket-usdjpy-n40-1week",
       "asset": "USD/JPY",
       "timeframe": "1week",
-      "verification_status": "watchlist — positive both halves, structural-trend parameter; grid-shift structurally unavailable at 1week"
+      "verification_status": "watchlist — positive both halves, structural-trend parameter; grid-shift structurally unavailable at 1week",
+      "source_report": "docs/donchian_deep_dive_closing_report.md"
     }
   ]
 }

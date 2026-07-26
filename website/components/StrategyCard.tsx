@@ -1,18 +1,15 @@
+import Link from "next/link";
+import TierBadge from "./TierBadge";
 import { deriveSignalState, SIGNAL_STATE_LABELS, type SignalState } from "@/lib/signalState";
 import { deriveStatLine } from "@/lib/statLine";
-import { classifyTier, TIER_LABELS, type Tier } from "@/lib/tier";
+import { buildStrategyId } from "@/lib/strategyId";
+import { classifyTier, type Tier } from "@/lib/tier";
 import type { LedgerRow, StrategyRosterEntry, StrategyStats } from "@/lib/types";
 
 const TIER_CARD_STYLES: Record<Tier, string> = {
   verified: "border-2 border-solid border-teal/70 bg-ink",
   watchlist: "border-2 border-dashed border-gold/60 bg-ink",
   experimental: "border-2 border-dotted border-muted/50 bg-ink",
-};
-
-const TIER_BADGE_STYLES: Record<Tier, string> = {
-  verified: "border-teal/70 text-teal",
-  watchlist: "border-gold/60 text-gold",
-  experimental: "border-muted/60 text-muted",
 };
 
 interface SignalStateStyle {
@@ -43,11 +40,12 @@ export default function StrategyCard({ entry, recentRows, stats }: StrategyCardP
   const signalStyle = SIGNAL_STATE_STYLES[signalState];
 
   return (
-    <div
+    <Link
+      href={`/strategy/${buildStrategyId(entry)}`}
       data-testid="strategy-card"
       data-tier={tier}
       data-signal-state={signalState}
-      className={`rounded-lg p-4 ${TIER_CARD_STYLES[tier]}`}
+      className={`block rounded-lg p-4 hover:opacity-90 ${TIER_CARD_STYLES[tier]}`}
     >
       {/* RESEARCH STATUS -- "has this strategy earned trust?" Static, backtest-derived,
           unrelated to whatever the ledger logged most recently. */}
@@ -59,11 +57,9 @@ export default function StrategyCard({ entry, recentRows, stats }: StrategyCardP
         <div className="mt-2 text-[10px] uppercase tracking-wide text-muted">
           Research status
         </div>
-        <span
-          className={`inline-block mt-1 rounded-full border px-2 py-0.5 text-xs ${TIER_BADGE_STYLES[tier]}`}
-        >
-          {TIER_LABELS[tier]}
-        </span>
+        <div className="mt-1">
+          <TierBadge tier={tier} />
+        </div>
       </div>
 
       {/* CURRENT SIGNAL -- "what is it doing right now?" Dynamic, ledger-derived.
@@ -83,6 +79,6 @@ export default function StrategyCard({ entry, recentRows, stats }: StrategyCardP
       </div>
 
       <p className="mt-2 text-xs text-muted">{statLine}</p>
-    </div>
+    </Link>
   );
 }
