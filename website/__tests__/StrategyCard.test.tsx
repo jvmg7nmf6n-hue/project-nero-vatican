@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import StrategyCard from "@/components/StrategyCard";
-import type { LedgerRow, StrategyRosterEntry } from "@/lib/types";
+import type { LedgerRow, StrategyRosterEntry, StrategyStats } from "@/lib/types";
 
 function makeEntry(overrides: Partial<StrategyRosterEntry> = {}): StrategyRosterEntry {
   return {
@@ -25,6 +25,21 @@ function makeRow(overrides: Partial<LedgerRow> = {}): LedgerRow {
     exit_price: null,
     reasoning: "",
     candle_timestamp: "1000",
+    ...overrides,
+  };
+}
+
+function makeStats(overrides: Partial<StrategyStats> = {}): StrategyStats {
+  return {
+    strategy: "BREAKOUT_MOMENTUM",
+    strategy_version: "breakout-momentum-v1.2.0-gold-calibrated-1week",
+    asset: "GOLD",
+    resolved_trades: 0,
+    win_rate: null,
+    expectancy_r: null,
+    avg_return_pct: null,
+    signal_counts: { ENTRY: 0, EXIT: 0, WATCH: 0, NO_TRADE: 0 },
+    open_position: null,
     ...overrides,
   };
 }
@@ -131,5 +146,69 @@ describe("StrategyCard current-signal color per state", () => {
       unmount();
     });
     expect(seenClasses.size).toBe(4);
+  });
+});
+
+describe("StrategyCard trade-context detail (ENTRY/EXIT)", () => {
+  it("shows entry price and timestamp for an ENTRY signal", () => {
+    render(
+      <StrategyCard
+        entry={makeEntry()}
+        recentRows={[makeRow({ signal_type: "ENTRY", entry_price: 2450.5 })]}
+        stats={[]}
+      />
+    );
+    const detail = screen.getByTestId("signal-detail");
+    expect(detail).toHaveTextContent("Entered");
+    expect(detail).toHaveTextContent("2450.5");
+  });
+
+  it("shows exit price and resolved P&L for an EXIT signal", () => {
+    render(
+      <StrategyCard
+        entry={makeEntry()}
+        recentRows={[
+          makeRow({ signal_type: "EXIT", exit_price: 2500, timestamp: "2026-07-27T00:00:00Z" }),
+          makeRow({ signal_type: "ENTRY", entry_price: 2400, timestamp: "2026-07-20T00:00:00Z" }),
+        ]}
+        stats={[makeStats({ resolved_trades: 4, avg_return_pct: 3.25 })]}
+      />
+    );
+    const detail = screen.getByTestId("signal-detail");
+    expect(detail).toHaveTextContent("Exited");
+    expect(detail).toHaveTextContent("2500");
+    expect(detail).toHaveTextContent("entered @ 2400");
+    expect(detail).toHaveTextContent("P&L: 3.25%");
+  });
+
+  it("shows 'P&L pending' for an EXIT signal with zero resolved trades in stats.json", () => {
+    render(
+      <StrategyCard
+        entry={makeEntry()}
+        recentRows={[makeRow({ signal_type: "EXIT", exit_price: 2500 })]}
+        stats={[makeStats({ resolved_trades: 0 })]}
+      />
+    );
+    expect(screen.getByTestId("signal-detail")).toHaveTextContent("P&L pending");
+  });
+
+  it("never shows a bare EXIT label without context: falls back to NO SIGNAL YET when the version doesn't match", () => {
+    render(
+      <StrategyCard
+        entry={makeEntry()}
+        recentRows={[
+          makeRow({ signal_type: "EXIT", exit_price: 2500, strategy_version: "breakout-momentum-v9.9.9-different" }),
+        ]}
+        stats={[]}
+      />
+    );
+    expect(screen.getByText("NO SIGNAL YET")).toBeInTheDocument();
+    expect(screen.queryByText("EXIT")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("signal-detail")).not.toBeInTheDocument();
+  });
+
+  it("shows no detail block for WATCHING or NO SIGNAL YET states", () => {
+    render(<StrategyCard entry={makeEntry()} recentRows={[makeRow({ signal_type: "WATCH" })]} stats={[]} />);
+    expect(screen.queryByTestId("signal-detail")).not.toBeInTheDocument();
   });
 });

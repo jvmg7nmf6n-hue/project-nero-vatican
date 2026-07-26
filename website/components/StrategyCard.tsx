@@ -1,5 +1,7 @@
 import Link from "next/link";
 import TierBadge from "./TierBadge";
+import { formatTimestamp } from "./LedgerTable";
+import { deriveSignalDetail } from "@/lib/signalDetail";
 import { deriveSignalState, SIGNAL_STATE_LABELS, type SignalState } from "@/lib/signalState";
 import { deriveStatLine } from "@/lib/statLine";
 import { buildStrategyId } from "@/lib/strategyId";
@@ -35,7 +37,19 @@ export interface StrategyCardProps {
 
 export default function StrategyCard({ entry, recentRows, stats }: StrategyCardProps) {
   const tier = classifyTier(entry.verification_status);
-  const signalState = deriveSignalState(entry, recentRows);
+  const rawSignalState = deriveSignalState(entry, recentRows);
+  const signalDetail =
+    rawSignalState === "entry" || rawSignalState === "exit"
+      ? deriveSignalDetail(entry, recentRows, stats)
+      : null;
+  // Never show a bare ENTRY/EXIT label with no backing detail (e.g. the exact
+  // (name, version, asset) triple doesn't match the row deriveSignalState's
+  // looser (name, asset)-only lookup found) -- fall back to "no signal yet"
+  // instead, per the same "never fabricate" discipline the rest of the site uses.
+  const signalState: SignalState =
+    (rawSignalState === "entry" || rawSignalState === "exit") && !signalDetail
+      ? "no_signal_yet"
+      : rawSignalState;
   const statLine = deriveStatLine(entry, stats);
   const signalStyle = SIGNAL_STATE_STYLES[signalState];
 
@@ -65,17 +79,36 @@ export default function StrategyCard({ entry, recentRows, stats }: StrategyCardP
       {/* CURRENT SIGNAL -- "what is it doing right now?" Dynamic, ledger-derived.
           Separated by a divider and its own color language so it can never read as
           part of the research-status verdict above. */}
-      <div
-        data-testid="current-signal"
-        className="mt-3 flex items-center gap-2 border-t border-muted/20 pt-3"
-      >
-        <span className={`h-2 w-2 rounded-full ${signalStyle.dot}`} aria-hidden="true" />
-        <p className="text-sm">
-          <span className="text-muted">Current signal: </span>
-          <span className={`font-medium ${signalStyle.text}`}>
-            {SIGNAL_STATE_LABELS[signalState]}
-          </span>
-        </p>
+      <div data-testid="current-signal" className="mt-3 border-t border-muted/20 pt-3">
+        <div className="flex items-center gap-2">
+          <span className={`h-2 w-2 rounded-full ${signalStyle.dot}`} aria-hidden="true" />
+          <p className="text-sm">
+            <span className="text-muted">Current signal: </span>
+            <span className={`font-medium ${signalStyle.text}`}>
+              {SIGNAL_STATE_LABELS[signalState]}
+            </span>
+          </p>
+        </div>
+        {signalDetail ? (
+          <p data-testid="signal-detail" className="mt-1 pl-4 text-xs text-muted">
+            {signalState === "entry" ? (
+              <>
+                Entered {signalDetail.entryPrice !== null ? `@ ${signalDetail.entryPrice} ` : ""}
+                {signalDetail.entryTimestamp ? formatTimestamp(signalDetail.entryTimestamp) : ""}
+              </>
+            ) : (
+              <>
+                Exited {signalDetail.exitPrice !== null ? `@ ${signalDetail.exitPrice} ` : ""}
+                {signalDetail.exitTimestamp ? formatTimestamp(signalDetail.exitTimestamp) : ""}
+                {signalDetail.entryPrice !== null ? ` (entered @ ${signalDetail.entryPrice})` : ""}
+                {" · "}
+                {signalDetail.pnlPending
+                  ? "P&L pending"
+                  : `P&L: ${signalDetail.avgReturnPct !== null ? signalDetail.avgReturnPct.toFixed(2) : "n/a"}%`}
+              </>
+            )}
+          </p>
+        ) : null}
       </div>
 
       <p className="mt-2 text-xs text-muted">{statLine}</p>
