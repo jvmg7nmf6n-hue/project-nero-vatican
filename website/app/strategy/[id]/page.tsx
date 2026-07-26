@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import ChartTabs from "@/components/ChartTabs";
 import EquityCurveChart from "@/components/EquityCurveChart";
 import TierBadge from "@/components/TierBadge";
 import { formatTimestamp } from "@/components/LedgerTable";
+import { buildChartMarkers } from "@/lib/chartMarkers";
 import {
+  fetchCandleData,
   fetchLedgerFull,
   fetchStats,
   fetchStrategies,
@@ -84,6 +87,17 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
   const hasResolvedTrades = (statsRow?.resolved_trades ?? 0) > 0;
   const equityCurve = hasResolvedTrades ? buildEquityCurve(trades) : null;
 
+  // Pair strategies (BTC-ETH, GOLD-SILVER) have no single price series -- Day 1's
+  // export pipeline deliberately skips them (see nero_core/execution/
+  // export_candle_data.py's module docstring) -- so there's no candle file to look
+  // up and no "Price Chart" tab to offer; equity-curve-only, exactly as before.
+  const isPairAsset = entry.asset.includes("-");
+  const candleResult = isPairAsset ? null : await fetchCandleData(entry.asset, entry.timeframe);
+  const candles = candleResult?.status === "ok" ? candleResult.data.candles : null;
+  const priceChartUnavailableReason =
+    candleResult?.status === "error" ? "error" : candleResult?.status === "not_found" ? "missing" : null;
+  const markers = candles ? buildChartMarkers(trades, candles) : [];
+
   return (
     <div className="flex flex-col gap-10">
       <Link href="/" className="text-sm text-muted hover:text-parchment">
@@ -136,13 +150,24 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
       </section>
 
       <section>
-        <h2 className="font-serif text-xl text-parchment mb-4">Equity curve</h2>
-        {!equityCurve ? (
-          <p data-testid="equity-curve-awaiting" className="text-muted">
-            Awaiting first trade for chart.
-          </p>
+        <h2 className="font-serif text-xl text-parchment mb-4">
+          {isPairAsset ? "Equity curve" : "Charts"}
+        </h2>
+        {isPairAsset ? (
+          !equityCurve ? (
+            <p data-testid="equity-curve-awaiting" className="text-muted">
+              Awaiting first trade for chart.
+            </p>
+          ) : (
+            <EquityCurveChart curve={equityCurve} />
+          )
         ) : (
-          <EquityCurveChart curve={equityCurve} />
+          <ChartTabs
+            candles={candles}
+            markers={markers}
+            equityCurve={equityCurve}
+            priceChartUnavailableReason={priceChartUnavailableReason}
+          />
         )}
       </section>
 

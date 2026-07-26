@@ -1,3 +1,5 @@
+import { candleFilename } from "./candleData";
+import type { CandleFile } from "./candleData";
 import type {
   GraveyardEntry,
   HeartbeatStatus,
@@ -68,4 +70,36 @@ export function fetchHeartbeat(): Promise<HeartbeatStatus | null> {
 // error; callers fall back to a generic "no description yet" message.
 export function fetchStrategyDescriptions(): Promise<StrategyDescriptions | null> {
   return fetchJson<StrategyDescriptions>("strategy_descriptions.json");
+}
+
+export type CandleFetchResult =
+  | { status: "ok"; data: CandleFile }
+  | { status: "not_found" }
+  | { status: "error" };
+
+// Deliberately does NOT reuse fetchJson: every other JSON file on this site treats
+// "missing" and "fetch failed" identically (both -> null), but Day 2's strategy page
+// needs to tell them apart -- "Price chart coming soon" (this asset/timeframe was
+// never in Day 1's export scope, e.g. ORDERFLOW_IMBALANCE's "snapshot" timeframe) vs
+// "Price data temporarily unavailable" (the file exists but this fetch failed) are
+// two different, honest messages, not the same fallback.
+export async function fetchCandleData(asset: string, rosterTimeframe: string): Promise<CandleFetchResult> {
+  const filename = candleFilename(asset, rosterTimeframe);
+  try {
+    const response = await fetch(`${GITHUB_RAW_BASE}/candles/${filename}`, {
+      next: { revalidate: REVALIDATE_SECONDS },
+    });
+
+    if (response.status === 404) {
+      return { status: "not_found" };
+    }
+    if (!response.ok) {
+      return { status: "error" };
+    }
+
+    const data = (await response.json()) as CandleFile;
+    return { status: "ok", data };
+  } catch {
+    return { status: "error" };
+  }
 }
