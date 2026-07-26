@@ -28,6 +28,27 @@ against the same asset (BTC), so keying on (strategy_id, asset) alone would let 
 config's status leak onto the other. A config with no historical backtest at all
 (NEWS_SENTIMENT, ORDERFLOW_IMBALANCE) maps to `null`, never a fabricated path.
 
+## `candles/` — auto-regenerated, cadence-gated (Day 1 of the candlestick-chart arc)
+
+`docs/site_data/candles/{SANITIZED_ASSET}_{timeframe}.json` (one file per in-scope
+(asset, timeframe) pair — see `nero_core/execution/export_candle_data.py`'s own
+module docstring for the full design, the exact 16-pair list, and why ETH and the two
+pair-strategy assets are excluded) — overwritten by
+`nero_core/execution/export_candle_data.py`, its own step in
+`.github/workflows/live_scheduler.yml`. Never hand-edit these files.
+
+Filenames strip forex's `/` (`EUR/USD` -> `EURUSD_1week.json`) — the same rule
+`tools/backtest_forex_task_b2_sweep.py` already used, not a new convention; any
+frontend code looking up a file from an asset string must apply the identical rule.
+
+Refresh cadence is gated by the existing `candle_boundary_due` check (no changes to
+that shared function) so this doesn't add meaningful load to the Twelve Data budget
+the live scheduler already spends every 30 minutes — see the module docstring and
+`docs/candle_export_day1_closing_report.md` for the exact per-source daily call
+estimate. Volume is `null` (never a fabricated zero) for GOLD and all 3 forex pairs,
+whose upstream data sources are already known to fill missing volume with a
+placeholder `0.0` at the source layer.
+
 `heartbeat.json` is a third category: written automatically by
 `nero_core/execution/heartbeat.py` after every successful live-scheduler run (see
 `nero_core/execution/live_scheduler.py::main`) — never hand-edit it, the same way you

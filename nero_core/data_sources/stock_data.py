@@ -58,7 +58,16 @@ class StockDataResult:
 
 def _drop_unclosed(frame: pd.DataFrame) -> pd.DataFrame:
     now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
-    return frame[frame["close_time"] < now_ms].copy()
+    closed = frame[frame["close_time"] < now_ms]
+    # yfinance sometimes appends a trailing "today" row with NaN open/high/low/close
+    # (a placeholder for a session that hasn't fully formed yet) that still passes
+    # the close_time check above -- confirmed directly while building the candle-
+    # export pipeline: every one of the 7 PEAD stock tickers showed exactly this on
+    # their most recent row (docs/candle_export_day1_closing_report.md). A row with
+    # any NaN OHLC value isn't a real closed candle no matter what its timestamp
+    # says, and serializing NaN to JSON produces an invalid (non-spec) token that a
+    # strict parser -- including JavaScript's JSON.parse -- will throw on.
+    return closed.dropna(subset=["open", "high", "low", "close"]).copy()
 
 
 def _fetch_yfinance_history(

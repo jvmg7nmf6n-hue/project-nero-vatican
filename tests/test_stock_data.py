@@ -97,6 +97,36 @@ class NativeFetchTest(unittest.TestCase):
         # bug class fixed for GOLD/SILVER/PLATINUM in market_data.py).
         self.assertEqual(len(str(int(result.prices["close_time"].iloc[-1]))), 13)
 
+    def test_a_trailing_nan_row_is_dropped_even_though_its_close_time_is_in_the_past(self) -> None:
+        """BUG FOUND 2026-07-26 (building the candle-export pipeline): yfinance
+        sometimes appends a trailing "today" row with NaN OHLC (a placeholder for a
+        session that hasn't fully formed yet) whose close_time still reads as
+        already-past by the time this runs -- so the close_time-only filter alone
+        let it through. Confirmed on all 7 PEAD stock tickers in the same real run.
+        A NaN-OHLC row must never reach a caller (and never get serialized to JSON,
+        where NaN is not a valid token)."""
+        import math
+
+        history = pd.DataFrame(
+            {
+                "Open": [100.0, math.nan],
+                "High": [102.0, math.nan],
+                "Low": [99.0, math.nan],
+                "Close": [101.0, math.nan],
+                "Volume": [1000.0, 500.0],
+            },
+            index=pd.DatetimeIndex(
+                [pd.Timestamp("2020-01-14", tz="America/New_York"), pd.Timestamp("2020-01-15", tz="America/New_York")],
+                name="Date",
+            ),
+        )
+        with patch("nero_core.data_sources.stock_data.yf.Ticker") as mock_ticker:
+            mock_ticker.return_value.history.return_value = history
+            result = fetch_stock_ohlcv("AAPL", "1day")
+
+        self.assertEqual(len(result.prices), 1)
+        self.assertEqual(result.prices["close"].iloc[0], 101.0)
+
 
 class Resample4hMarketHoursAwareTest(unittest.TestCase):
     def test_one_complete_4h_bar_per_session_with_summed_volume(self) -> None:

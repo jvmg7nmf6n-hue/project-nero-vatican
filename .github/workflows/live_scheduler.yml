@@ -34,6 +34,11 @@ jobs:
       - name: Export site data
         run: python -m nero_core.execution.export_site_data
         continue-on-error: true
+      - name: Export candle data
+        run: python -m nero_core.execution.export_candle_data
+        env:
+          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+        continue-on-error: true
       - name: Save Truth Ledger
         run: |
           git config user.name "nero-live-scheduler"
