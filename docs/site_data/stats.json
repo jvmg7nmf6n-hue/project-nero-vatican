@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-26T14:23:27.280233+00:00",
+  "last_updated": "2026-07-26T15:35:51.351561+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -239,12 +239,16 @@
       "expectancy_r": null,
       "avg_return_pct": 0.22075473262292908,
       "signal_counts": {
-        "ENTRY": 18,
+        "ENTRY": 19,
         "EXIT": 18,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": {
+        "entry_price": 1896.94,
+        "entry_timestamp": "2026-07-26T15:35:48.910184+00:00",
+        "candle_timestamp": "2026-07-26T15:00:00+00:00"
+      }
     },
     {
       "strategy": "GOLD_SILVER_RATIO_MR",
