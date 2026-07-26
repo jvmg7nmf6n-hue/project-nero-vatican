@@ -7,13 +7,18 @@ with `ledger_full.json`, `ledger_recent.json`, `stats.json`, `strategies.json`, 
 only when a new research batch completes and changes the picture, or a new strategy
 family is added — never auto-scrape or auto-generate them.
 
-`strategy_descriptions.json` is a flat `{ strategy_id: "plain-language mechanism
-description" }` map, keyed by strategy_id (the family name, e.g. `"PEAD"`) — ONE
-description per family, not per individual config/version/asset, since the mechanism
-is the same regardless of which asset it's wired to. Consumed by
-`website/app/strategy/[id]/page.tsx`'s "what this strategy does" header; a family with
-no entry here falls back to a generic "hasn't been added yet" message on the site
-rather than a broken page.
+`strategy_descriptions.json` is a `{ strategy_id: { mechanism, verification_note } }`
+map, keyed by strategy_id (the family name, e.g. `"PEAD"`) — ONE entry per family, not
+per individual config/version/asset, since the mechanism is the same regardless of
+which asset it's wired to. `mechanism` is a 2-3 sentence plain-language explanation of
+the entry/exit rule; `verification_note` is one honest sentence on what testing
+actually showed for that family — including saying so plainly when the edge-over-random
+was weak or the verification is thin (never spun to sound stronger than the underlying
+docs/*.md report supports). Consumed by `website/app/strategy/[id]/page.tsx`'s "what
+this strategy does" header; a family with no entry here falls back to a generic "hasn't
+been added yet" message on the site rather than a broken page. (Schema upgraded from a
+flat description string to this two-field shape — see the commit that filled in every
+family's `verification_note`.)
 
 `strategies.json`'s `source_report` field (added for Step 4, individual strategy
 pages) is populated by `nero_core/execution/source_reports.py`, which mirrors

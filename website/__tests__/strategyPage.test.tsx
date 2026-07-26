@@ -30,7 +30,9 @@ const ROSTER_ENTRY = {
 
 const EMPTY_STATS_EXPORT: StatsExport = { schema_version: 1, last_updated: "x", strategies: [] };
 const EMPTY_LEDGER_EXPORT: LedgerExport = { schema_version: 1, last_updated: "x", rows: [] };
-const DEFAULT_DESCRIPTIONS: StrategyDescriptions = { BREAKOUT_MOMENTUM: "Test mechanism description." };
+const DEFAULT_DESCRIPTIONS: StrategyDescriptions = {
+  BREAKOUT_MOMENTUM: { mechanism: "Test mechanism description.", verification_note: "Test verification note." },
+};
 
 function statsRow(overrides: Partial<StrategyStats> = {}): StrategyStats {
   return {
@@ -91,7 +93,9 @@ describe("StrategyDetailPage", () => {
 
     expect(screen.getByText("BREAKOUT_MOMENTUM")).toBeInTheDocument();
     expect(screen.getByText("Verified")).toBeInTheDocument();
+    expect(screen.getByTestId("strategy-description")).toBeInTheDocument();
     expect(screen.getByText("Test mechanism description.")).toBeInTheDocument();
+    expect(screen.getByText("Test verification note.")).toBeInTheDocument();
   });
 
   it("shows the awaiting-first-signal state when resolved_trades is 0", async () => {
@@ -146,6 +150,7 @@ describe("StrategyDetailPage", () => {
     const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
     render(jsx);
 
+    expect(screen.getByTestId("strategy-description-fallback")).toBeInTheDocument();
     expect(screen.getByText("A written description for this strategy hasn't been added yet.")).toBeInTheDocument();
   });
 

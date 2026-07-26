@@ -32,9 +32,15 @@ export interface StrategyRosterEntry {
 }
 
 // Manually-curated docs/site_data/strategy_descriptions.json -- keyed by strategy_id
-// (the family name, e.g. "PEAD"), one plain-language mechanism description per
-// family, not per individual config/version/asset.
-export type StrategyDescriptions = Record<string, string>;
+// (the family name, e.g. "PEAD"), one entry per family, not per individual
+// config/version/asset. verification_note is written honestly per family -- a
+// weak or thin edge-over-random result says so, never spun to sound stronger.
+export interface StrategyDescription {
+  mechanism: string;
+  verification_note: string;
+}
+
+export type StrategyDescriptions = Record<string, StrategyDescription>;
 
 export interface StrategiesExport {
   schema_version: number;

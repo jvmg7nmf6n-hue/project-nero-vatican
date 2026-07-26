@@ -75,7 +75,7 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
   }
 
   const tier = classifyTier(entry.verification_status);
-  const description = descriptions?.[entry.name] ?? FALLBACK_DESCRIPTION;
+  const description = descriptions?.[entry.name] ?? null;
 
   const statsRow = (statsExport?.strategies ?? []).find(
     (s) => s.strategy === entry.name && s.strategy_version === entry.version && s.asset === entry.asset
@@ -98,7 +98,16 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
         <div className="mt-3">
           <TierBadge tier={tier} />
         </div>
-        <p className="mt-4 max-w-2xl text-parchment">{description}</p>
+        {description ? (
+          <div data-testid="strategy-description" className="mt-4 max-w-2xl">
+            <p className="text-parchment">{description.mechanism}</p>
+            <p className="mt-2 text-sm text-muted">{description.verification_note}</p>
+          </div>
+        ) : (
+          <p data-testid="strategy-description-fallback" className="mt-4 max-w-2xl text-muted">
+            {FALLBACK_DESCRIPTION}
+          </p>
+        )}
       </section>
 
       <section>
