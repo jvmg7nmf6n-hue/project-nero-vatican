@@ -74,7 +74,10 @@
 .loadingBarFill {
   display: block;
   width: 0%;
-  animation: loadingFill 1.8s ease-out forwards;
+  /* Spans the same ~4.5s the logo's animation gets (see SplashScreen.tsx's
+     AUTO_DISMISS_MS) rather than finishing early and sitting there "done"
+     while the seal is still mid-lap. */
+  animation: loadingFill 4.4s ease-out forwards;
 }
 
 @keyframes loadingFill {

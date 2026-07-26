@@ -51,13 +51,26 @@ describe("SplashScreen", () => {
     expect(screen.queryByTestId("splash-screen")).not.toBeInTheDocument();
   });
 
+  it("stays fully visible for at least 4 seconds so the logo's animation actually plays", () => {
+    render(<SplashScreen />);
+
+    act(() => {
+      jest.advanceTimersByTime(4000);
+    });
+    // Still present AND not yet fading -- a viewer must see the full ~4s+
+    // lap of the orbiting spark / V-flash / burst, not a truncated fragment.
+    const splash = screen.getByTestId("splash-screen");
+    expect(splash).toBeInTheDocument();
+    expect(splash).not.toHaveClass("opacity-0");
+  });
+
   it("auto-dismisses (fades out, then unmounts) after the timeout elapses", () => {
     render(<SplashScreen />);
     expect(screen.getByTestId("splash-screen")).toBeInTheDocument();
 
     // Fires the auto-dismiss timer (starts the fade).
     act(() => {
-      jest.advanceTimersByTime(2800);
+      jest.advanceTimersByTime(4500);
     });
     expect(screen.getByTestId("splash-screen")).toHaveClass("opacity-0");
 

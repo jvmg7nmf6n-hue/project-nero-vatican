@@ -5,7 +5,12 @@ import Logo from "./Logo";
 import styles from "./SplashScreen.module.css";
 
 const SESSION_STORAGE_KEY = "vatican-splash-seen";
-const AUTO_DISMISS_MS = 2800;
+// Logo's own orbit/innerV-flash/burst animations run on a 4s lap (see
+// Logo.module.css) and its market-line redraw on a 3s loop -- this needs to be
+// comfortably longer than one full 4s lap so a viewer actually sees the
+// orbiting spark complete its circuit and the V-flash/burst fire, not just a
+// fragment of the cycle.
+const AUTO_DISMISS_MS = 4500;
 const REDUCED_MOTION_DISMISS_MS = 700;
 const FADE_OUT_MS = 500;
 
