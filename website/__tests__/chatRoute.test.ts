@@ -9,14 +9,14 @@
  */
 import fs from "fs";
 import path from "path";
+import { POST } from "@/app/api/chat/route";
 import {
   buildSystemPrompt,
   createSseTextExtractor,
   isStrategyChatContext,
-  POST,
   sanitizeHistory,
   sanitizeMessage,
-} from "@/app/api/chat/route";
+} from "@/lib/chatApi";
 import type { StrategyChatContext } from "@/lib/types";
 
 const originalFetch = global.fetch;
@@ -267,6 +267,44 @@ describe("POST /api/chat", () => {
     const response = await POST(jsonRequest({ message: "hi", strategyContext: CONTEXT, history: [] }));
     const body = await response.text();
     expect(body).not.toContain("ECONNRESET");
+  });
+});
+
+describe("Next.js Route Handler export contract", () => {
+  // Next.js's build-time route-type validation rejects ANY named export from
+  // app/**/route.ts other than HTTP method handlers and a small whitelisted
+  // set of route-segment config constants -- exporting a helper function
+  // (e.g. for direct unit testing) silently breaks the production build.
+  // This regression test would have caught exactly that: a prior version of
+  // this file exported sanitizeMessage/buildSystemPrompt/etc. directly and
+  // shipped a working test suite while the real Vercel build failed.
+  const ALLOWED_ROUTE_EXPORTS = new Set([
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE",
+    "HEAD",
+    "OPTIONS",
+    "runtime",
+    "dynamic",
+    "dynamicParams",
+    "revalidate",
+    "fetchCache",
+    "preferredRegion",
+    "maxDuration",
+  ]);
+
+  it("app/api/chat/route.ts exports only POST and runtime -- nothing else", () => {
+    const source = fs.readFileSync(path.join(__dirname, "..", "app", "api", "chat", "route.ts"), "utf-8");
+    const exportNames = Array.from(
+      source.matchAll(/^export\s+(?:async\s+function|function|const)\s+([A-Za-z_$][\w$]*)/gm)
+    ).map((m) => m[1]);
+
+    expect(exportNames.length).toBeGreaterThan(0);
+    for (const name of exportNames) {
+      expect(ALLOWED_ROUTE_EXPORTS.has(name)).toBe(true);
+    }
   });
 });
 
