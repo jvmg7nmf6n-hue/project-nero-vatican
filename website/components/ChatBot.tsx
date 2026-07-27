@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { HISTORY_LIMIT } from "@/lib/chatApi";
 import {
   buildChatHistoryStorageKey,
   hasReachedLimit,
@@ -16,7 +17,6 @@ const NO_RESPONSE_PLACEHOLDER = "(No response — please try again.)";
 const LIMIT_MESSAGE = "You've reached today's limit. Come back tomorrow for more questions!";
 const MAX_INPUT_LENGTH = 500;
 const CLIENT_TIMEOUT_MS = 10_000;
-const HISTORY_LIMIT = 6;
 
 export interface ChatBotProps {
   faqEntries: FaqEntry[];

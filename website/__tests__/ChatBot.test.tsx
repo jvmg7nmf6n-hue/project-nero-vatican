@@ -326,8 +326,8 @@ describe("ChatBot rate limiting", () => {
     await waitFor(() => expect(window.sessionStorage.getItem("vatican_chat_message_count")).toBe("2"));
   });
 
-  it("blocks sending and shows the limit message once 10 messages have been sent this session", async () => {
-    window.sessionStorage.setItem("vatican_chat_message_count", "10");
+  it("blocks sending and shows the limit message once the sanity ceiling (500) has been reached this session", async () => {
+    window.sessionStorage.setItem("vatican_chat_message_count", "500");
     const mockFetch = jest.fn();
     global.fetch = mockFetch;
 
@@ -340,5 +340,50 @@ describe("ChatBot rate limiting", () => {
       "You've reached today's limit. Come back tomorrow for more questions!"
     );
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("does not block sending at message counts well past the old 10-message limit (testing phase needs unrestricted exploration)", async () => {
+    window.sessionStorage.setItem("vatican_chat_message_count", "100");
+    const mockFetch = jest.fn().mockResolvedValue({ ok: true, body: null, text: async () => "ok" } as unknown as Response);
+    global.fetch = mockFetch;
+
+    render(<ChatBot faqEntries={FAQ} strategyContext={CONTEXT} hasLiveChat={true} />);
+    openWidget();
+    fireEvent.change(screen.getByTestId("chat-input"), { target: { value: "still going" } });
+    fireEvent.click(screen.getByTestId("chat-send"));
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId("chat-error")).not.toBeInTheDocument();
+  });
+});
+
+describe("ChatBot conversation history sent to the server", () => {
+  const HISTORY_KEY = "vatican_chat_history_BREAKOUT_MOMENTUM_GOLD_1week";
+
+  it("truncates the history sent to the server to HISTORY_LIMIT, even in a very long session", async () => {
+    // Seed 20 prior messages -- well beyond HISTORY_LIMIT (12) -- into this
+    // strategy's stored conversation, simulating a long-running session.
+    const longHistory = Array.from({ length: 20 }, (_, i) => ({
+      role: i % 2 === 0 ? "user" : "assistant",
+      content: `msg${i}`,
+    }));
+    window.sessionStorage.setItem(HISTORY_KEY, JSON.stringify(longHistory));
+
+    const mockFetch = jest.fn().mockResolvedValue({ ok: true, body: null, text: async () => "ok" } as unknown as Response);
+    global.fetch = mockFetch;
+
+    render(<ChatBot faqEntries={FAQ} strategyContext={CONTEXT} hasLiveChat={true} />);
+    openWidget();
+    fireEvent.change(screen.getByTestId("chat-input"), { target: { value: "new message" } });
+    fireEvent.click(screen.getByTestId("chat-send"));
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
+    const [, init] = mockFetch.mock.calls[0];
+    const body = JSON.parse(init.body);
+
+    // Only the most recent HISTORY_LIMIT (12) of the 20 stored messages go out.
+    expect(body.history).toHaveLength(12);
+    expect(body.history[0]).toEqual({ role: "user", content: "msg8" });
+    expect(body.history[body.history.length - 1]).toEqual({ role: "assistant", content: "msg19" });
   });
 });

@@ -22,8 +22,14 @@ function createMockStorage(): CountStorage & { store: Record<string, string> } {
 }
 
 describe("chatSession rate limiting", () => {
-  it("MAX_MESSAGES_PER_SESSION is 10, per the task's own limit", () => {
-    expect(MAX_MESSAGES_PER_SESSION).toBe(10);
+  // Raised from 10 to 500 for the testing phase: this is now a sanity
+  // ceiling that catches a real bug (e.g. a send-loop), not a UX limit on
+  // genuine exploration -- a single message costs roughly $0.005 worst case
+  // at current Sonnet 5 pricing, so there's no financial reason to cap
+  // testers at 10. See the pre-launch TODO in chatSession.ts for what
+  // replaces this once real strangers are using the product.
+  it("MAX_MESSAGES_PER_SESSION is a high sanity ceiling (500), not a real UX limit", () => {
+    expect(MAX_MESSAGES_PER_SESSION).toBe(500);
   });
 
   it("readMessageCount returns 0 for a fresh session (no stored value)", () => {
@@ -45,19 +51,26 @@ describe("chatSession rate limiting", () => {
     expect(readMessageCount(storage)).toBe(9);
   });
 
-  it("hasReachedLimit is false below the limit and true at/above it", () => {
-    expect(hasReachedLimit(9)).toBe(false);
-    expect(hasReachedLimit(10)).toBe(true);
-    expect(hasReachedLimit(11)).toBe(true);
+  it("hasReachedLimit is false below the sanity ceiling and true at/above it", () => {
+    expect(hasReachedLimit(499)).toBe(false);
+    expect(hasReachedLimit(500)).toBe(true);
+    expect(hasReachedLimit(501)).toBe(true);
   });
 
-  it("blocks the 11th message: count reaches 10, then hasReachedLimit gates further sends", () => {
+  it("does not trigger under normal testing-phase use -- well past the old 10-message limit, still fine at 50 or 100 messages in one session", () => {
+    expect(hasReachedLimit(10)).toBe(false);
+    expect(hasReachedLimit(20)).toBe(false);
+    expect(hasReachedLimit(50)).toBe(false);
+    expect(hasReachedLimit(100)).toBe(false);
+  });
+
+  it("blocks the 501st message: count reaches 500, then hasReachedLimit gates further sends", () => {
     const storage = createMockStorage();
-    for (let i = 0; i < 10; i += 1) {
+    for (let i = 0; i < 500; i += 1) {
       incrementMessageCount(storage);
     }
     const count = readMessageCount(storage);
-    expect(count).toBe(10);
+    expect(count).toBe(500);
     expect(hasReachedLimit(count)).toBe(true);
   });
 

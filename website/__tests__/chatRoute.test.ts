@@ -13,6 +13,7 @@ import { POST } from "@/app/api/chat/route";
 import {
   buildSystemPrompt,
   createSseTextExtractor,
+  HISTORY_LIMIT,
   isStrategyChatContext,
   MODEL,
   readAnthropicReplyAsText,
@@ -110,10 +111,10 @@ describe("sanitizeHistory", () => {
     ]);
   });
 
-  it("keeps only the last 6 entries (3 exchanges)", () => {
-    const long = Array.from({ length: 10 }, (_, i) => ({ role: "user" as const, content: `msg${i}` }));
-    expect(sanitizeHistory(long)).toHaveLength(6);
-    expect(sanitizeHistory(long)[0]).toEqual({ role: "user", content: "msg4" });
+  it(`keeps only the last ${HISTORY_LIMIT} entries, regardless of how long the session's total conversation is`, () => {
+    const long = Array.from({ length: HISTORY_LIMIT + 10 }, (_, i) => ({ role: "user" as const, content: `msg${i}` }));
+    expect(sanitizeHistory(long)).toHaveLength(HISTORY_LIMIT);
+    expect(sanitizeHistory(long)[0]).toEqual({ role: "user", content: "msg10" });
   });
 });
 
@@ -238,7 +239,35 @@ describe("readAnthropicReplyAsText", () => {
       },
     });
 
-    await expect(readAnthropicReplyAsText(upstreamBody, 50)).resolves.toBe("Hi there");
+    await expect(readAnthropicReplyAsText(upstreamBody, 50)).resolves.toEqual({
+      text: "Hi there",
+      usage: { inputTokens: null, outputTokens: null },
+    });
+  });
+
+  // Cost-visibility logging (testing phase) reads this usage data -- it's
+  // observability, not a limiter, but it only works if these fields are
+  // actually parsed out of the stream instead of silently staying null.
+  it("captures input/output token usage from message_start and message_delta events", async () => {
+    const upstreamBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"type":"message_start","message":{"usage":{"input_tokens":42,"output_tokens":1}}}\n'
+          )
+        );
+        controller.enqueue(
+          new TextEncoder().encode('data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hi"}}\n')
+        );
+        controller.enqueue(new TextEncoder().encode('data: {"type":"message_delta","usage":{"output_tokens":7}}\n'));
+        controller.close();
+      },
+    });
+
+    await expect(readAnthropicReplyAsText(upstreamBody, 50)).resolves.toEqual({
+      text: "Hi",
+      usage: { inputTokens: 42, outputTokens: 7 },
+    });
   });
 });
 
@@ -308,6 +337,27 @@ describe("POST /api/chat", () => {
     const text = await response.text();
 
     expect(text).toBe("Hi there");
+  });
+
+  // Cost-visibility logging (testing phase, not a limiter): confirms real
+  // per-message token usage actually lands in Vercel Runtime Logs so it can
+  // be spot-checked, now that the hard message-count cap is gone.
+  it("logs input/output token usage on a successful response", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    global.fetch = jest.fn().mockResolvedValue(
+      sseResponse([
+        'data: {"type":"message_start","message":{"usage":{"input_tokens":123,"output_tokens":1}}}\n',
+        'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hi"}}\n',
+        'data: {"type":"message_delta","usage":{"output_tokens":45}}\n',
+      ])
+    ) as unknown as typeof fetch;
+    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+
+    await POST(jsonRequest({ message: "hi", strategyContext: CONTEXT, history: [] }));
+
+    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("input_tokens=123"));
+    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("output_tokens=45"));
+    consoleLogSpy.mockRestore();
   });
 
   it("returns 502 when the upstream response is not ok", async () => {

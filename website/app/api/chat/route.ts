@@ -91,7 +91,11 @@ export async function POST(request: Request): Promise<Response> {
       return jsonError(502, "Upstream AI request failed.");
     }
 
-    const replyText = await readAnthropicReplyAsText(upstream.body);
+    const { text: replyText, usage } = await readAnthropicReplyAsText(upstream.body);
+    // Observability only (testing phase) -- not a limiter. Lets us spot-check
+    // real per-message cost in Vercel Runtime Logs; see chatSession.ts for
+    // the pre-launch TODO on an actual enforced cap.
+    console.log(`[chat] usage: input_tokens=${usage.inputTokens ?? "unknown"} output_tokens=${usage.outputTokens ?? "unknown"}`);
     return new Response(replyText, {
       status: 200,
       headers: { "Content-Type": "text/plain; charset=utf-8" },

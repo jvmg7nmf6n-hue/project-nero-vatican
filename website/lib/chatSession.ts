@@ -7,7 +7,17 @@
 
 import type { ChatMessage, StrategyChatContext } from "./types";
 
-export const MAX_MESSAGES_PER_SESSION = 10;
+// TESTING PHASE: this is a sanity ceiling (catches an actual bug like a
+// send-loop), not a real usage limit -- at current Sonnet 5 pricing a single
+// message costs roughly $0.005 worst case, so there's no meaningful
+// financial reason to cap a tester's exploration. Previously 10.
+//
+// TODO(pre-launch): sessionStorage cannot enforce a real per-user daily cap
+// -- it resets on every new tab, so it's not a defense once real strangers
+// (not just internal testers) are using this. Before public launch, replace
+// this with a server-side limit (IP-based or account-based, with an actual
+// time-bounded reset) enforced in app/api/chat/route.ts, not just here.
+export const MAX_MESSAGES_PER_SESSION = 500;
 
 const STORAGE_KEY = "vatican_chat_message_count";
 

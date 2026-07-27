@@ -14,7 +14,11 @@ export const ANTHROPIC_VERSION = "2023-06-01";
 export const MODEL = "claude-sonnet-5";
 export const MAX_TOKENS = 300;
 export const MAX_INPUT_LENGTH = 500;
-export const HISTORY_LIMIT = 6; // last 6 messages = 3 exchanges, per the task's own rule
+// Independent of MAX_MESSAGES_PER_SESSION (chatSession.ts) -- this bounds the
+// context sent in any SINGLE request as a conversation gets long, which is a
+// real token-growth/context-window concern regardless of how many total
+// messages a session sends. 12 messages = 6 exchanges.
+export const HISTORY_LIMIT = 12;
 export const UPSTREAM_TIMEOUT_MS = 10_000;
 
 export function sanitizeMessage(raw: unknown): string | null {
@@ -114,8 +118,15 @@ RESPONSE FORMAT:
 // `data: {...}` line in two) and returns only the newly-decoded reply text
 // for each push -- a pure, stateful-but-plain-string helper so it's directly
 // unit-testable without a real ReadableStream.
+export interface SseUsage {
+  inputTokens: number | null;
+  outputTokens: number | null;
+}
+
 export function createSseTextExtractor() {
   let buffer = "";
+  let inputTokens: number | null = null;
+  let outputTokens: number | null = null;
   return {
     push(chunkText: string): string {
       buffer += chunkText;
@@ -139,6 +150,11 @@ export function createSseTextExtractor() {
             typeof event.delta.text === "string"
           ) {
             output += event.delta.text;
+          } else if (event?.type === "message_start" && typeof event?.message?.usage?.input_tokens === "number") {
+            // Cost-visibility only (testing phase) -- not used for any limit.
+            inputTokens = event.message.usage.input_tokens;
+          } else if (event?.type === "message_delta" && typeof event?.usage?.output_tokens === "number") {
+            outputTokens = event.usage.output_tokens;
           }
         } catch {
           // Malformed or unexpected event shape -- skip it rather than crash
@@ -146,6 +162,9 @@ export function createSseTextExtractor() {
         }
       }
       return output;
+    },
+    getUsage(): SseUsage {
+      return { inputTokens, outputTokens };
     },
   };
 }
@@ -171,10 +190,15 @@ export const STREAM_IDLE_TIMEOUT_MS = 15_000;
 // completion (still bounded per-chunk by the same idle timeout) and returns
 // one plain string, so the route's own await/return is what ends the
 // function, with no separate stream-lifecycle path to get stuck in.
+export interface AnthropicReply {
+  text: string;
+  usage: SseUsage;
+}
+
 export async function readAnthropicReplyAsText(
   upstreamBody: ReadableStream<Uint8Array>,
   idleTimeoutMs: number = STREAM_IDLE_TIMEOUT_MS
-): Promise<string> {
+): Promise<AnthropicReply> {
   const decoder = new TextDecoder();
   const extractor = createSseTextExtractor();
   const reader = upstreamBody.getReader();
@@ -196,7 +220,7 @@ export async function readAnthropicReplyAsText(
 
       const { done, value } = result;
       if (done) {
-        return fullText;
+        return { text: fullText, usage: extractor.getUsage() };
       }
       fullText += extractor.push(decoder.decode(value, { stream: true }));
     }
