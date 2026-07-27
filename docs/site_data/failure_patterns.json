@@ -1,0 +1,101 @@
+[
+  {
+    "name": "FVG_REVERSION",
+    "family": "Fair Value Gap",
+    "failure_pattern": "edge-over-random-negative",
+    "fixable": false,
+    "source_doc": "docs/fvg_reversion_report.md"
+  },
+  {
+    "name": "BOS_CONTINUATION",
+    "family": "Break of Structure",
+    "failure_pattern": "regime-filter-only",
+    "fixable": true,
+    "fix_rationale": "The capped 3.0x ATR stop dominates over the structural swing-point stop in 75-95% of trades across nearly every config, meaning most 'BOS_CONTINUATION' trades are really just generic trend-following with an ATR stop. Restricting entries to setups where the true structural stop already sits inside the cap (rejecting cap-dominated trades instead of capping them) tests whether the structure-break trigger itself carries timing value once that dilution is removed.",
+    "source_doc": "docs/bos_continuation_report.md"
+  },
+  {
+    "name": "FUNDING_EXTREME",
+    "family": "Funding Rate",
+    "failure_pattern": "edge-over-random-negative",
+    "fixable": true,
+    "fix_rationale": "The random-entry baseline edge was inconsistent (negative on several test halves) at the current trailing 90-day 10th-percentile threshold, and 3 of 8 test-half CIs cleared zero on the negative side. Tightening the threshold (e.g. 5th percentile) to isolate genuinely extreme, crowded-short conditions could reduce the noise the current threshold is admitting.",
+    "source_doc": "docs/funding_extreme_report.md"
+  },
+  {
+    "name": "EMA-trail exit (v2 A/B variants)",
+    "family": "Exit Mechanics",
+    "failure_pattern": "edge-over-random-negative",
+    "fixable": true,
+    "fix_rationale": "The trail's asymmetric win/loss shape (bigger winners, smaller losers) showed up clearly in-sample on both configs but did not survive to the test half, and its edge-over-random collapsed on test (BNB: +0.181 to +0.043). Requiring a minimum unrealized profit before the trail arms -- rather than arming on the first close above the trail EMA -- could address the early-whipsaw pattern behind BNB's out-of-sample reversal without touching entry logic.",
+    "source_doc": "docs/trail_exit_ab_report.md"
+  },
+  {
+    "name": "TREND_PULLBACK filter variants (FVG-overlap, BOS-recency)",
+    "family": "Entry Filters",
+    "failure_pattern": "edge-over-random-negative",
+    "fixable": true,
+    "fix_rationale": "The BOS-recency filter (any break of structure within 20 candles) was diagnosed as a complete no-op on BNB/12h -- BOS events are frequent enough that the window never rejects a trade. A materially shorter, genuinely-recent window (e.g. 5 candles) could restore real selectivity instead of a filter that changes nothing.",
+    "source_doc": "docs/trend_pullback_filter_ab_report.md"
+  },
+  {
+    "name": "LEADLAG_FOLLOW",
+    "family": "Lead-Lag Momentum",
+    "failure_pattern": "grid-shift-artifact",
+    "fixable": true,
+    "fix_rationale": "All 4 pairs' fixed candle-count lags (lag3/lag5) passed on the native grid but failed on at least one wall-clock-shifted grid, meaning the lag was tuned to a specific bar alignment rather than a genuine, alignment-independent relationship. Re-deriving the lag as a wall-clock time offset instead of a candle count would make the signal invariant to arbitrary grid-offset choices by construction.",
+    "source_doc": "docs/grid_shift_robustness_followup.md"
+  },
+  {
+    "name": "MEAN_REVERSION variants (relaxed-pullback, deep-value)",
+    "family": "Mean Reversion",
+    "failure_pattern": "grid-shift-artifact",
+    "fixable": true,
+    "fix_rationale": "Every config passed its native-grid train/test filter but flipped negative on at least one shifted grid offset -- the same candle-alignment sensitivity diagnosed in LEADLAG_FOLLOW. A wall-clock-time-based signal formulation, rather than one anchored to a specific candle grid, addresses the same diagnosed weakness.",
+    "source_doc": "docs/grid_shift_robustness_followup.md"
+  },
+  {
+    "name": "MACRO_RISK_ON",
+    "family": "Macro Regime",
+    "failure_pattern": "mechanism-doesn't-transfer",
+    "fixable": false,
+    "source_doc": "docs/macro_risk_on_report.md"
+  },
+  {
+    "name": "CARRY_MOMENTUM",
+    "family": "Forex Carry",
+    "failure_pattern": "edge-over-random-negative",
+    "fixable": true,
+    "fix_rationale": "Ranking by |rate differential| and picking the top 3 performed worse than random selection among momentum-passing candidates in 3 of 4 half-configs -- the ranking step, not the momentum filter, is diagnosed as the source of the negative edge. Dropping the ranking step and holding all momentum-passing candidates equally tests whether the momentum filter alone carries value without the counterproductive ranking on top of it.",
+    "source_doc": "docs/carry_momentum_results.md"
+  },
+  {
+    "name": "RANGE_MEAN_REVERSION",
+    "family": "Range Mean Reversion",
+    "failure_pattern": "sample-too-thin",
+    "fixable": true,
+    "fix_rationale": "Stage 2's diagnosis found real, mechanistically-corroborated value in a 'confirmation' filter (exit mix shifted from 32% to 68% REVERSION_TARGET on BTC/1d), but every variant tested it on the thinnest, most sample-starved config (BTC/1d, 7-19 trades) rather than on RMR's own best, least-thin results (GOLD/1week and SILVER/1week, already on the live watchlist). Applying the same diagnosis-justified confirmation logic to the weekly-metals configs tests whether it concentrates an already-real edge instead of further diluting an already-thin one.",
+    "source_doc": "docs/rmr_variant_research_closing_report.md"
+  },
+  {
+    "name": "Vol-Clustering position-size multiplier (H2)",
+    "family": "Position Sizing",
+    "failure_pattern": "edge-over-random-negative",
+    "fixable": false,
+    "source_doc": "docs/vol_clustering_c2_comparative.md"
+  },
+  {
+    "name": "LIQUIDATION_PREDICTOR",
+    "family": "Order-Book / Liquidation",
+    "failure_pattern": "data-blocked",
+    "fixable": false,
+    "source_doc": "docs/liquidation_predictor_data_audit.md"
+  },
+  {
+    "name": "REPAIR_BREAKOUT_QUALITY",
+    "family": "Momentum",
+    "failure_pattern": "edge-over-random-negative",
+    "fixable": false,
+    "source_doc": "docs/repair_breakout_quality_verification_report.md"
+  }
+]

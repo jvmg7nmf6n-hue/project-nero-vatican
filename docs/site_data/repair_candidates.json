@@ -1,0 +1,26 @@
+[
+  {
+    "parent_strategy": "RANGE_MEAN_REVERSION",
+    "failure_pattern": "sample-too-thin",
+    "diagnosis": "RMR's variant-research cycle (Stage 1-4) found a real, mechanistically-corroborated improvement from a 'confirmation' filter -- waiting for an actual reversion signal rather than a raw regime touch shifted BTC/1d's exit mix from 32% REGIME_BREAK-dominated to 68% REVERSION_TARGET -- but tested it only on BTC/1d, the thinnest config in the whole cycle (7-19 trades per half, every CI crossing zero). Meanwhile RMR's own least-thin, most-real results sit on GOLD/1week and SILVER/1week (already on the live watchlist), where the confirmation filter has never been tried.",
+    "proposed_fix": "Apply the same diagnosis-justified confirmation logic (wait for a closed-candle reversion signal before entering, instead of entering on the raw band touch) to GOLD/1week and SILVER/1week specifically, testing whether it concentrates an edge that already exists there instead of further diluting an already sample-starved daily config.",
+    "hypothesis_name": "RMR_CONFIRMATION_METALS_WEEKLY",
+    "status": "candidate"
+  },
+  {
+    "parent_strategy": "BOS_CONTINUATION",
+    "failure_pattern": "regime-filter-only",
+    "diagnosis": "The capped 3.0x ATR stop dominates over the structural swing-point stop in 75-95% of trades across nearly every one of the 21 configs tested, and roughly half of all (asset, timeframe, half) cells show a negative edge over random-entry timing within the same MA200 regime. Together this means most of BOS_CONTINUATION's apparent promise (13/21 PROMISING-WATCHLIST) is attributable to the trend regime filter, not to the break-of-structure trigger itself -- the 'structural' stop that gives the strategy its name is rarely the stop actually used.",
+    "proposed_fix": "Reject (rather than cap) any setup whose true structural stop distance exceeds 3.0x ATR, isolating genuinely tight, structurally-confirmed breaks. This directly tests whether the structure-break trigger carries real timing value once cap-dominated, effectively-generic-trend-following trades are removed from the sample.",
+    "hypothesis_name": "BOS_STRUCTURAL_STOP_ONLY",
+    "status": "candidate"
+  },
+  {
+    "parent_strategy": "LEADLAG_FOLLOW",
+    "failure_pattern": "grid-shift-artifact",
+    "diagnosis": "All 4 lead-lag pairs (BTC-SOL lag5, BTC-XRP lag3, BTC-DOGE lag3, BTC-NEAR lag5) passed the native-grid train/test filter but failed the grid-shift robustness check on at least one wall-clock-shifted offset -- BTC-XRP failed on every shifted grid tested. A fixed candle-count lag (e.g. '5 candles') is tuned to one specific bar alignment; when the grid's boundaries move, the same nominal lag measures a different wall-clock time gap, and the apparent lead-lag relationship degrades or flips.",
+    "proposed_fix": "Replace the fixed candle-count lag with a genuine wall-clock time lag (e.g. 'BTC's move N hours ago', resampled consistently regardless of the candle grid's own boundary offset), so the signal is invariant to arbitrary bar-alignment choices by construction rather than re-tuned to one grid.",
+    "hypothesis_name": "LEADLAG_TIME_INVARIANT",
+    "status": "candidate"
+  }
+]
