@@ -1,10 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { hasReachedLimit, incrementMessageCount, readMessageCount } from "@/lib/chatSession";
+import {
+  buildChatHistoryStorageKey,
+  hasReachedLimit,
+  incrementMessageCount,
+  readMessageCount,
+  readStoredMessages,
+  writeStoredMessages,
+} from "@/lib/chatSession";
 import type { ChatMessage, FaqEntry, StrategyChatContext } from "@/lib/types";
 
 const GENERIC_ERROR = "AI is temporarily unavailable. Please check the FAQ above or try later.";
+const NO_RESPONSE_PLACEHOLDER = "(No response — please try again.)";
 const LIMIT_MESSAGE = "You've reached today's limit. Come back tomorrow for more questions!";
 const MAX_INPUT_LENGTH = 500;
 const CLIENT_TIMEOUT_MS = 10_000;
@@ -53,16 +61,47 @@ export default function ChatBot({ faqEntries, strategyContext, hasLiveChat }: Ch
   const [chatError, setChatError] = useState<string | null>(null);
   const [messageCount, setMessageCount] = useState(0);
 
+  const historyKey = buildChatHistoryStorageKey(strategyContext);
+
+  // Hydrate this strategy's conversation from sessionStorage on mount, so it
+  // survives a remount/reload within the same tab session instead of
+  // silently starting over with an empty array. See buildChatHistoryStorageKey's
+  // own doc comment for why history is keyed per strategy while the message
+  // count above is one shared, session-wide budget.
   useEffect(() => {
     setMessageCount(readMessageCount(window.sessionStorage));
+    setMessages(readStoredMessages(window.sessionStorage, historyKey));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Persist after every change. The `length > 0` guard specifically avoids a
+  // real ordering hazard: on first mount this effect runs with the render's
+  // OLD `messages` (still `[]`, since the hydration effect's setMessages
+  // above hasn't triggered a re-render yet) -- without the guard, that
+  // no-op run would immediately overwrite a just-read, non-empty
+  // sessionStorage entry with `[]`.
+  useEffect(() => {
+    if (messages.length > 0) {
+      writeStoredMessages(window.sessionStorage, historyKey, messages);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages]);
 
   function toggleFaq(index: number) {
     setActiveFaqIndex((prev) => (prev === index ? null : index));
   }
 
+  // Messages are only ever appended (handleSend) or updated IN PLACE (here) --
+  // never removed. A prior version called setMessages(prev => prev.slice(0, -1))
+  // on error/timeout, which could delete an assistant reply that had already
+  // finished streaming if the 10s client-side abort fired in a race right at
+  // the tail end of a normal response -- the exact "message vanishes after
+  // streaming completes" bug this file now fixes.
   function setLastAssistantMessage(content: string) {
     setMessages((prev) => {
+      if (prev.length === 0) {
+        return prev;
+      }
       const next = [...prev];
       next[next.length - 1] = { role: "assistant", content };
       return next;
@@ -101,14 +140,32 @@ export default function ChatBot({ faqEntries, strategyContext, hasLiveChat }: Ch
       });
 
       if (!response.ok) {
-        setMessages((prev) => prev.slice(0, -1));
+        setLastAssistantMessage(NO_RESPONSE_PLACEHOLDER);
         setChatError(GENERIC_ERROR);
         return;
       }
 
-      await readResponseAsText(response, setLastAssistantMessage);
+      const fullText = await readResponseAsText(response, setLastAssistantMessage);
+      if (!fullText) {
+        setLastAssistantMessage(NO_RESPONSE_PLACEHOLDER);
+      }
     } catch {
-      setMessages((prev) => prev.slice(0, -1));
+      // Never remove the message. If the stream had already produced real
+      // text before the error/abort, that text stays exactly as shown; only
+      // an still-empty placeholder gets filled in, so there's always
+      // something visible and nothing already-delivered ever disappears.
+      setMessages((prev) => {
+        if (prev.length === 0) {
+          return prev;
+        }
+        const last = prev[prev.length - 1];
+        if (last.role === "assistant" && last.content.length === 0) {
+          const next = [...prev];
+          next[next.length - 1] = { role: "assistant", content: NO_RESPONSE_PLACEHOLDER };
+          return next;
+        }
+        return prev;
+      });
       setChatError(GENERIC_ERROR);
     } finally {
       clearTimeout(timeoutId);

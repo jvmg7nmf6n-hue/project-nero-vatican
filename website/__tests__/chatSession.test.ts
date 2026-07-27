@@ -1,10 +1,14 @@
 import {
+  buildChatHistoryStorageKey,
   hasReachedLimit,
   incrementMessageCount,
   MAX_MESSAGES_PER_SESSION,
   readMessageCount,
+  readStoredMessages,
+  writeStoredMessages,
   type CountStorage,
 } from "@/lib/chatSession";
+import type { ChatMessage, StrategyChatContext } from "@/lib/types";
 
 function createMockStorage(): CountStorage & { store: Record<string, string> } {
   const store: Record<string, string> = {};
@@ -75,5 +79,70 @@ describe("chatSession rate limiting", () => {
     expect(incrementMessageCount(window.sessionStorage)).toBe(1);
     expect(readMessageCount(window.sessionStorage)).toBe(1);
     window.sessionStorage.clear();
+  });
+});
+
+const CONTEXT: Pick<StrategyChatContext, "strategy_name" | "asset" | "timeframe"> = {
+  strategy_name: "BREAKOUT_MOMENTUM",
+  asset: "GOLD",
+  timeframe: "1week",
+};
+
+describe("buildChatHistoryStorageKey", () => {
+  it("derives a stable key from strategy_name, asset, and timeframe", () => {
+    expect(buildChatHistoryStorageKey(CONTEXT)).toBe("vatican_chat_history_BREAKOUT_MOMENTUM_GOLD_1week");
+  });
+
+  it("gives different strategies distinct keys, so conversations never mix", () => {
+    const other = { strategy_name: "TREND_PULLBACK", asset: "BNB", timeframe: "12h" };
+    expect(buildChatHistoryStorageKey(CONTEXT)).not.toBe(buildChatHistoryStorageKey(other));
+  });
+});
+
+describe("readStoredMessages / writeStoredMessages (conversation persistence bug fix)", () => {
+  const key = buildChatHistoryStorageKey(CONTEXT);
+  const MESSAGES: ChatMessage[] = [
+    { role: "user", content: "hi" },
+    { role: "assistant", content: "hello!" },
+  ];
+
+  it("returns an empty array when nothing is stored yet", () => {
+    const storage = createMockStorage();
+    expect(readStoredMessages(storage, key)).toEqual([]);
+  });
+
+  it("round-trips a written conversation exactly", () => {
+    const storage = createMockStorage();
+    writeStoredMessages(storage, key, MESSAGES);
+    expect(readStoredMessages(storage, key)).toEqual(MESSAGES);
+  });
+
+  it("overwrites the previous value on each write (never appends duplicates)", () => {
+    const storage = createMockStorage();
+    writeStoredMessages(storage, key, [MESSAGES[0]]);
+    writeStoredMessages(storage, key, MESSAGES);
+    expect(readStoredMessages(storage, key)).toEqual(MESSAGES);
+  });
+
+  it("returns an empty array for corrupted/non-JSON stored data, never throwing", () => {
+    const storage = createMockStorage();
+    storage.setItem(key, "not valid json{{{");
+    expect(() => readStoredMessages(storage, key)).not.toThrow();
+    expect(readStoredMessages(storage, key)).toEqual([]);
+  });
+
+  it("filters out malformed entries from stored data", () => {
+    const storage = createMockStorage();
+    storage.setItem(key, JSON.stringify([{ role: "user", content: "ok" }, { role: "bogus", content: "x" }, { role: "assistant" }]));
+    expect(readStoredMessages(storage, key)).toEqual([{ role: "user", content: "ok" }]);
+  });
+
+  it("keeps two different strategies' conversations independent under the same storage", () => {
+    const storage = createMockStorage();
+    const otherKey = buildChatHistoryStorageKey({ strategy_name: "TREND_PULLBACK", asset: "BNB", timeframe: "12h" });
+    writeStoredMessages(storage, key, MESSAGES);
+    writeStoredMessages(storage, otherKey, [{ role: "user", content: "different strategy" }]);
+    expect(readStoredMessages(storage, key)).toEqual(MESSAGES);
+    expect(readStoredMessages(storage, otherKey)).toEqual([{ role: "user", content: "different strategy" }]);
   });
 });

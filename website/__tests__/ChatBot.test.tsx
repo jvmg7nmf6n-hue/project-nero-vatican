@@ -174,6 +174,12 @@ describe("ChatBot live chat (Part B)", () => {
         "AI is temporarily unavailable. Please check the FAQ above or try later."
       );
     });
+
+    // Bug fix regression: the user's message and an assistant bubble must
+    // both remain visible -- a prior version deleted the last message here.
+    const bubbles = screen.getAllByTestId("chat-bubble");
+    expect(bubbles.some((b) => b.getAttribute("data-role") === "user" && b.textContent === "hello")).toBe(true);
+    expect(bubbles.some((b) => b.getAttribute("data-role") === "assistant")).toBe(true);
   });
 
   it("shows the same generic fallback message when fetch throws (network failure)", async () => {
@@ -187,6 +193,120 @@ describe("ChatBot live chat (Part B)", () => {
     await waitFor(() => {
       expect(screen.getByTestId("chat-error")).toHaveTextContent(/temporarily unavailable/);
     });
+
+    // Bug fix regression: same as above -- nothing gets removed on a thrown
+    // network error either.
+    const bubbles = screen.getAllByTestId("chat-bubble");
+    expect(bubbles.some((b) => b.getAttribute("data-role") === "user" && b.textContent === "hello")).toBe(true);
+    expect(bubbles.some((b) => b.getAttribute("data-role") === "assistant")).toBe(true);
+  });
+});
+
+describe("ChatBot conversation persistence (bug fix)", () => {
+  const HISTORY_KEY = "vatican_chat_history_BREAKOUT_MOMENTUM_GOLD_1week";
+
+  it("keeps all 3 user messages and all 3 AI responses visible after 3 full exchanges -- nothing disappears", async () => {
+    let call = 0;
+    global.fetch = jest.fn().mockImplementation(() => {
+      call += 1;
+      return Promise.resolve({ ok: true, body: null, text: async () => `Reply ${call}` } as unknown as Response);
+    });
+
+    render(<ChatBot faqEntries={FAQ} strategyContext={CONTEXT} hasLiveChat={true} />);
+    openWidget();
+
+    for (let i = 1; i <= 3; i += 1) {
+      fireEvent.change(screen.getByTestId("chat-input"), { target: { value: `Message ${i}` } });
+      fireEvent.click(screen.getByTestId("chat-send"));
+      // eslint-disable-next-line no-await-in-loop
+      await waitFor(() => {
+        expect(screen.getAllByTestId("chat-bubble").some((b) => b.textContent === `Reply ${i}`)).toBe(true);
+      });
+    }
+
+    const bubbles = screen.getAllByTestId("chat-bubble");
+    expect(bubbles).toHaveLength(6);
+    for (let i = 1; i <= 3; i += 1) {
+      expect(
+        bubbles.some((b) => b.textContent === `Message ${i}` && b.getAttribute("data-role") === "user")
+      ).toBe(true);
+      expect(
+        bubbles.some((b) => b.textContent === `Reply ${i}` && b.getAttribute("data-role") === "assistant")
+      ).toBe(true);
+    }
+  });
+
+  it("keeps already-streamed text visible even if the connection errors right after -- no late deletion", async () => {
+    const encoder = new TextEncoder();
+    let readCount = 0;
+    const reader = {
+      read: jest.fn().mockImplementation(() => {
+        readCount += 1;
+        if (readCount === 1) {
+          return Promise.resolve({ done: false, value: encoder.encode("Partial reply") });
+        }
+        return Promise.reject(new Error("connection reset"));
+      }),
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, body: { getReader: () => reader } } as unknown as Response);
+
+    render(<ChatBot faqEntries={FAQ} strategyContext={CONTEXT} hasLiveChat={true} />);
+    openWidget();
+    fireEvent.change(screen.getByTestId("chat-input"), { target: { value: "hello" } });
+    fireEvent.click(screen.getByTestId("chat-send"));
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId("chat-bubble").some((b) => b.textContent === "Partial reply")).toBe(true);
+    });
+    // The error banner still shows (the connection did fail), but the reply
+    // that already streamed in must not be wiped out by that failure.
+    await waitFor(() => expect(screen.getByTestId("chat-error")).toBeInTheDocument());
+    expect(screen.getAllByTestId("chat-bubble").some((b) => b.textContent === "Partial reply")).toBe(true);
+  });
+
+  it("hydrates a prior conversation from sessionStorage on mount", () => {
+    window.sessionStorage.setItem(
+      HISTORY_KEY,
+      JSON.stringify([
+        { role: "user", content: "earlier question" },
+        { role: "assistant", content: "earlier answer" },
+      ])
+    );
+
+    render(<ChatBot faqEntries={FAQ} strategyContext={CONTEXT} hasLiveChat={true} />);
+    openWidget();
+
+    const bubbles = screen.getAllByTestId("chat-bubble");
+    expect(bubbles.some((b) => b.textContent === "earlier question")).toBe(true);
+    expect(bubbles.some((b) => b.textContent === "earlier answer")).toBe(true);
+  });
+
+  it("writes the conversation to sessionStorage, keyed per strategy, after each exchange", async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, body: null, text: async () => "reply" } as unknown as Response);
+
+    render(<ChatBot faqEntries={FAQ} strategyContext={CONTEXT} hasLiveChat={true} />);
+    openWidget();
+    fireEvent.change(screen.getByTestId("chat-input"), { target: { value: "hello" } });
+    fireEvent.click(screen.getByTestId("chat-send"));
+
+    await waitFor(() => {
+      const stored = window.sessionStorage.getItem(HISTORY_KEY);
+      expect(stored).not.toBeNull();
+      expect(JSON.parse(stored as string)).toEqual([
+        { role: "user", content: "hello" },
+        { role: "assistant", content: "reply" },
+      ]);
+    });
+  });
+
+  it("keeps two strategies' conversations independent (different history keys)", () => {
+    window.sessionStorage.setItem(HISTORY_KEY, JSON.stringify([{ role: "user", content: "gold question" }]));
+    const otherContext: StrategyChatContext = { ...CONTEXT, strategy_name: "TREND_PULLBACK", asset: "BNB", timeframe: "12h" };
+
+    render(<ChatBot faqEntries={FAQ} strategyContext={otherContext} hasLiveChat={true} />);
+    openWidget();
+
+    expect(screen.queryByText("gold question")).not.toBeInTheDocument();
   });
 });
 
