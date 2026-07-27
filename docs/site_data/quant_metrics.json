@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-27T08:51:57.247118+00:00",
+  "last_updated": "2026-07-27T12:10:47.013615+00:00",
   "metrics": [
     {
       "asset": "AAPL",
@@ -13,7 +13,7 @@
       "realized_vol_annualized": 24.128574458674994,
       "sharpe": 1.0124712635086002,
       "sortino": 1.4846893736251394,
-      "computed_at": "2026-07-27T08:51:57.247118+00:00",
+      "computed_at": "2026-07-27T12:10:47.013615+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -22,12 +22,12 @@
       "periods_per_year": 252,
       "window_used": 199,
       "rf_annual": 0.045,
-      "log_return_annualized": 0.07111338714483974,
+      "log_return_annualized": 0.07111338714483975,
       "zscore_current": -1.5040442527455087,
       "realized_vol_annualized": 31.827877633921943,
-      "sharpe": 0.08204564390120773,
-      "sortino": 0.11688281677661211,
-      "computed_at": "2026-07-27T08:51:57.247118+00:00",
+      "sharpe": 0.08204564390120778,
+      "sortino": 0.11688281677661216,
+      "computed_at": "2026-07-27T12:10:47.013615+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -41,7 +41,21 @@
       "realized_vol_annualized": 36.128560455737976,
       "sharpe": -1.3384690045517924,
       "sortino": -1.8977612587430117,
-      "computed_at": "2026-07-27T08:51:57.247118+00:00",
+      "computed_at": "2026-07-27T12:10:47.013615+00:00",
+      "rf_source": "fallback_constant"
+    },
+    {
+      "asset": "BTC",
+      "timeframe": "12h",
+      "periods_per_year": 730,
+      "window_used": 199,
+      "rf_annual": 0.045,
+      "log_return_annualized": 0.020296117748518302,
+      "zscore_current": -0.04579406836284373,
+      "realized_vol_annualized": 7.94946024745837,
+      "sharpe": -0.31076175592399635,
+      "sortino": -0.4681486230360196,
+      "computed_at": "2026-07-27T12:10:47.013615+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -55,7 +69,7 @@
       "realized_vol_annualized": 47.900623259837836,
       "sharpe": -1.4346252291378783,
       "sortino": -1.8839588494005273,
-      "computed_at": "2026-07-27T08:51:57.247118+00:00",
+      "computed_at": "2026-07-27T12:10:47.013615+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -69,7 +83,7 @@
       "realized_vol_annualized": 7.007789326738275,
       "sharpe": -0.0982373657550717,
       "sortino": -0.15270906528753445,
-      "computed_at": "2026-07-27T08:51:57.247118+00:00",
+      "computed_at": "2026-07-27T12:10:47.013615+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -78,12 +92,12 @@
       "periods_per_year": 52,
       "window_used": 199,
       "rf_annual": 0.045,
-      "log_return_annualized": 0.04609552657599748,
+      "log_return_annualized": 0.046095526575997484,
       "zscore_current": -0.4172716578121443,
       "realized_vol_annualized": 7.4193810677316065,
-      "sharpe": 0.01476574078075253,
-      "sortino": 0.022400699724909934,
-      "computed_at": "2026-07-27T08:51:57.247118+00:00",
+      "sharpe": 0.014765740780752623,
+      "sortino": 0.022400699724910076,
+      "computed_at": "2026-07-27T12:10:47.013615+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -97,7 +111,7 @@
       "realized_vol_annualized": 17.183638275043638,
       "sharpe": 1.0969295333639697,
       "sortino": 1.7129133391611007,
-      "computed_at": "2026-07-27T08:51:57.247118+00:00",
+      "computed_at": "2026-07-27T12:10:47.013615+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -111,7 +125,7 @@
       "realized_vol_annualized": 29.92527763262041,
       "sharpe": -0.720866072028254,
       "sortino": -0.9448574270602577,
-      "computed_at": "2026-07-27T08:51:57.247118+00:00",
+      "computed_at": "2026-07-27T12:10:47.013615+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -125,7 +139,7 @@
       "realized_vol_annualized": 31.98168201952405,
       "sharpe": 0.8089987454712932,
       "sortino": 1.255073472664882,
-      "computed_at": "2026-07-27T08:51:57.247118+00:00",
+      "computed_at": "2026-07-27T12:10:47.013615+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -139,7 +153,7 @@
       "realized_vol_annualized": 40.368632770935356,
       "sharpe": -0.6245560981272131,
       "sortino": -0.8495951402635942,
-      "computed_at": "2026-07-27T08:51:57.247118+00:00",
+      "computed_at": "2026-07-27T12:10:47.013615+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -148,12 +162,12 @@
       "periods_per_year": 252,
       "window_used": 199,
       "rf_annual": 0.045,
-      "log_return_annualized": -0.40464555572562355,
+      "log_return_annualized": -0.4046455557256235,
       "zscore_current": -0.3289156108256114,
       "realized_vol_annualized": 29.918536592819677,
       "sharpe": -1.5028995630539514,
-      "sortino": -1.9097290387127372,
-      "computed_at": "2026-07-27T08:51:57.247118+00:00",
+      "sortino": -1.909729038712737,
+      "computed_at": "2026-07-27T12:10:47.013615+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -167,7 +181,7 @@
       "realized_vol_annualized": 37.75446939568434,
       "sharpe": 0.2805848553659856,
       "sortino": 0.40223635895981047,
-      "computed_at": "2026-07-27T08:51:57.247118+00:00",
+      "computed_at": "2026-07-27T12:10:47.013615+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -181,7 +195,7 @@
       "realized_vol_annualized": 37.62907117411095,
       "sharpe": 0.6373336401246943,
       "sortino": 0.9111137076409809,
-      "computed_at": "2026-07-27T08:51:57.247118+00:00",
+      "computed_at": "2026-07-27T12:10:47.013615+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -195,7 +209,7 @@
       "realized_vol_annualized": 91.58368977976693,
       "sharpe": 0.39545794036970455,
       "sortino": 0.4978914394097786,
-      "computed_at": "2026-07-27T08:51:57.247118+00:00",
+      "computed_at": "2026-07-27T12:10:47.013615+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -209,7 +223,7 @@
       "realized_vol_annualized": 47.28170475071264,
       "sharpe": -1.030136999248349,
       "sortino": -1.3281354639905159,
-      "computed_at": "2026-07-27T08:51:57.247118+00:00",
+      "computed_at": "2026-07-27T12:10:47.013615+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -223,7 +237,7 @@
       "realized_vol_annualized": 9.913626733528403,
       "sharpe": -0.12710867338069906,
       "sortino": -0.16262809909121292,
-      "computed_at": "2026-07-27T08:51:57.247118+00:00",
+      "computed_at": "2026-07-27T12:10:47.013615+00:00",
       "rf_source": "fallback_constant"
     }
   ]
