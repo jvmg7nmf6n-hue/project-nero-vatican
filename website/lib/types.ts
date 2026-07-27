@@ -88,6 +88,43 @@ export interface GraveyardEntry {
   source_doc: string;
 }
 
+// Day 6/7 Strategy Doctor -- manually-curated, same convention as graveyard.json
+// (see docs/site_data/README.md): one entry per killed FAMILY (not per individual
+// graveyard row), synthesized from reading every family's source_doc(s), never
+// auto-scraped.
+export type FailurePattern =
+  | "regime-filter-only"
+  | "grid-shift-artifact"
+  | "edge-over-random-negative"
+  | "sample-too-thin"
+  | "data-blocked"
+  | "mechanism-doesn't-transfer";
+
+export interface FailurePatternEntry {
+  name: string;
+  family: string;
+  failure_pattern: FailurePattern;
+  fixable: boolean;
+  // Present only when fixable is true -- the mechanism-justified improvement
+  // that addresses the diagnosed weakness, never a vague "try again" note.
+  fix_rationale?: string;
+  source_doc: string;
+}
+
+// Day 6/7 Repair Workbench -- up to 3 mechanism-justified hypotheses registered
+// as candidates (not yet backtested; that is a separate future batch, per the
+// task's own instruction).
+export type RepairCandidateStatus = "candidate" | "testing" | "watchlist" | "promoted";
+
+export interface RepairCandidate {
+  parent_strategy: string;
+  failure_pattern: FailurePattern;
+  diagnosis: string;
+  proposed_fix: string;
+  hypothesis_name: string;
+  status: RepairCandidateStatus;
+}
+
 // Written by nero_core/execution/heartbeat.py after every successful live
 // scheduler run -- absence of this file (a fresh deploy, or the scheduler having
 // never run) is a valid, non-error state, not something to fabricate a value for.

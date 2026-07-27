@@ -1,11 +1,13 @@
 import { candleFilename } from "./candleData";
 import type { CandleFile } from "./candleData";
 import type {
+  FailurePatternEntry,
   GraveyardEntry,
   HeartbeatStatus,
   LedgerExport,
   QuantCrossAssetExport,
   QuantMetricsExport,
+  RepairCandidate,
   SiteSummary,
   StatsExport,
   StrategiesExport,
@@ -58,6 +60,16 @@ export function fetchSiteSummary(): Promise<SiteSummary | null> {
 
 export function fetchGraveyard(): Promise<GraveyardEntry[] | null> {
   return fetchJson<GraveyardEntry[]>("graveyard.json");
+}
+
+// Day 6/7 Strategy Doctor -- manually-curated, same convention as fetchGraveyard.
+export function fetchFailurePatterns(): Promise<FailurePatternEntry[] | null> {
+  return fetchJson<FailurePatternEntry[]>("failure_patterns.json");
+}
+
+// Day 6/7 Repair Workbench -- manually-curated, same convention as fetchGraveyard.
+export function fetchRepairCandidates(): Promise<RepairCandidate[] | null> {
+  return fetchJson<RepairCandidate[]>("repair_candidates.json");
 }
 
 // null is expected (not an error) until the scheduler's first successful run
