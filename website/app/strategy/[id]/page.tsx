@@ -1,14 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import ChartTabs from "@/components/ChartTabs";
+import ChatBot from "@/components/ChatBot";
 import EquityCurveChart from "@/components/EquityCurveChart";
 import QuantPanel from "@/components/QuantPanel";
 import TierBadge from "@/components/TierBadge";
 import { formatTimestamp } from "@/components/LedgerTable";
 import { buildChartMarkers } from "@/lib/chartMarkers";
+import { buildFaqEntries } from "@/lib/chatFaq";
 import {
   fetchCandleData,
   fetchLedgerFull,
+  fetchLedgerRecent,
   fetchQuantMetrics,
   fetchStats,
   fetchStrategies,
@@ -16,9 +19,11 @@ import {
 } from "@/lib/data";
 import { buildEquityCurve } from "@/lib/equityCurve";
 import { findQuantMetricsForAsset } from "@/lib/quantPanel";
+import { deriveSignalState, SIGNAL_STATE_LABELS } from "@/lib/signalState";
 import { findEntryByStrategyId } from "@/lib/strategyId";
 import { classifyTier } from "@/lib/tier";
 import { buildTradeHistory, type ResolvedTrade, type TradeResult } from "@/lib/tradeHistory";
+import type { StrategyChatContext } from "@/lib/types";
 
 export const revalidate = 300;
 
@@ -66,13 +71,15 @@ function TradeRow({ trade }: { trade: ResolvedTrade }) {
 }
 
 export default async function StrategyDetailPage({ params }: { params: { id: string } }) {
-  const [strategiesExport, statsExport, ledgerExport, descriptions, quantMetricsExport] = await Promise.all([
-    fetchStrategies(),
-    fetchStats(),
-    fetchLedgerFull(),
-    fetchStrategyDescriptions(),
-    fetchQuantMetrics(),
-  ]);
+  const [strategiesExport, statsExport, ledgerExport, ledgerRecentExport, descriptions, quantMetricsExport] =
+    await Promise.all([
+      fetchStrategies(),
+      fetchStats(),
+      fetchLedgerFull(),
+      fetchLedgerRecent(),
+      fetchStrategyDescriptions(),
+      fetchQuantMetrics(),
+    ]);
 
   const roster = strategiesExport?.strategies ?? [];
   const entry = findEntryByStrategyId(roster, params.id);
@@ -106,6 +113,24 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
   // docstring for why two strategies sharing this same pair correctly resolve to
   // the identical entry, rather than showing two different panels.
   const quantMetricsEntry = findQuantMetricsForAsset(quantMetricsExport?.metrics ?? [], entry.asset, entry.timeframe);
+
+  // Day 7 ChatBot -- FAQ answers are computed server-side from data already on
+  // this page (never fetched by the client). Live chat is enabled only when the
+  // server has ANTHROPIC_API_KEY configured; process.env is read here (a Server
+  // Component) and only the resulting boolean crosses into the client bundle --
+  // see app/api/chat/route.ts's own header comment for the server-only rule.
+  const signalState = deriveSignalState(entry, ledgerRecentExport?.rows ?? []);
+  const faqEntries = buildFaqEntries(entry, description, statsRow ?? null);
+  const hasLiveChat = Boolean(process.env.ANTHROPIC_API_KEY);
+  const strategyChatContext: StrategyChatContext = {
+    strategy_name: entry.name,
+    asset: entry.asset,
+    timeframe: entry.timeframe,
+    mechanism: description?.mechanism ?? "No description has been written for this strategy yet.",
+    verification_note: description?.verification_note ?? "Not yet verified.",
+    win_rate: statsRow?.win_rate ?? null,
+    current_signal: SIGNAL_STATE_LABELS[signalState],
+  };
 
   return (
     <div className="flex flex-col gap-10">
@@ -226,6 +251,8 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
           </p>
         )}
       </section>
+
+      <ChatBot faqEntries={faqEntries} strategyContext={strategyChatContext} hasLiveChat={hasLiveChat} />
     </div>
   );
 }

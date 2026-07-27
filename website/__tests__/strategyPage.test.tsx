@@ -17,6 +17,7 @@ jest.mock("@/lib/data");
 const mockFetchStrategies = jest.mocked(data.fetchStrategies);
 const mockFetchStats = jest.mocked(data.fetchStats);
 const mockFetchLedgerFull = jest.mocked(data.fetchLedgerFull);
+const mockFetchLedgerRecent = jest.mocked(data.fetchLedgerRecent);
 const mockFetchStrategyDescriptions = jest.mocked(data.fetchStrategyDescriptions);
 const mockFetchCandleData = jest.mocked(data.fetchCandleData);
 const mockFetchQuantMetrics = jest.mocked(data.fetchQuantMetrics);
@@ -72,6 +73,7 @@ function setupMocks(overrides: {
   strategies?: StrategiesExport | null;
   stats?: StatsExport | null;
   ledger?: LedgerExport | null;
+  ledgerRecent?: LedgerExport | null;
   descriptions?: StrategyDescriptions | null;
   candle?: CandleFetchResult;
   quantMetrics?: QuantMetricsExport | null;
@@ -81,6 +83,9 @@ function setupMocks(overrides: {
   );
   mockFetchStats.mockResolvedValue(overrides.stats ?? EMPTY_STATS_EXPORT);
   mockFetchLedgerFull.mockResolvedValue(overrides.ledger ?? EMPTY_LEDGER_EXPORT);
+  // Default: no recent-signal rows -- matches every test that predates Day 7 and
+  // never intended to exercise the Live Market Status Widget's signal pill.
+  mockFetchLedgerRecent.mockResolvedValue(overrides.ledgerRecent !== undefined ? overrides.ledgerRecent : EMPTY_LEDGER_EXPORT);
   mockFetchStrategyDescriptions.mockResolvedValue(
     overrides.descriptions !== undefined ? overrides.descriptions : DEFAULT_DESCRIPTIONS
   );
@@ -403,5 +408,74 @@ describe("StrategyDetailPage Quant Panel (Day 4)", () => {
     render(jsx);
 
     expect(screen.getByTestId("quant-panel-unavailable")).toBeInTheDocument();
+  });
+});
+
+describe("StrategyDetailPage ChatBot (Day 7)", () => {
+  const originalApiKey = process.env.ANTHROPIC_API_KEY;
+
+  afterEach(() => {
+    jest.resetAllMocks();
+    process.env.ANTHROPIC_API_KEY = originalApiKey;
+  });
+
+  it("renders the collapsed ChatBot toggle on every strategy page", async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    setupMocks();
+
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    expect(screen.getByTestId("chatbot-toggle-open")).toBeInTheDocument();
+  });
+
+  it("shows FAQ chips (with real strategy data) but hides live chat input when ANTHROPIC_API_KEY is unset", async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    setupMocks();
+
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    fireEvent.click(screen.getByTestId("chatbot-toggle-open"));
+    expect(screen.getByTestId("faq-chip-0")).toHaveTextContent("What does this strategy do?");
+    expect(screen.queryByTestId("chat-input")).not.toBeInTheDocument();
+  });
+
+  it("shows the live chat input when ANTHROPIC_API_KEY is set", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    setupMocks();
+
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    fireEvent.click(screen.getByTestId("chatbot-toggle-open"));
+    expect(screen.getByTestId("chat-input")).toBeInTheDocument();
+  });
+
+  it("also renders the ChatBot for a pair-asset strategy (every strategy page, not just non-pair)", async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    setupMocks({
+      strategies: {
+        schema_version: 1,
+        last_updated: "x",
+        strategies: [
+          {
+            name: "COINTEGRATION_PAIRS",
+            version: "cointegration-pairs-v1.0.0",
+            asset: "BTC-ETH",
+            timeframe: "12h",
+            verification_status: "verified — weakest, live-proving",
+            source_report: null,
+          },
+        ],
+      },
+    });
+
+    const jsx = await StrategyDetailPage({
+      params: { id: "cointegration-pairs--btc-eth--cointegration-pairs-v1-0-0" },
+    });
+    render(jsx);
+
+    expect(screen.getByTestId("chatbot-toggle-open")).toBeInTheDocument();
   });
 });

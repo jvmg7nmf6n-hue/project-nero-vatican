@@ -125,6 +125,35 @@ export interface RepairCandidate {
   status: RepairCandidateStatus;
 }
 
+// Day 7 ChatBot -- one static FAQ entry (Part A). Answers are pre-computed
+// server-side from strategy_descriptions.json + stats.json, never fetched live.
+export interface FaqEntry {
+  question: string;
+  answer: string;
+}
+
+// Day 7 ChatBot -- a single turn in the live-chat exchange (Part B). Sent to
+// and returned from website/app/api/chat/route.ts; kept to the last 6 entries
+// (3 exchanges) per the task's own conversation-history rule.
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+// Day 7 ChatBot -- resolved server-side (Server Component) from the same data
+// every other panel on the strategy page already reads, then handed to the
+// client ChatBot widget and forwarded to /api/chat so the system prompt can be
+// built per-strategy. Never includes anything not already public on the page.
+export interface StrategyChatContext {
+  strategy_name: string;
+  asset: string;
+  timeframe: string;
+  mechanism: string;
+  verification_note: string;
+  win_rate: number | null;
+  current_signal: string;
+}
+
 // Written by nero_core/execution/heartbeat.py after every successful live
 // scheduler run -- absence of this file (a fresh deploy, or the scheduler having
 // never run) is a valid, non-error state, not something to fabricate a value for.

@@ -45,11 +45,16 @@ failure fallback (network error, non-ok response, unparseable body).
 3. Set the project's **Root Directory** to `website/` (the Next.js app does
    not live at the repo root).
 4. Framework preset: Next.js (auto-detected). No environment variables are
-   required — the site fetches public data from GitHub raw URLs at request
-   time, no secrets involved.
-5. Deploy. Vercel runs `npm install && npm run build` automatically; this is
+   required for the core site — it fetches public data from GitHub raw URLs
+   at request time, no secrets involved.
+5. **Optional** — `ANTHROPIC_API_KEY`: enables the strategy-page ChatBot's
+   live AI chat (`app/api/chat/route.ts`). Set it in the Vercel dashboard's
+   Environment Variables, never committed to this repo. Without it, every
+   strategy page still renders its static FAQ chips; the live-chat input is
+   silently hidden (see `app/strategy/[id]/page.tsx`'s `hasLiveChat`).
+6. Deploy. Vercel runs `npm install && npm run build` automatically; this is
    the first real compile check this code will have had.
-6. Subsequent pushes to `main` auto-redeploy. Data freshness follows the
+7. Subsequent pushes to `main` auto-redeploy. Data freshness follows the
    `revalidate: 300` ISR window (5 minutes) independent of redeploys.
 
 ## Data contract
