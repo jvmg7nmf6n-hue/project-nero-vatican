@@ -11,7 +11,7 @@ import type { ChatMessage, StrategyChatContext } from "./types";
 
 export const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 export const ANTHROPIC_VERSION = "2023-06-01";
-export const MODEL = "claude-sonnet-4-6";
+export const MODEL = "claude-sonnet-5";
 export const MAX_TOKENS = 300;
 export const MAX_INPUT_LENGTH = 500;
 export const HISTORY_LIMIT = 6; // last 6 messages = 3 exchanges, per the task's own rule

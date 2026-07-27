@@ -80,6 +80,8 @@ export async function POST(request: Request): Promise<Response> {
     });
 
     if (!upstream.ok || !upstream.body) {
+      const bodyText = upstream.body ? await upstream.text().catch(() => "<unreadable body>") : "<no body>";
+      console.error(`[chat] upstream request failed: status=${upstream.status} body=${bodyText}`);
       return jsonError(502, "Upstream AI request failed.");
     }
 
@@ -87,10 +89,13 @@ export async function POST(request: Request): Promise<Response> {
       status: 200,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
-  } catch {
+  } catch (err) {
     // Covers network failure and the 10s AbortController timeout alike --
     // the client always shows the same generic fallback message either way,
     // never a technical error (see ChatBot.tsx's GENERIC_ERROR constant).
+    // The full error is still logged server-side so Vercel Runtime Logs show
+    // the real cause instead of only the generic client-facing fallback.
+    console.error("[chat] upstream request threw:", err);
     return jsonError(502, "Upstream AI request failed.");
   } finally {
     clearTimeout(timeoutId);

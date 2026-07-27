@@ -14,6 +14,7 @@ import {
   buildSystemPrompt,
   createSseTextExtractor,
   isStrategyChatContext,
+  MODEL,
   sanitizeHistory,
   sanitizeMessage,
 } from "@/lib/chatApi";
@@ -112,6 +113,19 @@ describe("sanitizeHistory", () => {
     const long = Array.from({ length: 10 }, (_, i) => ({ role: "user" as const, content: `msg${i}` }));
     expect(sanitizeHistory(long)).toHaveLength(6);
     expect(sanitizeHistory(long)[0]).toEqual({ role: "user", content: "msg4" });
+  });
+});
+
+describe("MODEL", () => {
+  // Regression test for a real incident: MODEL was set to the non-existent
+  // "claude-sonnet-4-6", which Anthropic's API rejects with a 404
+  // model_not_found error on every single request. The route swallowed that
+  // as a generic 502 with no server-side log (see the POST 502-logging test
+  // below), so the bot looked "broken" with no visible cause. This test pins
+  // MODEL to the verified-working id so a typo'd/stale model string fails
+  // CI instead of silently breaking production chat.
+  it("is set to a verified-valid Anthropic model id", () => {
+    expect(MODEL).toBe("claude-sonnet-5");
   });
 });
 
@@ -222,7 +236,7 @@ describe("POST /api/chat", () => {
     expect(init.headers["x-api-key"]).toBe("test-key");
     expect(init.headers["anthropic-version"]).toBe("2023-06-01");
     const parsedBody = JSON.parse(init.body);
-    expect(parsedBody.model).toBe("claude-sonnet-4-6");
+    expect(parsedBody.model).toBe("claude-sonnet-5");
     expect(parsedBody.max_tokens).toBe(300);
     expect(parsedBody.stream).toBe(true);
     expect(parsedBody.messages[parsedBody.messages.length - 1]).toEqual({ role: "user", content: "hi" });
@@ -250,6 +264,19 @@ describe("POST /api/chat", () => {
 
     const response = await POST(jsonRequest({ message: "hi", strategyContext: CONTEXT, history: [] }));
     expect(response.status).toBe(502);
+  });
+
+  it("logs the upstream status and body when the upstream response is not ok, so the real cause (e.g. an invalid model id) is visible server-side instead of only the generic client fallback", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    const errorBody = JSON.stringify({ type: "error", error: { type: "not_found_error", message: "model: claude-bogus-model" } });
+    global.fetch = jest.fn().mockResolvedValue(new Response(errorBody, { status: 404 })) as unknown as typeof fetch;
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+
+    await POST(jsonRequest({ message: "hi", strategyContext: CONTEXT, history: [] }));
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("404"));
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("not_found_error"));
+    consoleErrorSpy.mockRestore();
   });
 
   it("returns 502 when the upstream fetch throws (network failure / timeout)", async () => {
