@@ -109,6 +109,9 @@ export type MarketTile =
   | {
       status: "ok";
       asset: string;
+      timeframe: string; // the candle FILE's own timeframe token, e.g. "24h" -- used
+      // to match this exact tile against a Day 5 volatility-regime entry (GOLD/SILVER
+      // have two regime entries, one per timeframe, and can genuinely differ).
       price: number;
       changePct: number | null;
       sparklinePath: string;
@@ -142,6 +145,7 @@ export function buildMarketTiles(
     return {
       status: "ok",
       asset: spec.asset,
+      timeframe: result.data.timeframe,
       price: priceChange.price,
       changePct: priceChange.changePct,
       sparklinePath: sparkline.path,

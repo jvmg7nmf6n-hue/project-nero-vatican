@@ -122,3 +122,58 @@ export interface QuantMetricsExport {
   last_updated: string;
   metrics: QuantMetricsEntry[];
 }
+
+// Day 5/7 Quant Intelligence Panel, Part 2 -- cross-asset relationships. No
+// composite/overall score anywhere in this shape; each array is an independent
+// descriptive statistic, per this panel's own research/education framing.
+export interface CorrelationPair {
+  asset_a: string;
+  asset_b: string;
+  timeframe: string;
+  correlation: number | null;
+  window_used: number;
+  computed_at: string;
+}
+
+export interface VolatilityRegimeEntry {
+  asset: string;
+  timeframe: string;
+  regime: "LOW" | "NORMAL" | "HIGH" | "EXTREME" | "NO_DATA";
+  conditional_vol: number;
+  vol_ratio: number;
+  shock_score: number;
+  model_used: string;
+  computed_at: string;
+}
+
+export interface CointegrationEntry {
+  asset_a: string;
+  asset_b: string;
+  timeframe_a: string;
+  timeframe_b: string;
+  pvalue: number | null;
+  cointegrated: boolean | null;
+  window_used: number;
+  note: string;
+  computed_at: string;
+}
+
+export interface LeadLagEntry {
+  asset: string;
+  benchmark: string;
+  timeframe: string;
+  best_lag: number | null;
+  correlation: number | null;
+  window_used: number;
+  note: string;
+  computed_at: string;
+}
+
+export interface QuantCrossAssetExport {
+  schema_version: number;
+  last_updated: string;
+  correlation_matrix: CorrelationPair[];
+  volatility_regimes: VolatilityRegimeEntry[];
+  cointegration: CointegrationEntry[];
+  lead_lag: LeadLagEntry[];
+}

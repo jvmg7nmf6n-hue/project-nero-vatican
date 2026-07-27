@@ -23,8 +23,8 @@ const ROSTER: StrategyRosterEntry[] = [
 ];
 
 const TILES: MarketTile[] = [
-  { status: "ok", asset: "GOLD", price: 2000, changePct: 1.0, sparklinePath: "M 0,0", trend: "up", strategyCount: 1 },
-  { status: "ok", asset: "BTC", price: 65000, changePct: -0.5, sparklinePath: "M 0,0", trend: "down", strategyCount: 1 },
+  { status: "ok", asset: "GOLD", timeframe: "1week", price: 2000, changePct: 1.0, sparklinePath: "M 0,0", trend: "up", strategyCount: 1 },
+  { status: "ok", asset: "BTC", timeframe: "24h", price: 65000, changePct: -0.5, sparklinePath: "M 0,0", trend: "down", strategyCount: 1 },
 ];
 
 describe("MarketsSection", () => {

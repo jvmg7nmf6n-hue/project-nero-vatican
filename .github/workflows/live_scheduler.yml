@@ -44,6 +44,9 @@ jobs:
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         continue-on-error: true
+      - name: Export quant cross-asset
+        run: python -m nero_core.execution.export_quant_cross_asset
+        continue-on-error: true
       - name: Save Truth Ledger
         run: |
           git config user.name "nero-live-scheduler"

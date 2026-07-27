@@ -8,6 +8,7 @@ import {
   fetchGraveyard,
   fetchHeartbeat,
   fetchLedgerRecent,
+  fetchQuantCrossAsset,
   fetchSiteSummary,
   fetchStats,
   fetchStrategies,
@@ -21,13 +22,14 @@ export default async function HomePage({
 }: {
   searchParams?: { asset?: string };
 }) {
-  const [ledger, strategies, summary, graveyard, stats, heartbeat] = await Promise.all([
+  const [ledger, strategies, summary, graveyard, stats, heartbeat, quantCrossAsset] = await Promise.all([
     fetchLedgerRecent(),
     fetchStrategies(),
     fetchSiteSummary(),
     fetchGraveyard(),
     fetchStats(),
     fetchHeartbeat(),
+    fetchQuantCrossAsset(),
   ]);
 
   const rows = ledger?.rows ?? [];
@@ -57,6 +59,7 @@ export default async function HomePage({
         recentRows={rows}
         stats={strategyStats}
         tiles={marketTiles}
+        volatilityRegimes={quantCrossAsset?.volatility_regimes ?? []}
         initialAssetFilter={assetFilter}
       />
 

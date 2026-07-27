@@ -4,6 +4,7 @@ import type {
   GraveyardEntry,
   HeartbeatStatus,
   LedgerExport,
+  QuantCrossAssetExport,
   QuantMetricsExport,
   SiteSummary,
   StatsExport,
@@ -78,6 +79,12 @@ export function fetchStrategyDescriptions(): Promise<StrategyDescriptions | null
 // as fetchHeartbeat.
 export function fetchQuantMetrics(): Promise<QuantMetricsExport | null> {
   return fetchJson<QuantMetricsExport>("quant_metrics.json");
+}
+
+// Day 5/7 Quant Intelligence Panel, Part 2 (cross-asset). Same "null until the
+// scheduler's export step has run" convention as fetchQuantMetrics.
+export function fetchQuantCrossAsset(): Promise<QuantCrossAssetExport | null> {
+  return fetchJson<QuantCrossAssetExport>("quant_cross_asset.json");
 }
 
 export type CandleFetchResult =

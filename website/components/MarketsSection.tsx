@@ -4,13 +4,15 @@ import { useRef, useState } from "react";
 import AssetTabs from "./AssetTabs";
 import MarketsOverview from "./MarketsOverview";
 import type { MarketTile } from "@/lib/marketsOverview";
-import type { LedgerRow, StrategyRosterEntry, StrategyStats } from "@/lib/types";
+import type { LedgerRow, StrategyRosterEntry, StrategyStats, VolatilityRegimeEntry } from "@/lib/types";
 
 export interface MarketsSectionProps {
   roster: StrategyRosterEntry[];
   recentRows: LedgerRow[];
   stats: StrategyStats[];
   tiles: MarketTile[];
+  // Day 5/7: optional, defaults to no badges (never a broken tile).
+  volatilityRegimes?: VolatilityRegimeEntry[];
   // Set when arriving from /heatmap's "?asset=" link -- still honored as the
   // initial filter, same as before this component existed.
   initialAssetFilter?: string | null;
@@ -26,6 +28,7 @@ export default function MarketsSection({
   recentRows,
   stats,
   tiles,
+  volatilityRegimes = [],
   initialAssetFilter = null,
 }: MarketsSectionProps) {
   const [assetFilter, setAssetFilter] = useState<string | null>(initialAssetFilter);
@@ -38,7 +41,7 @@ export default function MarketsSection({
 
   return (
     <div className="flex flex-col gap-16">
-      <MarketsOverview tiles={tiles} onSelectAsset={handleSelectAsset} />
+      <MarketsOverview tiles={tiles} onSelectAsset={handleSelectAsset} volatilityRegimes={volatilityRegimes} />
 
       <section ref={tabsSectionRef} data-testid="asset-tabs-section">
         <h2 className="font-serif text-2xl text-parchment mb-4">Live council verdicts</h2>

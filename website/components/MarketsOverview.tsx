@@ -1,10 +1,16 @@
 "use client";
 
 import type { MarketTile } from "@/lib/marketsOverview";
+import { findVolatilityRegime, REGIME_COLOR } from "@/lib/quantCrossAsset";
+import type { VolatilityRegimeEntry } from "@/lib/types";
 
 export interface MarketsOverviewProps {
   tiles: MarketTile[];
   onSelectAsset: (asset: string) => void;
+  // Day 5/7: optional so this component still works standalone in isolation (and
+  // in every pre-Day-5 test) -- defaults to no regimes, which renders no badge at
+  // all, never a broken tile.
+  volatilityRegimes?: VolatilityRegimeEntry[];
 }
 
 // Values below 10 (mostly forex pairs, e.g. EUR/USD ~1.08) need more decimal
@@ -28,7 +34,7 @@ function formatChangePct(changePct: number): string {
 // per the task spec this must never navigate, only update the asset filter below
 // and smooth-scroll to it (see MarketsSection, the client wrapper that owns that
 // shared state).
-export default function MarketsOverview({ tiles, onSelectAsset }: MarketsOverviewProps) {
+export default function MarketsOverview({ tiles, onSelectAsset, volatilityRegimes = [] }: MarketsOverviewProps) {
   if (tiles.length === 0) {
     return null;
   }
@@ -77,6 +83,27 @@ export default function MarketsOverview({ tiles, onSelectAsset }: MarketsOvervie
                     strokeWidth="1.5"
                   />
                 </svg>
+                {(() => {
+                  const regime = findVolatilityRegime(volatilityRegimes, tile.asset, tile.timeframe);
+                  if (!regime) {
+                    return null; // graceful: no data -> no badge, never a broken tile
+                  }
+                  return (
+                    <div
+                      data-testid="market-tile-regime"
+                      title="Volatility Context (descriptive, not a trade signal or recommendation)"
+                      className="mt-1 flex items-center gap-1 text-[10px] text-muted"
+                    >
+                      <span
+                        data-testid="market-tile-regime-dot"
+                        className="h-1.5 w-1.5 rounded-full"
+                        style={{ backgroundColor: REGIME_COLOR[regime.regime] }}
+                        aria-hidden="true"
+                      />
+                      {regime.regime}
+                    </div>
+                  );
+                })()}
               </>
             ) : (
               <div data-testid="market-tile-placeholder" className="mt-1 text-xs text-muted">

@@ -1,10 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import MarketsOverview from "@/components/MarketsOverview";
 import type { MarketTile } from "@/lib/marketsOverview";
+import type { VolatilityRegimeEntry } from "@/lib/types";
 
 const OK_TILE: MarketTile = {
   status: "ok",
   asset: "BTC",
+  timeframe: "24h",
   price: 65432.1,
   changePct: 2.5,
   sparklinePath: "M 0,32 L 100,0",
@@ -69,5 +71,53 @@ describe("MarketsOverview", () => {
     fireEvent.click(screen.getAllByTestId("market-tile")[1]);
     expect(onSelectAsset).toHaveBeenCalledWith("ETH");
     expect(onSelectAsset).toHaveBeenCalledTimes(1);
+  });
+
+  describe("volatility regime badge (Day 5)", () => {
+    const REGIME: VolatilityRegimeEntry = {
+      asset: "BTC",
+      timeframe: "24h",
+      regime: "HIGH",
+      conditional_vol: 0.5,
+      vol_ratio: 1.3,
+      shock_score: 65,
+      model_used: "EWMA fallback",
+      computed_at: "x",
+    };
+
+    it("renders the regime badge with a colored dot and label when a matching entry exists", () => {
+      render(<MarketsOverview tiles={[OK_TILE]} onSelectAsset={jest.fn()} volatilityRegimes={[REGIME]} />);
+      const badge = screen.getByTestId("market-tile-regime");
+      expect(badge).toHaveTextContent("HIGH");
+      expect(screen.getByTestId("market-tile-regime-dot")).toBeInTheDocument();
+    });
+
+    it("shows nothing (no broken tile) when volatilityRegimes is empty", () => {
+      render(<MarketsOverview tiles={[OK_TILE]} onSelectAsset={jest.fn()} />);
+      expect(screen.queryByTestId("market-tile-regime")).not.toBeInTheDocument();
+    });
+
+    it("shows nothing when the regimes array has no entry for this asset", () => {
+      const otherAssetRegime: VolatilityRegimeEntry = { ...REGIME, asset: "GOLD" };
+      render(<MarketsOverview tiles={[OK_TILE]} onSelectAsset={jest.fn()} volatilityRegimes={[otherAssetRegime]} />);
+      expect(screen.queryByTestId("market-tile-regime")).not.toBeInTheDocument();
+    });
+
+    it("shows nothing when the asset matches but the timeframe doesn't", () => {
+      const wrongTimeframe: VolatilityRegimeEntry = { ...REGIME, timeframe: "1week" };
+      render(<MarketsOverview tiles={[OK_TILE]} onSelectAsset={jest.fn()} volatilityRegimes={[wrongTimeframe]} />);
+      expect(screen.queryByTestId("market-tile-regime")).not.toBeInTheDocument();
+    });
+
+    it("never renders a regime badge on a placeholder tile", () => {
+      render(
+        <MarketsOverview
+          tiles={[PLACEHOLDER_TILE]}
+          onSelectAsset={jest.fn()}
+          volatilityRegimes={[{ ...REGIME, asset: "ETH" }]}
+        />
+      );
+      expect(screen.queryByTestId("market-tile-regime")).not.toBeInTheDocument();
+    });
   });
 });
