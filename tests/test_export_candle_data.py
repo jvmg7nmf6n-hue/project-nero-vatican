@@ -75,11 +75,18 @@ class InScopePairsTest(unittest.TestCase):
         self.assertNotIn("ETH", assets)
 
     def test_expected_pair_count(self) -> None:
-        self.assertEqual(len(IN_SCOPE_PAIRS), 16)
+        self.assertEqual(len(IN_SCOPE_PAIRS), 17)
 
     def test_no_duplicate_asset_timeframe_pairs(self) -> None:
         keys = [(p.asset, p.timeframe) for p in IN_SCOPE_PAIRS]
         self.assertEqual(len(keys), len(set(keys)))
+
+    def test_btc_12h_is_included_as_a_deliberate_pre_roster_exception(self) -> None:
+        # See the IN_SCOPE_PAIRS docstring's Day 7 EXCEPTION note: added ahead of
+        # a live roster entry, using the same Binance 12h fetch path as BNB/12h.
+        pair = next(p for p in IN_SCOPE_PAIRS if p.asset == "BTC" and p.timeframe == "12h")
+        self.assertEqual(pair.cadence_timeframe, "12h")
+        self.assertEqual(pair.fetch_family, "crypto_metals")
 
 
 class ExportCandleDataTest(unittest.TestCase):

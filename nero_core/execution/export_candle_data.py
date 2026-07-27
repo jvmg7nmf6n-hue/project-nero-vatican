@@ -92,9 +92,17 @@ class CandlePair:
 
 
 # Derived from docs/site_data/strategies.json's live roster -- see the module
-# docstring for exactly what was excluded and why. 16 pairs.
+# docstring for exactly what was excluded and why. 17 pairs.
+#
+# EXCEPTION (Day 7): BTC/12h has no live roster entry as of this commit -- added
+# ahead of one, per explicit instruction, using the identical Binance 12h fetch
+# path BNB/12h already exercises. Chart-only data until a BTC/12h strategy is
+# actually registered; the strategy detail page has no route that reaches this
+# file yet (fetchCandleData is keyed off a roster entry's own timeframe), so this
+# is intentionally inert data, not a claim that a BTC/12h config is live.
 IN_SCOPE_PAIRS: tuple[CandlePair, ...] = (
     CandlePair("BTC", "24h", "24h", "crypto_metals"),
+    CandlePair("BTC", "12h", "12h", "crypto_metals"),
     CandlePair("BNB", "12h", "12h", "crypto_metals"),
     CandlePair("GOLD", "1week", "1week", "crypto_metals"),
     CandlePair("GOLD", "24h", "24h", "crypto_metals"),
