@@ -5,6 +5,7 @@ import type { CandleFetchResult } from "@/lib/data";
 import type {
   LedgerExport,
   LedgerRow,
+  QuantCrossAssetExport,
   QuantMetricsExport,
   StatsExport,
   StrategiesExport,
@@ -21,6 +22,7 @@ const mockFetchLedgerRecent = jest.mocked(data.fetchLedgerRecent);
 const mockFetchStrategyDescriptions = jest.mocked(data.fetchStrategyDescriptions);
 const mockFetchCandleData = jest.mocked(data.fetchCandleData);
 const mockFetchQuantMetrics = jest.mocked(data.fetchQuantMetrics);
+const mockFetchQuantCrossAsset = jest.mocked(data.fetchQuantCrossAsset);
 
 const STRATEGY_ID = "breakout-momentum--gold--breakout-momentum-v1-2-0-gold-calibrated-1week";
 
@@ -77,6 +79,7 @@ function setupMocks(overrides: {
   descriptions?: StrategyDescriptions | null;
   candle?: CandleFetchResult;
   quantMetrics?: QuantMetricsExport | null;
+  quantCrossAsset?: QuantCrossAssetExport | null;
 } = {}) {
   mockFetchStrategies.mockResolvedValue(
     overrides.strategies ?? { schema_version: 1, last_updated: "x", strategies: [ROSTER_ENTRY] }
@@ -95,6 +98,9 @@ function setupMocks(overrides: {
   // Default: no quant_metrics.json entry -- matches every test that predates Day 4
   // and never intended to exercise the Quant Panel.
   mockFetchQuantMetrics.mockResolvedValue(overrides.quantMetrics !== undefined ? overrides.quantMetrics : null);
+  // Default: no quant_cross_asset.json entry -- matches every test that predates
+  // Day 7 and never intended to exercise the regime badge.
+  mockFetchQuantCrossAsset.mockResolvedValue(overrides.quantCrossAsset !== undefined ? overrides.quantCrossAsset : null);
 }
 
 describe("StrategyDetailPage", () => {
@@ -422,6 +428,102 @@ function candleResultOk(candles = SAMPLE_CANDLES): CandleFetchResult {
     data: { schema_version: 1, asset: "GOLD", timeframe: "1week", last_updated: "x", candles },
   };
 }
+
+describe("StrategyDetailPage Live Market Status Widget (Day 7)", () => {
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it("renders price, change, regime, countdown, and signal pill from real data", async () => {
+    setupMocks({
+      candle: candleResultOk(),
+      quantCrossAsset: {
+        schema_version: 1,
+        last_updated: "x",
+        correlation_matrix: [],
+        volatility_regimes: [
+          {
+            asset: "GOLD",
+            timeframe: "1week",
+            regime: "HIGH",
+            conditional_vol: 0.2,
+            vol_ratio: 1.5,
+            shock_score: 0.8,
+            model_used: "GARCH",
+            computed_at: "x",
+          },
+        ],
+        cointegration: [],
+        lead_lag: [],
+      },
+    });
+
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    const widget = screen.getByTestId("market-status-widget");
+    expect(widget).toBeInTheDocument();
+    expect(screen.getByTestId("status-price")).toHaveTextContent("$3,287.50");
+    expect(screen.getByTestId("status-change")).toHaveTextContent("%");
+    expect(screen.getByTestId("status-regime")).toHaveAttribute("data-regime", "HIGH");
+    expect(screen.getByTestId("status-countdown")).toHaveTextContent("Next candle:");
+    expect(screen.getByTestId("status-signal-pill")).toHaveTextContent("NO SIGNAL");
+  });
+
+  it("shows the ENTRY ACTIVE signal pill when ledger_recent.json has a matching ENTRY row", async () => {
+    setupMocks({
+      candle: candleResultOk(),
+      ledgerRecent: {
+        schema_version: 1,
+        last_updated: "x",
+        rows: [ledgerRow({ signal_type: "ENTRY", timestamp: "t1", candle_timestamp: "2026-07-01T00:00:00Z" })],
+      },
+    });
+
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    expect(screen.getByTestId("status-signal-pill")).toHaveTextContent("ENTRY ACTIVE");
+  });
+
+  it("shows dashes for price/change/countdown when no candle data exists, never a fabricated value", async () => {
+    setupMocks({ candle: { status: "not_found" } });
+
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    expect(screen.getByTestId("status-price")).toHaveTextContent("—");
+    expect(screen.getByTestId("status-change")).toHaveTextContent("—");
+    expect(screen.getByTestId("status-countdown")).toHaveTextContent("—");
+    expect(screen.getByTestId("status-regime")).toHaveTextContent("NO DATA");
+  });
+
+  it("does not render the widget at all for a pair-asset strategy (BTC-ETH, GOLD-SILVER)", async () => {
+    setupMocks({
+      strategies: {
+        schema_version: 1,
+        last_updated: "x",
+        strategies: [
+          {
+            name: "COINTEGRATION_PAIRS",
+            version: "cointegration-pairs-v1.0.0",
+            asset: "BTC-ETH",
+            timeframe: "12h",
+            verification_status: "verified — weakest, live-proving",
+            source_report: null,
+          },
+        ],
+      },
+    });
+
+    const jsx = await StrategyDetailPage({
+      params: { id: "cointegration-pairs--btc-eth--cointegration-pairs-v1-0-0" },
+    });
+    render(jsx);
+
+    expect(screen.queryByTestId("market-status-widget")).not.toBeInTheDocument();
+  });
+});
 
 describe("StrategyDetailPage Chart Description (Day 7)", () => {
   afterEach(() => {

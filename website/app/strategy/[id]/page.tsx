@@ -4,9 +4,11 @@ import ChartDescription from "@/components/ChartDescription";
 import ChartTabs from "@/components/ChartTabs";
 import ChatBot from "@/components/ChatBot";
 import EquityCurveChart from "@/components/EquityCurveChart";
+import MarketStatusWidget from "@/components/MarketStatusWidget";
 import QuantPanel from "@/components/QuantPanel";
 import TierBadge from "@/components/TierBadge";
 import { formatTimestamp } from "@/components/LedgerTable";
+import { candleFileTimeframe } from "@/lib/candleData";
 import { buildChartDescription } from "@/lib/chartDescription";
 import { buildChartMarkers } from "@/lib/chartMarkers";
 import { buildFaqEntries } from "@/lib/chatFaq";
@@ -14,12 +16,20 @@ import {
   fetchCandleData,
   fetchLedgerFull,
   fetchLedgerRecent,
+  fetchQuantCrossAsset,
   fetchQuantMetrics,
   fetchStats,
   fetchStrategies,
   fetchStrategyDescriptions,
 } from "@/lib/data";
 import { buildEquityCurve } from "@/lib/equityCurve";
+import {
+  formatPrice,
+  latestPrice,
+  mapSignalStateToMarketStatus,
+  priceChangePercent,
+} from "@/lib/marketStatus";
+import { findVolatilityRegime } from "@/lib/quantCrossAsset";
 import { findQuantMetricsForAsset } from "@/lib/quantPanel";
 import { deriveSignalState, SIGNAL_STATE_LABELS } from "@/lib/signalState";
 import { findEntryByStrategyId } from "@/lib/strategyId";
@@ -73,7 +83,7 @@ function TradeRow({ trade }: { trade: ResolvedTrade }) {
 }
 
 export default async function StrategyDetailPage({ params }: { params: { id: string } }) {
-  const [strategiesExport, statsExport, ledgerExport, ledgerRecentExport, descriptions, quantMetricsExport] =
+  const [strategiesExport, statsExport, ledgerExport, ledgerRecentExport, descriptions, quantMetricsExport, quantCrossAssetExport] =
     await Promise.all([
       fetchStrategies(),
       fetchStats(),
@@ -81,6 +91,7 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
       fetchLedgerRecent(),
       fetchStrategyDescriptions(),
       fetchQuantMetrics(),
+      fetchQuantCrossAsset(),
     ]);
 
   const roster = strategiesExport?.strategies ?? [];
@@ -116,6 +127,26 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
   // the identical entry, rather than showing two different panels.
   const quantMetricsEntry = findQuantMetricsForAsset(quantMetricsExport?.metrics ?? [], entry.asset, entry.timeframe);
 
+  // Day 7 Live Market Status Widget -- all derived from data already fetched
+  // above for other panels (candles, quant_cross_asset.json); only the signal
+  // state below is new (added for ChatBot's current_signal) and is reused here
+  // rather than recomputed. Skipped entirely for pair assets (BTC-ETH,
+  // GOLD-SILVER), same as the price chart -- "current price" and "next candle"
+  // don't have a single-asset meaning for a two-leg pair.
+  const signalState = deriveSignalState(entry, ledgerRecentExport?.rows ?? []);
+  const marketSignalStatus = mapSignalStateToMarketStatus(signalState);
+  const price = candles ? latestPrice(candles) : null;
+  const priceDisplay = price !== null ? formatPrice(entry.asset, price) : null;
+  const changePercent = candles ? priceChangePercent(candles) : null;
+  const lastCandleTimeSeconds = candles && candles.length > 0 ? candles[candles.length - 1].time : null;
+  const regimeEntry = isPairAsset
+    ? null
+    : findVolatilityRegime(
+        quantCrossAssetExport?.volatility_regimes ?? [],
+        entry.asset,
+        candleFileTimeframe(entry.timeframe)
+      );
+
   // Day 7 Chart Description -- only meaningful alongside an actual candlestick
   // chart (non-pair asset with a real candle file). Reuses quantMetricsEntry
   // (already fetched above for the Quant Panel) for its time-span estimate --
@@ -136,7 +167,6 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
   // server has ANTHROPIC_API_KEY configured; process.env is read here (a Server
   // Component) and only the resulting boolean crosses into the client bundle --
   // see app/api/chat/route.ts's own header comment for the server-only rule.
-  const signalState = deriveSignalState(entry, ledgerRecentExport?.rows ?? []);
   const faqEntries = buildFaqEntries(entry, description, statsRow ?? null);
   const hasLiveChat = Boolean(process.env.ANTHROPIC_API_KEY);
   const strategyChatContext: StrategyChatContext = {
@@ -174,6 +204,17 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
           </p>
         )}
       </section>
+
+      {!isPairAsset ? (
+        <MarketStatusWidget
+          priceDisplay={priceDisplay}
+          changePercent={changePercent}
+          regime={regimeEntry}
+          lastCandleTimeSeconds={lastCandleTimeSeconds}
+          timeframe={entry.timeframe}
+          signalStatus={marketSignalStatus}
+        />
+      ) : null}
 
       <section>
         <h2 className="font-serif text-xl text-parchment mb-4">Performance summary</h2>
