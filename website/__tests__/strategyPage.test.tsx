@@ -411,6 +411,71 @@ describe("StrategyDetailPage Quant Panel (Day 4)", () => {
   });
 });
 
+const SAMPLE_CANDLES = [
+  { time: 1700000000, open: 3200, high: 3210, low: 3190, close: 3200, volume: 1000 },
+  { time: 1700604800, open: 3200, high: 3300, low: 3195, close: 3287.5, volume: 1200 },
+];
+
+function candleResultOk(candles = SAMPLE_CANDLES): CandleFetchResult {
+  return {
+    status: "ok",
+    data: { schema_version: 1, asset: "GOLD", timeframe: "1week", last_updated: "x", candles },
+  };
+}
+
+describe("StrategyDetailPage Chart Description (Day 7)", () => {
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it("renders the collapsible chart description when a candle file exists", async () => {
+    setupMocks({ candle: candleResultOk() });
+
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    expect(screen.getByTestId("chart-description")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("chart-description-toggle"));
+    expect(screen.getByTestId("chart-description-timeframe")).toHaveTextContent("1 week");
+    expect(screen.getByTestId("chart-description-status")).toHaveTextContent("No completed trades yet");
+  });
+
+  it("does not render the chart description when no candle data exists", async () => {
+    setupMocks({ candle: { status: "not_found" } });
+
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    expect(screen.queryByTestId("chart-description")).not.toBeInTheDocument();
+  });
+
+  it("does not render the chart description for a pair-asset strategy", async () => {
+    setupMocks({
+      strategies: {
+        schema_version: 1,
+        last_updated: "x",
+        strategies: [
+          {
+            name: "COINTEGRATION_PAIRS",
+            version: "cointegration-pairs-v1.0.0",
+            asset: "BTC-ETH",
+            timeframe: "12h",
+            verification_status: "verified — weakest, live-proving",
+            source_report: null,
+          },
+        ],
+      },
+    });
+
+    const jsx = await StrategyDetailPage({
+      params: { id: "cointegration-pairs--btc-eth--cointegration-pairs-v1-0-0" },
+    });
+    render(jsx);
+
+    expect(screen.queryByTestId("chart-description")).not.toBeInTheDocument();
+  });
+});
+
 describe("StrategyDetailPage ChatBot (Day 7)", () => {
   const originalApiKey = process.env.ANTHROPIC_API_KEY;
 

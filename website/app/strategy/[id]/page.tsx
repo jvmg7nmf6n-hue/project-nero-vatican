@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import ChartDescription from "@/components/ChartDescription";
 import ChartTabs from "@/components/ChartTabs";
 import ChatBot from "@/components/ChatBot";
 import EquityCurveChart from "@/components/EquityCurveChart";
 import QuantPanel from "@/components/QuantPanel";
 import TierBadge from "@/components/TierBadge";
 import { formatTimestamp } from "@/components/LedgerTable";
+import { buildChartDescription } from "@/lib/chartDescription";
 import { buildChartMarkers } from "@/lib/chartMarkers";
 import { buildFaqEntries } from "@/lib/chatFaq";
 import {
@@ -114,6 +116,21 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
   // the identical entry, rather than showing two different panels.
   const quantMetricsEntry = findQuantMetricsForAsset(quantMetricsExport?.metrics ?? [], entry.asset, entry.timeframe);
 
+  // Day 7 Chart Description -- only meaningful alongside an actual candlestick
+  // chart (non-pair asset with a real candle file). Reuses quantMetricsEntry
+  // (already fetched above for the Quant Panel) for its time-span estimate --
+  // no new data source.
+  const chartDescriptionData =
+    !isPairAsset && candles
+      ? buildChartDescription({
+          asset: entry.asset,
+          timeframe: entry.timeframe,
+          candleCount: candles.length,
+          periodsPerYear: quantMetricsEntry?.periods_per_year ?? null,
+          statsRow: statsRow ?? null,
+        })
+      : null;
+
   // Day 7 ChatBot -- FAQ answers are computed server-side from data already on
   // this page (never fetched by the client). Live chat is enabled only when the
   // server has ANTHROPIC_API_KEY configured; process.env is read here (a Server
@@ -203,6 +220,7 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
             priceChartUnavailableReason={priceChartUnavailableReason}
           />
         )}
+        {!isPairAsset && chartDescriptionData ? <ChartDescription data={chartDescriptionData} /> : null}
       </section>
 
       <QuantPanel entry={quantMetricsEntry} />
