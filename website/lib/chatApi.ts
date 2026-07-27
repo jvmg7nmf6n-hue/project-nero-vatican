@@ -153,24 +153,35 @@ export function createSseTextExtractor() {
 // STREAM_IDLE_TIMEOUT_MS bounds each individual read from the upstream body,
 // not just the initial connection. UPSTREAM_TIMEOUT_MS (via the route's
 // AbortController) only covers the initial fetch() -- once headers arrive
-// and we start pulling the body here, that abort timer is already cleared,
-// so a stalled upstream stream had no application-level cutoff at all and
-// would hang until Vercel's platform maxDuration force-killed the whole
-// function (observed in production: a request that hung the full 300s/30s
-// while still pulling real bytes from api.anthropic.com).
+// that abort timer is cleared, so a stalled upstream body had no
+// application-level cutoff at all and would hang until Vercel's platform
+// maxDuration force-killed the whole function. Confirmed in production via
+// Runtime Logs: the request had already connected to api.anthropic.com and
+// pulled real bytes, then stalled with no further progress.
 export const STREAM_IDLE_TIMEOUT_MS = 15_000;
 
-export function streamAnthropicReplyAsText(
+// A prior version of this function returned a passthrough ReadableStream so
+// the reply could render incrementally. That added a second, independent
+// place a hang could hide (a custom ReadableStream erroring doesn't reliably
+// finalize the underlying HTTP response under Next.js's Route Handler
+// streaming, observed in production: the app-level idle timeout fired but
+// the function still ran until Vercel's own maxDuration killed it). Given
+// MAX_TOKENS caps the whole reply at a few KB, the token-by-token streaming
+// UI touch isn't worth that fragility -- this reads the upstream SSE body to
+// completion (still bounded per-chunk by the same idle timeout) and returns
+// one plain string, so the route's own await/return is what ends the
+// function, with no separate stream-lifecycle path to get stuck in.
+export async function readAnthropicReplyAsText(
   upstreamBody: ReadableStream<Uint8Array>,
   idleTimeoutMs: number = STREAM_IDLE_TIMEOUT_MS
-): ReadableStream<Uint8Array> {
+): Promise<string> {
   const decoder = new TextDecoder();
-  const encoder = new TextEncoder();
   const extractor = createSseTextExtractor();
   const reader = upstreamBody.getReader();
+  let fullText = "";
 
-  return new ReadableStream<Uint8Array>({
-    async pull(controller) {
+  try {
+    for (;;) {
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
       const idle = new Promise<"idle">((resolve) => {
         timeoutId = setTimeout(() => resolve("idle"), idleTimeoutMs);
@@ -180,23 +191,16 @@ export function streamAnthropicReplyAsText(
       clearTimeout(timeoutId);
 
       if (result === "idle") {
-        reader.cancel("idle timeout waiting for upstream data").catch(() => {});
-        controller.error(new Error(`Upstream stream idle for over ${idleTimeoutMs}ms`));
-        return;
+        throw new Error(`Upstream stream idle for over ${idleTimeoutMs}ms`);
       }
 
       const { done, value } = result;
       if (done) {
-        controller.close();
-        return;
+        return fullText;
       }
-      const text = extractor.push(decoder.decode(value, { stream: true }));
-      if (text) {
-        controller.enqueue(encoder.encode(text));
-      }
-    },
-    cancel(reason) {
-      reader.cancel(reason);
-    },
-  });
+      fullText += extractor.push(decoder.decode(value, { stream: true }));
+    }
+  } finally {
+    reader.cancel().catch(() => {});
+  }
 }

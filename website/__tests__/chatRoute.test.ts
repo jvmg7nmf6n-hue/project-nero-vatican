@@ -15,9 +15,9 @@ import {
   createSseTextExtractor,
   isStrategyChatContext,
   MODEL,
+  readAnthropicReplyAsText,
   sanitizeHistory,
   sanitizeMessage,
-  streamAnthropicReplyAsText,
 } from "@/lib/chatApi";
 import type { StrategyChatContext } from "@/lib/types";
 
@@ -191,16 +191,16 @@ describe("createSseTextExtractor", () => {
   });
 });
 
-describe("streamAnthropicReplyAsText", () => {
+describe("readAnthropicReplyAsText", () => {
   // Regression test for a real incident: UPSTREAM_TIMEOUT_MS's AbortController
   // only guards the initial fetch() in route.ts -- it's cleared the moment
   // headers arrive, before this function ever starts pulling the body. A
   // production request that stalled mid-stream (after successfully starting
   // to download from api.anthropic.com) had no application-level cutoff at
   // all and ran until Vercel's platform maxDuration force-killed the whole
-  // function. This proves a stalled upstream body is now caught by this
+  // function. This proves a stalled upstream body is caught by this
   // function's own idle timeout instead of hanging indefinitely.
-  it("errors out instead of hanging forever when the upstream body stalls mid-stream", async () => {
+  it("throws instead of hanging forever when the upstream body stalls mid-stream", async () => {
     const upstreamBody = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(
@@ -212,35 +212,33 @@ describe("streamAnthropicReplyAsText", () => {
       },
     });
 
-    const resultStream = streamAnthropicReplyAsText(upstreamBody, 50);
-    const reader = resultStream.getReader();
-
-    const first = await reader.read();
-    expect(new TextDecoder().decode(first.value)).toBe("partial");
-
-    await expect(reader.read()).rejects.toThrow(/idle/i);
+    await expect(readAnthropicReplyAsText(upstreamBody, 50)).rejects.toThrow(/idle/i);
   });
 
-  it("closes cleanly when the upstream body ends normally", async () => {
+  // A prior version returned a passthrough ReadableStream for incremental
+  // rendering. That added a second, independent place a hang could hide: in
+  // production the idle timeout fired correctly but the function still ran
+  // to the full platform maxDuration, because an errored custom
+  // ReadableStream didn't reliably finalize the underlying HTTP response
+  // under Next.js's Route Handler streaming. Reading to completion and
+  // returning one plain string removes that entire failure-prone path --
+  // the route's own await/return is what ends the function.
+  it("returns the full accumulated text once the upstream body ends normally", async () => {
     const upstreamBody = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(
+          new TextEncoder().encode('data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hi "}}\n')
+        );
+        controller.enqueue(
           new TextEncoder().encode(
-            'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"done"}}\n'
+            'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"there"}}\n'
           )
         );
         controller.close();
       },
     });
 
-    const resultStream = streamAnthropicReplyAsText(upstreamBody, 50);
-    const reader = resultStream.getReader();
-
-    const first = await reader.read();
-    expect(new TextDecoder().decode(first.value)).toBe("done");
-
-    const second = await reader.read();
-    expect(second.done).toBe(true);
+    await expect(readAnthropicReplyAsText(upstreamBody, 50)).resolves.toBe("Hi there");
   });
 });
 

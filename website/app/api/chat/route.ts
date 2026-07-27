@@ -5,9 +5,9 @@ import {
   isStrategyChatContext,
   MAX_TOKENS,
   MODEL,
+  readAnthropicReplyAsText,
   sanitizeHistory,
   sanitizeMessage,
-  streamAnthropicReplyAsText,
   UPSTREAM_TIMEOUT_MS,
 } from "@/lib/chatApi";
 
@@ -91,7 +91,8 @@ export async function POST(request: Request): Promise<Response> {
       return jsonError(502, "Upstream AI request failed.");
     }
 
-    return new Response(streamAnthropicReplyAsText(upstream.body), {
+    const replyText = await readAnthropicReplyAsText(upstream.body);
+    return new Response(replyText, {
       status: 200,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
