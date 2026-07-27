@@ -23,6 +23,12 @@ import {
 // any other named export. All testable helper logic therefore lives in
 // @/lib/chatApi, imported here; this file exports only `runtime` and `POST`.
 export const runtime = "nodejs";
+// Hard backstop: without this, an unresponsive upstream connection can hang
+// the function for Vercel's full platform default (300s) even if our own
+// AbortController-based UPSTREAM_TIMEOUT_MS fails to fire (observed in
+// production runtime logs as FUNCTION_INVOCATION_TIMEOUT). Bounds worst-case
+// user-facing latency to a fast failure instead of a multi-minute hang.
+export const maxDuration = 30;
 
 function jsonError(status: number, error: string): Response {
   return new Response(JSON.stringify({ error }), {
