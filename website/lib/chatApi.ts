@@ -150,7 +150,20 @@ export function createSseTextExtractor() {
   };
 }
 
-export function streamAnthropicReplyAsText(upstreamBody: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+// STREAM_IDLE_TIMEOUT_MS bounds each individual read from the upstream body,
+// not just the initial connection. UPSTREAM_TIMEOUT_MS (via the route's
+// AbortController) only covers the initial fetch() -- once headers arrive
+// and we start pulling the body here, that abort timer is already cleared,
+// so a stalled upstream stream had no application-level cutoff at all and
+// would hang until Vercel's platform maxDuration force-killed the whole
+// function (observed in production: a request that hung the full 300s/30s
+// while still pulling real bytes from api.anthropic.com).
+export const STREAM_IDLE_TIMEOUT_MS = 15_000;
+
+export function streamAnthropicReplyAsText(
+  upstreamBody: ReadableStream<Uint8Array>,
+  idleTimeoutMs: number = STREAM_IDLE_TIMEOUT_MS
+): ReadableStream<Uint8Array> {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
   const extractor = createSseTextExtractor();
@@ -158,7 +171,21 @@ export function streamAnthropicReplyAsText(upstreamBody: ReadableStream<Uint8Arr
 
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
-      const { done, value } = await reader.read();
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      const idle = new Promise<"idle">((resolve) => {
+        timeoutId = setTimeout(() => resolve("idle"), idleTimeoutMs);
+      });
+
+      const result = await Promise.race([reader.read(), idle]);
+      clearTimeout(timeoutId);
+
+      if (result === "idle") {
+        reader.cancel("idle timeout waiting for upstream data").catch(() => {});
+        controller.error(new Error(`Upstream stream idle for over ${idleTimeoutMs}ms`));
+        return;
+      }
+
+      const { done, value } = result;
       if (done) {
         controller.close();
         return;

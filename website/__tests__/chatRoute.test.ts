@@ -17,6 +17,7 @@ import {
   MODEL,
   sanitizeHistory,
   sanitizeMessage,
+  streamAnthropicReplyAsText,
 } from "@/lib/chatApi";
 import type { StrategyChatContext } from "@/lib/types";
 
@@ -187,6 +188,59 @@ describe("createSseTextExtractor", () => {
     const extractor = createSseTextExtractor();
     expect(() => extractor.push("data: {not valid json\n")).not.toThrow();
     expect(extractor.push("data: {not valid json\n")).toBe("");
+  });
+});
+
+describe("streamAnthropicReplyAsText", () => {
+  // Regression test for a real incident: UPSTREAM_TIMEOUT_MS's AbortController
+  // only guards the initial fetch() in route.ts -- it's cleared the moment
+  // headers arrive, before this function ever starts pulling the body. A
+  // production request that stalled mid-stream (after successfully starting
+  // to download from api.anthropic.com) had no application-level cutoff at
+  // all and ran until Vercel's platform maxDuration force-killed the whole
+  // function. This proves a stalled upstream body is now caught by this
+  // function's own idle timeout instead of hanging indefinitely.
+  it("errors out instead of hanging forever when the upstream body stalls mid-stream", async () => {
+    const upstreamBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"partial"}}\n'
+          )
+        );
+        // Never closes and never enqueues again -- simulates a stalled upstream connection.
+      },
+    });
+
+    const resultStream = streamAnthropicReplyAsText(upstreamBody, 50);
+    const reader = resultStream.getReader();
+
+    const first = await reader.read();
+    expect(new TextDecoder().decode(first.value)).toBe("partial");
+
+    await expect(reader.read()).rejects.toThrow(/idle/i);
+  });
+
+  it("closes cleanly when the upstream body ends normally", async () => {
+    const upstreamBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"done"}}\n'
+          )
+        );
+        controller.close();
+      },
+    });
+
+    const resultStream = streamAnthropicReplyAsText(upstreamBody, 50);
+    const reader = resultStream.getReader();
+
+    const first = await reader.read();
+    expect(new TextDecoder().decode(first.value)).toBe("done");
+
+    const second = await reader.read();
+    expect(second.done).toBe(true);
   });
 });
 
