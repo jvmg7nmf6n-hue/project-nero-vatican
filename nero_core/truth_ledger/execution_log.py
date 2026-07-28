@@ -380,6 +380,19 @@ def insert_news_sentiment_log(
     return True
 
 
+def latest_news_sentiment_fetch_timestamp(asset: str, db_path: Path = DEFAULT_DB_PATH) -> datetime | None:
+    """Most recent fetch_timestamp logged for this asset across ALL runs (unlike
+    list_news_sentiment_log_for_run, which is scoped to one run_id) -- the
+    news_sentiment_log analogue of latest_logged_candle_timestamp. Read-only; used by
+    nero_core.execution.health_check to report/flag staleness."""
+    init_execution_tables(db_path)
+    with closing(sqlite3.connect(str(db_path))) as conn:
+        row = conn.execute(
+            "SELECT MAX(fetch_timestamp) FROM news_sentiment_log WHERE asset = ?", (asset,)
+        ).fetchone()
+    return datetime.fromisoformat(row[0]) if row and row[0] is not None else None
+
+
 def has_news_sentiment_logged_today(asset: str, day: datetime, db_path: Path = DEFAULT_DB_PATH) -> bool:
     """True if a news_sentiment_log row already exists for `asset` on `day`'s UTC
     calendar date — the daily-cadence gate that keeps a delayed/retried run within the

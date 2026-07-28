@@ -1,0 +1,61 @@
+name: Strategy Health Check
+
+# Twice daily, timed near market open/close so a stale strategy is caught within
+# hours of the window it should have fired in, not discovered weeks later (see
+# nero_core/execution/health_check.py's own module docstring for the 2026-07-28
+# PEAD/24h+1week incident this exists to catch going forward).
+#
+#   13:30 UTC = 9:30 AM ET (US market open, EDT). Also falls inside London's
+#     08:00-16:30 UTC session -- the London/NY overlap, when both major markets
+#     are simultaneously active.
+#   20:00 UTC = 4:00 PM ET (US market close, EDT). Comfortably after London's own
+#     close in both BST and GMT.
+#
+# CAVEAT: GitHub Actions cron is fixed UTC and can't track US DST -- during EST
+# (winter), these land ~1h before actual 9:30 AM / 4:00 PM ET instead of exactly
+# on it. That's fine for a resilience watchdog whose own tolerance is measured in
+# many hours (MAX_GAP_HOURS_BY_GATE in health_check.py), not minutes -- not worth
+# the complexity of a second, manually-toggled seasonal schedule.
+on:
+  schedule:
+    - cron: "30 13 * * *"
+    - cron: "0 20 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: health-check
+  cancel-in-progress: false
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run strategy health check
+        # Strictly read-only over data/truth_ledger.db (see health_check.py's own
+        # module docstring) -- never modifies the ledger, never touches strategy
+        # logic, independent of and never blocking the live scheduler's own cron.
+        run: python -m nero_core.execution.health_check
+      - name: Save health check report
+        run: |
+          git config user.name "nero-health-check"
+          git config user.email "actions@users.noreply.github.com"
+          git pull --rebase origin main || git rebase --abort || true
+          if [ -f docs/site_data/health_check.json ]; then
+            git add -f docs/site_data/health_check.json
+          fi
+          if git diff --cached --quiet; then
+            echo "no health check changes"
+            exit 0
+          fi
+          git commit -m "Update strategy health check report"
+          git pull --rebase origin main || git rebase --abort || true
+          git push || echo "health check push skipped; next run will retry"
