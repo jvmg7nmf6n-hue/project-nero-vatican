@@ -12,6 +12,7 @@ from nero_core.truth_ledger.execution_log import (
     insert_execution_metadata,
     insert_news_sentiment_log,
     latest_logged_candle_timestamp,
+    latest_news_sentiment_fetch_timestamp,
     list_execution_log,
     list_execution_metadata,
 )
@@ -112,21 +113,25 @@ class ExecutionMetadataTest(ExecutionLogTestCase):
         self.assertEqual(rows[0].assets_skipped, [{"asset": "BNB", "classification": "NOT_DUE"}])
 
 
+V1_VERSION = "news-sentiment-v1.0.0"
+V2_VERSION = "news-sentiment-v2.0.0-llm-claude"
+
+
 class NewsSentimentLogTest(ExecutionLogTestCase):
     def test_insert_then_dedupe_within_same_day(self) -> None:
         now = datetime(2026, 7, 17, 19, 0, tzinfo=timezone.utc)
-        self.assertFalse(has_news_sentiment_logged_today("GOLD", now, db_path=self.db_path))
+        self.assertFalse(has_news_sentiment_logged_today("GOLD", V1_VERSION, now, db_path=self.db_path))
 
         ok = insert_news_sentiment_log(
-            run_id="run-1", asset="GOLD", fetch_timestamp=now, signal_type="NEUTRAL",
+            run_id="run-1", asset="GOLD", strategy_version=V1_VERSION, fetch_timestamp=now, signal_type="NEUTRAL",
             confidence=0.0, reasoning="no eligible headlines", source="local", db_path=self.db_path,
         )
         self.assertTrue(ok)
-        self.assertTrue(has_news_sentiment_logged_today("GOLD", now, db_path=self.db_path))
+        self.assertTrue(has_news_sentiment_logged_today("GOLD", V1_VERSION, now, db_path=self.db_path))
 
         later_same_day = datetime(2026, 7, 17, 19, 30, tzinfo=timezone.utc)
         duplicate = insert_news_sentiment_log(
-            run_id="run-2", asset="GOLD", fetch_timestamp=later_same_day, signal_type="NEUTRAL",
+            run_id="run-2", asset="GOLD", strategy_version=V1_VERSION, fetch_timestamp=later_same_day, signal_type="NEUTRAL",
             confidence=0.0, reasoning="dup attempt", source="local", db_path=self.db_path,
         )
         # The row itself can insert (different fetch_timestamp) but the daily gate is what
@@ -136,11 +141,54 @@ class NewsSentimentLogTest(ExecutionLogTestCase):
     def test_next_day_is_not_considered_logged(self) -> None:
         day_one = datetime(2026, 7, 17, 19, 0, tzinfo=timezone.utc)
         insert_news_sentiment_log(
-            run_id="run-1", asset="BTC", fetch_timestamp=day_one, signal_type="NEUTRAL",
+            run_id="run-1", asset="BTC", strategy_version=V1_VERSION, fetch_timestamp=day_one, signal_type="NEUTRAL",
             confidence=0.0, reasoning="x", source="local", db_path=self.db_path,
         )
         day_two = datetime(2026, 7, 18, 19, 0, tzinfo=timezone.utc)
-        self.assertFalse(has_news_sentiment_logged_today("BTC", day_two, db_path=self.db_path))
+        self.assertFalse(has_news_sentiment_logged_today("BTC", V1_VERSION, day_two, db_path=self.db_path))
+
+    def test_two_strategy_versions_log_independently_same_asset_same_day(self) -> None:
+        """Regression coverage for the wiring bug the schema migration fixed: v1 and v2
+        must each be able to log GOLD (or BTC) on the same calendar day without one
+        seeing "already logged today" because of the OTHER version's row."""
+        now = datetime(2026, 7, 17, 19, 0, tzinfo=timezone.utc)
+
+        self.assertFalse(has_news_sentiment_logged_today("GOLD", V1_VERSION, now, db_path=self.db_path))
+        self.assertFalse(has_news_sentiment_logged_today("GOLD", V2_VERSION, now, db_path=self.db_path))
+
+        insert_news_sentiment_log(
+            run_id="run-1", asset="GOLD", strategy_version=V1_VERSION, fetch_timestamp=now, signal_type="NEUTRAL",
+            confidence=0.0, reasoning="v1 keyword read", source="local", db_path=self.db_path,
+        )
+        # v1 now shows logged today -- but v2 must NOT be considered logged just because
+        # v1 ran first. This is the exact bug the asset-only (pre-migration) gate had.
+        self.assertTrue(has_news_sentiment_logged_today("GOLD", V1_VERSION, now, db_path=self.db_path))
+        self.assertFalse(has_news_sentiment_logged_today("GOLD", V2_VERSION, now, db_path=self.db_path))
+
+        ok = insert_news_sentiment_log(
+            run_id="run-1", asset="GOLD", strategy_version=V2_VERSION, fetch_timestamp=now, signal_type="BUY_BIAS",
+            confidence=0.4, reasoning="v2 LLM read", source="claude", db_path=self.db_path,
+        )
+        self.assertTrue(ok, "v2 must be able to insert its own row for the same asset+fetch_timestamp as v1")
+        self.assertTrue(has_news_sentiment_logged_today("GOLD", V2_VERSION, now, db_path=self.db_path))
+
+    def test_latest_fetch_timestamp_is_scoped_per_strategy_version(self) -> None:
+        earlier = datetime(2026, 7, 17, 19, 0, tzinfo=timezone.utc)
+        later = datetime(2026, 7, 18, 19, 0, tzinfo=timezone.utc)
+
+        insert_news_sentiment_log(
+            run_id="run-1", asset="GOLD", strategy_version=V1_VERSION, fetch_timestamp=later, signal_type="NEUTRAL",
+            confidence=0.0, reasoning="v1, later", source="local", db_path=self.db_path,
+        )
+        insert_news_sentiment_log(
+            run_id="run-1", asset="GOLD", strategy_version=V2_VERSION, fetch_timestamp=earlier, signal_type="NEUTRAL",
+            confidence=0.0, reasoning="v2, earlier", source="claude", db_path=self.db_path,
+        )
+
+        # v1's latest must reflect ONLY v1's own row (later), not be pulled forward or
+        # masked by v2's -- a version-blind MAX(fetch_timestamp) would get this wrong.
+        self.assertEqual(latest_news_sentiment_fetch_timestamp("GOLD", V1_VERSION, db_path=self.db_path), later)
+        self.assertEqual(latest_news_sentiment_fetch_timestamp("GOLD", V2_VERSION, db_path=self.db_path), earlier)
 
 
 if __name__ == "__main__":

@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS news_sentiment_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     run_id TEXT NOT NULL,
     asset TEXT NOT NULL,
+    strategy_version TEXT NOT NULL,
     news_timestamp TEXT,
     fetch_timestamp TEXT NOT NULL,
     sentiment_score INTEGER,
@@ -71,7 +72,7 @@ CREATE TABLE IF NOT EXISTS news_sentiment_log (
     reasoning TEXT NOT NULL,
     source TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    UNIQUE (asset, fetch_timestamp)
+    UNIQUE (asset, strategy_version, fetch_timestamp)
 );
 """
 
@@ -310,6 +311,7 @@ class NewsSentimentLogRow:
     id: int | None
     run_id: str
     asset: str
+    strategy_version: str
     news_timestamp: datetime | None
     fetch_timestamp: datetime
     sentiment_score: int | None
@@ -326,7 +328,7 @@ def list_news_sentiment_log_for_run(run_id: str, db_path: Path = DEFAULT_DB_PATH
     with closing(sqlite3.connect(str(db_path))) as conn:
         rows = conn.execute(
             """
-            SELECT id, run_id, asset, news_timestamp, fetch_timestamp, sentiment_score,
+            SELECT id, run_id, asset, strategy_version, news_timestamp, fetch_timestamp, sentiment_score,
                    signal_type, confidence, reasoning, source, created_at
             FROM news_sentiment_log WHERE run_id = ? ORDER BY id ASC
             """,
@@ -334,9 +336,9 @@ def list_news_sentiment_log_for_run(run_id: str, db_path: Path = DEFAULT_DB_PATH
         ).fetchall()
     return [
         NewsSentimentLogRow(
-            id=r[0], run_id=r[1], asset=r[2], news_timestamp=datetime.fromisoformat(r[3]) if r[3] else None,
-            fetch_timestamp=datetime.fromisoformat(r[4]), sentiment_score=r[5], signal_type=r[6],
-            confidence=r[7], reasoning=r[8], source=r[9], created_at=datetime.fromisoformat(r[10]),
+            id=r[0], run_id=r[1], asset=r[2], strategy_version=r[3], news_timestamp=datetime.fromisoformat(r[4]) if r[4] else None,
+            fetch_timestamp=datetime.fromisoformat(r[5]), sentiment_score=r[6], signal_type=r[7],
+            confidence=r[8], reasoning=r[9], source=r[10], created_at=datetime.fromisoformat(r[11]),
         )
         for r in rows
     ]
@@ -345,6 +347,7 @@ def list_news_sentiment_log_for_run(run_id: str, db_path: Path = DEFAULT_DB_PATH
 def insert_news_sentiment_log(
     run_id: str,
     asset: str,
+    strategy_version: str,
     fetch_timestamp: datetime,
     signal_type: NewsSignalType,
     confidence: float,
@@ -354,9 +357,12 @@ def insert_news_sentiment_log(
     sentiment_score: int | None = None,
     db_path: Path = DEFAULT_DB_PATH,
 ) -> bool:
-    """Returns False (not an error) if this asset already has a logged row for this
-    exact fetch_timestamp — a dedupe-on-insert safety net behind the daily cadence gate
-    (see has_news_sentiment_logged_today)."""
+    """Returns False (not an error) if this (asset, strategy_version) already has a
+    logged row for this exact fetch_timestamp — a dedupe-on-insert safety net behind
+    the daily cadence gate (see has_news_sentiment_logged_today). strategy_version is
+    a required, explicit argument (never defaulted) -- v1.0.0 (keyword) and
+    v2.0.0-llm-claude now run in parallel and log independently, and a silent default
+    here would risk misattributing one version's row to the other."""
     init_execution_tables(db_path)
     created_at = datetime.now(timezone.utc)
     with closing(sqlite3.connect(str(db_path))) as conn:
@@ -364,12 +370,12 @@ def insert_news_sentiment_log(
             conn.execute(
                 """
                 INSERT INTO news_sentiment_log (
-                    run_id, asset, news_timestamp, fetch_timestamp, sentiment_score,
+                    run_id, asset, strategy_version, news_timestamp, fetch_timestamp, sentiment_score,
                     signal_type, confidence, reasoning, source, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    run_id, asset, news_timestamp.isoformat() if news_timestamp else None,
+                    run_id, asset, strategy_version, news_timestamp.isoformat() if news_timestamp else None,
                     fetch_timestamp.isoformat(), sentiment_score, signal_type, confidence, reasoning, source,
                     created_at.isoformat(),
                 ),
@@ -380,28 +386,38 @@ def insert_news_sentiment_log(
     return True
 
 
-def latest_news_sentiment_fetch_timestamp(asset: str, db_path: Path = DEFAULT_DB_PATH) -> datetime | None:
-    """Most recent fetch_timestamp logged for this asset across ALL runs (unlike
-    list_news_sentiment_log_for_run, which is scoped to one run_id) -- the
+def latest_news_sentiment_fetch_timestamp(asset: str, strategy_version: str, db_path: Path = DEFAULT_DB_PATH) -> datetime | None:
+    """Most recent fetch_timestamp logged for this (asset, strategy_version) across ALL
+    runs (unlike list_news_sentiment_log_for_run, which is scoped to one run_id) -- the
     news_sentiment_log analogue of latest_logged_candle_timestamp. Read-only; used by
-    nero_core.execution.health_check to report/flag staleness."""
+    nero_core.execution.health_check to report/flag staleness.
+
+    strategy_version is required (not defaulted, not aggregated across versions): with
+    v1.0.0 and v2.0.0-llm-claude both wired live, a version-blind MAX(fetch_timestamp)
+    would report v1's timestamp as "fresh" even if v2 were silently broken -- exactly
+    the failure mode this function exists to catch."""
     init_execution_tables(db_path)
     with closing(sqlite3.connect(str(db_path))) as conn:
         row = conn.execute(
-            "SELECT MAX(fetch_timestamp) FROM news_sentiment_log WHERE asset = ?", (asset,)
+            "SELECT MAX(fetch_timestamp) FROM news_sentiment_log WHERE asset = ? AND strategy_version = ?",
+            (asset, strategy_version),
         ).fetchone()
     return datetime.fromisoformat(row[0]) if row and row[0] is not None else None
 
 
-def has_news_sentiment_logged_today(asset: str, day: datetime, db_path: Path = DEFAULT_DB_PATH) -> bool:
-    """True if a news_sentiment_log row already exists for `asset` on `day`'s UTC
-    calendar date — the daily-cadence gate that keeps a delayed/retried run within the
-    same day's window from double-logging."""
+def has_news_sentiment_logged_today(asset: str, strategy_version: str, day: datetime, db_path: Path = DEFAULT_DB_PATH) -> bool:
+    """True if a news_sentiment_log row already exists for this (asset, strategy_version)
+    on `day`'s UTC calendar date — the daily-cadence gate that keeps a delayed/retried
+    run within the same day's window from double-logging.
+
+    strategy_version is required and part of the gate: without it, whichever version
+    evaluates an asset first each day would cause every other version to see
+    "already logged today" and skip entirely, even though it never actually ran."""
     init_execution_tables(db_path)
     date_str = day.astimezone(timezone.utc).date().isoformat()
     with closing(sqlite3.connect(str(db_path))) as conn:
         row = conn.execute(
-            "SELECT 1 FROM news_sentiment_log WHERE asset = ? AND substr(fetch_timestamp, 1, 10) = ? LIMIT 1",
-            (asset, date_str),
+            "SELECT 1 FROM news_sentiment_log WHERE asset = ? AND strategy_version = ? AND substr(fetch_timestamp, 1, 10) = ? LIMIT 1",
+            (asset, strategy_version, date_str),
         ).fetchone()
     return row is not None
