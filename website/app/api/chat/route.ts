@@ -98,6 +98,17 @@ export async function POST(request: Request): Promise<Response> {
       signal: controller.signal,
     });
 
+    // Headers have arrived -- clear the connection-phase abort timer now, not
+    // in the shared `finally` below. Previously this timer was only ever
+    // cleared after the ENTIRE request (including the full body read) had
+    // finished, so UPSTREAM_TIMEOUT_MS's AbortController stayed armed through
+    // readAnthropicReplyAsText and could fire mid-stream on a slow-but-alive
+    // response (confirmed in production: 502s logged as "upstream request
+    // threw: DOMException [AbortError]: This operation was aborted" on
+    // requests that had already connected). STREAM_IDLE_TIMEOUT_MS's
+    // per-chunk rolling window is what's meant to govern the body-read phase.
+    clearTimeout(timeoutId);
+
     if (!upstream.ok || !upstream.body) {
       const bodyText = upstream.body ? await upstream.text().catch(() => "<unreadable body>") : "<no body>";
       console.error(`[chat] upstream request failed: status=${upstream.status} body=${bodyText}`);
