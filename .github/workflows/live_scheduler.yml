@@ -2,7 +2,15 @@ name: Live Scheduler
 
 on:
   schedule:
-    - cron: "0,30 * * * *"
+    # Offset from :00/:30 deliberately -- GitHub's own scheduled-workflow docs warn
+    # that `schedule` runs are delayed most at exactly the popular top-of-hour/
+    # half-hour marks every default-configured cron job across GitHub converges on.
+    # This project's own execution_metadata history confirmed the effect directly:
+    # runs anchored at :00/:30 were landing 15-105+ minutes late, most days missing
+    # the "24h"/"1week" candle_boundary_due window entirely (see
+    # nero_core/execution/candle_schedule.py's BUG FOUND note). Still every 30
+    # minutes, just off the busiest queueing slot.
+    - cron: "3,33 * * * *"
   workflow_dispatch:
 
 permissions:
