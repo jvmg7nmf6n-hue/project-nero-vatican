@@ -41,6 +41,76 @@ class ParsePublishedTest(unittest.TestCase):
         self.assertIsNone(parse_published("not a real date"))
 
 
+class ParsePublishedIso8601Test(unittest.TestCase):
+    """Regression coverage for the 2026-07-28 live validation finding (see
+    docs/site_data/news_llm_live_validation.md): Yahoo Finance's RSS feed returns
+    ISO8601 pubDates (e.g. "2026-07-28T11:40:31Z"), which parsedate_to_datetime
+    (RFC822-only) cannot parse -- every Yahoo headline was silently excluded from
+    the lookahead-eligible set regardless of true age. Confirmed via live fetch
+    (Step 0d of this task) that of the 5 configured sources, CNBC and CoinDesk both
+    return RFC822 dates (unaffected); Yahoo Finance returns ISO8601 (affected);
+    Reuters and MarketWatch Economy could not be fetched at all at check time (DNS
+    failure / 403, both unrelated to timestamp format) so their format could not be
+    confirmed -- 1 of 5 configured sources is confirmed affected, 2 of 5 confirmed
+    unaffected, 2 of 5 unconfirmed due to unrelated connectivity issues."""
+
+    def test_iso8601_with_z_suffix_parses_and_is_utc(self) -> None:
+        parsed = parse_published("2026-07-28T11:40:31Z")
+        self.assertEqual(parsed, datetime(2026, 7, 28, 11, 40, 31, tzinfo=timezone.utc))
+
+    def test_iso8601_with_non_utc_offset_resolves_to_correct_utc_instant(self) -> None:
+        # 14:40:31+02:00 is the same instant as 12:40:31Z.
+        parsed = parse_published("2026-07-28T14:40:31+02:00")
+        self.assertEqual(parsed, datetime(2026, 7, 28, 12, 40, 31, tzinfo=timezone.utc))
+
+    def test_iso8601_with_fractional_seconds_parses(self) -> None:
+        parsed = parse_published("2026-07-28T11:40:31.123456Z")
+        self.assertEqual(parsed, datetime(2026, 7, 28, 11, 40, 31, 123456, tzinfo=timezone.utc))
+
+    def test_naive_iso8601_timestamp_is_treated_as_unparseable_not_assumed_utc(self) -> None:
+        # No offset and no "Z" at all. Assuming UTC (or local) here would risk a
+        # lookahead leak if the guess is wrong -- excluding is the safe failure
+        # mode, matching the existing "unparseable -> exclude" contract.
+        parsed = parse_published("2026-07-28T11:40:31")
+        self.assertIsNone(parsed)
+
+    def test_unparseable_after_both_parsers_returns_none(self) -> None:
+        self.assertIsNone(parse_published("definitely not a timestamp"))
+
+    def test_unparseable_timestamp_is_logged_with_raw_value(self) -> None:
+        with self.assertLogs("nero_core.strategies.news_sentiment", level="WARNING") as captured:
+            parse_published("definitely not a timestamp")
+
+        self.assertTrue(any("definitely not a timestamp" in line for line in captured.output))
+
+    def test_naive_iso8601_timestamp_is_logged_with_raw_value(self) -> None:
+        with self.assertLogs("nero_core.strategies.news_sentiment", level="WARNING") as captured:
+            parse_published("2026-07-28T11:40:31")
+
+        self.assertTrue(any("2026-07-28T11:40:31" in line for line in captured.output))
+
+
+class SelectEligibleHeadlinesIso8601BoundaryTest(unittest.TestCase):
+    """Bug 2 boundary coverage using ISO8601 timestamps specifically (the existing
+    SelectEligibleHeadlinesTest class above already covers the RFC822 boundary)."""
+
+    def test_iso8601_headline_just_inside_the_buffer_is_included(self) -> None:
+        just_old_enough = (NOW - timedelta(hours=2, minutes=1)).isoformat().replace("+00:00", "Z")
+        headlines = [_item("iso news", just_old_enough)]
+
+        eligible = select_eligible_headlines(headlines, NOW, min_publication_age_hours=2.0)
+
+        self.assertEqual(len(eligible), 1)
+
+    def test_iso8601_headline_just_outside_the_buffer_is_excluded(self) -> None:
+        just_too_recent = (NOW - timedelta(hours=1, minutes=59)).isoformat().replace("+00:00", "Z")
+        headlines = [_item("iso news", just_too_recent)]
+
+        eligible = select_eligible_headlines(headlines, NOW, min_publication_age_hours=2.0)
+
+        self.assertEqual(eligible, [])
+
+
 class SelectEligibleHeadlinesTest(unittest.TestCase):
     def test_headline_older_than_buffer_is_included(self) -> None:
         old_enough = _rfc822(NOW - timedelta(hours=3))

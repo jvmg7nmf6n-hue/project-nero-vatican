@@ -19,6 +19,7 @@ story publishing and a trader being able to react to it. Enforced in
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
@@ -28,6 +29,8 @@ import requests
 
 from nero_core.data_sources.news_feed import NewsItem
 from nero_core.strategies.registry import StrategyRegistry, StrategyVariant, default_registry
+
+logger = logging.getLogger(__name__)
 
 STRATEGY_ID = "NEWS_SENTIMENT"
 STRATEGY_VERSION = "news-sentiment-v1.0.0"
@@ -72,19 +75,50 @@ class SentimentResult:
 
 
 def parse_published(published: str) -> datetime | None:
-    """Parse an RSS pubDate (RFC822) into a UTC-aware datetime. Returns None — never a
-    guessed/assumed timestamp — if the string can't be parsed, so a malformed feed can
-    only make this signal MORE conservative (the headline gets excluded), never less
-    lookahead-safe."""
+    """Parse an RSS pubDate into a UTC-aware datetime. Tries RFC822 first (the RSS
+    spec's own format, and what CNBC/CoinDesk both use), then falls back to ISO8601
+    (what Yahoo Finance's feed actually returns -- e.g. "2026-07-28T11:40:31Z";
+    found in the 2026-07-28 live validation, see
+    docs/site_data/news_llm_live_validation.md, where every Yahoo headline was
+    silently excluded because only RFC822 was ever tried).
+
+    Returns None — never a guessed/assumed timestamp — if neither parser succeeds,
+    so a malformed feed can only make this signal MORE conservative (the headline
+    gets excluded), never less lookahead-safe. Every failure (unparseable by both
+    parsers, or ISO8601 parsing to a naive datetime with no zone) is logged with
+    the raw string so future gaps are visible instead of silent.
+
+    NAIVE TIMESTAMP HANDLING: an RFC822 date with no explicit zone (rare, but legal
+    RFC822) is still assumed UTC below, unchanged pre-existing behavior. A naive
+    ISO8601 result (no "Z", no +HH:MM offset at all) is instead treated as
+    unparseable and excluded -- deliberately NOT assuming UTC there. Guessing a
+    zone for a genuinely zone-less timestamp risks admitting a headline the
+    lookahead buffer should have excluded if the guess is wrong (a lookahead leak,
+    not just a missed headline), so for the new ISO8601 path the safer failure mode
+    is chosen: exclude rather than guess. This makes the two parsers inconsistent
+    with each other on this one point; that inconsistency is intentional (documented
+    here, not fixed) rather than silently harmonized, since changing the long-standing
+    RFC822 behavior is out of scope for this fix."""
     if not published:
         return None
     try:
         parsed = parsedate_to_datetime(published)
     except (TypeError, ValueError):
+        parsed = None
+    if parsed is not None:
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+
+    try:
+        iso_parsed = datetime.fromisoformat(published.strip())
+    except ValueError:
+        logger.warning("Unparseable pubDate (RFC822 and ISO8601 both failed): %r", published)
         return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    if iso_parsed.tzinfo is None:
+        logger.warning("Naive ISO8601 pubDate has no timezone, excluding rather than guessing one: %r", published)
+        return None
+    return iso_parsed.astimezone(timezone.utc)
 
 
 def select_eligible_headlines(
