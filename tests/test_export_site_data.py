@@ -262,9 +262,29 @@ class BuildStrategiesExportTest(unittest.TestCase):
     def test_news_sentiment_appears_with_daily_timeframe(self) -> None:
         export = build_strategies_export(now=NOW)
         news_entries = [e for e in export["strategies"] if e["name"] == "NEWS_SENTIMENT"]
-        self.assertEqual(len(news_entries), 2)  # GOLD, BTC
+        self.assertEqual(len(news_entries), 4)  # v1.0.0 x (GOLD, BTC) + v2.0.0-llm-claude x (GOLD, BTC)
         for entry in news_entries:
             self.assertEqual(entry["timeframe"], "daily")
+
+    def test_news_sentiment_v1_and_v2_are_separate_distinct_roster_entries(self) -> None:
+        """v2.0.0-llm-claude must appear as its own entry, never merged with or
+        mistaken for v1.0.0's row -- both versions run in parallel and must be
+        independently visible to the site."""
+        export = build_strategies_export(now=NOW)
+        news_entries = [e for e in export["strategies"] if e["name"] == "NEWS_SENTIMENT"]
+        versions_by_asset = {(e["asset"], e["version"]) for e in news_entries}
+        self.assertEqual(
+            versions_by_asset,
+            {
+                ("GOLD", "news-sentiment-v1.0.0"), ("BTC", "news-sentiment-v1.0.0"),
+                ("GOLD", "news-sentiment-v2.0.0-llm-claude"), ("BTC", "news-sentiment-v2.0.0-llm-claude"),
+            },
+        )
+        v2_entries = [e for e in news_entries if e["version"] == "news-sentiment-v2.0.0-llm-claude"]
+        for entry in v2_entries:
+            self.assertTrue(entry["verification_status"].startswith("experimental"))
+            self.assertNotIn("watchlist", entry["verification_status"])
+            self.assertNotIn("verified —", entry["verification_status"])
 
     def test_schema_version_and_last_updated_present(self) -> None:
         export = build_strategies_export(now=NOW)
@@ -279,7 +299,7 @@ class BuildStrategiesExportTest(unittest.TestCase):
     def test_configs_with_no_historical_backtest_export_a_null_source_report(self) -> None:
         export = build_strategies_export(now=NOW)
         news_entries = [e for e in export["strategies"] if e["name"] == "NEWS_SENTIMENT"]
-        self.assertEqual(len(news_entries), 2)
+        self.assertEqual(len(news_entries), 4)
         for entry in news_entries:
             self.assertIsNone(entry["source_report"])
 

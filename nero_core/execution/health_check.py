@@ -106,6 +106,7 @@ from nero_core.execution.live_scheduler import (
     SINGLE_ASSET_CONFIGS,
 )
 from nero_core.strategies.news_sentiment import STRATEGY_VERSION as NEWS_SENTIMENT_VERSION
+from nero_core.strategies.news_sentiment_llm import STRATEGY_VERSION as NEWS_SENTIMENT_LLM_VERSION
 from nero_core.strategies.timeframe_calibration import HOURS_PER_TIMEFRAME
 from nero_core.truth_ledger.execution_log import (
     DEFAULT_DB_PATH,
@@ -183,6 +184,11 @@ def _live_roster() -> list[RosterEntry]:
         RosterEntry(DONCHIAN_TREND_ID, c.strategy_version, c.pair, DONCHIAN_FOREX_TIMEFRAME) for c in DONCHIAN_FOREX_CONFIGS
     )
     entries.extend(RosterEntry(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_VERSION, asset, "daily") for asset in NEWS_SENTIMENT_ASSETS)
+    # v2.0.0-llm-claude wired 2026-07-28 IN PARALLEL with v1.0.0 above -- its own roster
+    # entry, own staleness check (see the version-scoped latest_news_sentiment_fetch_
+    # timestamp call below), so a silent v2-specific outage is caught even while v1
+    # keeps succeeding.
+    entries.extend(RosterEntry(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_LLM_VERSION, asset, "daily") for asset in NEWS_SENTIMENT_ASSETS)
     entries.extend(RosterEntry(ORDERFLOW_ID, ORDERFLOW_VERSION, asset, None) for asset in ORDERFLOW_BINANCE_SYMBOLS)
     return entries
 
@@ -293,6 +299,7 @@ def _evaluate_entry(
     metadata_rows: list[ExecutionMetadataRow],
     stats_by_key: dict[tuple[str, str, str], dict[str, Any]],
     now: datetime,
+    db_path: Path = DEFAULT_DB_PATH,
 ) -> StrategyHealth:
     stats = stats_by_key.get((entry.strategy, entry.strategy_version, entry.asset))
     resolved_trades = stats["resolved_trades"] if stats is not None else None
@@ -300,7 +307,21 @@ def _evaluate_entry(
     open_position = stats["open_position"] if stats is not None else None
 
     if entry.strategy == NEWS_SENTIMENT_ID:
-        last_signal_at = latest_news_sentiment_fetch_timestamp(entry.asset)
+        # strategy_version-scoped: with v1.0.0 and v2.0.0-llm-claude both wired live,
+        # a version-blind lookup would report v1's timestamp as "fresh" for v2's
+        # roster entry even if v2 were silently broken. db_path is passed through
+        # explicitly -- BUG FOUND while adding this: the previous call site
+        # (`latest_news_sentiment_fetch_timestamp(entry.asset)`, pre-dating this
+        # NEWS_SENTIMENT_ID branch's strategy_version argument too) never passed
+        # db_path at all, so it silently always read execution_log.DEFAULT_DB_PATH
+        # regardless of what db_path run_health_check itself was called with --
+        # every other roster entry's staleness already correctly used the passed-in
+        # db_path via execution_rows/metadata_rows, so NEWS_SENTIMENT was the one
+        # inconsistent path. In production this coincided with the real path by
+        # chance (nothing had ever called run_health_check with a non-default
+        # db_path AND actually asserted on a NEWS_SENTIMENT staleness result), so it
+        # was never observably wrong until a test exercised both together.
+        last_signal_at = latest_news_sentiment_fetch_timestamp(entry.asset, entry.strategy_version, db_path=db_path)
     else:
         last_signal_at = _last_signal_at(execution_rows, entry.strategy, entry.strategy_version, entry.asset)
 
@@ -388,7 +409,7 @@ def run_health_check(db_path: Path = DEFAULT_DB_PATH, now: datetime | None = Non
     results: list[StrategyHealth] = []
     for entry in _live_roster():
         try:
-            results.append(_evaluate_entry(entry, execution_rows, metadata_rows, stats_by_key, now))
+            results.append(_evaluate_entry(entry, execution_rows, metadata_rows, stats_by_key, now, db_path=db_path))
         except Exception as exc:  # noqa: BLE001 - one entry's own failure must not blank the whole report
             results.append(
                 StrategyHealth(

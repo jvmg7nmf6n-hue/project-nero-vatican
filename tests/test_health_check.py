@@ -14,6 +14,9 @@ from nero_core.execution.live_scheduler import (
     GOLD_SILVER_RATIO_ID,
     GOLD_SILVER_RATIO_LABEL,
     GOLD_SILVER_RATIO_VERSION,
+    NEWS_SENTIMENT_ID,
+    NEWS_SENTIMENT_V1_VERSION,
+    NEWS_SENTIMENT_V2_VERSION,
     ORDERFLOW_ID,
     ORDERFLOW_VERSION,
     PEAD_CONFIGS,
@@ -22,7 +25,7 @@ from nero_core.execution.live_scheduler import (
     TREND_PULLBACK_ID,
     TREND_PULLBACK_VERSION,
 )
-from nero_core.truth_ledger.execution_log import insert_execution_log_row, insert_execution_metadata
+from nero_core.truth_ledger.execution_log import insert_execution_log_row, insert_execution_metadata, insert_news_sentiment_log
 
 NOW = datetime(2026, 7, 28, 12, 0, tzinfo=timezone.utc)
 # Inside candle_boundary_due("24h", ...)'s post-midnight-UTC window (see
@@ -126,6 +129,50 @@ class ContinuousSignalStalenessTest(HealthCheckTestCase):
         result = self._find(results, TREND_PULLBACK_ID, TREND_PULLBACK_VERSION, "BNB")
         self.assertTrue(result.stale)
         self.assertIn("no last signal ever recorded", result.flag_reason)
+
+
+class NewsSentimentVersionIsolatedStalenessTest(HealthCheckTestCase):
+    """v1.0.0 and v2.0.0-llm-claude each get their own roster entry and must be
+    staleness-checked independently -- a version-blind lookup would report v2's
+    entry as "fresh" off v1's timestamp alone even if v2 were silently broken, which
+    is exactly the failure mode the strategy_version-scoped news_sentiment_log
+    schema (and latest_news_sentiment_fetch_timestamp's new required parameter)
+    exists to prevent."""
+
+    def test_v2_stale_is_not_masked_by_v1_being_fresh(self) -> None:
+        insert_news_sentiment_log(
+            run_id="r1", asset="GOLD", strategy_version=NEWS_SENTIMENT_V1_VERSION, fetch_timestamp=_hours_ago(1),
+            signal_type="NEUTRAL", confidence=0.0, reasoning="v1 fresh", source="local", db_path=self.db_path,
+        )
+        # v2 has never logged anything for GOLD -- must be flagged stale in its OWN
+        # roster entry despite v1's row existing for the same asset.
+        results = health_check.run_health_check(db_path=self.db_path, now=NOW)
+        v1_result = self._find(results, NEWS_SENTIMENT_ID, NEWS_SENTIMENT_V1_VERSION, "GOLD")
+        v2_result = self._find(results, NEWS_SENTIMENT_ID, NEWS_SENTIMENT_V2_VERSION, "GOLD")
+        self.assertFalse(v1_result.stale)
+        self.assertTrue(v2_result.stale)
+        self.assertIn("no last signal ever recorded", v2_result.flag_reason)
+
+    def test_v1_stale_is_not_masked_by_v2_being_fresh(self) -> None:
+        insert_news_sentiment_log(
+            run_id="r1", asset="BTC", strategy_version=NEWS_SENTIMENT_V2_VERSION, fetch_timestamp=_hours_ago(1),
+            signal_type="NEUTRAL", confidence=0.0, reasoning="v2 fresh", source="claude", db_path=self.db_path,
+        )
+        results = health_check.run_health_check(db_path=self.db_path, now=NOW)
+        v1_result = self._find(results, NEWS_SENTIMENT_ID, NEWS_SENTIMENT_V1_VERSION, "BTC")
+        v2_result = self._find(results, NEWS_SENTIMENT_ID, NEWS_SENTIMENT_V2_VERSION, "BTC")
+        self.assertTrue(v1_result.stale)
+        self.assertFalse(v2_result.stale)
+
+    def test_both_fresh_when_both_have_logged_recently(self) -> None:
+        for version, source in ((NEWS_SENTIMENT_V1_VERSION, "local"), (NEWS_SENTIMENT_V2_VERSION, "claude")):
+            insert_news_sentiment_log(
+                run_id="r1", asset="GOLD", strategy_version=version, fetch_timestamp=_hours_ago(1),
+                signal_type="NEUTRAL", confidence=0.0, reasoning="fresh", source=source, db_path=self.db_path,
+            )
+        results = health_check.run_health_check(db_path=self.db_path, now=NOW)
+        self.assertFalse(self._find(results, NEWS_SENTIMENT_ID, NEWS_SENTIMENT_V1_VERSION, "GOLD").stale)
+        self.assertFalse(self._find(results, NEWS_SENTIMENT_ID, NEWS_SENTIMENT_V2_VERSION, "GOLD").stale)
 
 
 class EventDrivenStalenessTest(HealthCheckTestCase):

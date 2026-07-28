@@ -67,6 +67,7 @@ from nero_core.execution.live_scheduler import (
 from nero_core.execution.source_reports import source_report_for
 from nero_core.execution.verification_status import verification_status_for
 from nero_core.strategies.news_sentiment import STRATEGY_VERSION as NEWS_SENTIMENT_VERSION
+from nero_core.strategies.news_sentiment_llm import STRATEGY_VERSION as NEWS_SENTIMENT_LLM_VERSION
 from nero_core.truth_ledger.execution_log import DEFAULT_DB_PATH, ExecutionLogRow, list_execution_log
 
 SCHEMA_VERSION = 1
@@ -263,6 +264,21 @@ def _roster_entries() -> list[dict[str, object]]:
                 "timeframe": "daily",
                 "verification_status": verification_status_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_VERSION, asset),
                 "source_report": source_report_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_VERSION, asset),
+            }
+        )
+    # news-sentiment-v2.0.0-llm-claude wired 2026-07-28 IN PARALLEL with v1.0.0 above
+    # (never replacing it) -- a separate, distinct roster entry so the site's strategy
+    # pages, /lab, and site_summary counts reflect both versions honestly rather than
+    # merging or confusing them.
+    for asset in NEWS_SENTIMENT_ASSETS:
+        entries.append(
+            {
+                "name": NEWS_SENTIMENT_ID,
+                "version": NEWS_SENTIMENT_LLM_VERSION,
+                "asset": asset,
+                "timeframe": "daily",
+                "verification_status": verification_status_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_LLM_VERSION, asset),
+                "source_report": source_report_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_LLM_VERSION, asset),
             }
         )
     for asset in ORDERFLOW_BINANCE_SYMBOLS:

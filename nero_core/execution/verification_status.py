@@ -34,6 +34,20 @@ VERIFICATION_STATUS: dict[tuple[str, str, str], str] = {
     ("COINTEGRATION_PAIRS", "cointegration-pairs-v1.0.0", "BTC-ETH"): "verified — weakest, live-proving",
     ("NEWS_SENTIMENT", "news-sentiment-v1.0.0", "GOLD"): "forward-test-only, no historical backtest",
     ("NEWS_SENTIMENT", "news-sentiment-v1.0.0", "BTC"): "forward-test-only, no historical backtest",
+    # Wired 2026-07-28 to run IN PARALLEL with v1.0.0 (never replacing it) for a direct
+    # keyword-vs-LLM comparison on the same real headlines -- see
+    # docs/site_data/news_llm_live_validation.md for the live validation and bugfix
+    # history behind this variant. Same "experimental" tier as ORDERFLOW_IMBALANCE:
+    # zero live resolved predictions, gate (b) surprise_score has zero live exercise to
+    # date -- must never be worded as "verified" or "watchlist" until it has earned that.
+    ("NEWS_SENTIMENT", "news-sentiment-v2.0.0-llm-claude", "GOLD"):
+        "experimental — LLM-powered, forward-testing only, zero live resolved predictions, "
+        "gate (b) surprise_score has zero live exercise, running in parallel with the "
+        "original keyword-based version for direct comparison",
+    ("NEWS_SENTIMENT", "news-sentiment-v2.0.0-llm-claude", "BTC"):
+        "experimental — LLM-powered, forward-testing only, zero live resolved predictions, "
+        "gate (b) surprise_score has zero live exercise, running in parallel with the "
+        "original keyword-based version for direct comparison",
     # Asset Expansion Phase A metals sweep (docs/metals_phase_a_full_sweep.md,
     # docs/metals_grid_shift_verification.md): positive both backtest halves, adequate
     # sample, but grid-shift verification does not apply at 24h and NO Phase A config
