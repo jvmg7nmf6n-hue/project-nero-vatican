@@ -38,6 +38,30 @@ STALENESS SIGNAL -- two different bases, deliberately:
     docstring) and only logs on a real ENTRY/EXIT, so neither basis applies:
     this class of starvation bug cannot happen to it (there's no gate to get
     stuck on), so it's reported but never flagged stale.
+
+FRESHNESS GAP (2026-07-29 infrastructure-resilience follow-up): the staleness
+check above answers "was this strategy evaluated at all, recently enough" --
+binary, and only trips once a strategy has gone fully silent past its own
+MAX_GAP_HOURS_BY_GATE threshold. It does NOT catch a strategy that IS still
+being evaluated every period, just later and later each time -- e.g. a gate
+whose candle closed at 00:00 UTC but wasn't actually logged until a run at
+03:50 UTC, comfortably inside MAX_GAP_HOURS_BY_GATE's much more lenient
+window (48h for "24h") but a clear sign of degrading cron timeliness that
+would eventually tip into a full miss. evaluation_gap_hours (computed for
+every non-event-driven, gated entry's MOST RECENT logged row, as wall-clock
+`timestamp` minus the row's own `candle_timestamp`) makes that degradation
+visible before it becomes one. The flag threshold reuses
+candle_schedule.py's own SINGLE_SHOT_TOLERANCE_MINUTES/
+MULTI_SHOT_TOLERANCE_MINUTES/DEFAULT_TOLERANCE_MINUTES (via
+_expected_max_freshness_gap_minutes) rather than inventing a fourth set of
+numbers -- those constants already ARE "how late can a candle's evaluation
+run before candle_boundary_due itself would have rejected it," which is
+exactly what "was this specific evaluation timely" needs to be judged
+against. PEAD/GOLD_SILVER_RATIO_MR (event-driven) and ORDERFLOW_IMBALANCE
+(no gate) are excluded for the same reasons the staleness check above
+excludes them -- a logged row's candle_timestamp for these doesn't represent
+"this period's gate was evaluated," so a gap computed against it wouldn't
+mean the same thing.
 """
 from __future__ import annotations
 
@@ -53,7 +77,12 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from nero_core.execution.candle_schedule import candle_boundary_due
+from nero_core.execution.candle_schedule import (
+    DEFAULT_TOLERANCE_MINUTES,
+    MULTI_SHOT_TOLERANCE_MINUTES,
+    SINGLE_SHOT_TOLERANCE_MINUTES,
+    candle_boundary_due,
+)
 from nero_core.execution.export_site_data import build_stats_export
 from nero_core.execution.live_scheduler import (
     COINTEGRATION_PAIRS_ID,
@@ -179,6 +208,38 @@ def _last_signal_at(rows: list[ExecutionLogRow], strategy: str, strategy_version
     return max(matching) if matching else None
 
 
+def _expected_max_freshness_gap_minutes(gate: str) -> float:
+    """Mirrors candle_schedule.candle_boundary_due/daily_time_due's own default
+    tolerance selection (see this module's own FRESHNESS GAP docstring note) --
+    "24h"/"1week"/"daily" get SINGLE_SHOT_TOLERANCE_MINUTES (one boundary
+    opportunity per period), "12h" gets MULTI_SHOT_TOLERANCE_MINUTES (two per
+    day), everything else gets DEFAULT_TOLERANCE_MINUTES."""
+    if gate in ("24h", "1week", "daily"):
+        return float(SINGLE_SHOT_TOLERANCE_MINUTES)
+    if gate == "12h":
+        return float(MULTI_SHOT_TOLERANCE_MINUTES)
+    return float(DEFAULT_TOLERANCE_MINUTES)
+
+
+def _last_evaluation_gap_hours(
+    rows: list[ExecutionLogRow], strategy: str, strategy_version: str, asset: str
+) -> float | None:
+    """Hours between the MOST RECENTLY logged row's own candle_timestamp (the
+    candle that closed) and its wall-clock `timestamp` (when the scheduler run
+    that logged it actually happened) -- "how late was the evaluation that DID
+    happen," not "did one happen at all" (see this module's own FRESHNESS GAP
+    docstring note). None if this (strategy, strategy_version, asset) has never
+    logged anything -- the existing staleness check already covers that case."""
+    matching = [
+        r for r in rows if r.strategy == strategy and r.strategy_version == strategy_version and r.asset == asset
+    ]
+    if not matching:
+        return None
+    latest = max(matching, key=lambda r: r.timestamp)
+    candle_closed_at = datetime.fromtimestamp(latest.candle_timestamp / 1000.0, tz=timezone.utc)
+    return (latest.timestamp - candle_closed_at).total_seconds() / 3600.0
+
+
 @dataclass(frozen=True)
 class StrategyHealth:
     strategy: str
@@ -191,6 +252,8 @@ class StrategyHealth:
     open_position: dict[str, Any] | None
     stale: bool
     flag_reason: str | None
+    evaluation_gap_hours: float | None = None
+    freshness_flagged: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -204,6 +267,8 @@ class StrategyHealth:
             "open_position": self.open_position,
             "stale": self.stale,
             "flag_reason": self.flag_reason,
+            "evaluation_gap_hours": self.evaluation_gap_hours,
+            "freshness_flagged": self.freshness_flagged,
         }
 
 
@@ -238,12 +303,34 @@ def _evaluate_entry(
         reference = last_signal_at
         reference_label = "last signal"
 
+    # FRESHNESS GAP -- see this module's own docstring note. Not applicable to
+    # event-driven strategies (a logged row's candle_timestamp doesn't represent
+    # "this period's gate was evaluated" for them) or NEWS_SENTIMENT (its rows
+    # live in news_sentiment_log, gated by daily_time_due, with no candle at all).
+    evaluation_gap_hours: float | None = None
+    freshness_flagged = False
+    freshness_reason: str | None = None
+    if entry.strategy not in EVENT_DRIVEN_STRATEGY_IDS and entry.strategy != NEWS_SENTIMENT_ID:
+        evaluation_gap_hours = _last_evaluation_gap_hours(
+            execution_rows, entry.strategy, entry.strategy_version, entry.asset
+        )
+        if evaluation_gap_hours is not None:
+            max_freshness_gap_hours = _expected_max_freshness_gap_minutes(entry.gate) / 60.0
+            if evaluation_gap_hours > max_freshness_gap_hours:
+                freshness_flagged = True
+                freshness_reason = (
+                    f"most recent evaluation lagged its own candle close by {evaluation_gap_hours:.1f}h "
+                    f"(expected within {max_freshness_gap_hours:.1f}h) -- timeliness is degrading even "
+                    f"though evaluations are still happening"
+                )
+
     max_gap_hours = _expected_max_gap_hours(entry.gate)
     if reference is None:
         return StrategyHealth(
             entry.strategy, entry.strategy_version, entry.asset, entry.gate, last_signal_at,
             resolved_trades, win_rate, open_position, stale=True,
             flag_reason=f"no {reference_label} ever recorded (expected at least every {max_gap_hours:.0f}h)",
+            evaluation_gap_hours=evaluation_gap_hours, freshness_flagged=freshness_flagged,
         )
 
     gap_hours = (now - reference).total_seconds() / 3600.0
@@ -252,11 +339,20 @@ def _evaluate_entry(
             entry.strategy, entry.strategy_version, entry.asset, entry.gate, last_signal_at,
             resolved_trades, win_rate, open_position, stale=True,
             flag_reason=f"{reference_label} was {gap_hours:.1f}h ago, expected at least every {max_gap_hours:.0f}h",
+            evaluation_gap_hours=evaluation_gap_hours, freshness_flagged=freshness_flagged,
+        )
+
+    if freshness_flagged:
+        return StrategyHealth(
+            entry.strategy, entry.strategy_version, entry.asset, entry.gate, last_signal_at,
+            resolved_trades, win_rate, open_position, stale=True, flag_reason=freshness_reason,
+            evaluation_gap_hours=evaluation_gap_hours, freshness_flagged=True,
         )
 
     return StrategyHealth(
         entry.strategy, entry.strategy_version, entry.asset, entry.gate, last_signal_at,
         resolved_trades, win_rate, open_position, stale=False, flag_reason=None,
+        evaluation_gap_hours=evaluation_gap_hours, freshness_flagged=False,
     )
 
 

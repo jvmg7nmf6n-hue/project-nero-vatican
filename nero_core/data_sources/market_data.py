@@ -67,6 +67,19 @@ YFINANCE_INTERVAL_MILLISECONDS = {"1h": 3_600_000, "1d": 86_400_000, "1wk": 604_
 
 CANDLE_COLUMNS = ["date", "open_time", "close_time", "open", "high", "low", "close", "volume"]
 
+# GitHub Actions runners are US-based; api.binance.com returns HTTP 451 ("Service
+# unavailable from a restricted location") to US IPs for public market data, including
+# klines -- confirmed directly via 100% of live production fetches for BNB (which has no
+# Coinbase/Kraken fallback -- see BINANCE_SYMBOLS vs. COINBASE_PRODUCTS/KRAKEN_PAIRS
+# above) failing with exactly this error whenever its 12h gate was satisfied (2026-07-29
+# infrastructure-resilience investigation). data-api.binance.vision is the same
+# Binance-operated, US-accessible mirror for public SPOT market data already used by
+# nero_core.data_sources.orderbook_data for the depth endpoint -- applying the same
+# vision-first, api.binance.com-fallback precedent here, confirmed to serve klines
+# identically via a direct live request.
+BINANCE_VISION_KLINES_URL = "https://data-api.binance.vision/api/v3/klines"
+BINANCE_COM_KLINES_URL = "https://api.binance.com/api/v3/klines"
+
 
 class MarketDataUnavailableError(Exception):
     """Raised when no configured live data source could return usable candles.
@@ -250,13 +263,28 @@ class MarketDataClient:
         frame["date"] = pd.to_datetime(frame["close_time"], unit="ms", utc=True)
         return frame[CANDLE_COLUMNS].reset_index(drop=True)
 
+    def _get_binance_klines_payload(self, params: dict) -> object:
+        """Tries data-api.binance.vision first (US-accessible), then api.binance.com --
+        same fallback order and reasoning as orderbook_data.fetch_orderbook_snapshot.
+        Raises the last RequestException if both fail, so callers' existing
+        `except requests.RequestException` handling (cascading to Coinbase/Kraken, or
+        surfacing as a FETCH_INCOMPLETE skip for assets like BNB with no such fallback)
+        is unchanged."""
+        last_exc: requests.RequestException | None = None
+        for url in (BINANCE_VISION_KLINES_URL, BINANCE_COM_KLINES_URL):
+            try:
+                response = requests.get(url, params=params, timeout=self.timeout_seconds)
+                response.raise_for_status()
+                return response.json()
+            except requests.RequestException as exc:
+                last_exc = exc
+        raise last_exc
+
     def _fetch_binance_page(self, symbol: str, interval: str, limit: int, end_time_ms: int | None = None) -> pd.DataFrame:
         params = {"symbol": symbol, "interval": interval, "limit": min(limit, self.BINANCE_MAX_LIMIT)}
         if end_time_ms is not None:
             params["endTime"] = end_time_ms
-        response = requests.get("https://api.binance.com/api/v3/klines", params=params, timeout=self.timeout_seconds)
-        response.raise_for_status()
-        payload = response.json()
+        payload = self._get_binance_klines_payload(params)
         if not isinstance(payload, list) or not payload:
             return pd.DataFrame(columns=["open_time", "open", "high", "low", "close", "volume", "close_time"])
         frame = pd.DataFrame(

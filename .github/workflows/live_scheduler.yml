@@ -9,8 +9,42 @@ on:
     # runs anchored at :00/:30 were landing 15-105+ minutes late, most days missing
     # the "24h"/"1week" candle_boundary_due window entirely (see
     # nero_core/execution/candle_schedule.py's BUG FOUND note). Still every 30
-    # minutes, just off the busiest queueing slot.
+    # minutes, just off the busiest queueing slot. Steady-state coverage for every
+    # gate that isn't one of the fragile single/multi-shot ones below.
     - cron: "3,33 * * * *"
+
+    # REDUNDANT TRIGGER SAFETY NET (2026-07-29 infrastructure-resilience task):
+    # widening candle_boundary_due/daily_time_due's own tolerance (see
+    # candle_schedule.py) assumes SOME run lands inside the window -- but querying
+    # this project's own execution_metadata directly showed GitHub Actions actually
+    # DROPS most scheduled ticks outright under load, not just delays them: only
+    # 11-18 of the nominal 48 daily "3,33 * * * *" runs actually fired across 11
+    # observed days (23-37%), confirmed by counting real run timestamps against the
+    # nominal schedule. A wide tolerance window is not the same as a reliable chance
+    # to use it if most ticks in that window never fire at all.
+    #
+    # This project is a public repo, so GitHub Actions minutes are unlimited/free
+    # (confirmed via the repo's own visibility) -- there is no cost reason not to
+    # densify coverage specifically where it matters. These 3 extra entries add
+    # ticks every ~10 minutes, but ONLY during the exact UTC windows the fragile
+    # single-shot ("24h"/"1week", daily_time_due) and multi-shot ("12h") gates can
+    # actually fire in (see candle_schedule.py's SINGLE_SHOT_TOLERANCE_MINUTES=240 /
+    # MULTI_SHOT_TOLERANCE_MINUTES=150) -- every run outside its own gate's window
+    # still costs nothing beyond the free runner minute itself, since
+    # candle_boundary_due/daily_time_due correctly report NOT_DUE and no third-party
+    # fetch ever happens (see run_once's own per-config gate checks) -- so this adds
+    # real redundancy exactly where cron congestion has already been observed to
+    # cause total misses, without multiplying pressure on any rate-limited data
+    # source (Twelve Data, yfinance) outside those windows.
+    #
+    #   00:00-03:59 UTC: covers "24h"/"1week"'s single-shot window (240min) AND
+    #     "12h"'s AM window (150min, fully contained within the wider one).
+    - cron: "5,15,25,35,45,55 0-3 * * *"
+    #   12:00-14:29 UTC: covers "12h"'s PM window (150min).
+    - cron: "5,15,25,35,45,55 12-14 * * *"
+    #   19:00-22:59 UTC: covers NEWS_SENTIMENT's daily_time_due window
+    #     (hour_utc=19, 240min single-shot tolerance -- see candle_schedule.py).
+    - cron: "5,15,25,35,45,55 19-22 * * *"
   workflow_dispatch:
 
 permissions:

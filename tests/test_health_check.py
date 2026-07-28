@@ -35,6 +35,10 @@ def _hours_ago(hours: float, base: datetime = NOW) -> datetime:
     return base - timedelta(hours=hours)
 
 
+def _ms(dt: datetime) -> int:
+    return int(dt.timestamp() * 1000)
+
+
 class HealthCheckTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
@@ -67,7 +71,7 @@ class ContinuousSignalStalenessTest(HealthCheckTestCase):
     def test_1week_strategy_not_flagged_when_recent(self) -> None:
         insert_execution_log_row(
             run_id="r1", strategy=BREAKOUT_MOMENTUM_ID, strategy_version=GOLD_BM_VERSION, asset="GOLD",
-            signal_type="NO_TRADE", reasoning="no signal", candle_timestamp=1,
+            signal_type="NO_TRADE", reasoning="no signal", candle_timestamp=_ms(_hours_ago(2 * 24)),
             timestamp=_hours_ago(2 * 24), db_path=self.db_path,
         )
         results = health_check.run_health_check(db_path=self.db_path, now=NOW)
@@ -87,7 +91,7 @@ class ContinuousSignalStalenessTest(HealthCheckTestCase):
     def test_24h_strategy_not_flagged_within_2_days(self) -> None:
         insert_execution_log_row(
             run_id="r1", strategy=BREAKOUT_MOMENTUM_ID, strategy_version=SILVER_BM_VERSION, asset="SILVER",
-            signal_type="NO_TRADE", reasoning="no signal", candle_timestamp=1,
+            signal_type="NO_TRADE", reasoning="no signal", candle_timestamp=_ms(_hours_ago(30)),
             timestamp=_hours_ago(30), db_path=self.db_path,
         )
         results = health_check.run_health_check(db_path=self.db_path, now=NOW)
@@ -107,7 +111,7 @@ class ContinuousSignalStalenessTest(HealthCheckTestCase):
     def test_12h_strategy_not_flagged_within_1_day(self) -> None:
         insert_execution_log_row(
             run_id="r1", strategy=TREND_PULLBACK_ID, strategy_version=TREND_PULLBACK_VERSION, asset="BNB",
-            signal_type="NO_TRADE", reasoning="no signal", candle_timestamp=1,
+            signal_type="NO_TRADE", reasoning="no signal", candle_timestamp=_ms(_hours_ago(10)),
             timestamp=_hours_ago(10), db_path=self.db_path,
         )
         results = health_check.run_health_check(db_path=self.db_path, now=NOW)
@@ -187,7 +191,7 @@ class FailIndependentTest(HealthCheckTestCase):
 
         insert_execution_log_row(
             run_id="r1", strategy=TREND_PULLBACK_ID, strategy_version=TREND_PULLBACK_VERSION, asset="BNB",
-            signal_type="NO_TRADE", reasoning="no signal", candle_timestamp=1,
+            signal_type="NO_TRADE", reasoning="no signal", candle_timestamp=_ms(_hours_ago(1)),
             timestamp=_hours_ago(1), db_path=self.db_path,
         )
         with patch.object(health_check, "_last_signal_at", side_effect=_boom):
@@ -202,6 +206,86 @@ class FailIndependentTest(HealthCheckTestCase):
 
         # The whole roster is still present -- one failure didn't shrink the report.
         self.assertEqual(len(results), len(health_check._live_roster()))
+
+
+class FreshnessGapTest(HealthCheckTestCase):
+    """evaluation_gap_hours/freshness_flagged catch a strategy that IS still being
+    evaluated every period, just later each time -- degrading timeliness that the
+    binary staleness check (last_signal_at vs. MAX_GAP_HOURS_BY_GATE, a much more
+    lenient threshold) wouldn't trip on until it's already a full miss. See
+    health_check.py's own FRESHNESS GAP docstring note."""
+
+    def test_12h_strategy_freshness_flagged_when_evaluation_lagged_its_candle_close(self) -> None:
+        # MULTI_SHOT_TOLERANCE_MINUTES=150 (2.5h) -- a 4h gap between candle close
+        # and the run that logged it is well past that, even though 4h is nowhere
+        # near the 24h staleness threshold this strategy's gate uses.
+        candle_closed_at = _hours_ago(4)
+        insert_execution_log_row(
+            run_id="r1", strategy=TREND_PULLBACK_ID, strategy_version=TREND_PULLBACK_VERSION, asset="BNB",
+            signal_type="NO_TRADE", reasoning="no signal", candle_timestamp=_ms(candle_closed_at),
+            timestamp=NOW, db_path=self.db_path,
+        )
+        results = health_check.run_health_check(db_path=self.db_path, now=NOW)
+        result = self._find(results, TREND_PULLBACK_ID, TREND_PULLBACK_VERSION, "BNB")
+        self.assertTrue(result.freshness_flagged)
+        self.assertTrue(result.stale)
+        self.assertAlmostEqual(result.evaluation_gap_hours, 4.0, places=2)
+        self.assertIn("lagged its own candle close", result.flag_reason)
+
+    def test_12h_strategy_not_freshness_flagged_when_evaluated_promptly(self) -> None:
+        candle_closed_at = _hours_ago(1)
+        insert_execution_log_row(
+            run_id="r1", strategy=TREND_PULLBACK_ID, strategy_version=TREND_PULLBACK_VERSION, asset="BNB",
+            signal_type="NO_TRADE", reasoning="no signal", candle_timestamp=_ms(candle_closed_at),
+            timestamp=NOW, db_path=self.db_path,
+        )
+        results = health_check.run_health_check(db_path=self.db_path, now=NOW)
+        result = self._find(results, TREND_PULLBACK_ID, TREND_PULLBACK_VERSION, "BNB")
+        self.assertFalse(result.freshness_flagged)
+        self.assertFalse(result.stale)
+        self.assertAlmostEqual(result.evaluation_gap_hours, 1.0, places=2)
+
+    def test_24h_strategy_freshness_flagged_past_single_shot_tolerance(self) -> None:
+        # SINGLE_SHOT_TOLERANCE_MINUTES=240 (4h). A 5h gap is past it, but nowhere
+        # near the 48h staleness threshold "24h" strategies use.
+        candle_closed_at = _hours_ago(5)
+        insert_execution_log_row(
+            run_id="r1", strategy=BREAKOUT_MOMENTUM_ID, strategy_version=SILVER_BM_VERSION, asset="SILVER",
+            signal_type="NO_TRADE", reasoning="no signal", candle_timestamp=_ms(candle_closed_at),
+            timestamp=NOW, db_path=self.db_path,
+        )
+        results = health_check.run_health_check(db_path=self.db_path, now=NOW)
+        result = self._find(results, BREAKOUT_MOMENTUM_ID, SILVER_BM_VERSION, "SILVER")
+        self.assertTrue(result.freshness_flagged)
+        self.assertTrue(result.stale)
+
+    def test_event_driven_strategy_never_freshness_flagged(self) -> None:
+        # PEAD/GOLD_SILVER_RATIO_MR are event-driven -- a logged row's
+        # candle_timestamp doesn't represent "this period's gate was evaluated"
+        # for them (see health_check.py's own docstring), so no freshness gap
+        # applies even with an old candle_timestamp on a real logged row.
+        insert_execution_metadata(
+            run_id="r1", start_time=GATE_SATISFIED_RECENTLY, end_time=GATE_SATISFIED_RECENTLY,
+            assets_evaluated=[], assets_skipped=[], errors_encountered=[], db_path=self.db_path,
+        )
+        pead_googl = next(c for c in PEAD_CONFIGS if c.ticker == "GOOGL")
+        insert_execution_log_row(
+            run_id="r1", strategy=PEAD_ID, strategy_version=pead_googl.strategy_version, asset="GOOGL",
+            signal_type="ENTRY", reasoning="earnings surprise", candle_timestamp=_ms(_hours_ago(24 * 30)),
+            entry_price=100.0, timestamp=NOW, db_path=self.db_path,
+        )
+        results = health_check.run_health_check(db_path=self.db_path, now=NOW)
+        result = self._find(results, PEAD_ID, pead_googl.strategy_version, "GOOGL")
+        self.assertIsNone(result.evaluation_gap_hours)
+        self.assertFalse(result.freshness_flagged)
+
+    def test_never_logged_has_no_freshness_gap(self) -> None:
+        # No execution_log rows at all -- the existing staleness check already
+        # flags this; evaluation_gap_hours has nothing to compute against.
+        results = health_check.run_health_check(db_path=self.db_path, now=NOW)
+        result = self._find(results, TREND_PULLBACK_ID, TREND_PULLBACK_VERSION, "BNB")
+        self.assertIsNone(result.evaluation_gap_hours)
+        self.assertFalse(result.freshness_flagged)
 
 
 class AlertMessageTest(unittest.TestCase):
@@ -222,7 +306,7 @@ class JsonExportSchemaTest(HealthCheckTestCase):
         output_path = Path(self._tmp.name) / "health_check.json"
         insert_execution_log_row(
             run_id="r1", strategy=TREND_PULLBACK_ID, strategy_version=TREND_PULLBACK_VERSION, asset="BNB",
-            signal_type="NO_TRADE", reasoning="no signal", candle_timestamp=1,
+            signal_type="NO_TRADE", reasoning="no signal", candle_timestamp=_ms(_hours_ago(1)),
             timestamp=_hours_ago(1), db_path=self.db_path,
         )
         export = health_check.write_health_check(db_path=self.db_path, output_path=output_path, now=NOW)
@@ -250,6 +334,8 @@ class JsonExportSchemaTest(HealthCheckTestCase):
             self.assertIn("open_position", row)
             self.assertIn("stale", row)
             self.assertIn("flag_reason", row)
+            self.assertIn("evaluation_gap_hours", row)
+            self.assertIn("freshness_flagged", row)
 
         bnb_row = next(r for r in export["strategies"] if r["asset"] == "BNB" and r["strategy"] == TREND_PULLBACK_ID)
         self.assertFalse(bnb_row["stale"])

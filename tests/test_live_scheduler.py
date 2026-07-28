@@ -270,6 +270,34 @@ class FullRunTest(LiveSchedulerTestCase):
         self.assertIn("GOLD", second_result.assets_evaluated)
         self.assertEqual(len(list_execution_metadata(db_path=self.db_path)), 2)
 
+    def test_a_redundant_delayed_run_within_the_same_window_does_not_duplicate(self) -> None:
+        """The exact scenario the REDUNDANT TRIGGER safety net (2026-07-29
+        infrastructure-resilience task) depends on: a first run lands early in the
+        1week/24h boundary window, GitHub Actions drops/delays the next few ticks
+        (see .github/workflows/live_scheduler.yml's own REDUNDANT TRIGGER SAFETY NET
+        comment), and a LATER run -- different `now`, still inside
+        SINGLE_SHOT_TOLERANCE_MINUTES -- picks up the same period. Both `now` values
+        must resolve to candle_boundary_due(...)=True for this to actually exercise
+        the scenario, not just re-run the exact same instant."""
+        client = self._patched_client()
+        first_now = FRIDAY_MIDNIGHT_UTC  # 00:05 UTC Friday
+        second_now = datetime(2026, 7, 17, 3, 30, tzinfo=timezone.utc)  # same window, 3h25m later
+        self.assertTrue(live_scheduler.candle_boundary_due("1week", second_now))
+        self.assertTrue(live_scheduler.candle_boundary_due("24h", second_now))
+
+        live_scheduler.run_once(client=client, now=first_now, db_path=self.db_path, sleep_fn=lambda s: None)
+        first_count = len(list_execution_log(db_path=self.db_path))
+
+        second_result = live_scheduler.run_once(client=client, now=second_now, db_path=self.db_path, sleep_fn=lambda s: None)
+        second_count = len(list_execution_log(db_path=self.db_path))
+
+        self.assertEqual(first_count, second_count)
+        self.assertIn("GOLD", second_result.assets_evaluated)
+        self.assertEqual(second_result.errors_encountered, [])
+        # Both runs are still recorded (the redundant run isn't skipped at the
+        # metadata level -- only the already-logged candle's own signal is a no-op).
+        self.assertEqual(len(list_execution_metadata(db_path=self.db_path)), 2)
+
 
 class PartialFailureResilienceTest(LiveSchedulerTestCase):
     def test_one_configs_permanent_failure_does_not_block_the_others(self) -> None:

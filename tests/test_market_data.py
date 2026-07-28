@@ -194,6 +194,44 @@ class MarketDataDailyTest(unittest.TestCase):
         self.assertNotIn("Coinbase", message)
         self.assertNotIn("Kraken", message)
 
+    def test_binance_klines_falls_back_to_vision_mirror_when_api_binance_com_451s(self) -> None:
+        # Regression test (2026-07-29 infrastructure-resilience task): GitHub
+        # Actions runners are US-based; api.binance.com returns HTTP 451 to US IPs
+        # for public market data, confirmed directly from 100% of BNB's real
+        # gate-satisfied production fetch attempts failing this way (BNB has no
+        # Coinbase/Kraken fallback -- see test_bnb_has_no_fallback_beyond_binance
+        # above -- so this was previously a total, unrecoverable failure for it).
+        # data-api.binance.vision is the same US-accessible mirror already used by
+        # nero_core.data_sources.orderbook_data for the depth endpoint.
+        def side_effect(url, **kwargs):
+            if url == "https://api.binance.com/api/v3/klines":
+                response = Mock()
+                response.raise_for_status.side_effect = requests.HTTPError(
+                    "451 Client Error:  for url: " + url
+                )
+                return response
+            if url == "https://data-api.binance.vision/api/v3/klines":
+                return _mock_response(_binance_klines(40))
+            raise AssertionError(f"unexpected URL in this test: {url}")
+
+        with patch("nero_core.data_sources.market_data.requests.get", side_effect=side_effect):
+            result = self.client.load_daily("BNB", days=40)
+
+        self.assertIn("Binance", result.source)
+        self.assertGreater(len(result.prices), 0)
+
+    def test_bnb_still_fails_cleanly_when_both_binance_endpoints_451(self) -> None:
+        def side_effect(url, **kwargs):
+            response = Mock()
+            response.raise_for_status.side_effect = requests.HTTPError("451 Client Error:  for url: " + url)
+            return response
+
+        with patch("nero_core.data_sources.market_data.requests.get", side_effect=side_effect):
+            with self.assertRaises(MarketDataUnavailableError) as ctx:
+                self.client.load_daily("BNB", days=40)
+
+        self.assertIn("Binance", str(ctx.exception))
+
 
 class MarketDataPaginationTest(unittest.TestCase):
     def setUp(self) -> None:
