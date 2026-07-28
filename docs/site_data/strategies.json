@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-28T16:21:05.407270+00:00",
+  "last_updated": "2026-07-28T17:30:19.260425+00:00",
   "strategies": [
     {
       "name": "BREAKOUT_MOMENTUM",
@@ -120,6 +120,22 @@
       "asset": "BTC",
       "timeframe": "daily",
       "verification_status": "forward-test-only, no historical backtest",
+      "source_report": null
+    },
+    {
+      "name": "NEWS_SENTIMENT",
+      "version": "news-sentiment-v2.0.0-llm-claude",
+      "asset": "GOLD",
+      "timeframe": "daily",
+      "verification_status": "experimental — LLM-powered, forward-testing only, zero live resolved predictions, gate (b) surprise_score has zero live exercise, running in parallel with the original keyword-based version for direct comparison",
+      "source_report": null
+    },
+    {
+      "name": "NEWS_SENTIMENT",
+      "version": "news-sentiment-v2.0.0-llm-claude",
+      "asset": "BTC",
+      "timeframe": "daily",
+      "verification_status": "experimental — LLM-powered, forward-testing only, zero live resolved predictions, gate (b) surprise_score has zero live exercise, running in parallel with the original keyword-based version for direct comparison",
       "source_report": null
     },
     {
