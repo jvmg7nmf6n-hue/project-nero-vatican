@@ -139,6 +139,50 @@ def _sanitize_bias(value: object) -> Bias:
     return upper if upper in _VALID_BIASES else "NEUTRAL"
 
 
+class NoTextBlockError(ValueError):
+    """Raised when a Claude Messages API response has no usable text content block.
+
+    Subclasses ValueError deliberately: analyze_headline's except clause already
+    catches (requests.RequestException, KeyError, ValueError, json.JSONDecodeError)
+    and reports `source=f"error: {exc.__class__.__name__}"`. Raising a ValueError
+    subclass here routes this failure through that exact same existing path -- same
+    NEUTRAL/NEUTRAL, NO_SIGNAL, honest-not-fabricated handling -- instead of adding
+    a parallel classification system that downstream code would need to know about
+    separately (and could easily fail to)."""
+
+
+def _extract_text(content: object) -> str:
+    """Find and return the model's text reply from a Messages API `content` array.
+
+    2026-07-28 live validation (docs/site_data/news_llm_live_validation.md) found
+    claude-sonnet-5 can prepend one or more `type: "thinking"` blocks before the
+    text block -- content[0] is then a thinking block with no "text" key, and the
+    previous `payload["content"][0]["text"]` indexing raised KeyError (or, if
+    `content` is not a list at all, an uncaught TypeError). This scans the whole
+    array by type instead of assuming a position.
+
+    If more than one text block is present, they are concatenated in array order
+    (not just the first one taken): the model's answer is one logical JSON
+    document, and if the API ever splits it across multiple text blocks,
+    concatenating reconstructs the complete reply instead of silently handing
+    json.loads a truncated fragment.
+
+    A block that isn't a dict, or is missing a "type" key, is skipped rather than
+    raising -- one malformed block must not prevent reading an otherwise-usable
+    reply. `content` that isn't a list at all is treated the same as zero text
+    blocks found (see NoTextBlockError below), not as a crash.
+    """
+    blocks = content if isinstance(content, list) else []
+    text_parts = [
+        block["text"]
+        for block in blocks
+        if isinstance(block, dict) and block.get("type") == "text" and isinstance(block.get("text"), str)
+    ]
+    if not text_parts:
+        raise NoTextBlockError(f"No text content block in Claude response; content={content!r:.500}")
+    return "".join(text_parts)
+
+
 def _strip_markdown_json(text: str) -> str:
     stripped = text.strip()
     if stripped.startswith("```json"):
@@ -207,7 +251,7 @@ comparisons."""
     )
     response.raise_for_status()
     payload = response.json()
-    text = payload["content"][0]["text"].strip()
+    text = _extract_text(payload.get("content")).strip()
     return json.loads(_strip_markdown_json(text))
 
 

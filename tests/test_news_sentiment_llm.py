@@ -34,7 +34,21 @@ def _item(title: str, hours_old: float = 5.0) -> NewsItem:
 def _mock_response(payload: dict) -> MagicMock:
     resp = MagicMock()
     resp.raise_for_status = MagicMock()
-    resp.json.return_value = {"content": [{"text": json.dumps(payload)}]}
+    # "type": "text" matches the real Messages API shape (confirmed in the
+    # 2026-07-28 live validation's captured payloads) -- _extract_text now
+    # discriminates blocks by type (see Bug 1 fix), so the fake response must
+    # carry the same "type" field the real API always sends.
+    resp.json.return_value = {"content": [{"type": "text", "text": json.dumps(payload)}]}
+    return resp
+
+
+def _mock_response_with_content(content: object) -> MagicMock:
+    """Like _mock_response, but lets a test supply the raw `content` array/value
+    directly instead of the single-text-block shape -- needed to reproduce
+    multi-block (thinking + text), zero-block, and malformed-block response shapes."""
+    resp = MagicMock()
+    resp.raise_for_status = MagicMock()
+    resp.json.return_value = {"content": content}
     return resp
 
 
@@ -261,6 +275,143 @@ class RegistrationTest(unittest.TestCase):
 
         versions = {v.version for v in registry.list_versions(STRATEGY_ID)}
         self.assertEqual(versions, {V1_STRATEGY_VERSION, STRATEGY_VERSION})
+
+
+class ContentBlockParsingTest(unittest.TestCase):
+    """Regression coverage for the 2026-07-28 live validation crash (see
+    docs/site_data/news_llm_live_validation.md): production indexed
+    payload["content"][0]["text"] unconditionally, which assumes the text block is
+    always first. claude-sonnet-5 can prepend one or more `type: "thinking"` blocks
+    (extended thinking, not requested by this module -- see _call_claude's request
+    body, which sets no "thinking" key at all), which breaks that assumption.
+
+    Tests 1 and 2 below replay the CAPTURED shapes from that live run (the giant
+    opaque `signature` blob is shortened for readability; the meaningful,
+    crash-causing structure -- block types, ordering, presence/absence of a text
+    block -- is exact, not reconstructed). Tests 3-6 use reconstructed shapes for
+    scenarios that were not observed live (multiple text blocks, a malformed
+    block, non-list content) -- these never happened during the live validation,
+    so they are synthetic edge cases, not captured ones.
+    """
+
+    def test_captured_run1_shape_zero_text_blocks_is_no_text_block_not_keyerror(self) -> None:
+        # Exact structural shape captured live for headline 2, run 1: content has
+        # exactly one thinking block and NO text block at all (the model spent its
+        # entire max_tokens budget thinking and never emitted an answer).
+        content = [
+            {
+                "type": "thinking",
+                "thinking": "",
+                "signature": "captured-live-signature-truncated-for-readability",
+            }
+        ]
+        with patch("nero_core.strategies.news_sentiment_llm.requests.post", return_value=_mock_response_with_content(content)):
+            result = analyze_headline(_item("Fed testimony headline"), NOW, api_key="fake-key", params=PARAMS)
+
+        self.assertEqual(result.source, "error: NoTextBlockError")
+        self.assertEqual(result.signal_type, "NO_SIGNAL")
+        self.assertEqual(result.impact_on_gold, "NEUTRAL")
+        self.assertEqual(result.impact_on_btc, "NEUTRAL")
+
+    def test_captured_run2_shape_thinking_then_truncated_text_falls_through_to_parse_failure(self) -> None:
+        # Exact structural shape captured live for headline 2, run 2: a thinking
+        # block first, THEN a real text block -- but the text block's content is
+        # itself truncated mid-JSON (the model ran out of max_tokens partway through
+        # its answer). This is the literal "thinking block first, then the text
+        # block" shape the task asked for, taken from the real captured payload
+        # rather than invented.
+        content = [
+            {
+                "type": "thinking",
+                "thinking": "",
+                "signature": "captured-live-signature-truncated-for-readability",
+            },
+            {
+                "type": "text",
+                "text": (
+                    '{"impact_on_gold": "NEUTRAL", "impact_on_btc": "NEUTRAL", '
+                    '"confidence": 0.25, "surprise_score": 0.35, "reasoning": '
+                    '"The headline only signals that testimony occurred without '
+                    'revealing specific policy stance or data, making immediate '
+                    'market impact ambiguous; War'
+                ),
+            },
+        ]
+        with patch("nero_core.strategies.news_sentiment_llm.requests.post", return_value=_mock_response_with_content(content)):
+            result = analyze_headline(_item("Fed testimony headline"), NOW, api_key="fake-key", params=PARAMS)
+
+        # The fix must locate content[1] as the text block (not crash on content[0]
+        # having no "text" key) -- but that text is genuinely truncated/invalid
+        # JSON, so it correctly falls through to the EXISTING json-parse-failure
+        # path, not a fabricated result.
+        self.assertEqual(result.source, "error: JSONDecodeError")
+        self.assertEqual(result.signal_type, "NO_SIGNAL")
+
+    def test_thinking_then_valid_text_block_extracts_correctly(self) -> None:
+        # Reconstructed (not captured): same "thinking first, text second" shape,
+        # but with a complete, valid JSON text block, to prove the happy path
+        # works once the text block is found at a non-zero index.
+        content = [
+            {"type": "thinking", "thinking": "reasoning about this headline", "signature": "sig"},
+            {"type": "text", "text": json.dumps(_claude_payload(impact_on_gold="BULLISH", impact_on_btc="BULLISH", confidence=0.9, surprise_score=0.8))},
+        ]
+        with patch("nero_core.strategies.news_sentiment_llm.requests.post", return_value=_mock_response_with_content(content)):
+            result = analyze_headline(_item("Gold rallies"), NOW, api_key="fake-key", params=PARAMS)
+
+        self.assertEqual(result.source, "claude")
+        self.assertEqual(result.signal_type, "SIGNAL")
+        self.assertEqual(result.impact_on_gold, "BULLISH")
+        self.assertEqual(result.impact_on_btc, "BULLISH")
+
+    def test_multiple_text_blocks_are_concatenated_in_order_not_just_the_first(self) -> None:
+        # Reconstructed. Policy: concatenate all text blocks in array order (rather
+        # than take only the first). Rationale: the model's reply is one logical
+        # JSON document; if the API ever splits it across more than one text block,
+        # concatenating reconstructs the complete reply, while "take the first"
+        # would silently discard the rest and likely hand a truncated fragment to
+        # json.loads. This test's two blocks are each incomplete JSON on their own
+        # and only valid once joined, so "take the first" would fail this test.
+        full_payload = _claude_payload(impact_on_gold="BEARISH", impact_on_btc="BEARISH", confidence=0.7, surprise_score=0.6)
+        full_text = json.dumps(full_payload)
+        split_at = len(full_text) // 2
+        content = [
+            {"type": "text", "text": full_text[:split_at]},
+            {"type": "text", "text": full_text[split_at:]},
+        ]
+        with patch("nero_core.strategies.news_sentiment_llm.requests.post", return_value=_mock_response_with_content(content)):
+            result = analyze_headline(_item("Gold falls"), NOW, api_key="fake-key", params=PARAMS)
+
+        self.assertEqual(result.source, "claude")
+        self.assertEqual(result.impact_on_gold, "BEARISH")
+        self.assertEqual(result.impact_on_btc, "BEARISH")
+
+    def test_block_missing_type_key_is_skipped_not_raised(self) -> None:
+        # Reconstructed. A block with no "type" key at all (malformed) must be
+        # skipped when scanning for the text block, not crash the scan.
+        content = [
+            {"signature": "some-block-with-no-type-key"},
+            {"type": "text", "text": json.dumps(_claude_payload(confidence=0.9, surprise_score=0.8))},
+        ]
+        with patch("nero_core.strategies.news_sentiment_llm.requests.post", return_value=_mock_response_with_content(content)):
+            result = analyze_headline(_item("Gold rallies"), NOW, api_key="fake-key", params=PARAMS)
+
+        self.assertEqual(result.source, "claude")
+        self.assertEqual(result.signal_type, "SIGNAL")
+
+    def test_content_not_a_list_is_classified_not_raised(self) -> None:
+        # Reconstructed. `content` as a non-list (e.g. a bare string) currently
+        # causes an UNCAUGHT TypeError -- payload["content"][0] indexes the first
+        # CHARACTER of the string, then ["text"] on that single character raises
+        # "TypeError: string indices must be integers", which is not in
+        # analyze_headline's caught exception tuple and crashes past it entirely.
+        # This is a more severe pre-fix failure mode than the KeyError cases above
+        # (an actual unhandled exception, not just a misclassification).
+        content = "not a list at all"
+        with patch("nero_core.strategies.news_sentiment_llm.requests.post", return_value=_mock_response_with_content(content)):
+            result = analyze_headline(_item("Gold rallies"), NOW, api_key="fake-key", params=PARAMS)
+
+        self.assertEqual(result.source, "error: NoTextBlockError")
+        self.assertEqual(result.signal_type, "NO_SIGNAL")
 
 
 if __name__ == "__main__":
