@@ -24,7 +24,18 @@ const TIMEOUT_MESSAGE = "Request timed out — please try again.";
 const EMPTY_REPLY_MESSAGE = "The model didn't return any text for this question — please try rephrasing or try again.";
 const LIMIT_MESSAGE = "You've reached today's limit. Come back tomorrow for more questions!";
 const MAX_INPUT_LENGTH = 500;
-const CLIENT_TIMEOUT_MS = 10_000;
+// Must stay ABOVE route.ts's `maxDuration` (30s) -- that Vercel platform
+// backstop is the real worst-case ceiling on how long a legitimate in-progress
+// stream can take server-side (route.ts's own STREAM_IDLE_TIMEOUT_MS of 15s
+// bounds only the gap between chunks, not total duration, so a slow-but-alive
+// stream can legally run right up to maxDuration). Previously this was 10s --
+// SHORTER than even the 15s idle timeout -- so the client could abort a
+// stream the server was still actively and correctly serving, discarding
+// whatever text had already arrived. Order: UPSTREAM_TIMEOUT_MS (10s, initial
+// connection) < STREAM_IDLE_TIMEOUT_MS (15s, per-chunk) < maxDuration (30s,
+// hard server cap) < CLIENT_TIMEOUT_MS (35s) -- the client is now always the
+// last one to give up.
+export const CLIENT_TIMEOUT_MS = 35_000;
 
 export interface ChatBotProps {
   faqEntries: FaqEntry[];

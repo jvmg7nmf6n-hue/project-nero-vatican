@@ -9,17 +9,21 @@
  */
 import fs from "fs";
 import path from "path";
-import { POST } from "@/app/api/chat/route";
+import { maxDuration, POST } from "@/app/api/chat/route";
 import {
   buildSystemPrompt,
   createSseTextExtractor,
   HISTORY_LIMIT,
   isStrategyChatContext,
+  MAX_TOKENS,
   MODEL,
   readAnthropicReplyAsText,
   sanitizeHistory,
   sanitizeMessage,
+  STREAM_IDLE_TIMEOUT_MS,
+  UPSTREAM_TIMEOUT_MS,
 } from "@/lib/chatApi";
+import { CLIENT_TIMEOUT_MS } from "@/components/ChatBot";
 import type { StrategyChatContext } from "@/lib/types";
 
 const originalFetch = global.fetch;
@@ -128,6 +132,34 @@ describe("MODEL", () => {
   // CI instead of silently breaking production chat.
   it("is set to a verified-valid Anthropic model id", () => {
     expect(MODEL).toBe("claude-sonnet-5");
+  });
+});
+
+describe("MAX_TOKENS", () => {
+  // Regression test for the "(No response)" truncation incident: 300 tokens
+  // left no room for a text reply once a thinking block opened first (see
+  // readAnthropicReplyAsText's "captures stop_reason 'max_tokens' with zero
+  // text..." test). Pins the raised value so a future edit can't silently
+  // drift back down to a budget too thin for the "under 150 words" system
+  // prompt cap at non-English token density.
+  it("is raised well above the 300-token budget that produced zero-text max_tokens truncations", () => {
+    expect(MAX_TOKENS).toBeGreaterThanOrEqual(1024);
+  });
+});
+
+describe("timeout ordering across the chat path", () => {
+  // Regression test for a real incident: the client's own AbortController
+  // (CLIENT_TIMEOUT_MS) fired at 10s, SHORTER than the server's per-chunk idle
+  // timeout (STREAM_IDLE_TIMEOUT_MS, 15s), so the client could abandon a
+  // stream the server was still legitimately serving. maxDuration (30s) is
+  // the real worst-case ceiling on total server-side duration -- a slow but
+  // alive stream can legally run right up to it. Every stage must be strictly
+  // faster than the next, with the client's own give-up point last, so the
+  // client is never the one that gives up early on a healthy request.
+  it("keeps UPSTREAM_TIMEOUT_MS < STREAM_IDLE_TIMEOUT_MS < maxDuration < CLIENT_TIMEOUT_MS", () => {
+    expect(UPSTREAM_TIMEOUT_MS).toBeLessThan(STREAM_IDLE_TIMEOUT_MS);
+    expect(STREAM_IDLE_TIMEOUT_MS).toBeLessThan(maxDuration * 1000);
+    expect(maxDuration * 1000).toBeLessThan(CLIENT_TIMEOUT_MS);
   });
 });
 
@@ -518,7 +550,7 @@ describe("POST /api/chat", () => {
     expect(init.headers["anthropic-version"]).toBe("2023-06-01");
     const parsedBody = JSON.parse(init.body);
     expect(parsedBody.model).toBe("claude-sonnet-5");
-    expect(parsedBody.max_tokens).toBe(300);
+    expect(parsedBody.max_tokens).toBe(1024);
     expect(parsedBody.stream).toBe(true);
     expect(parsedBody.messages[parsedBody.messages.length - 1]).toEqual({ role: "user", content: "hi" });
   });

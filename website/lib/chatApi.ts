@@ -12,7 +12,17 @@ import type { ChatMessage, StrategyChatContext } from "./types";
 export const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 export const ANTHROPIC_VERSION = "2023-06-01";
 export const MODEL = "claude-sonnet-5";
-export const MAX_TOKENS = 300;
+// Raised from 300 after production logs showed stop_reason "max_tokens" with
+// zero text_delta output on real requests (a "thinking" content block opened
+// before the budget ran out -- see readAnthropicReplyAsText's own tests).
+// 300 was thin even for text alone: the system prompt's "under 150 words"
+// cap runs ~250-300 tokens at English density, and non-Latin scripts (Urdu,
+// Arabic, Hindi, ...) that this bot explicitly promises to answer in commonly
+// tokenize at 2-3x that for equivalent content. 1024 is sized off that
+// structural floor, not off per-request outputTokens numbers -- those weren't
+// available for the failing requests at the time of this change. Revisit with
+// real inputTokens/outputTokens once logged.
+export const MAX_TOKENS = 1024;
 export const MAX_INPUT_LENGTH = 500;
 // Independent of MAX_MESSAGES_PER_SESSION (chatSession.ts) -- this bounds the
 // context sent in any SINGLE request as a conversation gets long, which is a
