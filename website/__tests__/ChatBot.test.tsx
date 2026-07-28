@@ -200,6 +200,95 @@ describe("ChatBot live chat (Part B)", () => {
     expect(bubbles.some((b) => b.getAttribute("data-role") === "user" && b.textContent === "hello")).toBe(true);
     expect(bubbles.some((b) => b.getAttribute("data-role") === "assistant")).toBe(true);
   });
+
+  // "(No response)" investigation regression: a non-2xx response now surfaces
+  // the SERVER's specific reason (e.g. an honestly-empty reply's stop_reason)
+  // in the assistant bubble, instead of every failure collapsing into the
+  // same uninformative placeholder. The chat-error banner stays the same
+  // generic "temporarily unavailable" text either way -- only the assistant
+  // bubble content becomes specific.
+  it("shows the server's specific error message in the assistant bubble, not a generic placeholder", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: async () => ({ error: "No response was generated -- the model returned no text (stop_reason: max_tokens)." }),
+    } as unknown as Response);
+
+    render(<ChatBot faqEntries={FAQ} strategyContext={CONTEXT} hasLiveChat={true} />);
+    openWidget();
+    fireEvent.change(screen.getByTestId("chat-input"), { target: { value: "hello" } });
+    fireEvent.click(screen.getByTestId("chat-send"));
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByTestId("chat-bubble").some((b) => (b.textContent ?? "").includes("stop_reason: max_tokens"))
+      ).toBe(true);
+    });
+  });
+
+  // If the error body isn't valid JSON (or has no .error string), fall back
+  // to the generic placeholder rather than crashing the whole handler --
+  // this exercises the inner try/catch around response.json() specifically.
+  it("falls back to the generic placeholder when the error body is not parseable JSON", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: async () => {
+        throw new Error("not json");
+      },
+    } as unknown as Response);
+
+    render(<ChatBot faqEntries={FAQ} strategyContext={CONTEXT} hasLiveChat={true} />);
+    openWidget();
+    fireEvent.change(screen.getByTestId("chat-input"), { target: { value: "hello" } });
+    fireEvent.click(screen.getByTestId("chat-send"));
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByTestId("chat-bubble").some((b) => (b.textContent ?? "").includes("No response"))
+      ).toBe(true);
+    });
+  });
+
+  // Distinguishes a client-side abort (what CLIENT_TIMEOUT_MS's real
+  // setTimeout produces, by calling controller.abort()) from every other
+  // thrown error, so "the request timed out" reads differently from
+  // "something else went wrong." Rejects with the same DOMException shape a
+  // real AbortController produces, rather than waiting out the real 10s
+  // timer, so this stays fast and deterministic.
+  it("shows a timeout-specific message when the fetch is aborted", async () => {
+    global.fetch = jest.fn().mockRejectedValue(new DOMException("The operation was aborted.", "AbortError"));
+
+    render(<ChatBot faqEntries={FAQ} strategyContext={CONTEXT} hasLiveChat={true} />);
+    openWidget();
+    fireEvent.change(screen.getByTestId("chat-input"), { target: { value: "hello" } });
+    fireEvent.click(screen.getByTestId("chat-send"));
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId("chat-bubble").some((b) => (b.textContent ?? "").includes("timed out"))).toBe(
+        true
+      );
+    });
+  });
+
+  // Defensive fallback: an empty-but-200 body (shouldn't happen anymore now
+  // that route.ts converts this case to a 502, but the client must still
+  // label it honestly if it ever does) gets its own message, not the
+  // "no response at all" placeholder.
+  it("shows an honest empty-reply message for a 200 response with no body text", async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, body: null, text: async () => "" } as unknown as Response);
+
+    render(<ChatBot faqEntries={FAQ} strategyContext={CONTEXT} hasLiveChat={true} />);
+    openWidget();
+    fireEvent.change(screen.getByTestId("chat-input"), { target: { value: "hello" } });
+    fireEvent.click(screen.getByTestId("chat-send"));
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByTestId("chat-bubble").some((b) => (b.textContent ?? "").includes("didn't return any text"))
+      ).toBe(true);
+    });
+  });
 });
 
 describe("ChatBot conversation persistence (bug fix)", () => {

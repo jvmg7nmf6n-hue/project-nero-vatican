@@ -13,7 +13,15 @@ import {
 import type { ChatMessage, FaqEntry, StrategyChatContext } from "@/lib/types";
 
 const GENERIC_ERROR = "AI is temporarily unavailable. Please check the FAQ above or try later.";
+// Fallback used only when we truly have no more specific reason: the server's
+// error body wasn't valid JSON, or a thrown error carries no useful `name`.
+// Previously this ONE string covered every failure mode -- HTTP errors,
+// empty-but-successful streams, timeouts, and network failures alike -- which
+// is exactly the uninformative dead end CLAUDE.md's honesty rule rules out.
+// Prefer one of the more specific messages below wherever the cause is known.
 const NO_RESPONSE_PLACEHOLDER = "(No response — please try again.)";
+const TIMEOUT_MESSAGE = "Request timed out — please try again.";
+const EMPTY_REPLY_MESSAGE = "The model didn't return any text for this question — please try rephrasing or try again.";
 const LIMIT_MESSAGE = "You've reached today's limit. Come back tomorrow for more questions!";
 const MAX_INPUT_LENGTH = 500;
 const CLIENT_TIMEOUT_MS = 10_000;
@@ -140,20 +148,41 @@ export default function ChatBot({ faqEntries, strategyContext, hasLiveChat }: Ch
       });
 
       if (!response.ok) {
-        setLastAssistantMessage(NO_RESPONSE_PLACEHOLDER);
+        // The server's error body already says WHY (invalid input, upstream
+        // failure, or -- since the "(No response)" investigation -- an
+        // honestly-empty model reply with its stop_reason) -- read it back
+        // instead of collapsing every non-2xx status to the same placeholder.
+        // The body may not be valid JSON in every mocked/edge case, so this
+        // parse is its own try/catch, independent of the outer one.
+        let serverMessage: string | null = null;
+        try {
+          const data: unknown = await response.json();
+          if (data && typeof data === "object" && typeof (data as { error?: unknown }).error === "string") {
+            serverMessage = (data as { error: string }).error;
+          }
+        } catch {
+          // Not JSON (or already consumed) -- fall through to the generic placeholder.
+        }
+        setLastAssistantMessage(serverMessage ?? NO_RESPONSE_PLACEHOLDER);
         setChatError(GENERIC_ERROR);
         return;
       }
 
       const fullText = await readResponseAsText(response, setLastAssistantMessage);
       if (!fullText) {
-        setLastAssistantMessage(NO_RESPONSE_PLACEHOLDER);
+        // route.ts now converts a genuinely empty-but-successful stream into a
+        // non-2xx response with stop_reason (see above) -- this branch is a
+        // defensive fallback for any other path that still yields an empty
+        // 200 body, so it gets its own honest label rather than the generic
+        // "no response at all" placeholder.
+        setLastAssistantMessage(EMPTY_REPLY_MESSAGE);
       }
-    } catch {
+    } catch (err) {
       // Never remove the message. If the stream had already produced real
       // text before the error/abort, that text stays exactly as shown; only
       // an still-empty placeholder gets filled in, so there's always
       // something visible and nothing already-delivered ever disappears.
+      const timedOut = err instanceof DOMException && err.name === "AbortError";
       setMessages((prev) => {
         if (prev.length === 0) {
           return prev;
@@ -161,7 +190,7 @@ export default function ChatBot({ faqEntries, strategyContext, hasLiveChat }: Ch
         const last = prev[prev.length - 1];
         if (last.role === "assistant" && last.content.length === 0) {
           const next = [...prev];
-          next[next.length - 1] = { role: "assistant", content: NO_RESPONSE_PLACEHOLDER };
+          next[next.length - 1] = { role: "assistant", content: timedOut ? TIMEOUT_MESSAGE : NO_RESPONSE_PLACEHOLDER };
           return next;
         }
         return prev;
