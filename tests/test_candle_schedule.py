@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from nero_core.execution.candle_schedule import (
     DEFAULT_TOLERANCE_MINUTES,
+    MULTI_SHOT_TOLERANCE_MINUTES,
     SINGLE_SHOT_TOLERANCE_MINUTES,
     candle_boundary_due,
     daily_time_due,
@@ -26,7 +27,9 @@ class CandleBoundaryDueTest(unittest.TestCase):
         self.assertFalse(candle_boundary_due("12h", _utc(2026, 7, 17, 6, 0)))
 
     def test_12h_not_due_just_outside_tolerance(self) -> None:
-        self.assertFalse(candle_boundary_due("12h", _utc(2026, 7, 17, 0, 45)))
+        # MULTI_SHOT_TOLERANCE_MINUTES (150) -- 0:45 is well inside it now; use a time
+        # genuinely past the widened window instead (well short of the 12:00 boundary).
+        self.assertFalse(candle_boundary_due("12h", _utc(2026, 7, 17, 3, 0)))
 
     def test_24h_due_only_near_midnight(self) -> None:
         self.assertTrue(candle_boundary_due("24h", _utc(2026, 7, 17, 0, 0)))
@@ -79,6 +82,30 @@ class CandleBoundaryDueTest(unittest.TestCase):
         # "simplifies" these back to one constant, this fails loudly.
         self.assertGreater(SINGLE_SHOT_TOLERANCE_MINUTES, DEFAULT_TOLERANCE_MINUTES)
 
+    # Regression tests for a follow-up incident (2026-07-29 health check first real
+    # run): "12h" (BNB/TREND_PULLBACK, BTC-ETH/COINTEGRATION_PAIRS) recorded ZERO
+    # signals across 143 runs -- same GitHub Actions cron-congestion pattern as the
+    # 24h/1week incident above, just with "12h"'s own two-opportunity-per-day rhythm.
+    # Querying execution_metadata's real run-time history confirmed the AM window
+    # (after 00:00 UTC) landed 15-106 minutes late and the PM window (after 12:00 UTC)
+    # landed 8-74 minutes late -- both of which the OLD 40-minute default rejected.
+    def test_12h_due_at_actually_observed_delayed_run_times(self) -> None:
+        for hour, minute in ((0, 15), (1, 45), (1, 46), (12, 8), (13, 14)):
+            with self.subTest(hour=hour, minute=minute):
+                self.assertTrue(candle_boundary_due("12h", _utc(2026, 7, 17, hour, minute)))
+
+    def test_12h_still_not_due_well_outside_the_widened_window(self) -> None:
+        # MULTI_SHOT_TOLERANCE_MINUTES is generous, not unlimited.
+        self.assertFalse(candle_boundary_due("12h", _utc(2026, 7, 17, 6, 0)))
+        self.assertFalse(candle_boundary_due("12h", _utc(2026, 7, 17, 18, 0)))
+
+    def test_multi_shot_tolerance_is_between_default_and_single_shot(self) -> None:
+        # Documents the actual relationship the fix depends on: "12h" keeps same-day
+        # redundancy (unlike "24h"/"1week"), so it gets a narrower window than the
+        # single-shot gates, but still much wider than the generic default.
+        self.assertGreater(MULTI_SHOT_TOLERANCE_MINUTES, DEFAULT_TOLERANCE_MINUTES)
+        self.assertLess(MULTI_SHOT_TOLERANCE_MINUTES, SINGLE_SHOT_TOLERANCE_MINUTES)
+
     def test_1h_due_near_top_of_hour(self) -> None:
         self.assertTrue(candle_boundary_due("1h", _utc(2026, 7, 17, 9, 5)))
         self.assertFalse(candle_boundary_due("1h", _utc(2026, 7, 17, 9, 45)))
@@ -109,6 +136,31 @@ class DailyTimeDueTest(unittest.TestCase):
     def test_naive_datetime_raises(self) -> None:
         with self.assertRaises(ValueError):
             daily_time_due(19, datetime(2026, 7, 17, 19, 0))
+
+    # Regression tests for the same 2026-07-29 follow-up incident: NEWS_SENTIMENT's
+    # daily_time_due(hour_utc=19, ...) gate was missing its own 48h health-check
+    # staleness threshold by 77.5h. Like "24h"/"1week", this gate has ZERO same-day
+    # redundancy, so it now defaults to SINGLE_SHOT_TOLERANCE_MINUTES instead of
+    # DEFAULT_TOLERANCE_MINUTES. Real execution_metadata history showed 18-76 minutes
+    # of steady-state delay plus one 229-minute outlier on 2026-07-17 (the workflow's
+    # first-ever calendar day).
+    def test_due_at_actually_observed_delayed_run_times(self) -> None:
+        for hour, minute in ((19, 18), (19, 45), (20, 16), (20, 35)):
+            with self.subTest(hour=hour, minute=minute):
+                self.assertTrue(daily_time_due(19, _utc(2026, 7, 17, hour, minute)))
+
+    def test_due_at_the_observed_229_minute_startup_outlier(self) -> None:
+        self.assertTrue(daily_time_due(19, _utc(2026, 7, 17, 22, 48)))
+
+    def test_still_not_due_well_outside_the_widened_window(self) -> None:
+        self.assertFalse(daily_time_due(19, _utc(2026, 7, 17, 23, 30)))
+
+    def test_default_tolerance_is_now_single_shot(self) -> None:
+        # Documents the actual relationship the fix depends on -- if someone
+        # "simplifies" the default parameter back to DEFAULT_TOLERANCE_MINUTES, this
+        # fails loudly.
+        self.assertGreater(SINGLE_SHOT_TOLERANCE_MINUTES, DEFAULT_TOLERANCE_MINUTES)
+        self.assertTrue(daily_time_due(19, _utc(2026, 7, 17, 22, 0)))
 
 
 if __name__ == "__main__":
