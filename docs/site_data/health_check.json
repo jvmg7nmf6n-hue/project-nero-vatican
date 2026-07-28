@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-28T15:42:54.036311+00:00",
+  "last_updated": "2026-07-28T21:05:47.685108+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -449,12 +449,12 @@
       "strategy_version": "news-sentiment-v1.0.0",
       "asset": "GOLD",
       "gate": "daily",
-      "last_signal_at": "2026-07-24T19:17:58.795154+00:00",
+      "last_signal_at": "2026-07-28T19:26:09.170462+00:00",
       "resolved_trades": null,
       "win_rate": null,
       "open_position": null,
-      "stale": true,
-      "flag_reason": "last signal was 92.4h ago, expected at least every 48h",
+      "stale": false,
+      "flag_reason": null,
       "evaluation_gap_hours": null,
       "freshness_flagged": false
     },
@@ -463,12 +463,40 @@
       "strategy_version": "news-sentiment-v1.0.0",
       "asset": "BTC",
       "gate": "daily",
-      "last_signal_at": "2026-07-24T19:17:58.795154+00:00",
+      "last_signal_at": "2026-07-28T19:26:09.170462+00:00",
       "resolved_trades": null,
       "win_rate": null,
       "open_position": null,
-      "stale": true,
-      "flag_reason": "last signal was 92.4h ago, expected at least every 48h",
+      "stale": false,
+      "flag_reason": null,
+      "evaluation_gap_hours": null,
+      "freshness_flagged": false
+    },
+    {
+      "strategy": "NEWS_SENTIMENT",
+      "strategy_version": "news-sentiment-v2.0.0-llm-claude",
+      "asset": "GOLD",
+      "gate": "daily",
+      "last_signal_at": "2026-07-28T19:26:09.170462+00:00",
+      "resolved_trades": null,
+      "win_rate": null,
+      "open_position": null,
+      "stale": false,
+      "flag_reason": null,
+      "evaluation_gap_hours": null,
+      "freshness_flagged": false
+    },
+    {
+      "strategy": "NEWS_SENTIMENT",
+      "strategy_version": "news-sentiment-v2.0.0-llm-claude",
+      "asset": "BTC",
+      "gate": "daily",
+      "last_signal_at": "2026-07-28T19:26:09.170462+00:00",
+      "resolved_trades": null,
+      "win_rate": null,
+      "open_position": null,
+      "stale": false,
+      "flag_reason": null,
       "evaluation_gap_hours": null,
       "freshness_flagged": false
     },
@@ -477,10 +505,14 @@
       "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "gate": null,
-      "last_signal_at": "2026-07-28T03:48:34.609837+00:00",
-      "resolved_trades": 23,
-      "win_rate": 0.5217391304347826,
-      "open_position": null,
+      "last_signal_at": "2026-07-28T20:45:00.970043+00:00",
+      "resolved_trades": 25,
+      "win_rate": 0.52,
+      "open_position": {
+        "entry_price": 63904.0,
+        "entry_timestamp": "2026-07-28T20:45:00.970043+00:00",
+        "candle_timestamp": "2026-07-28T19:59:59.999000+00:00"
+      },
       "stale": false,
       "flag_reason": null,
       "evaluation_gap_hours": null,
@@ -491,17 +523,21 @@
       "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "gate": null,
-      "last_signal_at": "2026-07-27T20:13:10.115741+00:00",
-      "resolved_trades": 23,
-      "win_rate": 0.6521739130434783,
-      "open_position": null,
+      "last_signal_at": "2026-07-28T20:45:00.970043+00:00",
+      "resolved_trades": 24,
+      "win_rate": 0.625,
+      "open_position": {
+        "entry_price": 1922.23,
+        "entry_timestamp": "2026-07-28T20:45:00.970043+00:00",
+        "candle_timestamp": "2026-07-28T19:59:59.999000+00:00"
+      },
       "stale": false,
       "flag_reason": null,
       "evaluation_gap_hours": null,
       "freshness_flagged": false
     }
   ],
-  "flagged_count": 14,
+  "flagged_count": 12,
   "flagged_strategies": [
     "BREAKOUT_MOMENTUM:breakout-momentum-v1.2.0-gold-calibrated-1week:GOLD",
     "BREAKOUT_MOMENTUM:breakout-momentum-v1.6.0-silver-calibrated-24h:SILVER",
@@ -514,8 +550,6 @@
     "DONCHIAN_TREND:donchian-trend-v2.0.0-bracket-gold-n20-1week:GOLD",
     "DONCHIAN_TREND:donchian-trend-v2.0.0-bracket-eurusd-n20-1week:EUR/USD",
     "DONCHIAN_TREND:donchian-trend-v2.0.0-bracket-gbpusd-n20-1week:GBP/USD",
-    "DONCHIAN_TREND:donchian-trend-v2.0.0-bracket-usdjpy-n40-1week:USD/JPY",
-    "NEWS_SENTIMENT:news-sentiment-v1.0.0:GOLD",
-    "NEWS_SENTIMENT:news-sentiment-v1.0.0:BTC"
+    "DONCHIAN_TREND:donchian-trend-v2.0.0-bracket-usdjpy-n40-1week:USD/JPY"
   ]
 }
