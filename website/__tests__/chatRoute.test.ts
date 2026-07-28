@@ -630,6 +630,52 @@ describe("POST /api/chat", () => {
     expect(body).not.toContain("ECONNRESET");
   });
 
+  // Regression test for a real production incident: two of four /api/chat
+  // requests came back 502 with "upstream request threw: DOMException
+  // [AbortError]: This operation was aborted". Root cause was that
+  // UPSTREAM_TIMEOUT_MS's AbortController was only ever cleared in the
+  // shared `finally` (i.e. after the ENTIRE request finished), so it stayed
+  // armed through the whole body read and could abort a stream that had
+  // already connected and was still legitimately in progress (e.g. a long
+  // "thinking" gap before the first text_delta). This proves headers arriving
+  // is enough to retire that timer -- a body that pauses past
+  // UPSTREAM_TIMEOUT_MS, but resumes within STREAM_IDLE_TIMEOUT_MS, must
+  // still succeed.
+  it("does not abort a stream that pauses past UPSTREAM_TIMEOUT_MS after headers have already arrived, as long as it resumes within STREAM_IDLE_TIMEOUT_MS", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    jest.useFakeTimers();
+
+    let streamController: ReadableStreamDefaultController<Uint8Array>;
+    const upstreamBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        streamController = controller;
+      },
+    });
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        new Response(upstreamBody, { status: 200, headers: { "Content-Type": "text/event-stream" } })
+      ) as unknown as typeof fetch;
+
+    const responsePromise = POST(jsonRequest({ message: "hi", strategyContext: CONTEXT, history: [] }));
+
+    // Simulate a "thinking" pause longer than UPSTREAM_TIMEOUT_MS but shorter
+    // than STREAM_IDLE_TIMEOUT_MS, with no body bytes delivered yet.
+    expect(UPSTREAM_TIMEOUT_MS).toBeLessThan(STREAM_IDLE_TIMEOUT_MS);
+    await jest.advanceTimersByTimeAsync(UPSTREAM_TIMEOUT_MS + 1_000);
+
+    streamController!.enqueue(
+      new TextEncoder().encode('data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"answer"}}\n')
+    );
+    streamController!.close();
+
+    const response = await responsePromise;
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("answer");
+
+    jest.useRealTimers();
+  });
+
   // Root-cause regression coverage for the "(No response)" investigation: a
   // stream that completes successfully (upstream.ok) but produces zero text
   // must NOT come back as a bare 200 + empty body -- previously this was the

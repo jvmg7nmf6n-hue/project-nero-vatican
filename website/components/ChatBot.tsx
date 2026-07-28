@@ -35,6 +35,11 @@ const MAX_INPUT_LENGTH = 500;
 // connection) < STREAM_IDLE_TIMEOUT_MS (15s, per-chunk) < maxDuration (30s,
 // hard server cap) < CLIENT_TIMEOUT_MS (35s) -- the client is now always the
 // last one to give up.
+// UPSTREAM_TIMEOUT_MS was 10s as of the comment above; raised to 12s
+// (see chatApi.ts) after a production incident where its AbortController
+// stayed armed through the body-read phase and aborted an in-progress
+// stream. The ordering invariant itself is unchanged and still enforced by
+// chatRoute.test.ts.
 export const CLIENT_TIMEOUT_MS = 35_000;
 
 export interface ChatBotProps {

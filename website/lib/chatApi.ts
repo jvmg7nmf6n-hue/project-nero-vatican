@@ -29,7 +29,14 @@ export const MAX_INPUT_LENGTH = 500;
 // real token-growth/context-window concern regardless of how many total
 // messages a session sends. 12 messages = 6 exchanges.
 export const HISTORY_LIMIT = 12;
-export const UPSTREAM_TIMEOUT_MS = 10_000;
+// Bounds only the connection/headers phase of the initial fetch() -- route.ts
+// clears this timer as soon as headers arrive, before any body read starts
+// (see readAnthropicReplyAsText / STREAM_IDLE_TIMEOUT_MS below, which governs
+// the body-read phase instead). Raised from 10s to 12s for headroom on
+// regional latency / cold starts while staying well under
+// STREAM_IDLE_TIMEOUT_MS (15s) -- this value is NOT meant to absorb
+// "thinking" latency; that's what the per-chunk idle timeout is for.
+export const UPSTREAM_TIMEOUT_MS = 12_000;
 
 export function sanitizeMessage(raw: unknown): string | null {
   if (typeof raw !== "string") {
