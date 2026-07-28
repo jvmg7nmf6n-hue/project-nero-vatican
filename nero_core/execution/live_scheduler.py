@@ -13,6 +13,11 @@ docs/grid_shift_robustness_followup.md for how each earned this status):
   2. BNB     / 12h    / TREND_PULLBACK trend-pullback-v1.0.0
   3. BTC-ETH / 12h    / COINTEGRATION_PAIRS cointegration-pairs-v1.0.0
   4. NEWS_SENTIMENT (GOLD, BTC) news-sentiment-v1.0.0 — forward-test-only, no backtest
+     -- running IN PARALLEL with news-sentiment-v2.0.0-llm-claude (experimental,
+     Claude-powered) since 2026-07-28: same daily_time_due schedule, each logging
+     independently to news_sentiment_log under its own strategy_version, for a direct
+     keyword-vs-LLM comparison on the same real headlines. Neither replaces the
+     other yet -- see docs/site_data/news_llm_live_validation.md.
 
 SILVER PROMISING-WATCHLIST FORWARD-TESTS WIRED (Asset Expansion Phase A follow-up —
 NOT survivors; wired at the user's explicit request to accrue live evidence on the
@@ -160,7 +165,13 @@ from nero_core.strategies.cointegration_pairs import (
 from nero_core.strategies.news_sentiment import (
     DEFAULT_PARAMETERS as NEWS_PARAMS,
     STRATEGY_ID as NEWS_SENTIMENT_ID,
+    STRATEGY_VERSION as NEWS_SENTIMENT_V1_VERSION,
     analyze_sentiment,
+)
+from nero_core.strategies.news_sentiment_llm import (
+    DEFAULT_PARAMETERS as NEWS_PARAMS_LLM,
+    STRATEGY_VERSION as NEWS_SENTIMENT_V2_VERSION,
+    analyze_sentiment_llm,
 )
 from nero_core.strategies.trend_pullback import STRATEGY_ID as TREND_PULLBACK_ID
 from nero_core.strategies.trend_pullback import STRATEGY_VERSION as TREND_PULLBACK_VERSION
@@ -699,27 +710,59 @@ class _OrderflowOpenPositionView:
 def process_news_sentiment(
     run_id: str, now: datetime, db_path: Path = DEFAULT_DB_PATH, news_client: NewsFeedClient | None = None
 ) -> tuple[list[str], list[dict[str, Any]]]:
+    """Evaluates BOTH NEWS_SENTIMENT versions in parallel: news-sentiment-v1.0.0
+    (keyword/Gemini) and news-sentiment-v2.0.0-llm-claude (Claude-powered). Neither
+    replaces the other -- both log independently to news_sentiment_log under their
+    own strategy_version, so keyword vs LLM performance can be compared directly on
+    the same real headlines going forward (see docs/site_data/news_llm_live_
+    validation.md). v1.0.0's own gate/logging behavior is unchanged from before this
+    function started evaluating v2 alongside it.
+
+    Each version is gated independently by has_news_sentiment_logged_today(asset,
+    version, ...) -- this is why the schema migration adding strategy_version to
+    news_sentiment_log was necessary: an asset-only gate would have let whichever
+    version evaluates first each day silently suppress the other for the rest of
+    the day, every day."""
     gemini_key = os.getenv("GEMINI_API_KEY", "")
+    claude_key = os.getenv("ANTHROPIC_API_KEY", "")
     client = news_client or NewsFeedClient()
 
     evaluated: list[str] = []
     errors: list[dict[str, Any]] = []
     for asset in NEWS_SENTIMENT_ASSETS:
-        if has_news_sentiment_logged_today(asset, now, db_path):
+        v1_due = not has_news_sentiment_logged_today(asset, NEWS_SENTIMENT_V1_VERSION, now, db_path)
+        v2_due = not has_news_sentiment_logged_today(asset, NEWS_SENTIMENT_V2_VERSION, now, db_path)
+        if not v1_due and not v2_due:
             continue
+
         try:
             feed_result = client.load(asset)
         except Exception as exc:  # noqa: BLE001 - one asset's feed failure must not block the other
             errors.append({"asset": asset, "strategy": NEWS_SENTIMENT_ID, "classification": "FETCH_INCOMPLETE", "message": str(exc)})
             continue
 
-        result = analyze_sentiment(feed_result.headlines, asset, now, gemini_api_key=gemini_key, params=NEWS_PARAMS)
-        insert_news_sentiment_log(
-            run_id=run_id, asset=asset, fetch_timestamp=now, signal_type=result.signal_type,
-            confidence=result.confidence, reasoning=result.summary, source=result.source,
-            sentiment_score=result.sentiment_score, db_path=db_path,
-        )
-        evaluated.append(asset)
+        asset_evaluated = False
+
+        if v1_due:
+            result = analyze_sentiment(feed_result.headlines, asset, now, gemini_api_key=gemini_key, params=NEWS_PARAMS)
+            insert_news_sentiment_log(
+                run_id=run_id, asset=asset, strategy_version=NEWS_SENTIMENT_V1_VERSION, fetch_timestamp=now,
+                signal_type=result.signal_type, confidence=result.confidence, reasoning=result.summary,
+                source=result.source, sentiment_score=result.sentiment_score, db_path=db_path,
+            )
+            asset_evaluated = True
+
+        if v2_due:
+            llm_result = analyze_sentiment_llm(feed_result.headlines, asset, now, api_key=claude_key, params=NEWS_PARAMS_LLM)
+            insert_news_sentiment_log(
+                run_id=run_id, asset=asset, strategy_version=NEWS_SENTIMENT_V2_VERSION, fetch_timestamp=now,
+                signal_type=llm_result.signal_type, confidence=llm_result.confidence, reasoning=llm_result.summary,
+                source=llm_result.source, sentiment_score=None, db_path=db_path,
+            )
+            asset_evaluated = True
+
+        if asset_evaluated:
+            evaluated.append(asset)
     return evaluated, errors
 
 

@@ -8,14 +8,41 @@ from unittest.mock import patch
 
 import pandas as pd
 
+import json
+
 from nero_core.data_sources.forex_data import ForexDataResult, ForexDataUnavailableError
 from nero_core.data_sources.market_data import MarketDataClient, MarketDataResult, MarketDataUnavailableError
 from nero_core.data_sources.news_feed import NewsFeedResult, NewsItem
 from nero_core.data_sources.orderbook_data import OrderbookSnapshot
 from nero_core.execution import live_scheduler
-from nero_core.truth_ledger.execution_log import list_execution_log, list_execution_metadata, has_news_sentiment_logged_today
+from nero_core.strategies.news_sentiment import STRATEGY_VERSION as NEWS_SENTIMENT_V1_VERSION
+from nero_core.strategies.news_sentiment_llm import STRATEGY_VERSION as NEWS_SENTIMENT_V2_VERSION
+from nero_core.truth_ledger.execution_log import (
+    has_news_sentiment_logged_today,
+    latest_news_sentiment_fetch_timestamp,
+    list_execution_log,
+    list_execution_metadata,
+    list_news_sentiment_log_for_run,
+)
 from tests.test_cointegration_pairs import _cointegrated_pair_frames
 from tests.test_council_engine import _make_candle_row
+
+
+def _mock_claude_response(impact_on_gold: str = "NEUTRAL", impact_on_btc: str = "NEUTRAL", confidence: float = 0.2, surprise_score: float = 0.1):
+    """Mocked Claude Messages API response, matching the real shape (a "type":
+    "text" content block) -- used so NewsSentimentSchedulingTest never makes a real
+    Anthropic API call, regardless of whether ANTHROPIC_API_KEY happens to be set in
+    the environment running the test suite."""
+    from unittest.mock import MagicMock
+
+    resp = MagicMock()
+    resp.raise_for_status = MagicMock()
+    payload = {
+        "impact_on_gold": impact_on_gold, "impact_on_btc": impact_on_btc,
+        "confidence": confidence, "surprise_score": surprise_score, "reasoning": "test",
+    }
+    resp.json.return_value = {"content": [{"type": "text", "text": json.dumps(payload)}]}
+    return resp
 
 FRIDAY_MIDNIGHT_UTC = datetime(2026, 7, 17, 0, 5, tzinfo=timezone.utc)  # 2026-07-17 is a Friday
 NEWS_HOUR_UTC = datetime(2026, 7, 17, 19, 5, tzinfo=timezone.utc)
@@ -420,12 +447,13 @@ class NewsSentimentSchedulingTest(LiveSchedulerTestCase):
         ]
         fake_result = NewsFeedResult(headlines=headlines, status="live (1 matched)")
 
-        with patch("nero_core.execution.live_scheduler.NewsFeedClient.load", return_value=fake_result):
+        with patch("nero_core.execution.live_scheduler.NewsFeedClient.load", return_value=fake_result), \
+             patch("nero_core.strategies.news_sentiment_llm.requests.post", return_value=_mock_claude_response()):
             client = self._patched_client()
             first = live_scheduler.run_once(client=client, now=NEWS_HOUR_UTC, db_path=self.db_path)
 
-            self.assertTrue(has_news_sentiment_logged_today("GOLD", NEWS_HOUR_UTC, db_path=self.db_path))
-            self.assertTrue(has_news_sentiment_logged_today("BTC", NEWS_HOUR_UTC, db_path=self.db_path))
+            self.assertTrue(has_news_sentiment_logged_today("GOLD", NEWS_SENTIMENT_V1_VERSION, NEWS_HOUR_UTC, db_path=self.db_path))
+            self.assertTrue(has_news_sentiment_logged_today("BTC", NEWS_SENTIMENT_V1_VERSION, NEWS_HOUR_UTC, db_path=self.db_path))
             self.assertIn("NEWS_SENTIMENT:GOLD", first.assets_evaluated)
 
             later_same_day = NEWS_HOUR_UTC.replace(minute=35)
@@ -442,6 +470,67 @@ class NewsSentimentSchedulingTest(LiveSchedulerTestCase):
         news_skips = [r for r in result.assets_skipped if r["asset"] == "NEWS_SENTIMENT"]
         self.assertEqual(len(news_skips), 1)
         self.assertEqual(news_skips[0]["classification"], "NOT_DUE")
+
+    def test_both_v1_and_v2_log_independently_on_the_shared_schedule(self) -> None:
+        """v1 (keyword) and v2 (LLM) must BOTH evaluate and log on the same
+        daily_time_due run, each under its own strategy_version, without either
+        suppressing the other -- the actual point of the schema migration and the
+        version-aware has_news_sentiment_logged_today gate."""
+        headlines = [
+            NewsItem(
+                title="gold price surge rally record high",
+                source="Test", link="", published="Fri, 17 Jul 2026 12:00:00 GMT", tags=[],
+            )
+        ]
+        fake_result = NewsFeedResult(headlines=headlines, status="live (1 matched)")
+
+        with patch("nero_core.execution.live_scheduler.NewsFeedClient.load", return_value=fake_result), \
+             patch("nero_core.strategies.news_sentiment_llm.requests.post", return_value=_mock_claude_response()):
+            client = self._patched_client()
+            result = live_scheduler.run_once(client=client, now=NEWS_HOUR_UTC, db_path=self.db_path)
+
+        self.assertTrue(has_news_sentiment_logged_today("GOLD", NEWS_SENTIMENT_V1_VERSION, NEWS_HOUR_UTC, db_path=self.db_path))
+        self.assertTrue(has_news_sentiment_logged_today("GOLD", NEWS_SENTIMENT_V2_VERSION, NEWS_HOUR_UTC, db_path=self.db_path))
+        self.assertTrue(has_news_sentiment_logged_today("BTC", NEWS_SENTIMENT_V1_VERSION, NEWS_HOUR_UTC, db_path=self.db_path))
+        self.assertTrue(has_news_sentiment_logged_today("BTC", NEWS_SENTIMENT_V2_VERSION, NEWS_HOUR_UTC, db_path=self.db_path))
+
+        rows = list_news_sentiment_log_for_run(result.run_id, db_path=self.db_path)
+        versions_by_asset = {(r.asset, r.strategy_version) for r in rows}
+        self.assertEqual(
+            versions_by_asset,
+            {
+                ("GOLD", NEWS_SENTIMENT_V1_VERSION), ("GOLD", NEWS_SENTIMENT_V2_VERSION),
+                ("BTC", NEWS_SENTIMENT_V1_VERSION), ("BTC", NEWS_SENTIMENT_V2_VERSION),
+            },
+        )
+        self.assertIn("NEWS_SENTIMENT:GOLD", result.assets_evaluated)
+        self.assertIn("NEWS_SENTIMENT:BTC", result.assets_evaluated)
+
+    def test_v1_behavior_unchanged_when_v2_has_no_api_key(self) -> None:
+        """v1 must keep logging exactly as before even when ANTHROPIC_API_KEY isn't
+        set (v2 then no-ops via its own "no api key" path, never falling back to
+        keyword matching -- see news_sentiment_llm's own module docstring) --
+        confirms v1 was not accidentally coupled to v2's availability."""
+        headlines = [
+            NewsItem(
+                title="gold price surge rally record high",
+                source="Test", link="", published="Fri, 17 Jul 2026 12:00:00 GMT", tags=[],
+            )
+        ]
+        fake_result = NewsFeedResult(headlines=headlines, status="live (1 matched)")
+
+        with patch("nero_core.execution.live_scheduler.NewsFeedClient.load", return_value=fake_result), \
+             patch("nero_core.execution.live_scheduler.os.getenv", side_effect=lambda key, default="": default):
+            client = self._patched_client()
+            result = live_scheduler.run_once(client=client, now=NEWS_HOUR_UTC, db_path=self.db_path)
+
+        self.assertTrue(has_news_sentiment_logged_today("GOLD", NEWS_SENTIMENT_V1_VERSION, NEWS_HOUR_UTC, db_path=self.db_path))
+        rows = list_news_sentiment_log_for_run(result.run_id, db_path=self.db_path)
+        v1_gold = next(r for r in rows if r.asset == "GOLD" and r.strategy_version == NEWS_SENTIMENT_V1_VERSION)
+        self.assertEqual(v1_gold.signal_type, "BUY_BIAS")
+        self.assertEqual(v1_gold.source, "local")
+        v2_gold = next(r for r in rows if r.asset == "GOLD" and r.strategy_version == NEWS_SENTIMENT_V2_VERSION)
+        self.assertEqual(v2_gold.source, "no api key")
 
 
 def _uptrend_1h_history(n: int = 40) -> pd.DataFrame:

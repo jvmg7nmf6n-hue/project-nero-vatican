@@ -41,8 +41,9 @@ def _exec_row(**overrides) -> ExecutionLogRow:
 
 def _news_row(**overrides) -> NewsSentimentLogRow:
     base = dict(
-        id=1, run_id="run-1", asset="GOLD", news_timestamp=None, fetch_timestamp=_now(),
-        sentiment_score=0, signal_type="NEUTRAL", confidence=0.0, reasoning="x", source="local", created_at=_now(),
+        id=1, run_id="run-1", asset="GOLD", strategy_version="news-sentiment-v1.0.0", news_timestamp=None,
+        fetch_timestamp=_now(), sentiment_score=0, signal_type="NEUTRAL", confidence=0.0, reasoning="x",
+        source="local", created_at=_now(),
     )
     base.update(overrides)
     return NewsSentimentLogRow(**base)
@@ -137,8 +138,8 @@ class BuildNotificationMessageTest(unittest.TestCase):
             entry_price=10.5, db_path=self.db_path,
         )
         insert_news_sentiment_log(
-            run_id="run-1", asset="GOLD", fetch_timestamp=_now(), signal_type="NEUTRAL",
-            confidence=0.0, reasoning="no eligible headlines", source="local", db_path=self.db_path,
+            run_id="run-1", asset="GOLD", strategy_version="news-sentiment-v1.0.0", fetch_timestamp=_now(),
+            signal_type="NEUTRAL", confidence=0.0, reasoning="no eligible headlines", source="local", db_path=self.db_path,
         )
 
         message = build_notification_message("run-1", db_path=self.db_path)
