@@ -85,7 +85,13 @@ class LLMNewsParameters:
     claude_model: str = "claude-sonnet-5"
     claude_api_url: str = "https://api.anthropic.com/v1/messages"
     claude_api_version: str = "2023-06-01"
-    claude_max_tokens: int = 400
+    # 400 was found to truncate: the 2026-07-28 live validation and revalidation both
+    # observed claude-sonnet-5 spend 300+ tokens on an unrequested "thinking" block for
+    # one specific headline, leaving too little of the 400-token budget for the JSON
+    # answer (stop_reason: "max_tokens" mid-string, no closing brace). See
+    # docs/site_data/news_llm_live_validation.md for the observed thinking_tokens counts
+    # this value needs headroom above.
+    claude_max_tokens: int = 800
     claude_timeout_seconds: int = 20
 
 
