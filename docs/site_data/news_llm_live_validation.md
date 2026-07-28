@@ -249,3 +249,25 @@ mocks an `OSError` to exercise error handling).
 
 Neither fix touches gate (b) (surprise_score) or extends live API validation — this document's "What this
 run does NOT establish" section above still applies unchanged.
+
+## Follow-up: max_tokens truncation fix (commit `7c01c3b`)
+
+Live revalidation of the Bug 1 fix (separate from the runs recorded above) re-ran fresh headlines through
+the fixed code and found the same headline that originally crashed — "Fed Chairman Kevin Warsh's
+testimony..." — still triggered a thinking block, and this time hit `max_tokens=400` before finishing its
+JSON answer: `stop_reason: "max_tokens"`, `thinking_tokens: 311` of the 400-token budget, text truncated
+mid-string. The Bug 1 fix correctly avoided crashing on this (classified it as `error: JSONDecodeError`,
+not a raw exception) but the headline still produced no usable read.
+
+Raised `claude_max_tokens` from 400 to 800 (commit `7c01c3b`). Re-ran the same headline live with the new
+limit: `stop_reason` changed to `"end_turn"`, `thinking_tokens: 298`, `output_tokens: 485` total, complete
+parseable JSON returned (`source: "claude"`), gate (a) fired honestly (confidence 0.3) rather than
+crashing or truncating. Full suite re-run at 1502 tests, 0 failures — unchanged from the count after the
+Bug 1/Bug 2 fixes, confirming no regression from this parameter change. No test or registry entry
+depended on the literal value 400 (checked before changing it), so this was a plain default-value edit,
+not a strategy version bump.
+
+This was checked against exactly one headline, twice (400 then 800), both times for a scenario where
+thinking activated. It has not been stress-tested against many headlines to establish how thinking-token
+counts vary in general, so 800 is evidence-based for this one recurring case, not a proven ceiling for
+all future headlines.
