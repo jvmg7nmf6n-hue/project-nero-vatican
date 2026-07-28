@@ -215,3 +215,37 @@ works, only that these 4 headlines didn't test it.
   must not be modified for this run.
 - Confidence/surprise stability was checked over 2 runs only; this bounds short-run noise, not long-run
   drift or seasonality in the model's behavior.
+
+## Bugs Found and Fixed (follow-up, same branch)
+
+The two bugs surfaced by this validation were fixed in two follow-up commits on this same branch. This
+section is appended after the fact; the run results and predictions above are left exactly as originally
+recorded — nothing above this section was reworded or softened.
+
+- **Bug 1 — content-block parsing crash**, fixed in commit `bc7945f` ("Fix content-block parsing crash in
+  LLM news sentiment (Bug 1)"). `_call_claude` indexed `payload["content"][0]["text"]` unconditionally;
+  a `type: "thinking"` block preceding the text block (as captured live above) raised `KeyError`, and a
+  non-list `content` value would have raised an uncaught `TypeError` clean past all error handling. Fixed
+  by scanning the whole `content` array for `type == "text"` blocks (concatenating if more than one is
+  present) instead of indexing positionally. The regression tests replay the exact captured live shapes
+  from this document (thinking-only, and thinking-then-truncated-text) plus reconstructed edge cases
+  (multiple text blocks, a block missing its `type` key, non-list content). Full trace and repo-wide
+  pattern search were done before fixing — see the commit message for both.
+- **Bug 2 — RSS timestamp parsing gap**, fixed in commit `2a6b02f` ("Add ISO8601 fallback to
+  parse_published (Bug 2)"). `parse_published` only tried RFC822; Yahoo Finance's ISO8601 pubDates (see
+  the excluded headline #5 above) were silently treated as unparseable and excluded regardless of true
+  age. Fixed by falling back to `datetime.fromisoformat()` when RFC822 fails, with an explicit,
+  documented rule for naive (zone-less) ISO8601 timestamps: excluded, not assumed UTC, since a wrong zone
+  guess risks a lookahead leak rather than just a missed headline. A live re-check of all 5 configured
+  sources found CNBC and CoinDesk both RFC822 (unaffected), Yahoo ISO8601 (confirmed affected), and
+  Reuters / MarketWatch Economy unreachable at check time (DNS failure / 403 respectively) — their
+  timestamp format remains unconfirmed, which is a separate, pre-existing connectivity gap, not part of
+  this fix.
+
+Both fixes were written test-first (regression tests confirmed failing against the pre-fix code before
+either fix was applied) and verified against the full test suite: 1487 tests passing before, 1502 passing
+after (15 new tests, 0 regressions, 0 failures either side beyond a pre-existing test that deliberately
+mocks an `OSError` to exercise error handling).
+
+Neither fix touches gate (b) (surprise_score) or extends live API validation — this document's "What this
+run does NOT establish" section above still applies unchanged.
