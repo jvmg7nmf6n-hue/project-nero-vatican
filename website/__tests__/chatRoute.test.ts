@@ -242,6 +242,13 @@ describe("readAnthropicReplyAsText", () => {
     await expect(readAnthropicReplyAsText(upstreamBody, 50)).resolves.toEqual({
       text: "Hi there",
       usage: { inputTokens: null, outputTokens: null },
+      diagnostics: {
+        stopReason: null,
+        contentBlockTypesSeen: [],
+        textDeltaCount: 2,
+        hadStreamError: false,
+        streamErrorType: null,
+      },
     });
   });
 
@@ -267,7 +274,200 @@ describe("readAnthropicReplyAsText", () => {
     await expect(readAnthropicReplyAsText(upstreamBody, 50)).resolves.toEqual({
       text: "Hi",
       usage: { inputTokens: 42, outputTokens: 7 },
+      diagnostics: {
+        stopReason: null,
+        contentBlockTypesSeen: [],
+        textDeltaCount: 1,
+        hadStreamError: false,
+        streamErrorType: null,
+      },
     });
+  });
+
+  // Regression coverage for the "(No response)" investigation: the sibling bug
+  // in news_sentiment_llm.py was a content-block PARSING crash (indexing
+  // content[0] positionally). This route's SSE extractor never indexed by
+  // position in the first place -- it filters purely on delta.type -- so a
+  // thinking block (or any other non-text block) appearing before the text
+  // block must be silently skipped, not crash and not corrupt the result.
+  it("skips a thinking block that arrives before the text block, extracting only the text", async () => {
+    const upstreamBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking"}}\n'
+          )
+        );
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"reasoning..."}}\n'
+          )
+        );
+        controller.enqueue(new TextEncoder().encode('data: {"type":"content_block_stop","index":0}\n'));
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"type":"content_block_start","index":1,"content_block":{"type":"text"}}\n'
+          )
+        );
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Real answer"}}\n'
+          )
+        );
+        controller.enqueue(
+          new TextEncoder().encode('data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}\n')
+        );
+        controller.close();
+      },
+    });
+
+    const result = await readAnthropicReplyAsText(upstreamBody, 50);
+    expect(result.text).toBe("Real answer");
+    expect(result.diagnostics.contentBlockTypesSeen).toEqual(["thinking", "text"]);
+    expect(result.diagnostics.stopReason).toBe("end_turn");
+  });
+
+  // A tool_use block ahead of the text block must be skipped the same way --
+  // its deltas are input_json_delta, never text_delta.
+  it("skips a tool_use block that arrives before the text block", async () => {
+    const upstreamBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","name":"lookup"}}\n'
+          )
+        );
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{}"}}\n'
+          )
+        );
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"type":"content_block_start","index":1,"content_block":{"type":"text"}}\n'
+          )
+        );
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Answer after tool use"}}\n'
+          )
+        );
+        controller.close();
+      },
+    });
+
+    const result = await readAnthropicReplyAsText(upstreamBody, 50);
+    expect(result.text).toBe("Answer after tool use");
+    expect(result.diagnostics.contentBlockTypesSeen).toEqual(["tool_use", "text"]);
+  });
+
+  // Multiple separate text blocks must concatenate in order, not just take
+  // the first one -- matching the fix applied to news_sentiment_llm.py.
+  it("concatenates multiple text blocks in order rather than taking only the first", async () => {
+    const upstreamBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Part one. "}}\n'
+          )
+        );
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Part two."}}\n'
+          )
+        );
+        controller.close();
+      },
+    });
+
+    const result = await readAnthropicReplyAsText(upstreamBody, 50);
+    expect(result.text).toBe("Part one. Part two.");
+    expect(result.diagnostics.textDeltaCount).toBe(2);
+  });
+
+  // The exact failure mode this investigation was launched to find: a
+  // thinking block consumes the reply's token budget before any text_delta
+  // ever arrives, and the stream ends with stop_reason "max_tokens" and zero
+  // text. Previously stop_reason was never captured at all, so this was
+  // indistinguishable from any other empty stream.
+  it("captures stop_reason 'max_tokens' with zero text when thinking exhausts the budget", async () => {
+    const upstreamBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking"}}\n'
+          )
+        );
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"long chain of reasoning that never finishes..."}}\n'
+          )
+        );
+        controller.enqueue(
+          new TextEncoder().encode('data: {"type":"message_delta","delta":{"stop_reason":"max_tokens"}}\n')
+        );
+        controller.close();
+      },
+    });
+
+    const result = await readAnthropicReplyAsText(upstreamBody, 50);
+    expect(result.text).toBe("");
+    expect(result.diagnostics.textDeltaCount).toBe(0);
+    expect(result.diagnostics.stopReason).toBe("max_tokens");
+    expect(result.diagnostics.contentBlockTypesSeen).toEqual(["thinking"]);
+  });
+
+  // An in-stream `error` event (e.g. overloaded_error mid-response) was
+  // previously silently dropped by the extractor's if/else-if chain -- it
+  // must now be captured, not just ignored.
+  it("captures an in-stream error event instead of silently dropping it", async () => {
+    const upstreamBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"partial"}}\n'
+          )
+        );
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}\n'
+          )
+        );
+        controller.close();
+      },
+    });
+
+    const result = await readAnthropicReplyAsText(upstreamBody, 50);
+    expect(result.diagnostics.hadStreamError).toBe(true);
+    expect(result.diagnostics.streamErrorType).toBe("overloaded_error");
+    // Partial text that arrived before the error is still preserved, exactly
+    // as the existing "keeps already-streamed text visible" ChatBot behavior
+    // expects -- an in-stream error must not retroactively erase real output.
+    expect(result.text).toBe("partial");
+  });
+
+  // A stream that closes with no message_delta/message_stop at all (an
+  // abrupt disconnect) must be distinguishable in principle from one that
+  // completed normally with nothing to say -- both currently yield
+  // stopReason: null, which is itself the honest signal ("we don't know
+  // why") rather than a fabricated "end_turn".
+  it("reports stopReason null (not a guessed value) when the stream closes with no message_delta at all", async () => {
+    const upstreamBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"type":"content_block_start","index":0,"content_block":{"type":"text"}}\n'
+          )
+        );
+        // Closes abruptly -- no content_block_delta, no message_delta, no [DONE].
+        controller.close();
+      },
+    });
+
+    const result = await readAnthropicReplyAsText(upstreamBody, 50);
+    expect(result.text).toBe("");
+    expect(result.diagnostics.stopReason).toBeNull();
+    expect(result.diagnostics.textDeltaCount).toBe(0);
   });
 });
 
@@ -396,6 +596,81 @@ describe("POST /api/chat", () => {
     const response = await POST(jsonRequest({ message: "hi", strategyContext: CONTEXT, history: [] }));
     const body = await response.text();
     expect(body).not.toContain("ECONNRESET");
+  });
+
+  // Root-cause regression coverage for the "(No response)" investigation: a
+  // stream that completes successfully (upstream.ok) but produces zero text
+  // must NOT come back as a bare 200 + empty body -- previously this was the
+  // one case the client could never explain, because nothing had gone wrong
+  // at the HTTP layer. It must surface stop_reason instead.
+  it("returns 502 with stop_reason surfaced when the stream completes with zero text (e.g. max_tokens exhausted by thinking)", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    global.fetch = jest.fn().mockResolvedValue(
+      sseResponse([
+        'data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking"}}\n',
+        'data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"..."}}\n',
+        'data: {"type":"message_delta","delta":{"stop_reason":"max_tokens"}}\n',
+      ])
+    ) as unknown as typeof fetch;
+
+    const response = await POST(jsonRequest({ message: "hi", strategyContext: CONTEXT, history: [] }));
+    expect(response.status).toBe(502);
+    const body = await response.json();
+    expect(body.error).toContain("max_tokens");
+  });
+
+  it("returns 502 mentioning the in-stream error type when the stream errors before any text arrives", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    global.fetch = jest.fn().mockResolvedValue(
+      sseResponse(['data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}\n'])
+    ) as unknown as typeof fetch;
+
+    const response = await POST(jsonRequest({ message: "hi", strategyContext: CONTEXT, history: [] }));
+    expect(response.status).toBe(502);
+    const body = await response.json();
+    expect(body.error).toContain("overloaded_error");
+  });
+
+  it("still returns 200 with the text when some text arrived despite a later in-stream error", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    global.fetch = jest.fn().mockResolvedValue(
+      sseResponse([
+        'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"partial answer"}}\n',
+        'data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}\n',
+      ])
+    ) as unknown as typeof fetch;
+
+    const response = await POST(jsonRequest({ message: "hi", strategyContext: CONTEXT, history: [] }));
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("partial answer");
+  });
+
+  it("logs a structured [chat-diag] line with stop_reason, content block types, and text length, never the API key or message content", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key-should-never-appear";
+    global.fetch = jest.fn().mockResolvedValue(
+      sseResponse([
+        'data: {"type":"content_block_start","index":0,"content_block":{"type":"text"}}\n',
+        'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"hello there"}}\n',
+        'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}\n',
+      ])
+    ) as unknown as typeof fetch;
+    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+
+    await POST(jsonRequest({ message: "a secret user question", strategyContext: CONTEXT, history: [] }));
+
+    const diagCall = consoleLogSpy.mock.calls.find((call) => typeof call[0] === "string" && call[0].includes("[chat-diag]"));
+    expect(diagCall).toBeDefined();
+    const logged = JSON.parse(diagCall![0] as string);
+    expect(logged.stopReason).toBe("end_turn");
+    expect(logged.contentBlockTypesSeen).toEqual(["text"]);
+    expect(logged.textByteLength).toBe("hello there".length);
+    expect(logged.hadStreamError).toBe(false);
+    // Never the key, never the raw message/reply content -- lengths/flags only.
+    const allLoggedText = consoleLogSpy.mock.calls.map((call) => String(call[0])).join("\n");
+    expect(allLoggedText).not.toContain("test-key-should-never-appear");
+    expect(allLoggedText).not.toContain("a secret user question");
+    expect(allLoggedText).not.toContain("hello there");
+    consoleLogSpy.mockRestore();
   });
 });
 

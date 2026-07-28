@@ -123,10 +123,30 @@ export interface SseUsage {
   outputTokens: number | null;
 }
 
+// Diagnostics for the "(No response)" investigation (see route.ts's own
+// comments): previously NONE of these were captured, which made an empty
+// reply indistinguishable -- even in the server logs -- from a genuinely
+// broken stream. contentBlockTypesSeen is diagnostic only, never used to
+// select which block to read from (the text_delta filter below is already
+// index-independent by construction: it matches on delta.type wherever in
+// the stream it appears, not on content_block position or count).
+export interface SseDiagnostics {
+  stopReason: string | null;
+  contentBlockTypesSeen: string[];
+  textDeltaCount: number;
+  hadStreamError: boolean;
+  streamErrorType: string | null;
+}
+
 export function createSseTextExtractor() {
   let buffer = "";
   let inputTokens: number | null = null;
   let outputTokens: number | null = null;
+  let stopReason: string | null = null;
+  const contentBlockTypesSeen: string[] = [];
+  let textDeltaCount = 0;
+  let hadStreamError = false;
+  let streamErrorType: string | null = null;
   return {
     push(chunkText: string): string {
       buffer += chunkText;
@@ -150,11 +170,28 @@ export function createSseTextExtractor() {
             typeof event.delta.text === "string"
           ) {
             output += event.delta.text;
+            textDeltaCount += 1;
+          } else if (event?.type === "content_block_start" && typeof event?.content_block?.type === "string") {
+            contentBlockTypesSeen.push(event.content_block.type);
           } else if (event?.type === "message_start" && typeof event?.message?.usage?.input_tokens === "number") {
             // Cost-visibility only (testing phase) -- not used for any limit.
             inputTokens = event.message.usage.input_tokens;
-          } else if (event?.type === "message_delta" && typeof event?.usage?.output_tokens === "number") {
-            outputTokens = event.usage.output_tokens;
+          } else if (event?.type === "message_delta") {
+            if (typeof event?.usage?.output_tokens === "number") {
+              outputTokens = event.usage.output_tokens;
+            }
+            // Previously never read at all -- this is the one field that lets
+            // an honestly-empty reply ("the model chose to stop, see why")
+            // be told apart from a broken stream.
+            if (typeof event?.delta?.stop_reason === "string") {
+              stopReason = event.delta.stop_reason;
+            }
+          } else if (event?.type === "error") {
+            // Previously silently dropped by this if/else-if chain -- an
+            // in-stream error (e.g. an overloaded_error mid-response) left no
+            // trace at all, so it looked identical to a genuinely empty reply.
+            hadStreamError = true;
+            streamErrorType = typeof event?.error?.type === "string" ? event.error.type : "unknown";
           }
         } catch {
           // Malformed or unexpected event shape -- skip it rather than crash
@@ -165,6 +202,9 @@ export function createSseTextExtractor() {
     },
     getUsage(): SseUsage {
       return { inputTokens, outputTokens };
+    },
+    getDiagnostics(): SseDiagnostics {
+      return { stopReason, contentBlockTypesSeen: [...contentBlockTypesSeen], textDeltaCount, hadStreamError, streamErrorType };
     },
   };
 }
@@ -193,6 +233,7 @@ export const STREAM_IDLE_TIMEOUT_MS = 15_000;
 export interface AnthropicReply {
   text: string;
   usage: SseUsage;
+  diagnostics: SseDiagnostics;
 }
 
 export async function readAnthropicReplyAsText(
@@ -220,7 +261,7 @@ export async function readAnthropicReplyAsText(
 
       const { done, value } = result;
       if (done) {
-        return { text: fullText, usage: extractor.getUsage() };
+        return { text: fullText, usage: extractor.getUsage(), diagnostics: extractor.getDiagnostics() };
       }
       fullText += extractor.push(decoder.decode(value, { stream: true }));
     }
