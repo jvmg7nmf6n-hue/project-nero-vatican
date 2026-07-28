@@ -287,6 +287,40 @@ class FreshnessGapTest(HealthCheckTestCase):
         self.assertIsNone(result.evaluation_gap_hours)
         self.assertFalse(result.freshness_flagged)
 
+    def test_tied_timestamp_batch_uses_the_newest_candle_not_the_oldest(self) -> None:
+        # Regression test (2026-07-29 bug, found via real production data): a
+        # backlog catch-up run logs several rows in the SAME instant (one per
+        # missed candle, all sharing the identical wall-clock `timestamp`) --
+        # e.g. SILVER/BREAKOUT_MOMENTUM's real 2026-07-28 03:48:34 run logged 4
+        # rows (candles 07-22 through 07-25) at that one timestamp.
+        # max(matching, key=lambda r: r.timestamp) doesn't break that tie by
+        # candle recency, so it silently picked whichever tied row sorted
+        # first (the OLDEST candle, since rows are ordered by candle_timestamp
+        # ASC) -- reporting a much larger gap than the real one. Inserted here
+        # in a deliberately non-chronological order so a naive "first
+        # matching row wins" implementation can't accidentally pass by luck.
+        batch_logged_at = NOW
+        oldest_candle = _hours_ago(96)  # 4 days before the newest candle
+        newest_candle = _hours_ago(24)  # 1 day before NOW -- the real gap
+        insert_execution_log_row(
+            run_id="r1", strategy=BREAKOUT_MOMENTUM_ID, strategy_version=SILVER_BM_VERSION, asset="SILVER",
+            signal_type="NO_TRADE", reasoning="no signal (oldest of the batch)",
+            candle_timestamp=_ms(oldest_candle), timestamp=batch_logged_at, db_path=self.db_path,
+        )
+        insert_execution_log_row(
+            run_id="r1", strategy=BREAKOUT_MOMENTUM_ID, strategy_version=SILVER_BM_VERSION, asset="SILVER",
+            signal_type="NO_TRADE", reasoning="no signal (newest of the batch)",
+            candle_timestamp=_ms(newest_candle), timestamp=batch_logged_at, db_path=self.db_path,
+        )
+        insert_execution_log_row(
+            run_id="r1", strategy=BREAKOUT_MOMENTUM_ID, strategy_version=SILVER_BM_VERSION, asset="SILVER",
+            signal_type="NO_TRADE", reasoning="no signal (middle of the batch)",
+            candle_timestamp=_ms(_hours_ago(60)), timestamp=batch_logged_at, db_path=self.db_path,
+        )
+        results = health_check.run_health_check(db_path=self.db_path, now=NOW)
+        result = self._find(results, BREAKOUT_MOMENTUM_ID, SILVER_BM_VERSION, "SILVER")
+        self.assertAlmostEqual(result.evaluation_gap_hours, 24.0, places=2)
+
 
 class AlertMessageTest(unittest.TestCase):
     def test_no_alert_when_nothing_flagged(self) -> None:

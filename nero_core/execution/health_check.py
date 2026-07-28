@@ -229,13 +229,28 @@ def _last_evaluation_gap_hours(
     that logged it actually happened) -- "how late was the evaluation that DID
     happen," not "did one happen at all" (see this module's own FRESHNESS GAP
     docstring note). None if this (strategy, strategy_version, asset) has never
-    logged anything -- the existing staleness check already covers that case."""
+    logged anything -- the existing staleness check already covers that case.
+
+    BUG FOUND 2026-07-29 (real production data, a status-check request that
+    surfaced this while confirming the 24h/12h/daily tolerance fixes' backlog
+    catch-up): a backlog catch-up run logs several rows in the SAME instant
+    (one per missed candle, all sharing the identical wall-clock `timestamp`)
+    -- e.g. SILVER/BREAKOUT_MOMENTUM's 2026-07-28 03:48:34 run logged 4 rows
+    (candles 07-22 through 07-25) at that one timestamp. `max(matching,
+    key=lambda r: r.timestamp)` doesn't break that tie by candle recency, so
+    it silently returned whichever tied row happened to sort first (the
+    OLDEST candle in the batch, since `rows` is already ordered by
+    candle_timestamp ASC) -- reporting a 143.8h gap instead of the real
+    ~71.8h. Breaking ties on candle_timestamp too (the newest candle among
+    equally-recent log entries is the one that actually reflects "how fresh
+    is the latest evaluation") fixes this without changing any single-row
+    case's result."""
     matching = [
         r for r in rows if r.strategy == strategy and r.strategy_version == strategy_version and r.asset == asset
     ]
     if not matching:
         return None
-    latest = max(matching, key=lambda r: r.timestamp)
+    latest = max(matching, key=lambda r: (r.timestamp, r.candle_timestamp))
     candle_closed_at = datetime.fromtimestamp(latest.candle_timestamp / 1000.0, tz=timezone.utc)
     return (latest.timestamp - candle_closed_at).total_seconds() / 3600.0
 
