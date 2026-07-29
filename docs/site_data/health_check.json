@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-28T21:05:47.685108+00:00",
+  "last_updated": "2026-07-29T15:30:07.919813+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -21,13 +21,13 @@
       "strategy_version": "trend-pullback-v1.0.0",
       "asset": "BNB",
       "gate": "12h",
-      "last_signal_at": "2026-07-28T14:09:03.742994+00:00",
+      "last_signal_at": "2026-07-29T12:29:42.836197+00:00",
       "resolved_trades": 0,
       "win_rate": null,
       "open_position": null,
       "stale": false,
       "flag_reason": null,
-      "evaluation_gap_hours": 2.1510399983333333,
+      "evaluation_gap_hours": 0.4952325547222222,
       "freshness_flagged": false
     },
     {
@@ -35,13 +35,13 @@
       "strategy_version": "breakout-momentum-v1.6.0-silver-calibrated-24h",
       "asset": "SILVER",
       "gate": "24h",
-      "last_signal_at": "2026-07-28T03:48:34.609837+00:00",
+      "last_signal_at": "2026-07-29T01:01:45.351488+00:00",
       "resolved_trades": 0,
       "win_rate": null,
       "open_position": null,
       "stale": true,
-      "flag_reason": "most recent evaluation lagged its own candle close by 71.8h (expected within 4.0h) -- timeliness is degrading even though evaluations are still happening",
-      "evaluation_gap_hours": 71.8096138436111,
+      "flag_reason": "most recent evaluation lagged its own candle close by 21.0h (expected within 4.0h) -- timeliness is degrading even though evaluations are still happening",
+      "evaluation_gap_hours": 21.029264302222224,
       "freshness_flagged": true
     },
     {
@@ -49,13 +49,13 @@
       "strategy_version": "trend-pullback-v1.5.0-silver-calibrated-24h",
       "asset": "SILVER",
       "gate": "24h",
-      "last_signal_at": "2026-07-28T03:48:34.609837+00:00",
+      "last_signal_at": "2026-07-29T01:01:45.351488+00:00",
       "resolved_trades": 0,
       "win_rate": null,
       "open_position": null,
       "stale": true,
-      "flag_reason": "most recent evaluation lagged its own candle close by 71.8h (expected within 4.0h) -- timeliness is degrading even though evaluations are still happening",
-      "evaluation_gap_hours": 71.8096138436111,
+      "flag_reason": "most recent evaluation lagged its own candle close by 21.0h (expected within 4.0h) -- timeliness is degrading even though evaluations are still happening",
+      "evaluation_gap_hours": 21.029264302222224,
       "freshness_flagged": true
     },
     {
@@ -63,13 +63,13 @@
       "strategy_version": "volatility-squeeze-v1.1.0-ma200-silver-calibrated-24h",
       "asset": "SILVER",
       "gate": "24h",
-      "last_signal_at": "2026-07-28T03:48:34.609837+00:00",
+      "last_signal_at": "2026-07-29T01:01:45.351488+00:00",
       "resolved_trades": 0,
       "win_rate": null,
       "open_position": null,
       "stale": true,
-      "flag_reason": "most recent evaluation lagged its own candle close by 71.8h (expected within 4.0h) -- timeliness is degrading even though evaluations are still happening",
-      "evaluation_gap_hours": 71.8096138436111,
+      "flag_reason": "most recent evaluation lagged its own candle close by 21.0h (expected within 4.0h) -- timeliness is degrading even though evaluations are still happening",
+      "evaluation_gap_hours": 21.029264302222224,
       "freshness_flagged": true
     },
     {
@@ -77,13 +77,13 @@
       "strategy_version": "volatility-squeeze-v1.1.0-ma150-silver-calibrated-24h",
       "asset": "SILVER",
       "gate": "24h",
-      "last_signal_at": "2026-07-28T03:48:34.609837+00:00",
+      "last_signal_at": "2026-07-29T01:01:45.351488+00:00",
       "resolved_trades": 0,
       "win_rate": null,
       "open_position": null,
       "stale": true,
-      "flag_reason": "most recent evaluation lagged its own candle close by 71.8h (expected within 4.0h) -- timeliness is degrading even though evaluations are still happening",
-      "evaluation_gap_hours": 71.8096138436111,
+      "flag_reason": "most recent evaluation lagged its own candle close by 21.0h (expected within 4.0h) -- timeliness is degrading even though evaluations are still happening",
+      "evaluation_gap_hours": 21.029264302222224,
       "freshness_flagged": true
     },
     {
@@ -91,13 +91,13 @@
       "strategy_version": "volatility-squeeze-v1.1.0-ma100-silver-calibrated-24h",
       "asset": "SILVER",
       "gate": "24h",
-      "last_signal_at": "2026-07-28T03:48:34.609837+00:00",
+      "last_signal_at": "2026-07-29T01:01:45.351488+00:00",
       "resolved_trades": 0,
       "win_rate": null,
       "open_position": null,
       "stale": true,
-      "flag_reason": "most recent evaluation lagged its own candle close by 71.8h (expected within 4.0h) -- timeliness is degrading even though evaluations are still happening",
-      "evaluation_gap_hours": 71.8096138436111,
+      "flag_reason": "most recent evaluation lagged its own candle close by 21.0h (expected within 4.0h) -- timeliness is degrading even though evaluations are still happening",
+      "evaluation_gap_hours": 21.029264302222224,
       "freshness_flagged": true
     },
     {
@@ -133,13 +133,13 @@
       "strategy_version": "range-mean-reversion-v1.1.0-long-only",
       "asset": "BTC",
       "gate": "24h",
-      "last_signal_at": "2026-07-28T03:48:34.609837+00:00",
+      "last_signal_at": "2026-07-29T01:01:45.351488+00:00",
       "resolved_trades": 0,
       "win_rate": null,
       "open_position": null,
       "stale": false,
       "flag_reason": null,
-      "evaluation_gap_hours": 3.809613843611111,
+      "evaluation_gap_hours": 1.02926458,
       "freshness_flagged": false
     },
     {
@@ -147,13 +147,13 @@
       "strategy_version": "range-mean-reversion-v1.3.0-confirmation",
       "asset": "BTC",
       "gate": "24h",
-      "last_signal_at": "2026-07-28T03:48:34.609837+00:00",
+      "last_signal_at": "2026-07-29T01:01:45.351488+00:00",
       "resolved_trades": 1,
       "win_rate": 0.0,
       "open_position": null,
       "stale": false,
       "flag_reason": null,
-      "evaluation_gap_hours": 3.809613843611111,
+      "evaluation_gap_hours": 1.02926458,
       "freshness_flagged": false
     },
     {
@@ -175,13 +175,13 @@
       "strategy_version": "cointegration-pairs-v1.0.0",
       "asset": "BTC-ETH",
       "gate": "12h",
-      "last_signal_at": "2026-07-28T14:09:03.742994+00:00",
+      "last_signal_at": "2026-07-29T12:29:42.836197+00:00",
       "resolved_trades": 0,
       "win_rate": null,
       "open_position": null,
       "stale": false,
       "flag_reason": null,
-      "evaluation_gap_hours": 2.1510399983333333,
+      "evaluation_gap_hours": 0.4952325547222222,
       "freshness_flagged": false
     },
     {
@@ -505,13 +505,13 @@
       "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "gate": null,
-      "last_signal_at": "2026-07-28T20:45:00.970043+00:00",
-      "resolved_trades": 25,
-      "win_rate": 0.52,
+      "last_signal_at": "2026-07-29T14:28:20.349717+00:00",
+      "resolved_trades": 27,
+      "win_rate": 0.5555555555555556,
       "open_position": {
-        "entry_price": 63904.0,
-        "entry_timestamp": "2026-07-28T20:45:00.970043+00:00",
-        "candle_timestamp": "2026-07-28T19:59:59.999000+00:00"
+        "entry_price": 64664.7,
+        "entry_timestamp": "2026-07-29T14:28:20.349717+00:00",
+        "candle_timestamp": "2026-07-29T13:59:59.999000+00:00"
       },
       "stale": false,
       "flag_reason": null,
@@ -523,13 +523,13 @@
       "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "gate": null,
-      "last_signal_at": "2026-07-28T20:45:00.970043+00:00",
-      "resolved_trades": 24,
-      "win_rate": 0.625,
+      "last_signal_at": "2026-07-29T14:52:27.848820+00:00",
+      "resolved_trades": 25,
+      "win_rate": 0.6,
       "open_position": {
-        "entry_price": 1922.23,
-        "entry_timestamp": "2026-07-28T20:45:00.970043+00:00",
-        "candle_timestamp": "2026-07-28T19:59:59.999000+00:00"
+        "entry_price": 1909.24,
+        "entry_timestamp": "2026-07-29T14:52:27.848820+00:00",
+        "candle_timestamp": "2026-07-29T13:59:59.999000+00:00"
       },
       "stale": false,
       "flag_reason": null,
