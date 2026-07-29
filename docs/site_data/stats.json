@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-29T10:08:53.782784+00:00",
+  "last_updated": "2026-07-29T12:30:11.763187+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -30,7 +30,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 2
+        "NO_TRADE": 3
       },
       "open_position": null
     },
@@ -206,7 +206,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 2
+        "NO_TRADE": 3
       },
       "open_position": null
     },
