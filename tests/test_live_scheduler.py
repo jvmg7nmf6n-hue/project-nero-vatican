@@ -528,7 +528,7 @@ class NewsSentimentSchedulingTest(LiveSchedulerTestCase):
         rows = list_news_sentiment_log_for_run(result.run_id, db_path=self.db_path)
         v1_gold = next(r for r in rows if r.asset == "GOLD" and r.strategy_version == NEWS_SENTIMENT_V1_VERSION)
         self.assertEqual(v1_gold.signal_type, "BUY_BIAS")
-        self.assertEqual(v1_gold.source, "local")
+        self.assertEqual(v1_gold.source, "keyword (no gemini key configured)")
         v2_gold = next(r for r in rows if r.asset == "GOLD" and r.strategy_version == NEWS_SENTIMENT_V2_VERSION)
         self.assertEqual(v2_gold.source, "no api key")
 
@@ -617,6 +617,103 @@ class OrderflowImbalanceSchedulingTest(LiveSchedulerTestCase):
         self.assertIn("ORDERFLOW_IMBALANCE:BTC", result.assets_evaluated)
         rows = list_execution_log(db_path=self.db_path, asset="BTC", strategy="ORDERFLOW_IMBALANCE")
         self.assertEqual(rows, [])
+
+
+class DataSourcePersistenceTest(LiveSchedulerTestCase):
+    """Regression coverage for the SILVER-via-YFinance-with-zero-record incident: the
+    provenance string tools.timeframe_data.fetch_timeframe_candles already computes
+    (see process_single_asset) must now actually reach execution_log.data_source
+    instead of being discarded."""
+
+    def test_single_asset_config_persists_the_fetch_source(self) -> None:
+        client = self._patched_client()
+        result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
+
+        self.assertIn("GOLD", result.assets_evaluated)
+        rows = list_execution_log(db_path=self.db_path, asset="GOLD", strategy="BREAKOUT_MOMENTUM")
+        self.assertTrue(rows, "expected at least one BREAKOUT_MOMENTUM/GOLD row")
+        for row in rows:
+            self.assertEqual(row.data_source, "NATIVE: test-fixture")
+
+    def test_data_source_is_none_when_not_supplied(self) -> None:
+        """insert_execution_log_row's default (no data_source passed) must stay None,
+        not an empty string or fabricated value -- callers not yet wired to a real
+        provenance string (e.g. process_pairs, process_gold_silver_ratio) must read
+        back as honestly "not recorded", never silently blank."""
+        from nero_core.truth_ledger.execution_log import insert_execution_log_row
+
+        row = insert_execution_log_row(
+            run_id="test-run", strategy="TEST_STRATEGY", strategy_version="v1", asset="TEST",
+            signal_type="NO_TRADE", reasoning="no data_source passed", candle_timestamp=1000,
+            db_path=self.db_path,
+        )
+        self.assertIsNone(row.data_source)
+        reloaded = list_execution_log(db_path=self.db_path, asset="TEST", strategy="TEST_STRATEGY")
+        self.assertEqual(len(reloaded), 1)
+        self.assertIsNone(reloaded[0].data_source)
+
+
+class ApiKeyStartupValidationTest(LiveSchedulerTestCase):
+    """Fix 2: a missing expected API key must produce a durable, queryable
+    CONFIG_WARNING in execution_metadata.errors_encountered -- checked once at the
+    very start of run_once, before any strategy evaluation -- and must never stop
+    the run or leak a key's actual value."""
+
+    _ALL_KEYS_PRESENT = {
+        "TWELVE_DATA_API_KEY": "td-real-value-should-never-appear-anywhere",
+        "GEMINI_API_KEY": "gemini-real-value-should-never-appear-anywhere",
+        "ANTHROPIC_API_KEY": "anthropic-real-value-should-never-appear-anywhere",
+    }
+
+    @staticmethod
+    def _getenv_from(env: dict[str, str]):
+        # Same pattern as NewsSentimentSchedulingTest.test_v1_behavior_unchanged_when_
+        # v2_has_no_api_key -- patches os.getenv directly rather than clearing the
+        # real process environment (safer: nothing outside this dict can leak in or
+        # be accidentally wiped for the duration of the call).
+        return lambda key, default="": env.get(key, default)
+
+    def test_missing_key_produces_config_warning_without_stopping_the_run(self) -> None:
+        env = dict(self._ALL_KEYS_PRESENT)
+        del env["ANTHROPIC_API_KEY"]
+        client = self._patched_client()
+        with patch("nero_core.execution.live_scheduler.os.getenv", side_effect=self._getenv_from(env)):
+            result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
+
+        warnings = [e for e in result.errors_encountered if e.get("classification") == "CONFIG_WARNING"]
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0]["key"], "ANTHROPIC_API_KEY")
+
+        # the run must not stop -- other strategies still evaluate normally.
+        self.assertIn("GOLD", result.assets_evaluated)
+
+    def test_all_keys_present_produces_no_config_warning(self) -> None:
+        client = self._patched_client()
+        with patch("nero_core.execution.live_scheduler.os.getenv", side_effect=self._getenv_from(self._ALL_KEYS_PRESENT)):
+            result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
+
+        warnings = [e for e in result.errors_encountered if e.get("classification") == "CONFIG_WARNING"]
+        self.assertEqual(warnings, [])
+
+    def test_multiple_missing_keys_each_get_their_own_warning(self) -> None:
+        client = self._patched_client()
+        with patch("nero_core.execution.live_scheduler.os.getenv", side_effect=self._getenv_from({})):
+            result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
+
+        warned_keys = {e["key"] for e in result.errors_encountered if e.get("classification") == "CONFIG_WARNING"}
+        self.assertEqual(warned_keys, {"TWELVE_DATA_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY"})
+
+    def test_key_value_never_appears_in_the_warning(self) -> None:
+        """Even when a key IS present (and therefore not warned about), its value
+        must never leak into any other run_once output -- this test's fixture keys
+        are deliberately distinctive strings so any accidental leak is unmissable."""
+        client = self._patched_client()
+        with patch("nero_core.execution.live_scheduler.os.getenv", side_effect=self._getenv_from(self._ALL_KEYS_PRESENT)):
+            result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
+
+        serialized = str(result.errors_encountered) + str(result.assets_skipped) + str(result.assets_evaluated)
+        for value in self._ALL_KEYS_PRESENT.values():
+            self.assertNotIn(value, serialized)
 
 
 if __name__ == "__main__":

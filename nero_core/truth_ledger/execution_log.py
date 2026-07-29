@@ -13,6 +13,15 @@ than the last one we logged" comparison an exact integer comparison, with no
 datetime-roundtrip precision question. Wall-clock fields (`timestamp`, `created_at`,
 `fetch_timestamp`, `news_timestamp`) are ISO8601 TEXT, matching
 nero_core.truth_ledger.models.PredictionRecord's existing convention.
+
+`execution_log.data_source` (nullable, no DEFAULT): the market-data provenance string
+tools.timeframe_data.fetch_timeframe_candles already computes (e.g. "NATIVE: Twelve Data
+XAG/USD daily candles" vs "NATIVE: YFinance SI=F (continuous futures proxy, not spot)
+daily candles") but which was previously discarded before reaching the ledger -- the
+reason a Twelve-Data-key outage silently shifted SILVER onto a YFinance futures-proxy
+substitute with zero record of the substitution anywhere. NULL for every row inserted
+before this column existed: which source actually served a historical row is genuinely
+unrecoverable, so NULL is the honest value, never a guessed backfill.
 """
 from __future__ import annotations
 
@@ -43,6 +52,7 @@ CREATE TABLE IF NOT EXISTS execution_log (
     reasoning TEXT NOT NULL,
     candle_timestamp INTEGER NOT NULL,
     created_at TEXT NOT NULL,
+    data_source TEXT,
     UNIQUE (asset, strategy, strategy_version, candle_timestamp, signal_type)
 );
 CREATE INDEX IF NOT EXISTS idx_execution_log_lookup ON execution_log (asset, strategy, strategy_version);
@@ -98,6 +108,7 @@ class ExecutionLogRow:
     reasoning: str
     candle_timestamp: int
     created_at: datetime
+    data_source: str | None = None
 
 
 def insert_execution_log_row(
@@ -111,11 +122,16 @@ def insert_execution_log_row(
     entry_price: float | None = None,
     exit_price: float | None = None,
     timestamp: datetime | None = None,
+    data_source: str | None = None,
     db_path: Path = DEFAULT_DB_PATH,
 ) -> ExecutionLogRow | None:
     """Insert one execution_log row. Returns None (not an error) if this exact signal
     for this exact candle was already logged by a previous run — the caller should treat
-    that as "already processed," never retry or overwrite it."""
+    that as "already processed," never retry or overwrite it.
+
+    data_source defaults to None (not an empty string) for callers that haven't been
+    wired to pass their fetch's actual provenance string yet -- an honest "not recorded"
+    rather than a fabricated value."""
     init_execution_tables(db_path)
     ts = timestamp or datetime.now(timezone.utc)
     created_at = datetime.now(timezone.utc)
@@ -125,12 +141,12 @@ def insert_execution_log_row(
                 """
                 INSERT INTO execution_log (
                     run_id, timestamp, strategy, strategy_version, asset, signal_type,
-                    entry_price, exit_price, reasoning, candle_timestamp, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    entry_price, exit_price, reasoning, candle_timestamp, created_at, data_source
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run_id, ts.isoformat(), strategy, strategy_version, asset, signal_type,
-                    entry_price, exit_price, reasoning, candle_timestamp, created_at.isoformat(),
+                    entry_price, exit_price, reasoning, candle_timestamp, created_at.isoformat(), data_source,
                 ),
             )
         except sqlite3.IntegrityError:
@@ -140,7 +156,7 @@ def insert_execution_log_row(
     return ExecutionLogRow(
         id=row_id, run_id=run_id, timestamp=ts, strategy=strategy, strategy_version=strategy_version,
         asset=asset, signal_type=signal_type, entry_price=entry_price, exit_price=exit_price,
-        reasoning=reasoning, candle_timestamp=candle_timestamp, created_at=created_at,
+        reasoning=reasoning, candle_timestamp=candle_timestamp, created_at=created_at, data_source=data_source,
     )
 
 
@@ -180,7 +196,7 @@ def list_execution_log(
     init_execution_tables(db_path)
     query = """
         SELECT id, run_id, timestamp, strategy, strategy_version, asset, signal_type,
-               entry_price, exit_price, reasoning, candle_timestamp, created_at
+               entry_price, exit_price, reasoning, candle_timestamp, created_at, data_source
         FROM execution_log
     """
     conditions: list[str] = []
@@ -200,7 +216,7 @@ def list_execution_log(
         ExecutionLogRow(
             id=r[0], run_id=r[1], timestamp=datetime.fromisoformat(r[2]), strategy=r[3], strategy_version=r[4],
             asset=r[5], signal_type=r[6], entry_price=r[7], exit_price=r[8], reasoning=r[9],
-            candle_timestamp=r[10], created_at=datetime.fromisoformat(r[11]),
+            candle_timestamp=r[10], created_at=datetime.fromisoformat(r[11]), data_source=r[12],
         )
         for r in rows
     ]
@@ -256,7 +272,7 @@ def list_execution_log_for_run(run_id: str, db_path: Path = DEFAULT_DB_PATH) -> 
         rows = conn.execute(
             """
             SELECT id, run_id, timestamp, strategy, strategy_version, asset, signal_type,
-                   entry_price, exit_price, reasoning, candle_timestamp, created_at
+                   entry_price, exit_price, reasoning, candle_timestamp, created_at, data_source
             FROM execution_log WHERE run_id = ? ORDER BY id ASC
             """,
             (run_id,),
@@ -265,7 +281,7 @@ def list_execution_log_for_run(run_id: str, db_path: Path = DEFAULT_DB_PATH) -> 
         ExecutionLogRow(
             id=r[0], run_id=r[1], timestamp=datetime.fromisoformat(r[2]), strategy=r[3], strategy_version=r[4],
             asset=r[5], signal_type=r[6], entry_price=r[7], exit_price=r[8], reasoning=r[9],
-            candle_timestamp=r[10], created_at=datetime.fromisoformat(r[11]),
+            candle_timestamp=r[10], created_at=datetime.fromisoformat(r[11]), data_source=r[12],
         )
         for r in rows
     ]
