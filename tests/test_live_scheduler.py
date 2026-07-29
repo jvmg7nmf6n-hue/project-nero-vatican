@@ -619,5 +619,39 @@ class OrderflowImbalanceSchedulingTest(LiveSchedulerTestCase):
         self.assertEqual(rows, [])
 
 
+class DataSourcePersistenceTest(LiveSchedulerTestCase):
+    """Regression coverage for the SILVER-via-YFinance-with-zero-record incident: the
+    provenance string tools.timeframe_data.fetch_timeframe_candles already computes
+    (see process_single_asset) must now actually reach execution_log.data_source
+    instead of being discarded."""
+
+    def test_single_asset_config_persists_the_fetch_source(self) -> None:
+        client = self._patched_client()
+        result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
+
+        self.assertIn("GOLD", result.assets_evaluated)
+        rows = list_execution_log(db_path=self.db_path, asset="GOLD", strategy="BREAKOUT_MOMENTUM")
+        self.assertTrue(rows, "expected at least one BREAKOUT_MOMENTUM/GOLD row")
+        for row in rows:
+            self.assertEqual(row.data_source, "NATIVE: test-fixture")
+
+    def test_data_source_is_none_when_not_supplied(self) -> None:
+        """insert_execution_log_row's default (no data_source passed) must stay None,
+        not an empty string or fabricated value -- callers not yet wired to a real
+        provenance string (e.g. process_pairs, process_gold_silver_ratio) must read
+        back as honestly "not recorded", never silently blank."""
+        from nero_core.truth_ledger.execution_log import insert_execution_log_row
+
+        row = insert_execution_log_row(
+            run_id="test-run", strategy="TEST_STRATEGY", strategy_version="v1", asset="TEST",
+            signal_type="NO_TRADE", reasoning="no data_source passed", candle_timestamp=1000,
+            db_path=self.db_path,
+        )
+        self.assertIsNone(row.data_source)
+        reloaded = list_execution_log(db_path=self.db_path, asset="TEST", strategy="TEST_STRATEGY")
+        self.assertEqual(len(reloaded), 1)
+        self.assertIsNone(reloaded[0].data_source)
+
+
 if __name__ == "__main__":
     unittest.main()

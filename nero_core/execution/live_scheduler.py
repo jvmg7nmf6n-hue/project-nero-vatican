@@ -374,7 +374,7 @@ def process_single_asset(
     if fetch_error is not None:
         return "SKIPPED", {"asset": config.asset, "strategy": config.strategy_id, **fetch_error}
 
-    candles, _source = fetch_result
+    candles, source = fetch_result
     enriched = spec.add_indicators_fn(candles, spec.params)
     dropna_columns = [c for c in INDICATOR_COLUMNS_TO_CHECK if c in enriched.columns]
     evaluable = enriched.dropna(subset=dropna_columns).reset_index(drop=True)
@@ -393,7 +393,7 @@ def process_single_asset(
             run_id=run_id, strategy=config.strategy_id, strategy_version=config.strategy_version,
             asset=config.asset, signal_type=event.signal_type, reasoning=event.reasoning,
             candle_timestamp=event.candle_close_time, entry_price=event.entry_price, exit_price=event.exit_price,
-            timestamp=now, db_path=db_path,
+            timestamp=now, data_source=source, db_path=db_path,
         )
     return "EVALUATED", None
 
