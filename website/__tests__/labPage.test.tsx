@@ -2,6 +2,9 @@ import { render, screen } from "@testing-library/react";
 import LabPage from "@/app/lab/page";
 import * as data from "@/lib/data";
 import type {
+  AgentHypothesis,
+  AgentPerformanceExport,
+  AgentTestResult,
   FailurePatternEntry,
   GraveyardEntry,
   RepairCandidate,
@@ -18,6 +21,9 @@ const mockFetchStats = jest.mocked(data.fetchStats);
 const mockFetchGraveyard = jest.mocked(data.fetchGraveyard);
 const mockFetchFailurePatterns = jest.mocked(data.fetchFailurePatterns);
 const mockFetchRepairCandidates = jest.mocked(data.fetchRepairCandidates);
+const mockFetchAgentHypotheses = jest.mocked(data.fetchAgentHypotheses);
+const mockFetchAgentTestResults = jest.mocked(data.fetchAgentTestResults);
+const mockFetchAgentPerformance = jest.mocked(data.fetchAgentPerformance);
 
 function roster(overrides: Partial<StrategyRosterEntry> = {}): StrategyRosterEntry {
   return {
@@ -48,6 +54,9 @@ function setupMocks(options: {
   graveyard?: GraveyardEntry[] | null;
   failurePatterns?: FailurePatternEntry[] | null;
   repairCandidates?: RepairCandidate[] | null;
+  agentHypotheses?: AgentHypothesis[] | null;
+  agentTestResults?: AgentTestResult[] | null;
+  agentPerformance?: AgentPerformanceExport | null;
 }) {
   const strategiesExport: StrategiesExport = {
     schema_version: 1,
@@ -67,6 +76,13 @@ function setupMocks(options: {
   mockFetchRepairCandidates.mockResolvedValue(
     "repairCandidates" in options ? (options.repairCandidates as RepairCandidate[] | null) : []
   );
+  mockFetchAgentHypotheses.mockResolvedValue(
+    "agentHypotheses" in options ? (options.agentHypotheses as AgentHypothesis[] | null) : []
+  );
+  mockFetchAgentTestResults.mockResolvedValue(
+    "agentTestResults" in options ? (options.agentTestResults as AgentTestResult[] | null) : []
+  );
+  mockFetchAgentPerformance.mockResolvedValue("agentPerformance" in options ? (options.agentPerformance ?? null) : null);
 }
 
 describe("LabPage", () => {
@@ -112,12 +128,63 @@ describe("LabPage", () => {
   });
 
   it("degrades gracefully to empty sections when every fetch returns null", async () => {
-    setupMocks({ graveyard: null, failurePatterns: null, repairCandidates: null });
+    setupMocks({
+      graveyard: null, failurePatterns: null, repairCandidates: null,
+      agentHypotheses: null, agentTestResults: null, agentPerformance: null,
+    });
     mockFetchStrategies.mockResolvedValue(null);
     mockFetchStats.mockResolvedValue(null);
     render(await LabPage());
 
     expect(screen.getByText("No research history recorded yet.")).toBeInTheDocument();
     expect(screen.getByTestId("repair-candidates-empty")).toBeInTheDocument();
+    expect(screen.getByTestId("agent-hypotheses-empty")).toBeInTheDocument();
+    expect(screen.getByTestId("agent-performance-empty")).toBeInTheDocument();
+  });
+
+  it("renders the Research Agent section with a hypothesis joined to its test result", async () => {
+    setupMocks({
+      agentHypotheses: [
+        {
+          scan_finding: "BTC/1h zscore_current=3.10 (|z|>2.0)",
+          scan_finding_type: "extreme_zscore",
+          hypothesis_name: "ZSCORE_REVERSION_BTC_1H",
+          mechanism: "Mean reversion after an extreme dislocation.",
+          entry_rule: "zscore20 < -2",
+          structured_entry_rule: { conditions: [{ field: "zscore20", op: "lt", value: -2 }] },
+          exit_rule: "zscore20 crosses back above 0",
+          stop_rule: "2x ATR",
+          structured_exit_plan: { stop_atr_multiple: 1.5, target_r_multiple: 2, max_holding_hours: 24 },
+          asset: "BTC",
+          timeframe: "1h",
+          differs_from_graveyard: "Frequent 1h trigger, not the rare daily one already tested.",
+          expected_frequency_claim: 80,
+          generated_at: "2026-07-29T00:00:00+00:00",
+          cost_usd: 0.012,
+          source: "claude",
+        },
+      ],
+      agentTestResults: [
+        {
+          hypothesis_name: "ZSCORE_REVERSION_BTC_1H",
+          asset: "BTC",
+          timeframe: "1h",
+          verdict: "PROMISING-WATCHLIST",
+          review_status: "pending_human_approval",
+          frequency_classification: "FAST",
+          measured_trades_per_year: 182.5,
+          expected_time_to_30_trades_months: 2.0,
+          reason: "train: N=40 ExpR=0.219; test: N=18 ExpR=0.120 -> PROMISING-WATCHLIST",
+          train: { trades: 40, expectancy_r: 0.219, bootstrap_ci: null, random_baseline: null },
+          test: { trades: 18, expectancy_r: 0.12, bootstrap_ci: null, random_baseline: null },
+          tested_at: "2026-07-29T01:00:00+00:00",
+        },
+      ],
+    });
+    render(await LabPage());
+
+    expect(screen.getByText("Research Agent")).toBeInTheDocument();
+    expect(screen.getByText("ZSCORE_REVERSION_BTC_1H")).toBeInTheDocument();
+    expect(screen.getByText(/Verdict: Promising — Watchlist/)).toBeInTheDocument();
   });
 });

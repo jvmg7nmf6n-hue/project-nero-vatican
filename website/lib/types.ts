@@ -243,3 +243,126 @@ export interface QuantCrossAssetExport {
   cointegration: CointegrationEntry[];
   lead_lag: LeadLagEntry[];
 }
+
+// Research Agent (feature/research-agent) -- docs/site_data/agent_hypotheses.json.
+// Append-only: one entry per hypothesis ever generated, written by
+// nero_core.research_agent.hypothesis_gen. `structured_entry_rule` /
+// `structured_exit_plan` are null whenever the LLM said the free-text
+// entry_rule/exit_rule/stop_rule genuinely can't be expressed in the
+// machine-checkable DSL -- never a forced approximation, so this stays
+// optional/untyped here rather than a fully-typed shape.
+export interface AgentHypothesis {
+  scan_finding: string;
+  scan_finding_type: string;
+  hypothesis_name: string;
+  mechanism: string;
+  entry_rule: string;
+  structured_entry_rule: Record<string, unknown> | null;
+  exit_rule: string;
+  stop_rule: string;
+  structured_exit_plan: Record<string, unknown> | null;
+  asset: string;
+  timeframe: string;
+  differs_from_graveyard: string;
+  expected_frequency_claim: number | null;
+  generated_at: string;
+  cost_usd: number;
+  source: string;
+}
+
+// docs/site_data/agent_test_results.json -- one entry per hypothesis tested
+// (or gate-rejected before ever reaching the harness), written by
+// nero_core.research_agent.auto_tester. SKIPPED covers both TOO_SLOW and
+// UNMEASURABLE gate rejections -- train/test are null for those, since no
+// backtest ever ran.
+export type AgentTestVerdict = "SURVIVED" | "PROMISING-WATCHLIST" | "DIED" | "UNTESTABLE" | "SKIPPED";
+export type AgentFrequencyClassification = "FAST" | "VIABLE" | "TOO_SLOW" | "UNMEASURABLE";
+
+export interface AgentBootstrapCI {
+  sample_size: number;
+  mean_r: number;
+  lower_2_5: number;
+  upper_97_5: number;
+  crosses_zero: boolean;
+}
+
+export interface AgentRandomBaseline {
+  real_expectancy_r: number;
+  mean_random_expectancy_r: number;
+  p95_random_expectancy_r: number;
+  edge_over_random: number;
+  target_trade_count: number;
+  realized_mean_trade_count: number;
+  n_runs: number;
+  caveat: string | null;
+}
+
+export interface AgentHalfStats {
+  trades: number;
+  expectancy_r: number;
+  bootstrap_ci: AgentBootstrapCI | null;
+  random_baseline: AgentRandomBaseline | null;
+}
+
+export interface AgentTestResult {
+  hypothesis_name: string;
+  asset: string;
+  timeframe: string;
+  verdict: AgentTestVerdict;
+  review_status: string;
+  frequency_classification: AgentFrequencyClassification;
+  measured_trades_per_year: number | null;
+  expected_time_to_30_trades_months: number | null;
+  reason: string;
+  train: AgentHalfStats | null;
+  test: AgentHalfStats | null;
+  tested_at: string;
+}
+
+// docs/site_data/agent_performance.json -- written by
+// nero_core.research_agent.performance after every ENABLED pipeline run.
+// survival_rate is null (never a fabricated 0.0) until at least one
+// hypothesis has ever been tested, and its denominator excludes SKIPPED
+// (gate-rejected) hypotheses on purpose -- they were never given a chance to
+// survive or die.
+export interface AgentPerformanceCumulative {
+  hypotheses_generated: number;
+  duplicates_skipped: number;
+  too_slow_rejected: number;
+  unmeasurable_rejected: number;
+  tested: number;
+  survived: number;
+  promising_watchlist: number;
+  died: number;
+  untestable: number;
+  no_candles_available: number;
+  llm_calls_made: number;
+  total_llm_cost_usd: number;
+  survival_rate: number | null;
+}
+
+export interface AgentPerformanceRun {
+  run_at: string;
+  enabled: boolean;
+  reason: string;
+  hypotheses_generated: number;
+  duplicates_skipped: number;
+  too_slow_rejected: number;
+  unmeasurable_rejected: number;
+  tested: number;
+  survived: number;
+  promising_watchlist: number;
+  died: number;
+  untestable: number;
+  no_candles_available: number;
+  llm_calls_made: number;
+  total_llm_cost_usd: number;
+  cost_limit_hit: boolean;
+}
+
+export interface AgentPerformanceExport {
+  schema_version: number;
+  last_updated: string | null;
+  cumulative: AgentPerformanceCumulative;
+  runs: AgentPerformanceRun[];
+}

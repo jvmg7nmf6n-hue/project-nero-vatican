@@ -1,6 +1,16 @@
 import RepairWorkbench from "@/components/RepairWorkbench";
+import ResearchAgentPanel from "@/components/ResearchAgentPanel";
 import ResearchScoreboard from "@/components/ResearchScoreboard";
-import { fetchFailurePatterns, fetchGraveyard, fetchRepairCandidates, fetchStats, fetchStrategies } from "@/lib/data";
+import {
+  fetchAgentHypotheses,
+  fetchAgentPerformance,
+  fetchAgentTestResults,
+  fetchFailurePatterns,
+  fetchGraveyard,
+  fetchRepairCandidates,
+  fetchStats,
+  fetchStrategies,
+} from "@/lib/data";
 import { buildResearchScoreboard } from "@/lib/researchScoreboard";
 
 export const revalidate = 300;
@@ -10,12 +20,24 @@ export const metadata = {
 };
 
 export default async function LabPage() {
-  const [strategiesExport, statsExport, graveyard, failurePatterns, repairCandidates] = await Promise.all([
+  const [
+    strategiesExport,
+    statsExport,
+    graveyard,
+    failurePatterns,
+    repairCandidates,
+    agentHypotheses,
+    agentTestResults,
+    agentPerformance,
+  ] = await Promise.all([
     fetchStrategies(),
     fetchStats(),
     fetchGraveyard(),
     fetchFailurePatterns(),
     fetchRepairCandidates(),
+    fetchAgentHypotheses(),
+    fetchAgentTestResults(),
+    fetchAgentPerformance(),
   ]);
 
   const rows = buildResearchScoreboard(
@@ -44,6 +66,15 @@ export default async function LabPage() {
       <section>
         <h2 className="font-serif text-2xl text-parchment mb-4">Repair Workbench</h2>
         <RepairWorkbench candidates={repairCandidates ?? []} />
+      </section>
+
+      <section>
+        <h2 className="font-serif text-2xl text-parchment mb-4">Research Agent</h2>
+        <ResearchAgentPanel
+          hypotheses={agentHypotheses ?? []}
+          testResults={agentTestResults ?? []}
+          performance={agentPerformance}
+        />
       </section>
     </div>
   );
