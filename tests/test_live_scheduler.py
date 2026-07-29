@@ -86,6 +86,19 @@ def _forex_weekly_history(n: int = 260) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _daily_history(n: int, base: float) -> pd.DataFrame:
+    """n daily candles (close_time starting at 0, same clock as _silver_daily_history)
+    mildly oscillating around `base` -- used where two series must share calendar
+    dates (e.g. align_gold_silver_candles), unlike _weekly_breakout_history's 7-day
+    step."""
+    rows = []
+    close_time = 0
+    for i in range(n):
+        rows.append(_make_candle_row(close_time, base + (i % 7) * (base * 0.001)))
+        close_time += 86_400_000
+    return pd.DataFrame(rows)
+
+
 def _silver_daily_history(n: int = 300) -> pd.DataFrame:
     """300 daily candles, enough warmup past every SILVER config's MA200 requirement
     (BREAKOUT_MOMENTUM/TREND_PULLBACK/VOLATILITY_SQUEEZE ma200) — mild oscillation
@@ -618,6 +631,45 @@ class OrderflowImbalanceSchedulingTest(LiveSchedulerTestCase):
         rows = list_execution_log(db_path=self.db_path, asset="BTC", strategy="ORDERFLOW_IMBALANCE")
         self.assertEqual(rows, [])
 
+    def test_data_source_combines_candle_and_orderbook_sources(self) -> None:
+        """process_orderflow_imbalance's data_source must reflect BOTH independent
+        fetches (1h candles + order-book snapshot), not just one of them -- the fix
+        for the confirmed cross-exchange-entry-vs-exit contamination risk (entry and
+        exit are separate scheduler runs, each independently cascading Binance ->
+        Coinbase -> Kraken for candles). Uses deliberately DIFFERENT source strings
+        for the two fetches so a test that silently duplicated one into the other's
+        slot would fail."""
+        def _fake_load_intraday_distinct_source(asset, interval="1h", candles=240, twelve_data_api_key=None):
+            source_map = {
+                "GOLD": self.gold_history, "BNB": self.bnb_history,
+                "BTC": self.btc_uptrend_history, "ETH": self.btc_uptrend_history,
+            }
+            if asset not in source_map:
+                raise MarketDataUnavailableError(f"no fixture configured for {asset}")
+            return MarketDataResult(prices=source_map[asset], source="Binance BTCUSDT 1h candles", asset=asset, interval=interval)
+
+        patcher = patch.object(MarketDataClient, "load_intraday", side_effect=_fake_load_intraday_distinct_source)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        daily_patcher = patch.object(MarketDataClient, "load_daily", side_effect=self._fake_load_daily)
+        daily_patcher.start()
+        self.addCleanup(daily_patcher.stop)
+        client = MarketDataClient()
+
+        def _high_ratio_snapshot_distinct_source(binance_symbol, now=None, db_path=None):
+            return OrderbookSnapshot(
+                timestamp=now, symbol=binance_symbol, best_bid=100.0, best_ask=100.1,
+                bid_vol_20=10.0, ask_vol_20=1.0, imbalance_ratio=10.0, source="data-api.binance.vision",
+            )
+
+        with patch("nero_core.execution.live_scheduler.fetch_and_cache_snapshot", side_effect=_high_ratio_snapshot_distinct_source):
+            result = live_scheduler.run_once(client=client, now=NOT_DUE_UTC, db_path=self.db_path)
+
+        self.assertIn("ORDERFLOW_IMBALANCE:BTC", result.assets_evaluated)
+        entry_rows = [r for r in list_execution_log(db_path=self.db_path, asset="BTC", strategy="ORDERFLOW_IMBALANCE") if r.signal_type == "ENTRY"]
+        self.assertEqual(len(entry_rows), 1)
+        self.assertEqual(entry_rows[0].data_source, "Binance BTCUSDT 1h candles | orderbook: data-api.binance.vision")
+
 
 class DataSourcePersistenceTest(LiveSchedulerTestCase):
     """Regression coverage for the SILVER-via-YFinance-with-zero-record incident: the
@@ -638,8 +690,11 @@ class DataSourcePersistenceTest(LiveSchedulerTestCase):
     def test_data_source_is_none_when_not_supplied(self) -> None:
         """insert_execution_log_row's default (no data_source passed) must stay None,
         not an empty string or fabricated value -- callers not yet wired to a real
-        provenance string (e.g. process_pairs, process_gold_silver_ratio) must read
-        back as honestly "not recorded", never silently blank."""
+        provenance string (e.g. process_pead_config, process_donchian_forex_config, as
+        of this test) must read back as honestly "not recorded", never silently
+        blank. (process_pairs and process_gold_silver_ratio were wired in the
+        orderflow-verification Task 3 follow-up -- see PairsAndGoldSilverRatioDataSource
+        Test below.)"""
         from nero_core.truth_ledger.execution_log import insert_execution_log_row
 
         row = insert_execution_log_row(
@@ -651,6 +706,72 @@ class DataSourcePersistenceTest(LiveSchedulerTestCase):
         reloaded = list_execution_log(db_path=self.db_path, asset="TEST", strategy="TEST_STRATEGY")
         self.assertEqual(len(reloaded), 1)
         self.assertIsNone(reloaded[0].data_source)
+
+
+class PairsAndGoldSilverRatioDataSourceTest(LiveSchedulerTestCase):
+    """orderflow-verification Task 3: process_pairs and process_gold_silver_ratio
+    discarded their two legs' fetch_timeframe_candles provenance the same way
+    process_single_asset did before 38405e7 -- both now combine both legs' sources
+    into one execution_log.data_source string. Each test uses DELIBERATELY DIFFERENT
+    source strings per leg so a fix that silently duplicated one leg's source into the
+    other's slot would fail."""
+
+    def test_pairs_combines_both_legs_sources(self) -> None:
+        client = self._patched_client()
+
+        def _distinct_pairs_source(asset, interval="1h", candles=240, twelve_data_api_key=None):
+            source_map = {
+                "GOLD": self.gold_history, "BNB": self.bnb_history,
+                "BTC": self.btc_history, "ETH": self.eth_history, "SILVER": self.silver_history,
+            }
+            if asset not in source_map:
+                raise MarketDataUnavailableError(f"no fixture configured for {asset}")
+            leg_source = {"BTC": "Binance BTCUSDT 12h candles", "ETH": "Coinbase ETH-USD 12h candles"}.get(asset, "test-fixture")
+            return MarketDataResult(prices=source_map[asset], source=leg_source, asset=asset, interval=interval)
+
+        patcher = patch.object(MarketDataClient, "load_intraday", side_effect=_distinct_pairs_source)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda s: None)
+
+        self.assertIn("BTC-ETH", result.assets_evaluated)
+        rows = list_execution_log(db_path=self.db_path, asset="BTC-ETH", strategy="COINTEGRATION_PAIRS")
+        self.assertTrue(rows, "expected at least one COINTEGRATION_PAIRS/BTC-ETH row")
+        for row in rows:
+            self.assertEqual(row.data_source, "BTC: NATIVE: Binance BTCUSDT 12h candles | ETH: NATIVE: Coinbase ETH-USD 12h candles")
+
+    def test_gold_silver_ratio_combines_both_legs_sources(self) -> None:
+        # GOLD_SILVER_RATIO_MR needs a 252-session rolling window (see
+        # nero_core/strategies/gold_silver_ratio_mr.py's rolling_window default) with
+        # BOTH legs sharing calendar dates (align_gold_silver_candles joins on date) --
+        # the shared LiveSchedulerTestCase fixtures don't fit this (gold_history is
+        # weekly-stepped, built for BREAKOUT_MOMENTUM/1week; silver_history is daily
+        # but on its own clock), so this test builds its own same-clock daily pair
+        # long enough to clear warmup, calling process_gold_silver_ratio directly
+        # rather than through run_once's candle_boundary_due gate (irrelevant here).
+        gold_daily = _daily_history(300, base=2000.0)
+        silver_daily = _daily_history(300, base=25.0)
+
+        def _distinct_gsr_source(asset, days=365, twelve_data_api_key=None):
+            source_map = {"GOLD": gold_daily, "SILVER": silver_daily}
+            if asset not in source_map:
+                raise MarketDataUnavailableError(f"no fixture configured for {asset}")
+            leg_source = {"GOLD": "Twelve Data XAU/USD daily candles", "SILVER": "YFinance SI=F daily candles"}[asset]
+            return MarketDataResult(prices=source_map[asset], source=leg_source, asset=asset, interval="1d")
+
+        client = MarketDataClient()
+        patcher = patch.object(MarketDataClient, "load_daily", side_effect=_distinct_gsr_source)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        status, record = live_scheduler.process_gold_silver_ratio(client, run_id="test-run", now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path)
+
+        self.assertEqual(status, "EVALUATED", f"expected EVALUATED, got SKIPPED: {record}")
+        rows = list_execution_log(db_path=self.db_path, asset="GOLD-SILVER", strategy="GOLD_SILVER_RATIO_MR")
+        self.assertTrue(rows, "expected at least one GOLD_SILVER_RATIO_MR/GOLD-SILVER row")
+        for row in rows:
+            self.assertEqual(row.data_source, "GOLD: NATIVE: Twelve Data XAU/USD daily candles | SILVER: NATIVE: YFinance SI=F daily candles")
 
 
 class ApiKeyStartupValidationTest(LiveSchedulerTestCase):
