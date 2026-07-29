@@ -16,10 +16,25 @@ docs/site_data/agent_test_results.json. It never imports
 nero_core.execution.live_scheduler and never touches
 nero_core.strategies.registry's default_registry -- see
 test_research_agent_no_auto_wire.py's HARD TEST.
+
+CLI ENTRYPOINT (added 2026-07-30 -- the gap flagged in docs/research_agent_
+real_run_followup.md): `main()` is the FIRST place in this whole package that
+reads ANTHROPIC_API_KEY from the environment. Every other function here takes
+`api_key` as an explicit parameter and never touches os.environ itself (by
+design -- keeps everything else here pure and trivially testable without an
+env var). `main()` closes that gap the same way nero_core.execution.
+live_scheduler.py already does for news_sentiment_llm: `os.getenv(
+"ANTHROPIC_API_KEY", "")` read ONCE, then passed explicitly as `api_key=`.
+The value is never printed, logged, or included in any print() argument --
+see test_research_agent_secret_handling.py's ast-based check, which verifies
+that precisely (not "no print() calls at all" -- a print of aggregate,
+non-secret counts, as main() does below, is fine and matches this project's
+own nero_core.execution.export_quant_metrics.main() convention).
 """
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -172,3 +187,23 @@ def run_pipeline(
     )
     performance.record_run(result, now=now)
     return result
+
+
+def main() -> None:
+    """CLI entrypoint: `python -m nero_core.research_agent.pipeline`. Reads
+    ANTHROPIC_API_KEY via os.getenv (never printed) and runs the pipeline
+    once. If RESEARCH_AGENT_ENABLED isn't set, run_pipeline itself no-ops
+    immediately (see its own docstring) -- this function does not duplicate
+    that check. Prints only aggregate, non-secret counts."""
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    result = run_pipeline(api_key=api_key)
+    print(f"enabled={result.enabled} reason={result.reason!r}")
+    print(f"hypotheses_generated={result.hypotheses_generated} duplicates_skipped={result.duplicates_skipped}")
+    print(f"llm_calls_made={result.llm_calls_made} total_llm_cost_usd={result.total_llm_cost_usd:.6f} cost_limit_hit={result.cost_limit_hit}")
+    print(f"too_slow_rejected={result.too_slow_rejected} unmeasurable_rejected={result.unmeasurable_rejected}")
+    print(f"survived={result.survived} promising_watchlist={result.promising_watchlist} died={result.died} untestable={result.untestable}")
+    print(f"no_candles_available={result.no_candles_available}")
+
+
+if __name__ == "__main__":
+    main()

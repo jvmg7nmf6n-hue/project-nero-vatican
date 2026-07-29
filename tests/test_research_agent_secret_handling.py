@@ -9,13 +9,20 @@ it's set" step, since the match line still contains the value.
 
 This file adds the structural guarantees that incident exposed as untested:
 
-1. STATIC -- no .py file under nero_core/research_agent/ contains a `print(`
-   call or imports `logging` at all (verified via `ast`, not a text scan, for
-   the same reason test_research_agent_no_auto_wire.py uses ast: a substring
-   scan would misflag this very docstring, which names `print(` in prose).
-   This package has zero console/log output surface by design -- there is
-   nowhere for a secret to leak to via output at all, structurally, not just
-   by care in each call site.
+1. STATIC -- no .py file under nero_core/research_agent/ imports `logging`
+   at all (verified via `ast`, not a text scan, for the same reason
+   test_research_agent_no_auto_wire.py uses ast: a substring scan would
+   misflag this very docstring, which names these things in prose), and no
+   `print(...)` call anywhere in the package ever references a credential-
+   shaped identifier (api_key, secret, token, password, credential) as a
+   Name or Attribute within its arguments. Updated 2026-07-30: `print()`
+   itself is no longer banned outright -- pipeline.py now has a legitimate
+   `main()` CLI entrypoint that prints aggregate, non-secret run counts
+   (hypotheses_generated, cost, etc., matching this project's own
+   nero_core.execution.export_quant_metrics.main() convention) -- but the
+   precise risk this incident exposed (a credential value reaching console
+   output) is checked directly, which is a stronger, more targeted guarantee
+   than a blanket "no print anywhere" rule.
 
 2. DYNAMIC -- hypothesis_gen.py is the only research_agent module that ever
    receives `api_key`. Across every realistic failure path (connection error,
@@ -70,8 +77,11 @@ def _flatten_for_leak_check(result) -> str:
     return json.dumps({"hypotheses": result.hypotheses, "duplicates_skipped": result.duplicates_skipped, "errors": result.errors})
 
 
+CREDENTIAL_IDENTIFIER_SUBSTRINGS = ("api_key", "apikey", "secret", "token", "password", "credential")
+
+
 class StaticNoOutputSurfaceTest(unittest.TestCase):
-    def test_no_research_agent_source_file_prints_or_imports_logging(self) -> None:
+    def test_no_research_agent_source_file_imports_logging(self) -> None:
         py_files = sorted(RESEARCH_AGENT_DIR.glob("*.py"))
         self.assertGreater(len(py_files), 0)
 
@@ -80,17 +90,61 @@ class StaticNoOutputSurfaceTest(unittest.TestCase):
             tree = ast.parse(path.read_text(), filename=str(path))
             hits: list[str] = []
             for node in ast.walk(tree):
-                if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "print":
-                    hits.append("print(...) call")
-                elif isinstance(node, ast.Import):
-                    if any(alias.name == "logging" for alias in node.names):
-                        hits.append("import logging")
+                if isinstance(node, ast.Import) and any(alias.name == "logging" for alias in node.names):
+                    hits.append("import logging")
                 elif isinstance(node, ast.ImportFrom) and node.module == "logging":
                     hits.append("from logging import ...")
             if hits:
                 offenders[path.name] = hits
 
-        self.assertEqual(offenders, {}, f"research_agent must have zero console/log output surface: {offenders}")
+        self.assertEqual(offenders, {}, f"research_agent must never use the logging module: {offenders}")
+
+    def test_no_print_call_ever_references_a_credential_shaped_identifier(self) -> None:
+        """print() itself is legitimate (pipeline.main() prints an aggregate,
+        non-secret summary) -- what must NEVER happen is a print call whose
+        argument expression references a variable/parameter/attribute
+        plausibly holding a credential, by name. Checked via `ast` (a Name or
+        Attribute node inside a print call's arguments), so this docstring's
+        own prose mentioning these words causes no false positive."""
+        py_files = sorted(RESEARCH_AGENT_DIR.glob("*.py"))
+        offenders: dict[str, list[str]] = {}
+        for path in py_files:
+            tree = ast.parse(path.read_text(), filename=str(path))
+            hits: list[str] = []
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "print"):
+                    continue
+                for arg_node in ast.walk(node):
+                    if isinstance(arg_node, ast.Name) and any(s in arg_node.id.lower() for s in CREDENTIAL_IDENTIFIER_SUBSTRINGS):
+                        hits.append(f"print(...) references identifier {arg_node.id!r}")
+                    elif isinstance(arg_node, ast.Attribute) and any(
+                        s in arg_node.attr.lower() for s in CREDENTIAL_IDENTIFIER_SUBSTRINGS
+                    ):
+                        hits.append(f"print(...) references attribute {arg_node.attr!r}")
+            if hits:
+                offenders[path.name] = hits
+
+        self.assertEqual(offenders, {}, f"print() call referencing a credential-shaped identifier: {offenders}")
+
+    def test_the_check_itself_would_catch_a_real_offender(self) -> None:
+        """Sanity check on the ast walk: a print() call that actually
+        references `api_key` must be flagged, proving this isn't a no-op."""
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write("api_key = 'whatever'\nprint(api_key)\n")
+            temp_path = Path(f.name)
+        try:
+            tree = ast.parse(temp_path.read_text(), filename=str(temp_path))
+            found = False
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "print":
+                    for arg_node in ast.walk(node):
+                        if isinstance(arg_node, ast.Name) and "api_key" in arg_node.id.lower():
+                            found = True
+            self.assertTrue(found)
+        finally:
+            temp_path.unlink(missing_ok=True)
 
 
 class DynamicApiKeyNeverLeaksTest(unittest.TestCase):
