@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-29T16:45:14.151752+00:00",
+  "last_updated": "2026-07-29T17:17:03.810695+00:00",
   "cumulative": {
     "hypotheses_generated": 0,
     "duplicates_skipped": 0,
@@ -12,7 +12,7 @@
     "died": 0,
     "untestable": 0,
     "no_candles_available": 0,
-    "llm_calls_made": 0,
+    "llm_calls_made": 3,
     "total_llm_cost_usd": 0.0,
     "survival_rate": null
   },
@@ -32,6 +32,24 @@
       "untestable": 0,
       "no_candles_available": 0,
       "llm_calls_made": 0,
+      "total_llm_cost_usd": 0.0,
+      "cost_limit_hit": false
+    },
+    {
+      "run_at": "2026-07-29T17:17:03.810695+00:00",
+      "enabled": true,
+      "reason": "",
+      "hypotheses_generated": 0,
+      "duplicates_skipped": 0,
+      "too_slow_rejected": 0,
+      "unmeasurable_rejected": 0,
+      "tested": 0,
+      "survived": 0,
+      "promising_watchlist": 0,
+      "died": 0,
+      "untestable": 0,
+      "no_candles_available": 0,
+      "llm_calls_made": 3,
       "total_llm_cost_usd": 0.0,
       "cost_limit_hit": false
     }

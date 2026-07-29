@@ -47,9 +47,10 @@ NOW = datetime(2026, 7, 29, tzinfo=timezone.utc)
 
 
 class _FakeResponse:
-    def __init__(self, payload: dict, status_ok: bool = True) -> None:
+    def __init__(self, payload: dict, status_ok: bool = True, status_code: int = 200) -> None:
         self._payload = payload
         self._status_ok = status_ok
+        self.status_code = status_code
 
     def raise_for_status(self) -> None:
         if not self._status_ok:

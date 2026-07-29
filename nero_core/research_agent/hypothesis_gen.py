@@ -30,6 +30,12 @@ from the response's own `usage.input_tokens`/`usage.output_tokens` (never
 estimated) at CLAUDE_PRICING's per-MTok rates and summed into
 `total_cost_usd`.
 
+PREFLIGHT KEY VALIDATION (added 2026-07-29, after a real run made 3 doomed
+calls before this existed): before the per-finding loop, one minimal call
+confirms the key is actually accepted. A 401 stops the run immediately with
+ONE recorded error instead of repeating the same failure once per finding --
+see validate_api_key/ApiKeyRejectedError.
+
 Output schema per hypothesis (docs/site_data/agent_hypotheses.json, append-
 only): scan_finding, scan_finding_type (added -- needed for duplicate
 detection and for Task 7's UI to group/filter), hypothesis_name, mechanism,
@@ -259,6 +265,49 @@ def _call_claude(prompt: str, api_key: str, params: HypothesisGenParameters) -> 
     return data, usage
 
 
+class ApiKeyRejectedError(Exception):
+    """Raised by validate_api_key when a preflight call to the Claude API
+    returns 401 Unauthorized -- the key is PRESENT but not accepted. Distinct
+    from an empty api_key (handled separately, before any call is ever made,
+    per-finding) and from a transient per-hypothesis failure (network blip,
+    malformed response): a 401 is structural -- every subsequent call in this
+    run would fail the exact same way, so generate_hypotheses stops here
+    rather than spending the rest of the run's call budget finding that out N
+    times. Added 2026-07-29 after a real run made 3 doomed calls (one per
+    scan finding, $0 spent since 401s aren't billed) before this check
+    existed. The message never carries the api_key value."""
+
+
+def validate_api_key(api_key: str, params: HypothesisGenParameters = DEFAULT_PARAMETERS) -> None:
+    """One minimal (max_tokens=1) preflight call. Raises ApiKeyRejectedError
+    ONLY on a 401 response. Any other outcome -- 200, a different error
+    status, or the request failing to complete at all (network error) -- is
+    NOT treated as fatal here: distinguishing "definitely fine" from "some
+    other problem" isn't this function's job, only catching the one failure
+    mode (key present but rejected) that is guaranteed to repeat on every
+    subsequent call and is therefore worth stopping the whole run for. Every
+    other failure surfaces normally, per-hypothesis, in generate_hypotheses's
+    own main loop."""
+    try:
+        response = requests.post(
+            params.claude_api_url,
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": params.claude_api_version,
+                "content-type": "application/json",
+            },
+            json={"model": params.claude_model, "max_tokens": 1, "messages": [{"role": "user", "content": "Hi"}]},
+            timeout=params.claude_timeout_seconds,
+        )
+    except requests.RequestException:
+        return  # not a 401 -- let the real calls surface whatever this is, per-hypothesis
+    if response.status_code == 401:
+        raise ApiKeyRejectedError(
+            "ANTHROPIC_API_KEY is present but was rejected (401 Unauthorized) by the Claude API. "
+            "No further calls were attempted this run -- check the key's validity before retrying."
+        )
+
+
 def _call_cost_usd(usage: dict, params: HypothesisGenParameters) -> float:
     input_tokens = int(usage.get("input_tokens", 0) or 0)
     output_tokens = int(usage.get("output_tokens", 0) or 0)
@@ -318,6 +367,18 @@ def generate_hypotheses(
     calls_made = 0
     total_cost = 0.0
     cost_limit_hit = False
+
+    # Preflight: one cheap call to confirm the key is accepted BEFORE spending
+    # the real per-finding call budget -- skip entirely if there's nothing that
+    # would actually need a call anyway (empty key, or every finding already a
+    # known duplicate), so this never burns a call for no reason.
+    non_duplicate_findings_exist = any(not check_duplicate(f, known).is_duplicate for f in scan_findings)
+    if api_key.strip() and non_duplicate_findings_exist:
+        try:
+            validate_api_key(api_key, params)
+        except ApiKeyRejectedError as exc:
+            errors.append({"scan_finding": "(preflight key validation)", "message": str(exc)})
+            return GenerationRunResult(hypotheses, duplicates, 1, total_cost, cost_limit_hit, errors)
 
     for finding in scan_findings:
         if calls_made >= max_calls_per_run:

@@ -10,10 +10,12 @@ from unittest.mock import patch
 
 from nero_core.research_agent.hypothesis_gen import (
     DEFAULT_PARAMETERS,
+    ApiKeyRejectedError,
     check_duplicate,
     generate_hypotheses,
     load_existing_hypotheses,
     persist_hypotheses,
+    validate_api_key,
 )
 from nero_core.research_agent.scanner import ScanFinding
 
@@ -25,9 +27,10 @@ def _finding(asset="BTC", timeframe="1h", finding_type="extreme_zscore", descrip
 
 
 class _FakeResponse:
-    def __init__(self, payload: dict, status_ok: bool = True) -> None:
+    def __init__(self, payload: dict, status_ok: bool = True, status_code: int = 200) -> None:
         self._payload = payload
         self._status_ok = status_ok
+        self.status_code = status_code
 
     def raise_for_status(self) -> None:
         if not self._status_ok:
@@ -142,7 +145,8 @@ class GenerateHypothesesTest(unittest.TestCase):
         with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse(payload)) as mock_post:
             result = generate_hypotheses(findings, [], "fake-key", max_calls_per_run=1, now=NOW)
 
-        self.assertEqual(mock_post.call_count, 1)
+        # 1 preflight (key validation, not counted in llm_calls_made) + 1 real call (the cap)
+        self.assertEqual(mock_post.call_count, 2)
         self.assertEqual(result.llm_calls_made, 1)
         self.assertTrue(result.cost_limit_hit)
         self.assertEqual(len(result.hypotheses), 1)
@@ -165,7 +169,8 @@ class GenerateHypothesesTest(unittest.TestCase):
         with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse(payload)) as mock_post:
             result = generate_hypotheses(findings, [], "fake-key", now=NOW)
 
-        self.assertEqual(mock_post.call_count, 1)
+        # 1 preflight + 1 real call (the second finding becomes a within-run duplicate)
+        self.assertEqual(mock_post.call_count, 2)
         self.assertEqual(len(result.hypotheses), 1)
         self.assertEqual(len(result.duplicates_skipped), 1)
 
@@ -178,6 +183,88 @@ class GenerateHypothesesTest(unittest.TestCase):
         sent_prompt = mock_post.call_args.kwargs["json"]["messages"][0]["content"]
         self.assertIn("20-30 trades per", sent_prompt)
         self.assertIn("FVG_REVERSION", sent_prompt)
+
+
+class ValidateApiKeyDirectTest(unittest.TestCase):
+    """Unit tests on validate_api_key in isolation, added 2026-07-29 after a
+    real run made 3 doomed calls (one per scan finding) against a rejected
+    key before this preflight check existed."""
+
+    def test_401_raises_api_key_rejected(self) -> None:
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse({}, status_code=401)):
+            with self.assertRaises(ApiKeyRejectedError):
+                validate_api_key("fake-key")
+
+    def test_200_does_not_raise(self) -> None:
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse({}, status_code=200)):
+            validate_api_key("fake-key")  # must not raise
+
+    def test_other_error_status_does_not_raise(self) -> None:
+        # a 429/500/etc. is not a "key rejected" signal -- only 401 is
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse({}, status_code=429)):
+            validate_api_key("fake-key")  # must not raise
+
+    def test_network_error_does_not_raise(self) -> None:
+        import requests as requests_module
+
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post", side_effect=requests_module.ConnectionError("down")):
+            validate_api_key("fake-key")  # must not raise -- let the real calls surface it
+
+    def test_the_key_value_never_appears_in_the_raised_message(self) -> None:
+        secret = "sk-ant-TESTSECRET-do-not-leak"
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse({}, status_code=401)):
+            with self.assertRaises(ApiKeyRejectedError) as ctx:
+                validate_api_key(secret)
+        self.assertNotIn(secret, str(ctx.exception))
+
+
+class PreflightIntegrationTest(unittest.TestCase):
+    """Preflight behavior as wired into generate_hypotheses itself."""
+
+    def test_401_stops_the_run_with_exactly_one_call_and_one_error(self) -> None:
+        findings = [_finding(asset="BTC"), _finding(asset="ETH"), _finding(asset="SOL")]
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse({}, status_code=401)) as mock_post:
+            result = generate_hypotheses(findings, [], "fake-key", now=NOW)
+
+        # exactly ONE call total -- not one doomed call per finding
+        mock_post.assert_called_once()
+        self.assertEqual(result.llm_calls_made, 1)
+        self.assertEqual(result.hypotheses, [])
+        self.assertEqual(len(result.errors), 1)
+        self.assertIn("401", result.errors[0]["message"])
+        self.assertEqual(result.total_cost_usd, 0.0)
+
+    def test_401_error_message_never_contains_the_key_value(self) -> None:
+        secret = "sk-ant-TESTSECRET-do-not-leak"
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse({}, status_code=401)):
+            result = generate_hypotheses([_finding()], [], secret, now=NOW)
+        self.assertNotIn(secret, json.dumps(result.errors))
+
+    def test_preflight_skipped_when_api_key_is_empty(self) -> None:
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post") as mock_post:
+            generate_hypotheses([_finding()], [], "", now=NOW)
+        mock_post.assert_not_called()
+
+    def test_preflight_skipped_when_every_finding_is_already_a_duplicate(self) -> None:
+        existing = [{"scan_finding_type": "extreme_zscore", "asset": "BTC", "timeframe": "1h"}]
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post") as mock_post:
+            generate_hypotheses([_finding()], [], "fake-key", existing_hypotheses=existing, now=NOW)
+        mock_post.assert_not_called()
+
+    def test_preflight_network_error_does_not_block_the_real_call(self) -> None:
+        import requests as requests_module
+
+        payload = _claude_payload(VALID_HYPOTHESIS_DATA)
+        # preflight raises a connection error (not a 401) -- must NOT be treated as fatal;
+        # the real per-finding call still gets a chance and succeeds here.
+        with patch(
+            "nero_core.research_agent.hypothesis_gen.requests.post",
+            side_effect=[requests_module.ConnectionError("preflight network blip"), _FakeResponse(payload)],
+        ):
+            result = generate_hypotheses([_finding()], [], "fake-key", now=NOW)
+
+        self.assertEqual(len(result.hypotheses), 1)
+        self.assertEqual(result.errors, [])
 
 
 class PersistHypothesesTest(unittest.TestCase):
