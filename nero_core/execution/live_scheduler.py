@@ -409,15 +409,16 @@ def process_pairs(
     label = f"{x_name}-{y_name}"
 
     def _fetch() -> tuple:
-        x_candles, _ = fetch_timeframe_candles(client, x_name, PAIRS_TIMEFRAME)
-        y_candles, _ = fetch_timeframe_candles(client, y_name, PAIRS_TIMEFRAME)
-        return x_candles, y_candles
+        x_candles, x_source = fetch_timeframe_candles(client, x_name, PAIRS_TIMEFRAME)
+        y_candles, y_source = fetch_timeframe_candles(client, y_name, PAIRS_TIMEFRAME)
+        return x_candles, y_candles, x_source, y_source
 
     fetch_result, fetch_error = fetch_with_retry(_fetch, sleep_fn)
     if fetch_error is not None:
         return "SKIPPED", {"asset": label, "strategy": COINTEGRATION_PAIRS_ID, **fetch_error}
 
-    x_candles, y_candles = fetch_result
+    x_candles, y_candles, x_source, y_source = fetch_result
+    data_source = f"{x_name}: {x_source} | {y_name}: {y_source}"
     aligned = align_pair_candles(x_candles, y_candles, x_name, y_name)
     enriched = pairs_add_indicators(aligned, PAIRS_PARAMETERS, x_name, y_name)
     evaluable = enriched.dropna(subset=["zscore"]).reset_index(drop=True)
@@ -436,7 +437,7 @@ def process_pairs(
             run_id=run_id, strategy=COINTEGRATION_PAIRS_ID, strategy_version=COINTEGRATION_PAIRS_VERSION,
             asset=label, signal_type=event.signal_type, reasoning=event.reasoning,
             candle_timestamp=event.candle_close_time, entry_price=event.entry_price, exit_price=event.exit_price,
-            timestamp=now, db_path=db_path,
+            timestamp=now, data_source=data_source, db_path=db_path,
         )
     return "EVALUATED", None
 
@@ -455,15 +456,16 @@ def process_gold_silver_ratio(
     for the SHORT leg is the SAME standard convention (apply_slippage direction,
     inverted gross_pnl) used everywhere else in this project, not new code."""
     def _fetch() -> tuple:
-        gold, _ = fetch_timeframe_candles(client, "GOLD", GOLD_SILVER_RATIO_TIMEFRAME)
-        silver, _ = fetch_timeframe_candles(client, "SILVER", GOLD_SILVER_RATIO_TIMEFRAME)
-        return gold, silver
+        gold, gold_source = fetch_timeframe_candles(client, "GOLD", GOLD_SILVER_RATIO_TIMEFRAME)
+        silver, silver_source = fetch_timeframe_candles(client, "SILVER", GOLD_SILVER_RATIO_TIMEFRAME)
+        return gold, silver, gold_source, silver_source
 
     fetch_result, fetch_error = fetch_with_retry(_fetch, sleep_fn)
     if fetch_error is not None:
         return "SKIPPED", {"asset": GOLD_SILVER_RATIO_LABEL, "strategy": GOLD_SILVER_RATIO_ID, **fetch_error}
 
-    gold_candles, silver_candles = fetch_result
+    gold_candles, silver_candles, gold_source, silver_source = fetch_result
+    data_source = f"GOLD: {gold_source} | SILVER: {silver_source}"
     # align_gold_silver_candles joins on CALENDAR DATE, not raw close_time -- the
     # vendor-timestamp fix (GOLD/Twelve Data closes at 00:00 UTC, SILVER/yfinance
     # futures at 04:00 UTC) committed with the strategy itself. This IS the live
@@ -486,7 +488,7 @@ def process_gold_silver_ratio(
             run_id=run_id, strategy=GOLD_SILVER_RATIO_ID, strategy_version=GOLD_SILVER_RATIO_VERSION,
             asset=GOLD_SILVER_RATIO_LABEL, signal_type=event.signal_type, reasoning=event.reasoning,
             candle_timestamp=event.candle_close_time, entry_price=event.entry_price, exit_price=event.exit_price,
-            timestamp=now, db_path=db_path,
+            timestamp=now, data_source=data_source, db_path=db_path,
         )
     return "EVALUATED", None
 
