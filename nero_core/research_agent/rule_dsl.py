@@ -24,7 +24,19 @@ RuleAmbiguousError (unsupported field, unsupported op, missing/empty
 `conditions`, a non-numeric threshold). Callers MUST route that to
 UNMEASURABLE (frequency_gate) / UNTESTABLE (auto_tester) -- never silently
 fall back to a "closest reasonable" interpretation of an ambiguous rule. This
-is deliberately narrow (8 fields, 7 ops) rather than extensible-by-guessing.
+is deliberately narrow (9 fields, 7 ops) rather than extensible-by-guessing.
+
+FIELD-VS-FIELD COMPARISON (added 2026-07-30, after a real diagnostic run
+found the original field-vs-constant-only design couldn't express even a
+simple moving-average crossover): a condition's right-hand side is either a
+fixed `value` (a number) or a `compare_to_field` (another name from
+ALLOWED_FIELDS) -- exactly one of the two, never both, never neither. This
+makes "ma20 crosses above ma50" (a golden cross) expressible as
+{"field": "ma20", "op": "cross_above", "compare_to_field": "ma50"}, the same
+way "zscore20 < -2" is expressed with `value`. Both sides read from the SAME
+per-row indicator frame, so a field-vs-field condition costs nothing extra
+computationally -- it just doesn't collapse the right-hand side to a
+constant.
 
 NO LOOKAHEAD: every field below is a rolling/causal computation over closed
 candles up to and including the evaluation row (see compute_indicator_frame).
@@ -48,8 +60,16 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-ALLOWED_FIELDS = ("close", "ma20", "ma50", "ma200", "zscore20", "atr14", "ret_1", "volume")
+from nero_core.strategies.mean_reversion import rsi as _mean_reversion_rsi
+
+# rsi14 added 2026-07-30: RSI is MEAN_REVERSION's own core indicator (this
+# project's first-ever ported strategy) -- its earlier absence meant any
+# RSI-based hypothesis got rejected UNMEASURABLE, indistinguishable from a
+# genuinely ambiguous rule, purely because of an incomplete field list.
+ALLOWED_FIELDS = ("close", "ma20", "ma50", "ma200", "zscore20", "atr14", "rsi14", "ret_1", "volume")
 ALLOWED_OPS = ("gt", "gte", "lt", "lte", "eq", "cross_above", "cross_below")
+
+RSI_PERIOD = 14
 
 REQUIRED_CANDLE_COLUMNS = ("close_time", "close", "high", "low")
 
@@ -67,7 +87,11 @@ class RuleAmbiguousError(Exception):
 class Condition:
     field: str
     op: str
-    value: float
+    # Exactly one of the two is set -- see module docstring, FIELD-VS-FIELD
+    # COMPARISON. `value` is a fixed numeric threshold; `compare_to_field` is
+    # another ALLOWED_FIELDS name whose OWN per-row value is the threshold.
+    value: float | None = None
+    compare_to_field: str | None = None
 
 
 @dataclass(frozen=True)
@@ -78,9 +102,14 @@ class StructuredRule:
 def parse_structured_rule(raw: object) -> StructuredRule:
     """Parses a hypothesis's structured entry_rule dict, e.g.:
         {"conditions": [{"field": "zscore20", "op": "lt", "value": -2.0}]}
+    or, for a field-vs-field comparison (e.g. a moving-average crossover):
+        {"conditions": [{"field": "ma20", "op": "cross_above", "compare_to_field": "ma50"}]}
     Raises RuleAmbiguousError (never returns a guessed/partial rule) if `raw`
-    isn't a dict, `conditions` is missing/empty/not-a-list, or any single
-    condition names an unsupported field/op or a non-numeric value."""
+    isn't a dict, `conditions` is missing/empty/not-a-list, a condition names
+    an unsupported field/op, a condition sets both or neither of `value`/
+    `compare_to_field`, `compare_to_field` isn't itself an allowed field, or
+    `compare_to_field` names the same field as `field` (comparing a field to
+    itself is never a meaningful trigger)."""
     if not isinstance(raw, dict):
         raise RuleAmbiguousError(f"entry_rule must be a dict with a 'conditions' list, got {type(raw).__name__}")
 
@@ -95,13 +124,30 @@ def parse_structured_rule(raw: object) -> StructuredRule:
         field = entry.get("field")
         op = entry.get("op")
         value = entry.get("value")
+        compare_to_field = entry.get("compare_to_field")
+
         if field not in ALLOWED_FIELDS:
             raise RuleAmbiguousError(f"unsupported field {field!r} -- allowed: {sorted(ALLOWED_FIELDS)}")
         if op not in ALLOWED_OPS:
             raise RuleAmbiguousError(f"unsupported op {op!r} -- allowed: {sorted(ALLOWED_OPS)}")
-        if value is None or isinstance(value, bool) or not isinstance(value, (int, float)):
-            raise RuleAmbiguousError(f"condition value must be a number, got {value!r}")
-        parsed.append(Condition(field=field, op=op, value=float(value)))
+
+        has_value = value is not None
+        has_compare_field = compare_to_field is not None
+        if has_value and has_compare_field:
+            raise RuleAmbiguousError(f"condition must set exactly one of 'value'/'compare_to_field', got both: {entry!r}")
+        if not has_value and not has_compare_field:
+            raise RuleAmbiguousError(f"condition must set exactly one of 'value'/'compare_to_field': {entry!r}")
+
+        if has_compare_field:
+            if compare_to_field not in ALLOWED_FIELDS:
+                raise RuleAmbiguousError(f"unsupported compare_to_field {compare_to_field!r} -- allowed: {sorted(ALLOWED_FIELDS)}")
+            if compare_to_field == field:
+                raise RuleAmbiguousError(f"compare_to_field cannot equal field ({field!r} compared to itself)")
+            parsed.append(Condition(field=field, op=op, value=None, compare_to_field=compare_to_field))
+        else:
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise RuleAmbiguousError(f"condition value must be a number, got {value!r}")
+            parsed.append(Condition(field=field, op=op, value=float(value)))
 
     return StructuredRule(conditions=tuple(parsed))
 
@@ -140,18 +186,30 @@ def parse_exit_plan(raw: object) -> ExitPlan:
 
 
 def compute_indicator_frame(candles: pd.DataFrame) -> pd.DataFrame:
-    """Adds ma20/ma50/ma200/zscore20/atr14/ret_1 columns to a sorted copy of
-    `candles` (which must carry close_time (epoch ms), close, high, low --
-    volume is optional, defaulted to NaN if absent). Every added column is a
-    trailing rolling computation ending AT its own row -- no centering, no
-    forward shift, so no future candle ever leaks into a value used to
-    evaluate an earlier row (this project's no-lookahead-bias rule, CLAUDE.md).
+    """Adds ma20/ma50/ma200/zscore20/atr14/rsi14/ret_1 columns to a sorted
+    copy of `candles` (which must carry close_time (epoch ms), close, high,
+    low -- volume is optional, defaulted to NaN if absent). Every added
+    column is a trailing rolling computation ending AT its own row -- no
+    centering, no forward shift, so no future candle ever leaks into a value
+    used to evaluate an earlier row (this project's no-lookahead-bias rule,
+    CLAUDE.md).
 
     zscore20 uses the identical formula (trailing-20 mean/std, ddof=1) as
     nero_core.quant.quant_panel.rolling_zscore -- vectorized across the whole
     series here (rather than that function's single-latest-value-per-call
     shape) purely for performance across hundreds/thousands of candles, not a
     different definition.
+
+    rsi14 reuses nero_core.strategies.mean_reversion.rsi UNCHANGED (this
+    project's own oldest strategy's indicator, not re-derived), then re-masks
+    the leading `RSI_PERIOD + 1` rows back to NaN: that function's own
+    `.fillna(100.0)` is correct for ITS caller (a genuine "no losses in this
+    window" reading legitimately IS RSI 100, not a warmup artifact), but
+    applied during warmup -- before enough closes exist to compute a real
+    reading at all -- it would fabricate a 100.0 that looks identical to a
+    real extreme reading. This module's own convention (warmup = NaN = "does
+    not fire," see evaluate_condition) requires undoing that specific
+    conflation, not the whole function.
     """
     missing = [c for c in REQUIRED_CANDLE_COLUMNS if c not in candles.columns]
     if missing:
@@ -176,6 +234,9 @@ def compute_indicator_frame(candles: pd.DataFrame) -> pd.DataFrame:
     rolling_std_20 = close.rolling(20).std()
     frame["zscore20"] = (close - frame["ma20"]) / rolling_std_20.replace(0, float("nan"))
 
+    enough_history_for_rsi = close.rolling(RSI_PERIOD + 1).count() >= RSI_PERIOD + 1
+    frame["rsi14"] = _mean_reversion_rsi(close, RSI_PERIOD).where(enough_history_for_rsi)
+
     frame["volume"] = frame["volume"].astype(float) if "volume" in frame.columns else float("nan")
 
     # Matches every other candle schema in this codebase (e.g.
@@ -188,14 +249,28 @@ def compute_indicator_frame(candles: pd.DataFrame) -> pd.DataFrame:
     return frame
 
 
+def _threshold_at(condition: Condition, row: "pd.Series") -> float | None:
+    """The right-hand side of `condition` at `row`: another field's own
+    value if `compare_to_field` is set, else the fixed `value`. None if a
+    field-vs-field threshold is itself still NaN (that field's own warmup)."""
+    if condition.compare_to_field is not None:
+        return row.get(condition.compare_to_field)
+    return condition.value
+
+
 def evaluate_condition(row: "pd.Series", condition: Condition, prev_row: "pd.Series | None") -> bool | None:
     """True/False if `condition` can be evaluated at `row`; None if the
-    relevant field is still NaN (indicator warmup, e.g. row 5 of a ma200
-    column) -- a warmup row is "does not fire," not an error and not the same
-    as RuleAmbiguousError (which means the RULE itself, not one row, can't be
+    relevant field (or, for a field-vs-field condition, either side) is
+    still NaN (indicator warmup, e.g. row 5 of a ma200 column) -- a warmup
+    row is "does not fire," not an error and not the same as
+    RuleAmbiguousError (which means the RULE itself, not one row, can't be
     evaluated at all)."""
     value = row.get(condition.field)
     if value is None or pd.isna(value):
+        return None
+
+    threshold = _threshold_at(condition, row)
+    if threshold is None or pd.isna(threshold):
         return None
 
     if condition.op in ("cross_above", "cross_below"):
@@ -204,12 +279,17 @@ def evaluate_condition(row: "pd.Series", condition: Condition, prev_row: "pd.Ser
         prev_value = prev_row.get(condition.field)
         if prev_value is None or pd.isna(prev_value):
             return False
-        threshold = condition.value
+        prev_threshold = _threshold_at(condition, prev_row)
+        if prev_threshold is None or pd.isna(prev_threshold):
+            return False
+        # For a fixed `value`, prev_threshold == threshold == condition.value (constant
+        # across rows), reducing to the original single-level-crossing check; for a
+        # compare_to_field, each row uses its OWN threshold (e.g. ma20 vs ma50 -- a
+        # genuine two-series crossover, not a level crossing).
         if condition.op == "cross_above":
-            return bool(prev_value <= threshold < value)
-        return bool(prev_value >= threshold > value)
+            return bool(prev_value <= prev_threshold and value > threshold)
+        return bool(prev_value >= prev_threshold and value < threshold)
 
-    threshold = condition.value
     if condition.op == "gt":
         return bool(value > threshold)
     if condition.op == "gte":

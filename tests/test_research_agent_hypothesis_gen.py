@@ -184,6 +184,17 @@ class GenerateHypothesesTest(unittest.TestCase):
         self.assertIn("20-30 trades per", sent_prompt)
         self.assertIn("FVG_REVERSION", sent_prompt)
 
+    def test_prompt_mentions_rsi14_and_compare_to_field(self) -> None:
+        # Added 2026-07-30 alongside the DSL extension -- the prompt must actually tell
+        # the LLM these capabilities exist, or the DSL fix is useless in practice.
+        payload = _claude_payload(VALID_HYPOTHESIS_DATA)
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse(payload)) as mock_post:
+            generate_hypotheses([_finding()], [], "fake-key", now=NOW)
+
+        sent_prompt = mock_post.call_args.kwargs["json"]["messages"][0]["content"]
+        self.assertIn("rsi14", sent_prompt)
+        self.assertIn("compare_to_field", sent_prompt)
+
 
 class ValidateApiKeyDirectTest(unittest.TestCase):
     """Unit tests on validate_api_key in isolation, added 2026-07-29 after a

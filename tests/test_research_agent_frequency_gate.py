@@ -90,7 +90,7 @@ class FrequencyClassificationTest(unittest.TestCase):
         candles = _daily_candles(200, trigger_indices=set(range(200)))
         generated_at = datetime(2020, 1, 1, tzinfo=timezone.utc) + timedelta(days=250)
 
-        result = measure_entry_frequency(candles, {"conditions": [{"field": "rsi14", "op": "lt", "value": 30.0}]}, generated_at)
+        result = measure_entry_frequency(candles, {"conditions": [{"field": "macd", "op": "lt", "value": 30.0}]}, generated_at)
 
         self.assertEqual(result.classification, UNMEASURABLE)
         self.assertIn("ambiguous", result.reason.lower())

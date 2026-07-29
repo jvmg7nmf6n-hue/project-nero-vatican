@@ -213,8 +213,14 @@ Return STRICT JSON only, with exactly these keys and no others:
 - structured_entry_rule: a machine-checkable version of entry_rule, shaped exactly as
   {{"conditions": [{{"field": <field>, "op": <op>, "value": <number>}}, ...]}} (multiple
   conditions are ANDed together). Allowed fields: close, ma20, ma50, ma200, zscore20,
-  atr14, ret_1, volume. Allowed ops: gt, gte, lt, lte, eq, cross_above, cross_below. If
-  the entry condition genuinely cannot be expressed with these fields/ops, set
+  atr14, rsi14, ret_1, volume. Allowed ops: gt, gte, lt, lte, eq, cross_above, cross_below.
+  Each condition's right-hand side is EITHER a fixed "value" (a number) OR a
+  "compare_to_field" naming another one of the allowed fields above -- exactly one of
+  the two, never both. Use "compare_to_field" for a moving-average crossover or any
+  other relationship BETWEEN two of these fields, e.g. a golden cross is
+  {{"field": "ma20", "op": "cross_above", "compare_to_field": "ma50"}}; use "value" for a
+  comparison against a fixed level, e.g. {{"field": "rsi14", "op": "lt", "value": 30}}.
+  If the entry condition genuinely cannot be expressed with these fields/ops, set
   structured_entry_rule to null -- do NOT force an approximate mapping.
 - exit_rule: a precise exit condition
 - stop_rule: a precise stop-loss condition

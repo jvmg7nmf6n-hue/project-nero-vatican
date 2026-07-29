@@ -5,9 +5,11 @@ import unittest
 import pandas as pd
 
 from nero_core.research_agent.rule_dsl import (
+    Condition,
     RuleAmbiguousError,
     compute_indicator_frame,
     count_triggers,
+    evaluate_condition,
     find_trigger_timestamps,
     parse_structured_rule,
     rule_fires_at,
@@ -69,7 +71,7 @@ class ParseStructuredRuleTest(unittest.TestCase):
 
     def test_unsupported_field_raises_ambiguous(self) -> None:
         with self.assertRaises(RuleAmbiguousError):
-            parse_structured_rule({"conditions": [{"field": "rsi14", "op": "lt", "value": 30.0}]})
+            parse_structured_rule({"conditions": [{"field": "macd", "op": "lt", "value": 30.0}]})
 
     def test_unsupported_op_raises_ambiguous(self) -> None:
         with self.assertRaises(RuleAmbiguousError):
@@ -83,6 +85,34 @@ class ParseStructuredRuleTest(unittest.TestCase):
         # bool is a subclass of int in Python -- must not silently pass as a numeric threshold
         with self.assertRaises(RuleAmbiguousError):
             parse_structured_rule({"conditions": [{"field": "close", "op": "gt", "value": True}]})
+
+    def test_rsi14_is_an_allowed_field(self) -> None:
+        # RSI is MEAN_REVERSION's own core indicator -- added 2026-07-30 after its
+        # absence meant a genuinely-supportable RSI hypothesis got rejected UNMEASURABLE,
+        # indistinguishable from real ambiguity.
+        rule = parse_structured_rule({"conditions": [{"field": "rsi14", "op": "lt", "value": 30.0}]})
+        self.assertEqual(rule.conditions[0].field, "rsi14")
+
+    def test_compare_to_field_parses(self) -> None:
+        rule = parse_structured_rule({"conditions": [{"field": "ma20", "op": "cross_above", "compare_to_field": "ma50"}]})
+        self.assertEqual(rule.conditions[0].compare_to_field, "ma50")
+        self.assertIsNone(rule.conditions[0].value)
+
+    def test_both_value_and_compare_to_field_raises_ambiguous(self) -> None:
+        with self.assertRaises(RuleAmbiguousError):
+            parse_structured_rule({"conditions": [{"field": "ma20", "op": "gt", "value": 1.0, "compare_to_field": "ma50"}]})
+
+    def test_neither_value_nor_compare_to_field_raises_ambiguous(self) -> None:
+        with self.assertRaises(RuleAmbiguousError):
+            parse_structured_rule({"conditions": [{"field": "ma20", "op": "gt"}]})
+
+    def test_unsupported_compare_to_field_raises_ambiguous(self) -> None:
+        with self.assertRaises(RuleAmbiguousError):
+            parse_structured_rule({"conditions": [{"field": "ma20", "op": "gt", "compare_to_field": "macd"}]})
+
+    def test_compare_to_field_equal_to_field_raises_ambiguous(self) -> None:
+        with self.assertRaises(RuleAmbiguousError):
+            parse_structured_rule({"conditions": [{"field": "ma20", "op": "gt", "compare_to_field": "ma20"}]})
 
 
 class IndicatorFrameTest(unittest.TestCase):
@@ -108,6 +138,79 @@ class IndicatorFrameTest(unittest.TestCase):
         pd.testing.assert_series_equal(
             frame_base["ma20"].iloc[:29], frame_mutated["ma20"].iloc[:29], check_names=False
         )
+
+    def test_rsi14_warmup_rows_are_nan_not_fabricated(self) -> None:
+        # nero_core.strategies.mean_reversion.rsi fillna(100.0)s its OWN warmup rows too
+        # (correct for its caller -- "no losses yet" legitimately reads as RSI 100 once
+        # warmed up); this module must re-mask those same rows back to NaN, or a warmup
+        # row would look identical to a genuine, extreme overbought reading.
+        frame = compute_indicator_frame(_candles(30, closes=[100.0 + i * 0.1 for i in range(30)]))
+        self.assertTrue(frame["rsi14"].iloc[:14].isna().all())
+        self.assertFalse(pd.isna(frame["rsi14"].iloc[14]))
+
+    def test_rsi14_matches_the_reused_mean_reversion_function_after_warmup(self) -> None:
+        from nero_core.strategies.mean_reversion import rsi as mean_reversion_rsi
+
+        closes = [100.0, 98.0, 99.5, 97.0, 101.0, 102.0, 99.0, 98.5, 103.0, 104.0,
+                  101.5, 100.5, 99.0, 98.0, 97.5, 99.0, 100.0, 101.0, 102.5, 103.0]
+        frame = compute_indicator_frame(_candles(len(closes), closes=closes))
+        expected = mean_reversion_rsi(pd.Series(closes), 14)
+        # only compare from the point both consider warmed up (index 14 onward)
+        pd.testing.assert_series_equal(
+            frame["rsi14"].iloc[14:].reset_index(drop=True), expected.iloc[14:].reset_index(drop=True), check_names=False
+        )
+
+
+class FieldVsFieldEvaluationTest(unittest.TestCase):
+    """evaluate_condition in isolation, on hand-built rows -- exact numbers,
+    no dependency on compute_indicator_frame's own warmup behavior."""
+
+    def test_gt_field_vs_field(self) -> None:
+        condition = Condition(field="ma20", op="gt", compare_to_field="ma50")
+        row = pd.Series({"ma20": 105.0, "ma50": 100.0})
+        self.assertTrue(evaluate_condition(row, condition, None))
+        row2 = pd.Series({"ma20": 95.0, "ma50": 100.0})
+        self.assertFalse(evaluate_condition(row2, condition, None))
+
+    def test_field_vs_field_none_when_either_side_is_nan(self) -> None:
+        condition = Condition(field="ma20", op="gt", compare_to_field="ma50")
+        self.assertIsNone(evaluate_condition(pd.Series({"ma20": float("nan"), "ma50": 100.0}), condition, None))
+        self.assertIsNone(evaluate_condition(pd.Series({"ma20": 105.0, "ma50": float("nan")}), condition, None))
+
+    def test_cross_above_field_vs_field(self) -> None:
+        # A golden cross: ma20 was <= ma50, now ma20 > ma50.
+        condition = Condition(field="ma20", op="cross_above", compare_to_field="ma50")
+        prev_row = pd.Series({"ma20": 99.0, "ma50": 100.0})
+        row = pd.Series({"ma20": 101.0, "ma50": 100.0})
+        self.assertTrue(evaluate_condition(row, condition, prev_row))
+
+    def test_cross_above_field_vs_field_does_not_fire_without_a_real_crossing(self) -> None:
+        condition = Condition(field="ma20", op="cross_above", compare_to_field="ma50")
+        # ma20 already above ma50 on both rows -- no crossing occurred
+        prev_row = pd.Series({"ma20": 101.0, "ma50": 100.0})
+        row = pd.Series({"ma20": 102.0, "ma50": 100.0})
+        self.assertFalse(evaluate_condition(row, condition, prev_row))
+
+    def test_cross_below_field_vs_field(self) -> None:
+        condition = Condition(field="ma20", op="cross_below", compare_to_field="ma50")
+        prev_row = pd.Series({"ma20": 101.0, "ma50": 100.0})
+        row = pd.Series({"ma20": 99.0, "ma50": 100.0})
+        self.assertTrue(evaluate_condition(row, condition, prev_row))
+
+    def test_end_to_end_ma20_crosses_above_ma50_on_a_real_indicator_frame(self) -> None:
+        # 60 flat candles (ma20 == ma50 == 100) then a sustained uptrend -- the faster
+        # ma20 must cross above the slower ma50 exactly once, at a known index (verified
+        # empirically before writing this test: index 60).
+        closes = [100.0] * 60
+        for _ in range(40):
+            closes.append(closes[-1] * 1.01)
+        frame = compute_indicator_frame(_candles(len(closes), closes=closes))
+        rule = parse_structured_rule({"conditions": [{"field": "ma20", "op": "cross_above", "compare_to_field": "ma50"}]})
+
+        timestamps = find_trigger_timestamps(frame, rule)
+
+        self.assertEqual(len(timestamps), 1)
+        self.assertEqual(timestamps[0], int(frame["close_time"].iloc[60]))
 
 
 class RuleFiresAtTest(unittest.TestCase):

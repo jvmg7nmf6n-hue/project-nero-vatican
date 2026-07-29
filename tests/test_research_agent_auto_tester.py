@@ -92,7 +92,7 @@ class GateRejectionSkipsHarnessTest(unittest.TestCase):
         generated_at = datetime.fromtimestamp((START_MS + 1000 * HOUR_MS) / 1000, tz=timezone.utc)
         hypothesis = _hypothesis(
             generated_at=generated_at.isoformat(),
-            structured_entry_rule={"conditions": [{"field": "rsi14", "op": "lt", "value": 30.0}]},  # unsupported field
+            structured_entry_rule={"conditions": [{"field": "macd", "op": "lt", "value": 30.0}]},  # unsupported field
         )
 
         with patch("nero_core.research_agent.auto_tester.split_chronological") as mock_split:
