@@ -653,5 +653,68 @@ class DataSourcePersistenceTest(LiveSchedulerTestCase):
         self.assertIsNone(reloaded[0].data_source)
 
 
+class ApiKeyStartupValidationTest(LiveSchedulerTestCase):
+    """Fix 2: a missing expected API key must produce a durable, queryable
+    CONFIG_WARNING in execution_metadata.errors_encountered -- checked once at the
+    very start of run_once, before any strategy evaluation -- and must never stop
+    the run or leak a key's actual value."""
+
+    _ALL_KEYS_PRESENT = {
+        "TWELVE_DATA_API_KEY": "td-real-value-should-never-appear-anywhere",
+        "GEMINI_API_KEY": "gemini-real-value-should-never-appear-anywhere",
+        "ANTHROPIC_API_KEY": "anthropic-real-value-should-never-appear-anywhere",
+    }
+
+    @staticmethod
+    def _getenv_from(env: dict[str, str]):
+        # Same pattern as NewsSentimentSchedulingTest.test_v1_behavior_unchanged_when_
+        # v2_has_no_api_key -- patches os.getenv directly rather than clearing the
+        # real process environment (safer: nothing outside this dict can leak in or
+        # be accidentally wiped for the duration of the call).
+        return lambda key, default="": env.get(key, default)
+
+    def test_missing_key_produces_config_warning_without_stopping_the_run(self) -> None:
+        env = dict(self._ALL_KEYS_PRESENT)
+        del env["ANTHROPIC_API_KEY"]
+        client = self._patched_client()
+        with patch("nero_core.execution.live_scheduler.os.getenv", side_effect=self._getenv_from(env)):
+            result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
+
+        warnings = [e for e in result.errors_encountered if e.get("classification") == "CONFIG_WARNING"]
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0]["key"], "ANTHROPIC_API_KEY")
+
+        # the run must not stop -- other strategies still evaluate normally.
+        self.assertIn("GOLD", result.assets_evaluated)
+
+    def test_all_keys_present_produces_no_config_warning(self) -> None:
+        client = self._patched_client()
+        with patch("nero_core.execution.live_scheduler.os.getenv", side_effect=self._getenv_from(self._ALL_KEYS_PRESENT)):
+            result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
+
+        warnings = [e for e in result.errors_encountered if e.get("classification") == "CONFIG_WARNING"]
+        self.assertEqual(warnings, [])
+
+    def test_multiple_missing_keys_each_get_their_own_warning(self) -> None:
+        client = self._patched_client()
+        with patch("nero_core.execution.live_scheduler.os.getenv", side_effect=self._getenv_from({})):
+            result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
+
+        warned_keys = {e["key"] for e in result.errors_encountered if e.get("classification") == "CONFIG_WARNING"}
+        self.assertEqual(warned_keys, {"TWELVE_DATA_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY"})
+
+    def test_key_value_never_appears_in_the_warning(self) -> None:
+        """Even when a key IS present (and therefore not warned about), its value
+        must never leak into any other run_once output -- this test's fixture keys
+        are deliberately distinctive strings so any accidental leak is unmissable."""
+        client = self._patched_client()
+        with patch("nero_core.execution.live_scheduler.os.getenv", side_effect=self._getenv_from(self._ALL_KEYS_PRESENT)):
+            result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
+
+        serialized = str(result.errors_encountered) + str(result.assets_skipped) + str(result.assets_evaluated)
+        for value in self._ALL_KEYS_PRESENT.values():
+            self.assertNotIn(value, serialized)
+
+
 if __name__ == "__main__":
     unittest.main()

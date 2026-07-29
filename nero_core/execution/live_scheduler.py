@@ -766,6 +766,36 @@ def process_news_sentiment(
     return evaluated, errors
 
 
+# Checked once per run, before any strategy evaluation begins (see run_once). Every
+# name here has a live consumer today; FRED_API_KEY is deliberately excluded -- the
+# macro/dollar-proxy strategy that would need it (nero_core.data_sources.macro_data)
+# is not wired into run_once, so warning about it would be noise about a key nothing
+# currently reads.
+EXPECTED_API_KEYS = ("TWELVE_DATA_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY")
+
+
+def _missing_api_key_warnings() -> list[dict[str, Any]]:
+    """CONFIG_WARNING entries for every expected API key absent from the environment.
+
+    This is the fix for the exact incident that motivated it: three keys (Twelve Data,
+    Gemini, Anthropic) were each missing from the GitHub Actions environment for
+    weeks/months with no crash and no durable record anywhere -- only a stdout line in
+    a CI log nobody was watching. A CONFIG_WARNING entry here lands in
+    execution_metadata.errors_encountered, the same queryable ledger table every other
+    run-level fact already lives in, so "is a key currently missing" is one SQL query
+    away going forward instead of something that has to be independently rediscovered.
+
+    Never logs a key's VALUE -- only whether os.getenv(name, "") is empty. A missing
+    key is a warning, not a run-stopping condition: the run must continue exactly as
+    it does today (v1/v2 news sentiment's existing degraded-but-non-fatal behavior is
+    unchanged by this check)."""
+    return [
+        {"classification": "CONFIG_WARNING", "key": key, "message": f"{key} is not set in the environment"}
+        for key in EXPECTED_API_KEYS
+        if not os.getenv(key, "").strip()
+    ]
+
+
 def run_once(
     client: MarketDataClient | None = None,
     now: datetime | None = None,
@@ -779,7 +809,7 @@ def run_once(
 
     assets_evaluated: list[str] = []
     assets_skipped: list[dict[str, Any]] = []
-    errors_encountered: list[dict[str, Any]] = []
+    errors_encountered: list[dict[str, Any]] = list(_missing_api_key_warnings())
 
     for config in SINGLE_ASSET_CONFIGS:
         if not candle_boundary_due(config.timeframe, now):

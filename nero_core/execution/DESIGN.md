@@ -138,6 +138,12 @@ string-pattern classifier, not a precise one:
   processing for the other assets/strategies in the same run. Partial results (e.g.
   2 of 4 configs logged) are the expected outcome of a partial failure, not an error
   state in themselves.
+- **CONFIG_WARNING**: checked once at the very start of `run_once`, before any
+  strategy evaluation (`_missing_api_key_warnings`) — one entry per expected API key
+  (`EXPECTED_API_KEYS`) absent from the environment. Never stops the run; a missing
+  key degrades whatever depends on it exactly as before (v1 news sentiment's keyword
+  fallback, v2's honest no-op), this just makes the absence a durable, queryable
+  ledger fact instead of only a stdout line. Never logs a key's value.
 
 `main()` never raises: it wraps `run_once()` in a top-level `try/except`, printing a
 full traceback to stdout on any unexpected failure and returning normally, so the
