@@ -156,12 +156,17 @@ def analyze_sentiment(
             "no eligible headlines",
         )
 
+    # source values deliberately say "keyword", never just "local": GEMINI_API_KEY was
+    # absent from the live scheduler's environment for this signal's entire history,
+    # so every row logged so far took this branch, tagged with the previous "local"
+    # label -- a real, honest, but easy-to-misread-as-something-else value. The
+    # fallback itself stays intentional (see module docstring); only the label changes.
     if gemini_api_key.strip():
         try:
             return _analyze_with_gemini(eligible, asset, gemini_api_key.strip(), params)
         except (requests.RequestException, KeyError, ValueError, json.JSONDecodeError):
-            return _local_sentiment(eligible, asset, params, source="local fallback after Gemini error")
-    return _local_sentiment(eligible, asset, params, source="local")
+            return _local_sentiment(eligible, asset, params, source="keyword (gemini call failed)")
+    return _local_sentiment(eligible, asset, params, source="keyword (no gemini key configured)")
 
 
 def _signal_from_score(score: int, params: NewsSentimentParameters) -> str:

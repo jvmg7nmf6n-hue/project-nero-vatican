@@ -163,7 +163,7 @@ class AnalyzeSentimentTest(unittest.TestCase):
 
         result = analyze_sentiment(headlines, "GOLD", NOW, gemini_api_key="")
 
-        self.assertEqual(result.source, "local")
+        self.assertEqual(result.source, "keyword (no gemini key configured)")
         self.assertEqual(result.signal_type, "BUY_BIAS")
         self.assertGreater(result.confidence, 0)
 
@@ -180,7 +180,7 @@ class AnalyzeSentimentTest(unittest.TestCase):
         with patch("nero_core.strategies.news_sentiment.requests.post", side_effect=requests.exceptions.ConnectionError("boom")):
             result = analyze_sentiment(headlines, "GOLD", NOW, gemini_api_key="fake-key")
 
-        self.assertEqual(result.source, "local fallback after Gemini error")
+        self.assertEqual(result.source, "keyword (gemini call failed)")
 
     def test_confidence_scales_with_score_magnitude(self) -> None:
         strong = [_item("surge jump rise gain record high breakout rally strong bullish", _rfc822(NOW - timedelta(hours=5)))]

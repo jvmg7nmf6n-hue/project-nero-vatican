@@ -528,7 +528,7 @@ class NewsSentimentSchedulingTest(LiveSchedulerTestCase):
         rows = list_news_sentiment_log_for_run(result.run_id, db_path=self.db_path)
         v1_gold = next(r for r in rows if r.asset == "GOLD" and r.strategy_version == NEWS_SENTIMENT_V1_VERSION)
         self.assertEqual(v1_gold.signal_type, "BUY_BIAS")
-        self.assertEqual(v1_gold.source, "local")
+        self.assertEqual(v1_gold.source, "keyword (no gemini key configured)")
         v2_gold = next(r for r in rows if r.asset == "GOLD" and r.strategy_version == NEWS_SENTIMENT_V2_VERSION)
         self.assertEqual(v2_gold.source, "no api key")
 
