@@ -1,7 +1,51 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-28T23:44:57.628215+00:00",
+  "last_updated": "2026-07-29T01:02:23.825799+00:00",
   "rows": [
+    {
+      "timestamp": "2026-07-29T01:01:45.351488+00:00",
+      "strategy": "COINTEGRATION_PAIRS",
+      "strategy_version": "cointegration-pairs-v1.0.0",
+      "asset": "BTC-ETH",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "|z|=0.35 below entry threshold 2.0",
+      "candle_timestamp": "2026-07-28T23:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-07-29T01:01:45.351488+00:00",
+      "strategy": "RANGE_MEAN_REVERSION",
+      "strategy_version": "range-mean-reversion-v1.3.0-confirmation",
+      "asset": "BTC",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NO_CONFIRMATION_PATTERN",
+      "candle_timestamp": "2026-07-28T23:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-07-29T01:01:45.351488+00:00",
+      "strategy": "RANGE_MEAN_REVERSION",
+      "strategy_version": "range-mean-reversion-v1.1.0-long-only",
+      "asset": "BTC",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NOT_RANGING, NO_BAND_BREACH",
+      "candle_timestamp": "2026-07-28T23:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-07-29T01:01:45.351488+00:00",
+      "strategy": "TREND_PULLBACK",
+      "strategy_version": "trend-pullback-v1.0.0",
+      "asset": "BNB",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NOT_IN_ESTABLISHED_UPTREND, CLOSE_NOT_BACK_ABOVE_MA50",
+      "candle_timestamp": "2026-07-28T23:59:59.999000+00:00"
+    },
     {
       "timestamp": "2026-07-28T21:37:55.023054+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
@@ -133,6 +177,61 @@
       "exit_price": null,
       "reasoning": "NOT_IN_ESTABLISHED_UPTREND, CLOSE_NOT_BACK_ABOVE_MA50, RSI_OUTSIDE_NEUTRAL_BAND",
       "candle_timestamp": "2026-07-28T11:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-07-29T01:01:45.351488+00:00",
+      "strategy": "VOLATILITY_SQUEEZE",
+      "strategy_version": "volatility-squeeze-v1.1.0-ma100-silver-calibrated-24h",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "CLOSE_NOT_ABOVE_SQUEEZE_HIGH, CLOSE_NOT_ABOVE_TREND_MA",
+      "candle_timestamp": "2026-07-28T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-29T01:01:45.351488+00:00",
+      "strategy": "VOLATILITY_SQUEEZE",
+      "strategy_version": "volatility-squeeze-v1.1.0-ma150-silver-calibrated-24h",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "CLOSE_NOT_ABOVE_SQUEEZE_HIGH, CLOSE_NOT_ABOVE_TREND_MA",
+      "candle_timestamp": "2026-07-28T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-29T01:01:45.351488+00:00",
+      "strategy": "VOLATILITY_SQUEEZE",
+      "strategy_version": "volatility-squeeze-v1.1.0-ma200-silver-calibrated-24h",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "CLOSE_NOT_ABOVE_SQUEEZE_HIGH, CLOSE_NOT_ABOVE_TREND_MA",
+      "candle_timestamp": "2026-07-28T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-29T01:01:45.351488+00:00",
+      "strategy": "TREND_PULLBACK",
+      "strategy_version": "trend-pullback-v1.5.0-silver-calibrated-24h",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NOT_IN_ESTABLISHED_UPTREND, NO_RECENT_PULLBACK_TO_MA50, CLOSE_NOT_BACK_ABOVE_MA50",
+      "candle_timestamp": "2026-07-28T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-07-29T01:01:45.351488+00:00",
+      "strategy": "BREAKOUT_MOMENTUM",
+      "strategy_version": "breakout-momentum-v1.6.0-silver-calibrated-24h",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "CLOSE_NOT_ABOVE_BREAKOUT_HIGH, CLOSE_NOT_ABOVE_MA200, RSI_NOT_MOMENTUM_SUPPORTIVE",
+      "candle_timestamp": "2026-07-28T04:00:00+00:00"
     },
     {
       "timestamp": "2026-07-28T03:48:34.609837+00:00",

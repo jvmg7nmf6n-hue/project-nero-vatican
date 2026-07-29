@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-28T23:44:57.629265+00:00",
+  "last_updated": "2026-07-29T01:02:23.827087+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -30,7 +30,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 1
+        "NO_TRADE": 2
       },
       "open_position": null
     },
@@ -46,7 +46,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 5
+        "NO_TRADE": 6
       },
       "open_position": null
     },
@@ -62,7 +62,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 5
+        "NO_TRADE": 6
       },
       "open_position": null
     },
@@ -78,7 +78,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 5
+        "NO_TRADE": 6
       },
       "open_position": null
     },
@@ -94,7 +94,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 5
+        "NO_TRADE": 6
       },
       "open_position": null
     },
@@ -110,7 +110,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 5
+        "NO_TRADE": 6
       },
       "open_position": null
     },
@@ -158,7 +158,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 7
+        "NO_TRADE": 8
       },
       "open_position": null
     },
@@ -174,7 +174,7 @@
         "ENTRY": 1,
         "EXIT": 1,
         "WATCH": 0,
-        "NO_TRADE": 6
+        "NO_TRADE": 7
       },
       "open_position": null
     },
@@ -206,7 +206,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 1
+        "NO_TRADE": 2
       },
       "open_position": null
     },
