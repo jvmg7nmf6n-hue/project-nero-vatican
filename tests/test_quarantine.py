@@ -6,9 +6,11 @@ from pathlib import Path
 
 from nero_core.execution.quarantine import (
     QUARANTINE_CUTOFFS,
+    exclude_mismatched_sources,
     exclude_quarantined,
     is_quarantined,
     list_clean_execution_log,
+    source_mismatched_trade_ids,
 )
 from nero_core.strategies.orderflow_imbalance import STRATEGY_ID as ORDERFLOW_ID
 from nero_core.strategies.orderflow_imbalance import STRATEGY_VERSION as ORDERFLOW_VERSION
@@ -102,6 +104,118 @@ class ExcludeQuarantinedTest(unittest.TestCase):
         rows = [clean_before, quarantined, clean_after]
         result = exclude_quarantined(rows)
         self.assertEqual(result, [clean_before, clean_after])
+
+
+class SourceMismatchedTradeIdsTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.db_path = Path(self._tmp.name) / "test_truth_ledger.db"
+        self.addCleanup(self._tmp.cleanup)
+
+    def test_agreeing_pair_is_not_flagged(self) -> None:
+        entry = insert_execution_log_row(
+            run_id="r", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="BTC",
+            signal_type="ENTRY", reasoning="entry", candle_timestamp=1000, data_source="Binance", db_path=self.db_path,
+        )
+        exit_row = insert_execution_log_row(
+            run_id="r", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="BTC",
+            signal_type="EXIT", reasoning="exit", candle_timestamp=2000, data_source="Binance", db_path=self.db_path,
+        )
+        rows = [entry, exit_row]
+
+        self.assertEqual(source_mismatched_trade_ids(rows), set())
+
+    def test_disagreeing_pair_flags_both_legs(self) -> None:
+        """The exact scenario Task 5 exists for: entry priced off Binance, its own
+        exit priced off a Coinbase fallback (a transient re-occurrence of the 451
+        issue, post-fix) -- both legs must be excluded, not just one."""
+        entry = insert_execution_log_row(
+            run_id="r", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="BTC",
+            signal_type="ENTRY", reasoning="entry", candle_timestamp=1000, data_source="Binance", db_path=self.db_path,
+        )
+        exit_row = insert_execution_log_row(
+            run_id="r", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="BTC",
+            signal_type="EXIT", reasoning="exit", candle_timestamp=2000, data_source="Coinbase", db_path=self.db_path,
+        )
+        rows = [entry, exit_row]
+
+        self.assertEqual(source_mismatched_trade_ids(rows), {entry.id, exit_row.id})
+
+    def test_pair_with_unrecorded_source_is_not_flagged_as_mismatched(self) -> None:
+        """A None data_source is a separate "can't verify" case, not a confirmed
+        mismatch -- these must not overlap, double-count, or mask each other."""
+        entry = insert_execution_log_row(
+            run_id="r", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="BTC",
+            signal_type="ENTRY", reasoning="entry", candle_timestamp=1000, db_path=self.db_path,
+        )
+        exit_row = insert_execution_log_row(
+            run_id="r", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="BTC",
+            signal_type="EXIT", reasoning="exit", candle_timestamp=2000, data_source="Binance", db_path=self.db_path,
+        )
+        rows = [entry, exit_row]
+
+        self.assertEqual(source_mismatched_trade_ids(rows), set())
+
+    def test_still_open_entry_is_not_flagged(self) -> None:
+        entry = insert_execution_log_row(
+            run_id="r", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="BTC",
+            signal_type="ENTRY", reasoning="still open", candle_timestamp=1000, data_source="Binance", db_path=self.db_path,
+        )
+        self.assertEqual(source_mismatched_trade_ids([entry]), set())
+
+    def test_different_assets_are_paired_independently(self) -> None:
+        """A BTC ENTRY must never pair against an ETH EXIT just because they're
+        adjacent in the input list -- grouping is strictly per (strategy,
+        strategy_version, asset)."""
+        btc_entry = insert_execution_log_row(
+            run_id="r", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="BTC",
+            signal_type="ENTRY", reasoning="btc entry", candle_timestamp=1000, data_source="Binance", db_path=self.db_path,
+        )
+        eth_exit = insert_execution_log_row(
+            run_id="r", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="ETH",
+            signal_type="EXIT", reasoning="eth exit, no preceding ETH entry", candle_timestamp=1500,
+            data_source="Coinbase", db_path=self.db_path,
+        )
+        btc_exit = insert_execution_log_row(
+            run_id="r", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="BTC",
+            signal_type="EXIT", reasoning="btc exit", candle_timestamp=2000, data_source="Binance", db_path=self.db_path,
+        )
+        rows = [btc_entry, eth_exit, btc_exit]
+
+        self.assertEqual(source_mismatched_trade_ids(rows), set())
+
+
+class ExcludeMismatchedSourcesTest(unittest.TestCase):
+    """exclude_mismatched_sources is source_mismatched_trade_ids wired into an actual
+    row-filtering function -- these tests exercise the filter itself, not just the
+    id-set it's built on."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.db_path = Path(self._tmp.name) / "test_truth_ledger.db"
+        self.addCleanup(self._tmp.cleanup)
+
+    def test_mismatched_pair_is_excluded_even_with_both_sources_recorded(self) -> None:
+        entry = insert_execution_log_row(
+            run_id="r", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="BTC",
+            signal_type="ENTRY", reasoning="entry", candle_timestamp=1000, data_source="Binance", db_path=self.db_path,
+        )
+        exit_row = insert_execution_log_row(
+            run_id="r", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="BTC",
+            signal_type="EXIT", reasoning="exit", candle_timestamp=2000, data_source="Kraken", db_path=self.db_path,
+        )
+        self.assertEqual(exclude_mismatched_sources([entry, exit_row]), [])
+
+    def test_agreeing_source_tagged_pair_survives(self) -> None:
+        entry = insert_execution_log_row(
+            run_id="r", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="BTC",
+            signal_type="ENTRY", reasoning="entry", candle_timestamp=1000, data_source="Binance", db_path=self.db_path,
+        )
+        exit_row = insert_execution_log_row(
+            run_id="r", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="BTC",
+            signal_type="EXIT", reasoning="exit", candle_timestamp=2000, data_source="Binance", db_path=self.db_path,
+        )
+        self.assertEqual(exclude_mismatched_sources([entry, exit_row]), [entry, exit_row])
 
 
 class ListCleanExecutionLogTest(unittest.TestCase):

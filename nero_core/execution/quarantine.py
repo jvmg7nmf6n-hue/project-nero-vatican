@@ -28,9 +28,18 @@ This is a documented-cutoff quarantine (Python constants + a filter function), n
 schema change: it works against the CURRENT execution_log schema with no ALTER TABLE
 and no migration risk. See the migration-plan doc above for a proposed `quarantined`
 column as a more durable long-term alternative -- planned, not applied.
+
+FOLLOW-UP (2026-07-29, same day): even a row with data_source recorded isn't safe
+alone -- ENTRY and EXIT are separate scheduler runs (separate fetches), so a resolved
+trade's two legs can independently land on different exchanges even after the
+Binance-451 fix, if Binance 451s again only transiently. `source_mismatched_trade_ids`/
+`exclude_mismatched_sources` pair each ENTRY with its EXIT (chronological, one open
+position at a time -- confirmed true for every ENTRY/EXIT-logging strategy in this
+codebase today) and drop both legs of any pair whose recorded sources disagree.
 """
 from __future__ import annotations
 
+from collections import defaultdict
 from pathlib import Path
 from typing import Iterable
 
@@ -65,10 +74,79 @@ def exclude_quarantined(rows: Iterable[ExecutionLogRow]) -> list[ExecutionLogRow
     return [row for row in rows if not is_quarantined(row)]
 
 
+def _trade_pairs(rows: Iterable[ExecutionLogRow]) -> list[tuple[ExecutionLogRow, ExecutionLogRow | None]]:
+    """Groups ENTRY/EXIT rows by (strategy, strategy_version, asset), orders each
+    group chronologically (candle_timestamp, then id as a tiebreak), and pairs each
+    ENTRY with the EXIT that immediately follows it for that same key. Assumes one
+    open position at a time per key -- true for every ENTRY/EXIT-logging strategy in
+    this codebase today (confirmed for ORDERFLOW_IMBALANCE's live history: strict
+    ENTRY/EXIT/ENTRY/EXIT alternation, no overlaps). An ENTRY with no following EXIT
+    yet (still open) or an EXIT with no preceding ENTRY (shouldn't happen given the
+    above, but handled defensively) pairs with None and is never flagged as
+    mismatched -- only a CONFIRMED two-sided disagreement is a mismatch."""
+    grouped: dict[tuple[str, str, str], list[ExecutionLogRow]] = defaultdict(list)
+    for row in rows:
+        if row.signal_type in ("ENTRY", "EXIT"):
+            grouped[(row.strategy, row.strategy_version, row.asset)].append(row)
+
+    pairs: list[tuple[ExecutionLogRow, ExecutionLogRow | None]] = []
+    for group in grouped.values():
+        ordered = sorted(group, key=lambda r: (r.candle_timestamp, r.id or 0))
+        pending_entry: ExecutionLogRow | None = None
+        for row in ordered:
+            if row.signal_type == "ENTRY":
+                if pending_entry is not None:
+                    pairs.append((pending_entry, None))
+                pending_entry = row
+            else:  # EXIT
+                if pending_entry is not None:
+                    pairs.append((pending_entry, row))
+                    pending_entry = None
+                # else: orphaned EXIT with no preceding ENTRY in this key -- not
+                # something this function can pair or flag; left out of `pairs`
+                # entirely rather than guessed at.
+        if pending_entry is not None:
+            pairs.append((pending_entry, None))
+    return pairs
+
+
+def source_mismatched_trade_ids(rows: Iterable[ExecutionLogRow]) -> set[int]:
+    """Row ids belonging to a resolved (ENTRY, EXIT) pair whose recorded data_source
+    values disagree -- both legs' ids are included, since a mismatched trade isn't
+    valid evidence from either side. A pair where either leg is still open (paired
+    with None) or either leg's data_source is None is never flagged here -- that's a
+    "can't verify" case, not a confirmed mismatch."""
+    mismatched: set[int] = set()
+    for entry, exit_row in _trade_pairs(rows):
+        if exit_row is None:
+            continue
+        if entry.data_source is None or exit_row.data_source is None:
+            continue
+        if entry.data_source != exit_row.data_source:
+            if entry.id is not None:
+                mismatched.add(entry.id)
+            if exit_row.id is not None:
+                mismatched.add(exit_row.id)
+    return mismatched
+
+
+def exclude_mismatched_sources(rows: Iterable[ExecutionLogRow]) -> list[ExecutionLogRow]:
+    """Drops both legs of any resolved ENTRY/EXIT pair whose recorded data_source
+    values disagree, preserving order. Mismatch detection runs against the full given
+    row set before filtering (source_mismatched_trade_ids needs both legs present to
+    pair correctly) -- callers should pass this a row set that still has every leg
+    present."""
+    rows = list(rows)
+    mismatched_ids = source_mismatched_trade_ids(rows)
+    return [row for row in rows if row.id not in mismatched_ids]
+
+
 def list_clean_execution_log(
     db_path: Path = DEFAULT_DB_PATH, asset: str | None = None, strategy: str | None = None
 ) -> list[ExecutionLogRow]:
     """list_execution_log's quarantine-aware counterpart -- the entrypoint any future
     statistical-verification harness should call instead of list_execution_log
-    directly."""
-    return exclude_quarantined(list_execution_log(db_path=db_path, asset=asset, strategy=strategy))
+    directly. Applies, in order: the documented incident-cutoff (exclude_quarantined),
+    then the entry/exit source-agreement check (exclude_mismatched_sources)."""
+    rows = exclude_quarantined(list_execution_log(db_path=db_path, asset=asset, strategy=strategy))
+    return exclude_mismatched_sources(rows)
