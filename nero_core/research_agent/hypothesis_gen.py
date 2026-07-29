@@ -36,10 +36,17 @@ detection and for Task 7's UI to group/filter), hypothesis_name, mechanism,
 entry_rule (human-readable), structured_entry_rule (machine-checkable form
 consumed by frequency_gate.py/auto_tester.py via nero_core.research_agent.
 rule_dsl -- null if the LLM says the rule can't be expressed that way, NEVER
-force-mapped), exit_rule, stop_rule, asset, timeframe, differs_from_graveyard,
-expected_frequency_claim (the LLM's own guess -- recorded for reference only;
-this project never asks the LLM for a frequency and never trusts this number
-for a gating decision, see frequency_gate.py), generated_at, cost_usd, source.
+force-mapped), exit_rule, stop_rule, structured_exit_plan (added -- a
+hypothesis's entry_rule alone isn't enough to run a real backtest; auto_tester.py
+(Task 4) also needs a machine-checkable exit/stop shape to compute R-multiples
+at all, so this asks for the same {"stop_atr_multiple", "target_r_multiple",
+"max_holding_hours"} shape rule_dsl.parse_exit_plan expects, null if
+inexpressible -- same "never guess" principle as structured_entry_rule, just
+applied to the other half of a testable trade definition), asset, timeframe,
+differs_from_graveyard, expected_frequency_claim (the LLM's own guess --
+recorded for reference only; this project never asks the LLM for a frequency
+and never trusts this number for a gating decision, see frequency_gate.py),
+generated_at, cost_usd, source.
 """
 from __future__ import annotations
 
@@ -82,8 +89,8 @@ DEFAULT_PARAMETERS = HypothesisGenParameters()
 
 HYPOTHESIS_JSON_KEYS = (
     "hypothesis_name", "mechanism", "entry_rule", "structured_entry_rule",
-    "exit_rule", "stop_rule", "asset", "timeframe", "differs_from_graveyard",
-    "expected_frequency_claim",
+    "exit_rule", "stop_rule", "structured_exit_plan", "asset", "timeframe",
+    "differs_from_graveyard", "expected_frequency_claim",
 )
 
 
@@ -205,6 +212,14 @@ Return STRICT JSON only, with exactly these keys and no others:
   structured_entry_rule to null -- do NOT force an approximate mapping.
 - exit_rule: a precise exit condition
 - stop_rule: a precise stop-loss condition
+- structured_exit_plan: a machine-checkable exit/stop shape, shaped exactly as
+  {{"stop_atr_multiple": <number>, "target_r_multiple": <number>, "max_holding_hours":
+  <number>}} -- stop_atr_multiple is the ATR-multiple distance from entry to stop,
+  target_r_multiple is the reward target expressed as a multiple of that same risk
+  distance (e.g. 2.0 means a 2R target), max_holding_hours is a maximum holding period
+  before a time-based exit. All three must be positive numbers. If exit_rule/stop_rule
+  genuinely cannot be expressed this way, set structured_exit_plan to null -- do NOT
+  force an approximate mapping.
 - asset: the asset this applies to (default to the scan finding's own asset if unsure)
 - timeframe: the timeframe this applies to
 - differs_from_graveyard: 1-2 sentences on how this differs from every dead mechanism
@@ -214,7 +229,7 @@ Return STRICT JSON only, with exactly these keys and no others:
   frequency from candle data and will reject this hypothesis if the measured number
   doesn't clear the 20-30/year bar above, regardless of what you estimate here.
 
-Do not include any field other than these nine."""
+Do not include any field other than these ten."""
 
 
 def _call_claude(prompt: str, api_key: str, params: HypothesisGenParameters) -> tuple[dict, dict]:
@@ -260,6 +275,7 @@ def _build_record(finding: ScanFinding, data: dict, cost_usd: float, now: dateti
         "structured_entry_rule": data.get("structured_entry_rule"),
         "exit_rule": str(data.get("exit_rule", "")).strip(),
         "stop_rule": str(data.get("stop_rule", "")).strip(),
+        "structured_exit_plan": data.get("structured_exit_plan"),
         "asset": str(data.get("asset") or finding.asset).strip(),
         "timeframe": str(data.get("timeframe") or (finding.timeframe or "")).strip(),
         "differs_from_graveyard": str(data.get("differs_from_graveyard", "")).strip(),

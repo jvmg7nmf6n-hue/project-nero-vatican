@@ -29,6 +29,18 @@ is deliberately narrow (8 fields, 7 ops) rather than extensible-by-guessing.
 NO LOOKAHEAD: every field below is a rolling/causal computation over closed
 candles up to and including the evaluation row (see compute_indicator_frame).
 `cross_above`/`cross_below` look at exactly one prior row, never a future one.
+
+EXIT PLAN (added for auto_tester.py, Task 4): an entry_rule alone isn't enough
+to run a real backtest -- computing an R-multiple needs a stop and a target
+too. ExitPlan/parse_exit_plan apply the exact same "never guess" principle
+(REQUIREMENT 1 above) to that other half of a testable trade definition: a
+hypothesis's exit_rule/stop_rule free text is REJECTED as UNTESTABLE unless it
+also has this fixed, machine-checkable shape -- stop distance in ATR
+multiples, target as a multiple of that same risk (an R-multiple), and a
+maximum holding period in hours. This mirrors this project's own established
+ATR-stop/target/max-holding-hours convention (see
+nero_core.strategies.mean_reversion.evaluate_exit, which auto_tester.py reuses
+unmodified for exactly this reason).
 """
 from __future__ import annotations
 
@@ -94,6 +106,39 @@ def parse_structured_rule(raw: object) -> StructuredRule:
     return StructuredRule(conditions=tuple(parsed))
 
 
+@dataclass(frozen=True)
+class ExitPlan:
+    stop_atr_multiple: float
+    target_r_multiple: float
+    max_holding_hours: float
+
+
+def parse_exit_plan(raw: object) -> ExitPlan:
+    """Parses a hypothesis's structured_exit_plan dict, e.g.:
+        {"stop_atr_multiple": 1.5, "target_r_multiple": 2.0, "max_holding_hours": 48.0}
+    Raises RuleAmbiguousError (never a guessed substitute) if `raw` isn't a
+    dict, a required key is missing/non-numeric, or any value isn't strictly
+    positive (a zero/negative stop distance, target, or holding period has no
+    sane trading interpretation)."""
+    if not isinstance(raw, dict):
+        raise RuleAmbiguousError(f"structured_exit_plan must be a dict, got {type(raw).__name__}")
+
+    values: dict[str, float] = {}
+    for key in ("stop_atr_multiple", "target_r_multiple", "max_holding_hours"):
+        value = raw.get(key)
+        if value is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise RuleAmbiguousError(f"structured_exit_plan.{key} must be a number, got {value!r}")
+        if value <= 0:
+            raise RuleAmbiguousError(f"structured_exit_plan.{key} must be positive, got {value!r}")
+        values[key] = float(value)
+
+    return ExitPlan(
+        stop_atr_multiple=values["stop_atr_multiple"],
+        target_r_multiple=values["target_r_multiple"],
+        max_holding_hours=values["max_holding_hours"],
+    )
+
+
 def compute_indicator_frame(candles: pd.DataFrame) -> pd.DataFrame:
     """Adds ma20/ma50/ma200/zscore20/atr14/ret_1 columns to a sorted copy of
     `candles` (which must carry close_time (epoch ms), close, high, low --
@@ -132,6 +177,13 @@ def compute_indicator_frame(candles: pd.DataFrame) -> pd.DataFrame:
     frame["zscore20"] = (close - frame["ma20"]) / rolling_std_20.replace(0, float("nan"))
 
     frame["volume"] = frame["volume"].astype(float) if "volume" in frame.columns else float("nan")
+
+    # Matches every other candle schema in this codebase (e.g.
+    # nero_core.data_sources.market_data.CANDLE_COLUMNS) -- added so
+    # auto_tester.py can reuse mean_reversion.reset_daily_guard_if_needed /
+    # tools.backtest_statistics.random_entry_baseline_single_asset unmodified,
+    # both of which read candle["date"] directly.
+    frame["date"] = pd.to_datetime(frame["close_time"], unit="ms", utc=True)
 
     return frame
 
