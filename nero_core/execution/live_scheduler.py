@@ -622,7 +622,21 @@ def process_orderflow_imbalance(
     nero_core/strategies/orderflow_imbalance.py's module docstring. Evaluated every
     run for BTC and ETH; a failure fetching either the 1h candle data or the
     order-book snapshot is classified DATA_UNAVAILABLE and that asset is skipped for
-    this run only — never crashes the scheduler, never fabricates a snapshot."""
+    this run only — never crashes the scheduler, never fabricates a snapshot.
+
+    Each logged row's data_source combines TWO independent fetches -- the 1h candle
+    feed (MarketDataClient.load_intraday, which cascades Binance -> Coinbase -> Kraken
+    on failure, per that client's own docstring) and the order-book depth snapshot
+    (fetch_and_cache_snapshot, which cascades data-api.binance.vision -> api.binance.com)
+    -- into one "<candle_source> | orderbook: <snapshot_source>" string. This is the
+    fix for a confirmed incident: pre-2026-07-28 (before the Binance-451 GitHub-Actions
+    fix, commit c106b8d), BOTH BTC and ETH's candle fetches were silently falling
+    through to a non-Binance exchange on every GitHub Actions run with zero record of
+    it -- and because ENTRY and EXIT are two independent scheduler runs, an entry and
+    its own exit could legitimately have been priced off two DIFFERENT exchanges,
+    which is not a valid paper-traded round trip. See
+    nero_core/execution/quarantine.py for the historical rows this was found in and
+    how they're excluded from analysis."""
     evaluated: list[str] = []
     errors: list[dict[str, Any]] = []
 
@@ -632,7 +646,8 @@ def process_orderflow_imbalance(
             # rotation, so this fetches directly via MarketDataClient.load_intraday
             # (which supports "1h" as an ordinary Binance interval) rather than through
             # fetch_timeframe_candles.
-            candles = client.load_intraday(asset, interval="1h", candles=240).prices
+            candle_result = client.load_intraday(asset, interval="1h", candles=240)
+            candles = candle_result.prices
         except MarketDataUnavailableError as exc:
             errors.append({"asset": asset, "strategy": ORDERFLOW_ID, "classification": "DATA_UNAVAILABLE", "message": str(exc)})
             continue
@@ -663,6 +678,8 @@ def process_orderflow_imbalance(
             errors.append({"asset": asset, "strategy": ORDERFLOW_ID, "classification": "DATA_UNAVAILABLE", "message": str(exc)})
             continue
 
+        data_source = f"{candle_result.source} | orderbook: {snapshot.source}"
+
         direction, stop_loss = _reconstruct_open_position(asset, db_path)
         if direction is not None:
             open_position = _OrderflowOpenPositionView(direction=direction, stop_loss=stop_loss)
@@ -673,7 +690,7 @@ def process_orderflow_imbalance(
                     run_id=run_id, strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset=asset,
                     signal_type="EXIT", reasoning=f"{decision.exit_reason} exit, imbalance_ratio={ratio_text}",
                     candle_timestamp=latest_candle_time, entry_price=None, exit_price=latest_close,
-                    timestamp=now, db_path=db_path,
+                    timestamp=now, data_source=data_source, db_path=db_path,
                 )
             evaluated.append(asset)
             continue
@@ -690,7 +707,7 @@ def process_orderflow_imbalance(
                     signal_type="ENTRY",
                     reasoning=f"direction={trade.direction} stop_loss={trade.stop_loss:.8f} imbalance_ratio={ratio_text}",
                     candle_timestamp=latest_candle_time, entry_price=trade.entry_price, exit_price=None,
-                    timestamp=now, db_path=db_path,
+                    timestamp=now, data_source=data_source, db_path=db_path,
                 )
         evaluated.append(asset)
 

@@ -618,6 +618,45 @@ class OrderflowImbalanceSchedulingTest(LiveSchedulerTestCase):
         rows = list_execution_log(db_path=self.db_path, asset="BTC", strategy="ORDERFLOW_IMBALANCE")
         self.assertEqual(rows, [])
 
+    def test_data_source_combines_candle_and_orderbook_sources(self) -> None:
+        """process_orderflow_imbalance's data_source must reflect BOTH independent
+        fetches (1h candles + order-book snapshot), not just one of them -- the fix
+        for the confirmed cross-exchange-entry-vs-exit contamination risk (entry and
+        exit are separate scheduler runs, each independently cascading Binance ->
+        Coinbase -> Kraken for candles). Uses deliberately DIFFERENT source strings
+        for the two fetches so a test that silently duplicated one into the other's
+        slot would fail."""
+        def _fake_load_intraday_distinct_source(asset, interval="1h", candles=240, twelve_data_api_key=None):
+            source_map = {
+                "GOLD": self.gold_history, "BNB": self.bnb_history,
+                "BTC": self.btc_uptrend_history, "ETH": self.btc_uptrend_history,
+            }
+            if asset not in source_map:
+                raise MarketDataUnavailableError(f"no fixture configured for {asset}")
+            return MarketDataResult(prices=source_map[asset], source="Binance BTCUSDT 1h candles", asset=asset, interval=interval)
+
+        patcher = patch.object(MarketDataClient, "load_intraday", side_effect=_fake_load_intraday_distinct_source)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        daily_patcher = patch.object(MarketDataClient, "load_daily", side_effect=self._fake_load_daily)
+        daily_patcher.start()
+        self.addCleanup(daily_patcher.stop)
+        client = MarketDataClient()
+
+        def _high_ratio_snapshot_distinct_source(binance_symbol, now=None, db_path=None):
+            return OrderbookSnapshot(
+                timestamp=now, symbol=binance_symbol, best_bid=100.0, best_ask=100.1,
+                bid_vol_20=10.0, ask_vol_20=1.0, imbalance_ratio=10.0, source="data-api.binance.vision",
+            )
+
+        with patch("nero_core.execution.live_scheduler.fetch_and_cache_snapshot", side_effect=_high_ratio_snapshot_distinct_source):
+            result = live_scheduler.run_once(client=client, now=NOT_DUE_UTC, db_path=self.db_path)
+
+        self.assertIn("ORDERFLOW_IMBALANCE:BTC", result.assets_evaluated)
+        entry_rows = [r for r in list_execution_log(db_path=self.db_path, asset="BTC", strategy="ORDERFLOW_IMBALANCE") if r.signal_type == "ENTRY"]
+        self.assertEqual(len(entry_rows), 1)
+        self.assertEqual(entry_rows[0].data_source, "Binance BTCUSDT 1h candles | orderbook: data-api.binance.vision")
+
 
 class DataSourcePersistenceTest(LiveSchedulerTestCase):
     """Regression coverage for the SILVER-via-YFinance-with-zero-record incident: the
