@@ -60,7 +60,8 @@ class KillSwitchHardTest(unittest.TestCase):
              patch("nero_core.research_agent.pipeline.scanner.run_scan", return_value=empty_scan) as mock_scan, \
              patch("nero_core.research_agent.pipeline.hypothesis_gen.load_existing_hypotheses", return_value=[]), \
              patch("nero_core.research_agent.pipeline.hypothesis_gen.persist_hypotheses") as mock_persist_hyp, \
-             patch("nero_core.research_agent.pipeline.auto_tester.persist_test_results") as mock_persist_results:
+             patch("nero_core.research_agent.pipeline.auto_tester.persist_test_results") as mock_persist_results, \
+             patch("nero_core.research_agent.pipeline.performance.record_run") as mock_record_run:
             result = run_pipeline(api_key="fake-key")
 
         mock_scan.assert_called_once()
@@ -68,6 +69,16 @@ class KillSwitchHardTest(unittest.TestCase):
         # no findings -> no hypotheses -> still calls persist with an empty list (both harmless no-ops)
         mock_persist_hyp.assert_called_once_with([])
         mock_persist_results.assert_called_once_with([])
+        mock_record_run.assert_called_once()
+
+    def test_disabled_pipeline_never_records_performance(self) -> None:
+        # Task 5's own spec is "nothing runs when disabled" -- even a telemetry
+        # write is an action, so performance.record_run must never be reached.
+        with patch("nero_core.research_agent.pipeline.is_enabled", return_value=False), \
+             patch("nero_core.research_agent.pipeline.performance.record_run") as mock_record_run:
+            run_pipeline()
+
+        mock_record_run.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -28,7 +28,7 @@ from typing import Callable
 import pandas as pd
 
 from nero_core.execution.export_candle_data import candle_filename
-from nero_core.research_agent import auto_tester, frequency_gate, hypothesis_gen, scanner
+from nero_core.research_agent import auto_tester, frequency_gate, hypothesis_gen, performance, scanner
 from nero_core.research_agent.config import is_enabled
 from nero_core.research_agent.scanner import ScanFinding, ScanResult
 
@@ -101,6 +101,11 @@ def run_pipeline(
     max_calls_per_run: int = hypothesis_gen.DEFAULT_MAX_CALLS_PER_RUN,
     now: datetime | None = None,
 ) -> PipelineRunResult:
+    # Kill switch: checked BEFORE `now` is even resolved, and returns with no
+    # further action of any kind -- not even a performance-log write. Task 5's
+    # own spec is "nothing runs when disabled," and a telemetry write is still
+    # an action; performance.record_run is only ever called on the enabled
+    # path below. See test_research_agent_kill_switch.py.
     if not is_enabled():
         return PipelineRunResult(enabled=False, reason="research_agent.enabled is False (RESEARCH_AGENT_ENABLED not set) -- pipeline did nothing")
 
@@ -148,7 +153,7 @@ def run_pipeline(
 
     auto_tester.persist_test_results(test_results)
 
-    return PipelineRunResult(
+    result = PipelineRunResult(
         enabled=True,
         scan_result=scan_result,
         hypotheses_generated=len(generation.hypotheses),
@@ -165,3 +170,5 @@ def run_pipeline(
         no_candles_available=no_candles,
         test_results=test_results,
     )
+    performance.record_run(result, now=now)
+    return result

@@ -116,7 +116,8 @@ class DynamicNoAutoWireTest(unittest.TestCase):
              patch("nero_core.research_agent.pipeline.hypothesis_gen.load_existing_hypotheses", return_value=[]), \
              patch("nero_core.research_agent.pipeline.hypothesis_gen.generate_hypotheses") as mock_generate, \
              patch("nero_core.research_agent.pipeline.hypothesis_gen.persist_hypotheses"), \
-             patch("nero_core.research_agent.pipeline.auto_tester.persist_test_results"):
+             patch("nero_core.research_agent.pipeline.auto_tester.persist_test_results"), \
+             patch("nero_core.research_agent.pipeline.performance.record_run"):
             from nero_core.research_agent.hypothesis_gen import GenerationRunResult
 
             mock_generate.return_value = GenerationRunResult(hypotheses=[hypothesis_record])
