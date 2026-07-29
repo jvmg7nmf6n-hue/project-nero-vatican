@@ -8,6 +8,7 @@ from nero_core.execution.quarantine import (
     QUARANTINE_CUTOFFS,
     exclude_mismatched_sources,
     exclude_quarantined,
+    exclude_unrecorded_source,
     is_quarantined,
     list_clean_execution_log,
     source_mismatched_trade_ids,
@@ -237,19 +238,68 @@ class ListCleanExecutionLogTest(unittest.TestCase):
             run_id="r1", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="BTC",
             signal_type="EXIT", reasoning="pre-fix exit", candle_timestamp=BTC_CUTOFF - 3600_000, db_path=self.db_path,
         )
+        # Post-cutoff AND source-tagged AND agreeing sources -- the only combination
+        # that should survive list_clean_execution_log as of the Task 5/6 follow-up.
         insert_execution_log_row(
             run_id="r2", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="BTC",
-            signal_type="ENTRY", reasoning="post-fix entry", candle_timestamp=BTC_CUTOFF + 3600_000, db_path=self.db_path,
+            signal_type="ENTRY", reasoning="post-fix entry", candle_timestamp=BTC_CUTOFF + 3600_000,
+            data_source="Binance BTCUSDT 1h candles | orderbook: data-api.binance.vision", db_path=self.db_path,
         )
         insert_execution_log_row(
             run_id="r2", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="BTC",
-            signal_type="EXIT", reasoning="post-fix exit", candle_timestamp=BTC_CUTOFF + 7200_000, db_path=self.db_path,
+            signal_type="EXIT", reasoning="post-fix exit", candle_timestamp=BTC_CUTOFF + 7200_000,
+            data_source="Binance BTCUSDT 1h candles | orderbook: data-api.binance.vision", db_path=self.db_path,
         )
 
         clean_rows = list_clean_execution_log(db_path=self.db_path, asset="BTC", strategy=ORDERFLOW_ID)
 
         self.assertEqual(len(clean_rows), 2)
         self.assertTrue(all("post-fix" in row.reasoning for row in clean_rows))
+
+    def test_post_cutoff_row_without_recorded_source_is_still_excluded(self) -> None:
+        """Task 6 regression: clearing the timestamp cutoff alone is no longer
+        enough -- data_source must actually be recorded."""
+        insert_execution_log_row(
+            run_id="r", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="BTC",
+            signal_type="ENTRY", reasoning="post-cutoff, never source-tagged",
+            candle_timestamp=BTC_CUTOFF + 3600_000, db_path=self.db_path,
+        )
+        insert_execution_log_row(
+            run_id="r", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="BTC",
+            signal_type="EXIT", reasoning="post-cutoff, never source-tagged",
+            candle_timestamp=BTC_CUTOFF + 7200_000, db_path=self.db_path,
+        )
+
+        clean_rows = list_clean_execution_log(db_path=self.db_path, asset="BTC", strategy=ORDERFLOW_ID)
+
+        self.assertEqual(clean_rows, [])
+
+
+class ExcludeUnrecordedSourceTest(unittest.TestCase):
+    """Task 6: a row that clears the timestamp cutoff but was never actually
+    source-tagged must still be excluded -- "probably fine by inference" is not
+    "confirmed clean"."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.db_path = Path(self._tmp.name) / "test_truth_ledger.db"
+        self.addCleanup(self._tmp.cleanup)
+
+    def test_row_without_recorded_source_is_excluded_even_if_post_cutoff(self) -> None:
+        row = insert_execution_log_row(
+            run_id="r", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="BTC",
+            signal_type="ENTRY", reasoning="post-cutoff but never source-tagged",
+            candle_timestamp=BTC_CUTOFF + 1_000_000, db_path=self.db_path,
+        )
+        self.assertEqual(exclude_unrecorded_source([row]), [])
+
+    def test_row_with_recorded_source_survives(self) -> None:
+        row = insert_execution_log_row(
+            run_id="r", strategy=ORDERFLOW_ID, strategy_version=ORDERFLOW_VERSION, asset="BTC",
+            signal_type="ENTRY", reasoning="source-tagged", candle_timestamp=BTC_CUTOFF + 1_000_000,
+            data_source="Binance", db_path=self.db_path,
+        )
+        self.assertEqual(exclude_unrecorded_source([row]), [row])
 
 
 if __name__ == "__main__":

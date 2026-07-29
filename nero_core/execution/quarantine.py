@@ -29,13 +29,35 @@ schema change: it works against the CURRENT execution_log schema with no ALTER T
 and no migration risk. See the migration-plan doc above for a proposed `quarantined`
 column as a more durable long-term alternative -- planned, not applied.
 
-FOLLOW-UP (2026-07-29, same day): even a row with data_source recorded isn't safe
-alone -- ENTRY and EXIT are separate scheduler runs (separate fetches), so a resolved
-trade's two legs can independently land on different exchanges even after the
-Binance-451 fix, if Binance 451s again only transiently. `source_mismatched_trade_ids`/
-`exclude_mismatched_sources` pair each ENTRY with its EXIT (chronological, one open
-position at a time -- confirmed true for every ENTRY/EXIT-logging strategy in this
-codebase today) and drop both legs of any pair whose recorded sources disagree.
+FOLLOW-UP (2026-07-29, same day), two layers:
+
+1. Even a row with data_source recorded isn't safe alone -- ENTRY and EXIT are
+   separate scheduler runs (separate fetches), so a resolved trade's two legs can
+   independently land on different exchanges even after the Binance-451 fix, if
+   Binance 451s again only transiently. `source_mismatched_trade_ids`/
+   `exclude_mismatched_sources` pair each ENTRY with its EXIT (chronological, one
+   open position at a time -- confirmed true for every ENTRY/EXIT-logging strategy in
+   this codebase today) and drop both legs of any pair whose recorded sources
+   disagree.
+
+2. `data_source is None` is itself now grounds for exclusion too, not just the
+   timestamp cutoff above. That cutoff was inferred from a candle_timestamp signature
+   because process_orderflow_imbalance didn't log data_source AT ALL until this same
+   investigation's own fix -- Task 1 wired the column going forward, but that fix has
+   not yet been deployed (this is still an unmerged branch), so as of this edit,
+   EVERY existing ORDERFLOW_IMBALANCE row -- including the ones the timestamp cutoff
+   alone considered clean -- has data_source = NULL. A "clean" row resting on
+   inference rather than a directly recorded source value doesn't meet this project's
+   evidence-based bar (CLAUDE.md). `exclude_unrecorded_source` enforces this.
+   `QUARANTINE_CUTOFFS` is kept (not removed) as an independent, incident-documented
+   signal -- for ORDERFLOW_IMBALANCE specifically it's currently fully subsumed by the
+   data_source requirement (identical exclusion set today), but it remains meaningful
+   for any future incident where a source WAS recorded yet is still known-bad for a
+   specific window.
+
+`list_clean_execution_log` applies exclude_quarantined -> exclude_mismatched_sources ->
+exclude_unrecorded_source, in that order -- the mismatch check must run before the
+unrecorded-source filter, since it needs every leg still present to pair correctly.
 """
 from __future__ import annotations
 
@@ -141,12 +163,21 @@ def exclude_mismatched_sources(rows: Iterable[ExecutionLogRow]) -> list[Executio
     return [row for row in rows if row.id not in mismatched_ids]
 
 
+def exclude_unrecorded_source(rows: Iterable[ExecutionLogRow]) -> list[ExecutionLogRow]:
+    """Drops every row whose data_source is None -- "probably fine by inference" is
+    not "confirmed clean" (see this module's docstring, follow-up layer 2)."""
+    return [row for row in rows if row.data_source is not None]
+
+
 def list_clean_execution_log(
     db_path: Path = DEFAULT_DB_PATH, asset: str | None = None, strategy: str | None = None
 ) -> list[ExecutionLogRow]:
     """list_execution_log's quarantine-aware counterpart -- the entrypoint any future
     statistical-verification harness should call instead of list_execution_log
     directly. Applies, in order: the documented incident-cutoff (exclude_quarantined),
-    then the entry/exit source-agreement check (exclude_mismatched_sources)."""
+    the entry/exit source-agreement check (exclude_mismatched_sources -- run before the
+    next step so pairing still sees every leg), then the recorded-source requirement
+    (exclude_unrecorded_source)."""
     rows = exclude_quarantined(list_execution_log(db_path=db_path, asset=asset, strategy=strategy))
-    return exclude_mismatched_sources(rows)
+    rows = exclude_mismatched_sources(rows)
+    return exclude_unrecorded_source(rows)
