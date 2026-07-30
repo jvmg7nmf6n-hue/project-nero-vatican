@@ -37,13 +37,14 @@ SCHEMA_VERSION = 1
 _CUMULATIVE_INT_FIELDS = (
     "hypotheses_generated", "duplicates_skipped", "too_slow_rejected", "unmeasurable_rejected",
     "tested", "survived", "promising_watchlist", "died", "untestable", "no_candles_available",
-    "llm_calls_made",
+    "llm_calls_made", "web_hypotheses_generated", "web_llm_calls_made",
 )
 
 
 def _empty_cumulative() -> dict:
     cumulative = {field: 0 for field in _CUMULATIVE_INT_FIELDS}
     cumulative["total_llm_cost_usd"] = 0.0
+    cumulative["web_total_llm_cost_usd"] = 0.0
     cumulative["survival_rate"] = None
     return cumulative
 
@@ -97,6 +98,16 @@ def _run_entry(result, now: datetime) -> dict:
         "llm_calls_made": result.llm_calls_made,
         "total_llm_cost_usd": result.total_llm_cost_usd,
         "cost_limit_hit": result.cost_limit_hit,
+        # Web-sourced discovery channel breakdown -- additive, not a
+        # replacement for the combined fields above (see
+        # pipeline.PipelineRunResult's own web_* fields, which this mirrors).
+        # Without this, the scanner-vs-web split existed only in the process's
+        # own stdout for the run's duration and was gone the moment the
+        # console log scrolled away.
+        "web_hypotheses_generated": result.web_hypotheses_generated,
+        "web_llm_calls_made": result.web_llm_calls_made,
+        "web_total_llm_cost_usd": result.web_total_llm_cost_usd,
+        "web_cost_limit_hit": result.web_cost_limit_hit,
     }
 
 
@@ -110,10 +121,12 @@ def record_run(result, path: Path = DEFAULT_PERFORMANCE_PATH, now: datetime | No
     run_entry = _run_entry(result, now)
     if result.enabled:
         for field in ("hypotheses_generated", "duplicates_skipped", "too_slow_rejected", "unmeasurable_rejected",
-                       "survived", "promising_watchlist", "died", "untestable", "no_candles_available", "llm_calls_made"):
+                       "survived", "promising_watchlist", "died", "untestable", "no_candles_available", "llm_calls_made",
+                       "web_hypotheses_generated", "web_llm_calls_made"):
             cumulative[field] = cumulative.get(field, 0) + getattr(result, field)
         cumulative["tested"] = cumulative.get("tested", 0) + run_entry["tested"]
         cumulative["total_llm_cost_usd"] = cumulative.get("total_llm_cost_usd", 0.0) + result.total_llm_cost_usd
+        cumulative["web_total_llm_cost_usd"] = cumulative.get("web_total_llm_cost_usd", 0.0) + result.web_total_llm_cost_usd
 
         if cumulative["tested"] > 0:
             cumulative["survival_rate"] = (cumulative["survived"] + cumulative["promising_watchlist"]) / cumulative["tested"]
