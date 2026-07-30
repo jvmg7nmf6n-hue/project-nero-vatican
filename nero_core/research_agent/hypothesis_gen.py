@@ -244,11 +244,31 @@ Return STRICT JSON only, with exactly these keys and no others:
 Do not include any field other than these ten."""
 
 
+class ResponseParseError(Exception):
+    """Raised when a Claude Messages API response comes back 2xx -- meaning
+    Anthropic PROCESSED and BILLED the request -- but this module can't
+    extract a usable hypothesis from it (no text block, or the text isn't
+    valid JSON). Carries `usage` (the response's own token counts, read
+    BEFORE either parsing step that can raise) so the caller can still
+    record the real cost of a billed-but-unusable call, instead of silently
+    reporting $0.00 for a call Anthropic charged for. Without this, a 200
+    response with malformed output looked identical -- in cost terms -- to a
+    call that never reached Anthropic at all (see this module's own TIER 4
+    diagnostics finding: total_llm_cost_usd is only ever incremented on a
+    fully successful parse)."""
+
+    def __init__(self, message: str, usage: dict):
+        super().__init__(message)
+        self.usage = usage
+
+
 def _call_claude(prompt: str, api_key: str, params: HypothesisGenParameters) -> tuple[dict, dict]:
-    """Returns (parsed_json_data, usage_dict). Raises on any transport/parse
-    failure -- the caller (generate_hypotheses) is responsible for catching
-    and recording the error, matching this project's existing per-call error
-    handling convention (news_sentiment_llm.analyze_headline)."""
+    """Returns (parsed_json_data, usage_dict). Raises requests.RequestException
+    on a transport/HTTP-status failure (nothing billed, no usage available) or
+    ResponseParseError on a 2xx response this module can't parse (billed --
+    carries `usage`) -- the caller (generate_hypotheses) is responsible for
+    catching and recording either, matching this project's existing per-call
+    error handling convention (news_sentiment_llm.analyze_headline)."""
     response = requests.post(
         params.claude_api_url,
         headers={
@@ -265,9 +285,12 @@ def _call_claude(prompt: str, api_key: str, params: HypothesisGenParameters) -> 
     )
     response.raise_for_status()
     payload = response.json()
-    text = _extract_text(payload.get("content")).strip()
-    data = json.loads(_strip_markdown_json(text))
     usage = payload.get("usage") or {}
+    try:
+        text = _extract_text(payload.get("content")).strip()
+        data = json.loads(_strip_markdown_json(text))
+    except (NoTextBlockError, json.JSONDecodeError) as exc:
+        raise ResponseParseError(f"{exc.__class__.__name__}: {exc}", usage) from exc
     return data, usage
 
 
@@ -413,8 +436,21 @@ def generate_hypotheses(
 
         try:
             data, usage = _call_claude(_build_prompt(finding, failure_patterns), api_key, params)
-        except (requests.RequestException, NoTextBlockError, KeyError, ValueError, json.JSONDecodeError) as exc:
-            calls_made += 1  # the attempt still consumed this run's call budget
+        except ResponseParseError as exc:
+            # Item #4/TIER 4: this response WAS billed by Anthropic (2xx,
+            # processed) even though it couldn't be used -- record the real
+            # cost instead of letting it silently disappear as $0.00.
+            calls_made += 1
+            billed_cost = _call_cost_usd(exc.usage, params)
+            total_cost += billed_cost
+            errors.append({
+                "scan_finding": finding.description,
+                "message": f"{exc} (call WAS billed: ${billed_cost:.6f} -- Anthropic processed "
+                           f"this request even though the response couldn't be used)",
+            })
+            continue
+        except (requests.RequestException, KeyError, ValueError) as exc:
+            calls_made += 1  # the attempt still consumed this run's call budget; nothing billed
             errors.append({"scan_finding": finding.description, "message": f"{exc.__class__.__name__}: {exc}"})
             continue
 

@@ -168,6 +168,53 @@ class GenerateHypothesesTest(unittest.TestCase):
         self.assertIn("ConnectionError", result.errors[1]["message"])
         self.assertEqual(result.hypotheses, [])
 
+    def test_malformed_json_response_still_records_the_real_billed_cost(self) -> None:
+        # TIER 4 / item #4: a 2xx response IS billed by Anthropic even if the
+        # text inside it isn't valid JSON -- previously this was recorded as
+        # $0.00, identical to a call that never reached Anthropic at all.
+        payload = {
+            "content": [{"type": "text", "text": "not valid json at all"}],
+            "usage": {"input_tokens": 1000, "output_tokens": 500},
+        }
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse(payload)):
+            result = generate_hypotheses([_finding()], [], "fake-key", now=NOW)
+
+        expected_cost = (1000 / 1_000_000.0) * 2.00 + (500 / 1_000_000.0) * 10.00
+        self.assertEqual(result.hypotheses, [])
+        self.assertAlmostEqual(result.total_cost_usd, expected_cost, places=8)
+        self.assertGreater(result.total_cost_usd, 0.0)
+        self.assertIn("call WAS billed", result.errors[-1]["message"])
+        self.assertIn(f"${expected_cost:.6f}", result.errors[-1]["message"])
+
+    def test_no_text_block_response_still_records_the_real_billed_cost(self) -> None:
+        payload = {
+            "content": [{"type": "thinking", "thinking": "..."}],
+            "usage": {"input_tokens": 200, "output_tokens": 50},
+        }
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse(payload)):
+            result = generate_hypotheses([_finding()], [], "fake-key", now=NOW)
+
+        expected_cost = (200 / 1_000_000.0) * 2.00 + (50 / 1_000_000.0) * 10.00
+        self.assertAlmostEqual(result.total_cost_usd, expected_cost, places=8)
+        self.assertGreater(result.total_cost_usd, 0.0)
+        self.assertIn("call WAS billed", result.errors[-1]["message"])
+
+    def test_transport_failure_never_reports_a_fabricated_cost(self) -> None:
+        # Regression guard: a genuine transport failure (nothing billed, no
+        # usage available at all) must NOT be conflated with the billed-but-
+        # unparseable case above -- it must stay $0.00, not get some
+        # fabricated non-zero figure.
+        import requests as requests_module
+
+        with patch(
+            "nero_core.research_agent.hypothesis_gen.requests.post",
+            side_effect=[_FakeResponse({}, status_code=200), requests_module.ConnectionError("down")],
+        ):
+            result = generate_hypotheses([_finding()], [], "fake-key", now=NOW)
+
+        self.assertEqual(result.total_cost_usd, 0.0)
+        self.assertNotIn("call WAS billed", result.errors[-1]["message"])
+
     def test_within_run_duplicates_are_also_caught(self) -> None:
         # two findings that map to the SAME (finding_type, asset, timeframe) key --
         # the second must be skipped even though nothing was on disk beforehand.
