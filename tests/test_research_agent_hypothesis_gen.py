@@ -154,12 +154,66 @@ class GenerateHypothesesTest(unittest.TestCase):
     def test_api_error_is_recorded_and_counts_against_call_budget(self) -> None:
         import requests as requests_module
 
+        # Every requests.post call (preflight AND the real per-finding call)
+        # raises the same ConnectionError here -- so this now records TWO
+        # error notes: the preflight's own non-fatal note (item #3's fix --
+        # previously silently swallowed with zero trace) plus the real call's
+        # failure. llm_calls_made only counts the real per-finding attempt.
         with patch("nero_core.research_agent.hypothesis_gen.requests.post", side_effect=requests_module.ConnectionError("down")):
             result = generate_hypotheses([_finding()], [], "fake-key", now=NOW)
 
         self.assertEqual(result.llm_calls_made, 1)
-        self.assertEqual(len(result.errors), 1)
+        self.assertEqual(len(result.errors), 2)
+        self.assertIn("preflight key check did not complete", result.errors[0]["message"])
+        self.assertIn("ConnectionError", result.errors[1]["message"])
         self.assertEqual(result.hypotheses, [])
+
+    def test_malformed_json_response_still_records_the_real_billed_cost(self) -> None:
+        # TIER 4 / item #4: a 2xx response IS billed by Anthropic even if the
+        # text inside it isn't valid JSON -- previously this was recorded as
+        # $0.00, identical to a call that never reached Anthropic at all.
+        payload = {
+            "content": [{"type": "text", "text": "not valid json at all"}],
+            "usage": {"input_tokens": 1000, "output_tokens": 500},
+        }
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse(payload)):
+            result = generate_hypotheses([_finding()], [], "fake-key", now=NOW)
+
+        expected_cost = (1000 / 1_000_000.0) * 2.00 + (500 / 1_000_000.0) * 10.00
+        self.assertEqual(result.hypotheses, [])
+        self.assertAlmostEqual(result.total_cost_usd, expected_cost, places=8)
+        self.assertGreater(result.total_cost_usd, 0.0)
+        self.assertIn("call WAS billed", result.errors[-1]["message"])
+        self.assertIn(f"${expected_cost:.6f}", result.errors[-1]["message"])
+
+    def test_no_text_block_response_still_records_the_real_billed_cost(self) -> None:
+        payload = {
+            "content": [{"type": "thinking", "thinking": "..."}],
+            "usage": {"input_tokens": 200, "output_tokens": 50},
+        }
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse(payload)):
+            result = generate_hypotheses([_finding()], [], "fake-key", now=NOW)
+
+        expected_cost = (200 / 1_000_000.0) * 2.00 + (50 / 1_000_000.0) * 10.00
+        self.assertAlmostEqual(result.total_cost_usd, expected_cost, places=8)
+        self.assertGreater(result.total_cost_usd, 0.0)
+        self.assertIn("call WAS billed", result.errors[-1]["message"])
+
+    def test_transport_failure_never_reports_a_fabricated_cost(self) -> None:
+        # Regression guard: a genuine transport failure (nothing billed, no
+        # usage available at all) must NOT be conflated with the billed-but-
+        # unparseable case above -- it must stay $0.00, not get some
+        # fabricated non-zero figure.
+        import requests as requests_module
+
+        with patch(
+            "nero_core.research_agent.hypothesis_gen.requests.post",
+            side_effect=[_FakeResponse({}, status_code=200), requests_module.ConnectionError("down")],
+        ):
+            result = generate_hypotheses([_finding()], [], "fake-key", now=NOW)
+
+        self.assertEqual(result.total_cost_usd, 0.0)
+        self.assertNotIn("call WAS billed", result.errors[-1]["message"])
 
     def test_within_run_duplicates_are_also_caught(self) -> None:
         # two findings that map to the SAME (finding_type, asset, timeframe) key --
@@ -208,18 +262,29 @@ class ValidateApiKeyDirectTest(unittest.TestCase):
 
     def test_200_does_not_raise(self) -> None:
         with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse({}, status_code=200)):
-            validate_api_key("fake-key")  # must not raise
+            note = validate_api_key("fake-key")  # must not raise
+        self.assertIsNone(note)
 
     def test_other_error_status_does_not_raise(self) -> None:
         # a 429/500/etc. is not a "key rejected" signal -- only 401 is
         with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse({}, status_code=429)):
-            validate_api_key("fake-key")  # must not raise
+            note = validate_api_key("fake-key")  # must not raise
+        self.assertIsNone(note)
 
-    def test_network_error_does_not_raise(self) -> None:
+    def test_network_error_does_not_raise_but_returns_a_descriptive_note(self) -> None:
+        # Item #3's fix: previously a bare `return` here left ZERO trace
+        # anywhere -- a network failure on the preflight probe was
+        # indistinguishable from "everything's fine." Must not raise (the
+        # real per-finding calls still get their own chance), but the
+        # non-None return is exactly what makes this failure visible now.
         import requests as requests_module
 
         with patch("nero_core.research_agent.hypothesis_gen.requests.post", side_effect=requests_module.ConnectionError("down")):
-            validate_api_key("fake-key")  # must not raise -- let the real calls surface it
+            note = validate_api_key("fake-key")  # must not raise -- let the real calls surface it
+
+        self.assertIsNotNone(note)
+        self.assertIn("ConnectionError", note)
+        self.assertIn("down", note)
 
     def test_the_key_value_never_appears_in_the_raised_message(self) -> None:
         secret = "sk-ant-TESTSECRET-do-not-leak"
@@ -275,7 +340,13 @@ class PreflightIntegrationTest(unittest.TestCase):
             result = generate_hypotheses([_finding()], [], "fake-key", now=NOW)
 
         self.assertEqual(len(result.hypotheses), 1)
-        self.assertEqual(result.errors, [])
+        # Not fatal (the real call still ran and succeeded) but no longer
+        # silent either -- item #3's fix records a non-fatal preflight note
+        # instead of the previous bare `return` that left zero trace.
+        self.assertEqual(len(result.errors), 1)
+        self.assertEqual(result.errors[0]["scan_finding"], "(preflight key validation)")
+        self.assertIn("ConnectionError", result.errors[0]["message"])
+        self.assertIn("preflight network blip", result.errors[0]["message"])
 
 
 class PersistHypothesesTest(unittest.TestCase):

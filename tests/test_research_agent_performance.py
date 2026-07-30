@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import io
 import shutil
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,6 +18,8 @@ NOW = datetime(2026, 7, 29, tzinfo=timezone.utc)
 class _FakeResult:
     enabled: bool
     reason: str = ""
+    status: str = "clean"
+    errors: list = field(default_factory=list)
     hypotheses_generated: int = 0
     duplicates_skipped: int = 0
     llm_calls_made: int = 0
@@ -64,6 +68,23 @@ class RecordRunTest(unittest.TestCase):
         self.assertEqual(len(state["runs"]), 1)
         self.assertEqual(state["runs"][0]["run_at"], NOW.isoformat())
 
+    def test_status_and_errors_are_persisted_into_the_run_entry(self) -> None:
+        # A failed run must leave a durable record here, not just console
+        # output that scrolls away once the Actions log closes.
+        errors = [{"phase": "hypothesis_gen", "context": "(preflight key validation)", "message": "401 rejected"}]
+        result = _FakeResult(enabled=True, status="error", errors=errors, hypotheses_generated=0)
+        state = record_run(result, self.path, now=NOW)
+
+        self.assertEqual(state["runs"][0]["status"], "error")
+        self.assertEqual(state["runs"][0]["errors"], errors)
+
+    def test_clean_run_persists_empty_errors_list(self) -> None:
+        result = _FakeResult(enabled=True, status="clean", hypotheses_generated=0)
+        state = record_run(result, self.path, now=NOW)
+
+        self.assertEqual(state["runs"][0]["status"], "clean")
+        self.assertEqual(state["runs"][0]["errors"], [])
+
     def test_cumulative_accumulates_across_multiple_runs(self) -> None:
         record_run(_FakeResult(enabled=True, hypotheses_generated=3, survived=1, died=1), self.path, now=NOW)
         state = record_run(_FakeResult(enabled=True, hypotheses_generated=2, survived=1, died=1), self.path, now=NOW)
@@ -89,11 +110,29 @@ class RecordRunTest(unittest.TestCase):
         self.assertIsNone(state["cumulative"]["survival_rate"])
 
     def test_load_missing_file_returns_a_well_formed_empty_state(self) -> None:
-        state = load_performance(self.tmp / "does_not_exist.json")
+        err = io.StringIO()
+        with redirect_stderr(err):
+            state = load_performance(self.tmp / "does_not_exist.json")
         self.assertEqual(state["schema_version"], 1)
         self.assertEqual(state["runs"], [])
         for key in ("hypotheses_generated", "survived", "died", "tested"):
             self.assertEqual(state["cumulative"][key], 0)
+        self.assertEqual(err.getvalue(), "")  # missing is benign -- nothing printed
+
+    def test_corrupted_file_prints_a_loud_error_and_resets_to_empty(self) -> None:
+        # Item #10 from the diagnostics audit: previously silent -- the
+        # Agent's entire cumulative career record could vanish with zero
+        # trace on a corrupted read.
+        self.path.write_text("{not valid json")
+        err = io.StringIO()
+        with redirect_stderr(err):
+            state = load_performance(self.path)
+
+        self.assertEqual(state["runs"], [])
+        self.assertIsNone(state["cumulative"]["survival_rate"])
+        self.assertIn("ERROR", err.getvalue())
+        self.assertIn(str(self.path), err.getvalue())
+        self.assertIn("corrupted", err.getvalue())
 
 
 if __name__ == "__main__":

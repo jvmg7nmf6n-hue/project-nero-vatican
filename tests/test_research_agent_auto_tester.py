@@ -129,6 +129,39 @@ class UntestableDetectionTest(unittest.TestCase):
         result = test_hypothesis(hypothesis, candles)
         self.assertEqual(result.verdict, VERDICT_UNTESTABLE)
 
+    def test_malformed_generated_at_is_untestable_never_defaulted_to_now(self) -> None:
+        # HARD TEST: a malformed generated_at must never silently fall back to
+        # now() -- that would be the most PERMISSIVE possible lookahead cutoff,
+        # defeating the frequency gate's own no-lookahead guarantee. Frequent
+        # trigger so a bug that DID fall back to now() would otherwise pass the
+        # gate (FAST) and reach the harness -- proving this is a real reject,
+        # not an accidental TOO_SLOW/UNMEASURABLE from an unrelated cause.
+        spikes = {i: 500.0 for i in range(50, 900, 20)}
+        candles = _flat_noise_candles(1000, spike_indices=spikes)
+        hypothesis = _hypothesis(generated_at="not-a-real-timestamp")
+
+        with patch("nero_core.research_agent.auto_tester.measure_entry_frequency") as mock_gate:
+            result = test_hypothesis(hypothesis, candles)
+
+        mock_gate.assert_not_called()  # never even reaches the frequency gate
+        self.assertEqual(result.verdict, VERDICT_UNTESTABLE)
+        self.assertEqual(result.review_status, REVIEW_UNTESTABLE)
+        self.assertIn("generated_at", result.reason)
+        self.assertIsNone(result.train)
+        self.assertIsNone(result.test)
+
+    def test_missing_generated_at_is_untestable_never_defaulted_to_now(self) -> None:
+        spikes = {i: 500.0 for i in range(50, 900, 20)}
+        candles = _flat_noise_candles(1000, spike_indices=spikes)
+        hypothesis = _hypothesis(generated_at=None)
+
+        with patch("nero_core.research_agent.auto_tester.measure_entry_frequency") as mock_gate:
+            result = test_hypothesis(hypothesis, candles)
+
+        mock_gate.assert_not_called()
+        self.assertEqual(result.verdict, VERDICT_UNTESTABLE)
+        self.assertEqual(result.review_status, REVIEW_UNTESTABLE)
+
 
 class RealBacktestVerdictTest(unittest.TestCase):
     def test_strong_deterministic_uptrend_survives_or_watchlists_not_dies(self) -> None:

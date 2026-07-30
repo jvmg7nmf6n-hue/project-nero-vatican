@@ -219,6 +219,32 @@ class RunScanTest(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_malformed_candle_file_is_recorded_in_scan_errors_not_silently_dropped(self) -> None:
+        # Item #2 from the diagnostics audit: previously _asset_series_map's
+        # bare `continue` on a malformed candle file left ZERO record anywhere
+        # -- not even in scan_errors. A single corrupt file could silently
+        # vanish from every scan with no trace.
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            candles_dir = tmp / "candles"
+            candles_dir.mkdir()
+            (candles_dir / "BROKEN_1h.json").write_text("not valid json at all")
+            (tmp / "quant_metrics.json").write_text(json.dumps({"metrics": []}))
+            (tmp / "quant_cross_asset.json").write_text(json.dumps({"volatility_regimes": []}))
+
+            result = run_scan(
+                candles_dir=candles_dir,
+                quant_metrics_path=tmp / "quant_metrics.json",
+                quant_cross_asset_path=tmp / "quant_cross_asset.json",
+                strategies_path=tmp / "strategies.json",
+                state_path=tmp / "state.json",
+                now=NOW,
+            )
+
+            self.assertTrue(any("BROKEN_1h.json" in e["source"] for e in result.scan_errors))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()
