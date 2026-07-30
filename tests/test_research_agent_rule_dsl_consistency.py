@@ -140,6 +140,71 @@ def _ma_crossover_candles(flat: int = 70, growth: int = 60) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+ADX_ENTRY_RULE = {"conditions": [{"field": "adx14", "op": "cross_below", "value": 25.0}]}
+# Generous exit -- irrelevant to this test, which only checks ENTRY agreement.
+ADX_EXIT_PLAN = {"stop_atr_multiple": 3.0, "target_r_multiple": 3.0, "max_holding_hours": 5000.0}
+
+
+def _trend_then_range_candles(trend: int = 60, ranging: int = 60) -> pd.DataFrame:
+    """`trend` candles of sustained directional movement (drives ADX up, well
+    past 25) followed by `ranging` candles of small oscillation around a flat
+    level (drives ADX back down) -- the same "verified empirically before
+    writing this test" convention as _ma_crossover_candles above: ADX crossing
+    below 25 is exactly the regime-entry condition RMR_LONG_ONLY_EURUSD_4H
+    itself depends on, so this exercises the real mechanism, not a synthetic
+    stand-in for it."""
+    rows = []
+    close = 100.0
+    for i in range(trend):
+        close *= 1.006
+        rows.append({"close_time": START_MS + i * HOUR_MS, "close": close, "high": close + 0.3, "low": close - 0.3, "volume": 1.0})
+    for j in range(ranging):
+        i = trend + j
+        close = close * (1.0 + 0.0006 * ((j % 4) - 1.5))  # tiny back-and-forth, near-zero net drift
+        rows.append({"close_time": START_MS + i * HOUR_MS, "close": close, "high": close + 0.3, "low": close - 0.3, "volume": 1.0})
+    return pd.DataFrame(rows)
+
+
+class AdxConsistencyTest(unittest.TestCase):
+    """Same gate/tester agreement guarantee, exercised for adx14 (added for
+    RMR_LONG_ONLY_EURUSD_4H) -- proves the ADX wiring didn't create a second
+    code path either module could silently diverge on, exactly like
+    FieldVsFieldConsistencyTest already proves for a moving-average
+    crossover."""
+
+    def test_adx_regime_entry_trigger_and_timestamps_agree_between_gate_and_tester(self) -> None:
+        candles = _trend_then_range_candles()
+        generated_at = datetime.fromtimestamp((START_MS + len(candles) * HOUR_MS) / 1000, tz=timezone.utc)
+
+        gate_result = measure_entry_frequency(candles, ADX_ENTRY_RULE, generated_at)
+
+        rule = parse_structured_rule(ADX_ENTRY_RULE)
+        exit_plan = parse_exit_plan(ADX_EXIT_PLAN)
+        frame = compute_indicator_frame(candles)
+        canonical_timestamps = find_trigger_timestamps(frame, rule)
+
+        # sanity: the trend->range design actually produced at least one real
+        # ADX-below-25 regime entry -- otherwise the equality checks below would
+        # be vacuously true (0 == 0) rather than exercising real agreement.
+        self.assertGreater(len(canonical_timestamps), 0)
+        self.assertEqual(gate_result.triggers_counted, len(canonical_timestamps))
+
+        params = MeanReversionParameters(max_holding_hours=exit_plan.max_holding_hours)
+        executed_entry_timestamps: list[int] = []
+        real_size_entry = auto_tester._size_entry_for_hypothesis
+
+        def _spy(candle, state, p, ep):
+            trade = real_size_entry(candle, state, p, ep)
+            if trade is not None:
+                executed_entry_timestamps.append(trade.open_close_time)
+            return trade
+
+        with patch("nero_core.research_agent.auto_tester._size_entry_for_hypothesis", side_effect=_spy):
+            auto_tester.run_backtest(frame, rule, exit_plan, params)
+
+        self.assertEqual(executed_entry_timestamps, canonical_timestamps)
+
+
 class FieldVsFieldConsistencyTest(unittest.TestCase):
     def test_ma_crossover_trigger_and_entry_timestamps_agree_between_gate_and_tester(self) -> None:
         candles = _ma_crossover_candles()

@@ -24,7 +24,7 @@ RuleAmbiguousError (unsupported field, unsupported op, missing/empty
 `conditions`, a non-numeric threshold). Callers MUST route that to
 UNMEASURABLE (frequency_gate) / UNTESTABLE (auto_tester) -- never silently
 fall back to a "closest reasonable" interpretation of an ambiguous rule. This
-is deliberately narrow (9 fields, 7 ops) rather than extensible-by-guessing.
+is deliberately narrow (10 fields, 7 ops) rather than extensible-by-guessing.
 
 FIELD-VS-FIELD COMPARISON (added 2026-07-30, after a real diagnostic run
 found the original field-vs-constant-only design couldn't express even a
@@ -61,12 +61,21 @@ from dataclasses import dataclass
 import pandas as pd
 
 from nero_core.strategies.mean_reversion import rsi as _mean_reversion_rsi
+from nero_core.strategies.range_mean_reversion import adx as _range_mean_reversion_adx
 
 # rsi14 added 2026-07-30: RSI is MEAN_REVERSION's own core indicator (this
 # project's first-ever ported strategy) -- its earlier absence meant any
 # RSI-based hypothesis got rejected UNMEASURABLE, indistinguishable from a
 # genuinely ambiguous rule, purely because of an incomplete field list.
-ALLOWED_FIELDS = ("close", "ma20", "ma50", "ma200", "zscore20", "atr14", "rsi14", "ret_1", "volume")
+#
+# adx14 added 2026-07-30 (RMR_LONG_ONLY_EURUSD_4H blocker): reuses
+# range_mean_reversion.adx() UNCHANGED -- the canonical ADX implementation in
+# this codebase (already reused as-is by trend_pullback_adx_gated.py). Unlike
+# rsi14, adx() has no .fillna() step to undo during warmup -- every rolling()
+# call in it leaves genuine NaN until enough history exists, which already
+# matches this module's own "warmup = NaN = does not fire" convention (see
+# evaluate_condition), so no re-masking is needed here.
+ALLOWED_FIELDS = ("close", "ma20", "ma50", "ma200", "zscore20", "atr14", "rsi14", "adx14", "ret_1", "volume")
 ALLOWED_OPS = ("gt", "gte", "lt", "lte", "eq", "cross_above", "cross_below")
 
 RSI_PERIOD = 14
@@ -186,7 +195,7 @@ def parse_exit_plan(raw: object) -> ExitPlan:
 
 
 def compute_indicator_frame(candles: pd.DataFrame) -> pd.DataFrame:
-    """Adds ma20/ma50/ma200/zscore20/atr14/rsi14/ret_1 columns to a sorted
+    """Adds ma20/ma50/ma200/zscore20/atr14/rsi14/adx14/ret_1 columns to a sorted
     copy of `candles` (which must carry close_time (epoch ms), close, high,
     low -- volume is optional, defaulted to NaN if absent). Every added
     column is a trailing rolling computation ending AT its own row -- no
@@ -236,6 +245,10 @@ def compute_indicator_frame(candles: pd.DataFrame) -> pd.DataFrame:
 
     enough_history_for_rsi = close.rolling(RSI_PERIOD + 1).count() >= RSI_PERIOD + 1
     frame["rsi14"] = _mean_reversion_rsi(close, RSI_PERIOD).where(enough_history_for_rsi)
+
+    # adx() reads frame["high"]/["low"]/["close"] directly and assumes ascending
+    # time order -- both already true of `frame` at this point (sorted above).
+    frame["adx14"] = _range_mean_reversion_adx(frame, period=14)
 
     frame["volume"] = frame["volume"].astype(float) if "volume" in frame.columns else float("nan")
 
