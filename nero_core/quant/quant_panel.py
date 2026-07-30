@@ -47,7 +47,18 @@ MIN_OBSERVATIONS = 30
 # asset class ever reuses "1day" for a 24/7 market (or "24h" for a 5-day one) this
 # table would need an asset-class-aware key instead of a bare timeframe string --
 # flagged here rather than silently assumed to hold forever.
+#
+# "4h" (added for EUR/USD, RMR_LONG_ONLY_EURUSD_4H) is the FIRST entry in this
+# table sized for a 24/5 market rather than a 24/7 or trading-day one: forex
+# trades continuously Sunday open to Friday close (see forex_data.py's own "24/5
+# MARKET GAP" docstring note) -- 5 days x 24h = 120 tradeable hours/week, / 4h
+# per candle = 30 candles/week x 52 weeks = 1560/year. Same caveat as above
+# applies with extra force here: if a 24/7 asset (e.g. crypto) ever gets its own
+# native "4h" export under this same bare-string key, 1560 would be WRONG for it
+# (a 24/7 4h asset trades 6 candles/day x 365 = 2190/year) -- this key is
+# forex-only until this table becomes asset-class-aware.
 TIMEFRAME_PERIODS_PER_YEAR: dict[str, int] = {
+    "4h": 1560,   # forex, 24/5 -- see note above; NOT valid for a 24/7 4h asset
     "12h": 730,   # crypto, 24/7: 2 candles/day x 365
     "24h": 365,   # crypto/metals, 24/7
     "1day": 252,  # stocks, trading days only

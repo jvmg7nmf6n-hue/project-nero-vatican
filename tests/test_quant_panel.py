@@ -192,6 +192,12 @@ class PeriodsPerYearLookupTest(unittest.TestCase):
         self.assertEqual(qp.periods_per_year_for_timeframe("1day"), 252)
         self.assertEqual(qp.periods_per_year_for_timeframe("1week"), 52)
 
+    def test_4h_is_sized_for_a_24_5_market_not_24_7(self) -> None:
+        # Forex-only key (see this table's own docstring caveat): 5 tradeable
+        # days/week x 24h = 120h, / 4h per candle = 30 candles/week x 52 = 1560.
+        # NOT the 2190/year a 24/7 4h asset (6 candles/day x 365) would need.
+        self.assertEqual(qp.periods_per_year_for_timeframe("4h"), 1560)
+
     def test_unknown_timeframe_returns_none_not_a_guess(self) -> None:
         self.assertIsNone(qp.periods_per_year_for_timeframe("snapshot"))
         self.assertIsNone(qp.periods_per_year_for_timeframe("3day"))

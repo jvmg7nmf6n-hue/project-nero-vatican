@@ -92,7 +92,7 @@ class CandlePair:
 
 
 # Derived from docs/site_data/strategies.json's live roster -- see the module
-# docstring for exactly what was excluded and why. 17 pairs.
+# docstring for exactly what was excluded and why. 18 pairs.
 #
 # EXCEPTION (Day 7): BTC/12h has no live roster entry as of this commit -- added
 # ahead of one, per explicit instruction, using the identical Binance 12h fetch
@@ -100,6 +100,13 @@ class CandlePair:
 # actually registered; the strategy detail page has no route that reaches this
 # file yet (fetchCandleData is keyed off a roster entry's own timeframe), so this
 # is intentionally inert data, not a claim that a BTC/12h config is live.
+#
+# EXCEPTION (added for RMR_LONG_ONLY_EURUSD_4H): EUR/USD/4h has no live roster
+# entry either, same justification as BTC/12h above -- added ahead of one so
+# this candidate strategy has real candle history to develop/test against.
+# fetch_forex_ohlcv's own TWELVE_DATA_NATIVE_INTERVAL already has a native "4h"
+# entry (see nero_core/data_sources/forex_data.py) -- no resampling needed here,
+# unlike GOLD's 12h (Twelve Data has no native 12h for metals).
 IN_SCOPE_PAIRS: tuple[CandlePair, ...] = (
     CandlePair("BTC", "24h", "24h", "crypto_metals"),
     CandlePair("BTC", "12h", "12h", "crypto_metals"),
@@ -109,6 +116,7 @@ IN_SCOPE_PAIRS: tuple[CandlePair, ...] = (
     CandlePair("SILVER", "1week", "1week", "crypto_metals"),
     CandlePair("SILVER", "24h", "24h", "crypto_metals"),
     CandlePair("EUR/USD", "1week", "1week", "forex"),
+    CandlePair("EUR/USD", "4h", "4h", "forex"),
     CandlePair("GBP/USD", "1week", "1week", "forex"),
     CandlePair("USD/JPY", "1week", "1week", "forex"),
     CandlePair("AAPL", "1day", "24h", "stock"),
@@ -179,6 +187,8 @@ def _already_fresh(existing: datetime | None, cadence_timeframe: str, now: datet
         return existing.date() == now.date()
     if cadence_timeframe == "12h":
         return (existing.date(), existing.hour // 12) == (now.date(), now.hour // 12)
+    if cadence_timeframe == "4h":
+        return (existing.date(), existing.hour // 4) == (now.date(), now.hour // 4)
     return False
 
 
