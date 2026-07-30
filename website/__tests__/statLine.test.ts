@@ -51,4 +51,30 @@ describe("deriveStatLine", () => {
     const stats = [makeStats({ resolved_trades: 5, win_rate: null })];
     expect(deriveStatLine(makeEntry(), stats)).toBe("5 resolved trades");
   });
+
+  it("shows a pending-verification state when trades happened but none are confirmed clean", () => {
+    const stats = [makeStats({ resolved_trades: 0, unverified_trades: 3 })];
+    expect(deriveStatLine(makeEntry(), stats)).toBe("3 trades pending source verification");
+  });
+
+  it("uses singular 'trade' for exactly 1 unverified trade", () => {
+    const stats = [makeStats({ resolved_trades: 0, unverified_trades: 1 })];
+    expect(deriveStatLine(makeEntry(), stats)).toBe("1 trade pending source verification");
+  });
+
+  it("still returns awaiting-first-signal when both resolved and unverified are 0", () => {
+    const stats = [makeStats({ resolved_trades: 0, unverified_trades: 0 })];
+    expect(deriveStatLine(makeEntry(), stats)).toBe(AWAITING_FIRST_SIGNAL);
+  });
+
+  it("treats a missing unverified_trades field (older cached export) as 0", () => {
+    const stats = [makeStats({ resolved_trades: 0 })];
+    delete (stats[0] as { unverified_trades?: number }).unverified_trades;
+    expect(deriveStatLine(makeEntry(), stats)).toBe(AWAITING_FIRST_SIGNAL);
+  });
+
+  it("prefers the resolved-trades line once at least one trade is confirmed clean, even with unverified ones too", () => {
+    const stats = [makeStats({ resolved_trades: 2, win_rate: 0.5, unverified_trades: 1 })];
+    expect(deriveStatLine(makeEntry(), stats)).toBe("2 resolved trades · 50% win rate");
+  });
 });

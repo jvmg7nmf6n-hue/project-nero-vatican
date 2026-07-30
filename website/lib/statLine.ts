@@ -15,9 +15,19 @@ export function deriveStatLine(
       row.strategy_version === entry.version &&
       row.asset === entry.asset
   );
+  const unverifiedTrades = match?.unverified_trades ?? 0;
 
-  if (!match || match.resolved_trades <= 0) {
+  if (!match || (match.resolved_trades <= 0 && unverifiedTrades <= 0)) {
     return AWAITING_FIRST_SIGNAL;
+  }
+
+  // Trades happened (round trips exist in the raw ledger) but none survived
+  // the export's quarantine filter yet -- an honest "we don't know" instead
+  // of either fabricating a stat from unverified data or claiming no signal
+  // has happened at all. See nero_core.execution.export_site_data's
+  // unverified_trades docstring for the incident this state exists to fix.
+  if (match.resolved_trades <= 0) {
+    return `${unverifiedTrades} trade${unverifiedTrades === 1 ? "" : "s"} pending source verification`;
   }
 
   const trades = `${match.resolved_trades} resolved trade${

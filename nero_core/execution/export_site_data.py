@@ -30,6 +30,27 @@ nero_core.execution.replay) — never averaged over a partial subset. `win_rate`
 `avg_return_pct` are instead computed directly from the always-structured
 entry_price/exit_price columns, so real per-trade-quality signal is still reported
 even when a true R-multiple isn't recoverable from this strategy family's ledger text.
+
+QUARANTINE (2026-07-30, fixing the gap the ORDERFLOW_IMBALANCE incident exposed):
+every ENTRY/EXIT round trip feeding stats.json's resolved_trades/win_rate/
+avg_return_pct/expectancy_r/open_position, and every ENTRY/EXIT row included in
+ledger_full.json/ledger_recent.json, must first survive nero_core.execution.
+quarantine's full clean-trade filter chain (exclude_quarantined ->
+exclude_mismatched_sources -> exclude_unrecorded_source -- see _clean_trade_rows).
+This module previously read straight from list_execution_log with no quarantine
+awareness at all, which let a 32-trade, entirely-NULL-data_source ORDERFLOW_IMBALANCE
+sample display on the public site as if it were 32 verified round trips (48% win
+rate, -0.16% avg return) — the true clean sample at the time was 4. The fix is
+structural (inside _strategy_stats and write_site_data), not an ORDERFLOW-specific
+patch: it runs identically for every roster entry, so any strategy's first
+unverified-source trade is caught automatically rather than requiring a name check.
+WATCH/NO_TRADE rows are never trade legs and are exempt — they carry no performance
+claim, so quarantine.py's incident has nothing to say about them; they stay in
+signal_counts and the ledger export unfiltered. `unverified_trades` on each
+stats.json entry is the count of raw resolved round trips that did NOT survive this
+filter, so the website can render an honest "N trades pending source verification"
+state (see website/lib/statLine.ts) instead of either silently showing a
+contaminated stat or silently collapsing to "no trades yet."
 """
 from __future__ import annotations
 
@@ -63,6 +84,11 @@ from nero_core.execution.live_scheduler import (
     PEAD_CONFIGS,
     PEAD_ID,
     SINGLE_ASSET_CONFIGS,
+)
+from nero_core.execution.quarantine import (
+    exclude_mismatched_sources,
+    exclude_quarantined,
+    exclude_unrecorded_source,
 )
 from nero_core.execution.source_reports import source_report_for
 from nero_core.execution.verification_status import verification_status_for
@@ -154,17 +180,55 @@ def _round_trip_return_pct(round_trip: _RoundTrip) -> float | None:
 
 
 SIGNAL_TYPES = ("ENTRY", "EXIT", "WATCH", "NO_TRADE")
+_TRADE_SIGNAL_TYPES = ("ENTRY", "EXIT")
+
+
+def _clean_trade_rows(rows: list[ExecutionLogRow]) -> list[ExecutionLogRow]:
+    """ENTRY/EXIT rows from `rows` that survive nero_core.execution.quarantine's full
+    clean-trade filter chain, applied in the same order list_clean_execution_log uses
+    (exclude_quarantined -> exclude_mismatched_sources -> exclude_unrecorded_source) --
+    reused directly, never reimplemented, per that module's own docstring. WATCH/
+    NO_TRADE rows are dropped here on purpose: this answers "which TRADE LEGS are
+    confirmed clean," not "which rows are clean" -- WATCH/NO_TRADE carry no
+    performance claim (no entry/exit price pair to misrepresent), so callers that need
+    them (signal_counts, the ledger export) source them separately, unfiltered."""
+    trade_rows = [r for r in rows if r.signal_type in _TRADE_SIGNAL_TYPES]
+    trade_rows = exclude_quarantined(trade_rows)
+    trade_rows = exclude_mismatched_sources(trade_rows)
+    return exclude_unrecorded_source(trade_rows)
 
 
 def _strategy_stats(strategy_id: str, strategy_version: str, asset: str, group_rows: list[ExecutionLogRow]) -> dict[str, object]:
     chronological = sorted(group_rows, key=lambda r: (r.candle_timestamp, r.id or 0))
-    round_trips, open_entry = _pair_round_trips(chronological)
 
+    # Round trips/open position are computed from the CONFIRMED-CLEAN subset only --
+    # see _clean_trade_rows. `raw_round_trips` (unfiltered) exists only to derive
+    # unverified_trades below; it is never used for win_rate/avg_return_pct/
+    # expectancy_r/open_position, which must never be computed over an unconfirmed
+    # source (see docs/execution_log_quarantine_migration_plan.md incident writeup --
+    # this is exactly the gap that let a 32-trade, all-NULL-source ORDERFLOW_IMBALANCE
+    # sample display as if it were verified performance evidence).
+    raw_trade_rows = [r for r in chronological if r.signal_type in _TRADE_SIGNAL_TYPES]
+    raw_round_trips, _ = _pair_round_trips(raw_trade_rows)
+    clean_trade_rows = _clean_trade_rows(chronological)
+    round_trips, open_entry = _pair_round_trips(clean_trade_rows)
+
+    # signal_counts stays raw/unfiltered -- it's an activity tally ("N signals of
+    # each type were logged"), not a performance claim, so quarantine has no reason
+    # to hide it (a strategy that logged 7 NO_TRADE evaluations before its data
+    # source was wired should still show 7, not silently drop to 0).
     signal_counts = {signal_type: 0 for signal_type in SIGNAL_TYPES}
     for row in group_rows:
         signal_counts[row.signal_type] = signal_counts.get(row.signal_type, 0) + 1
 
     resolved_trades = len(round_trips)
+    # Resolved round trips that existed in the raw ledger but did not survive the
+    # clean-trade filter (quarantined by incident cutoff, mismatched entry/exit
+    # source, or missing a recorded source entirely) -- the honest count behind the
+    # website's "N trades pending source verification" state (see lib/statLine.ts /
+    # app/strategy/[id]/page.tsx), never surfaced as 0 resolved trades pretending
+    # nothing happened.
+    unverified_trades = len(raw_round_trips) - resolved_trades
     win_rate: float | None = None
     avg_return_pct: float | None = None
     expectancy_r: float | None = None
@@ -193,6 +257,7 @@ def _strategy_stats(strategy_id: str, strategy_version: str, asset: str, group_r
         "strategy_version": strategy_version,
         "asset": asset,
         "resolved_trades": resolved_trades,
+        "unverified_trades": unverified_trades,
         "win_rate": win_rate,
         "expectancy_r": expectancy_r,
         "avg_return_pct": avg_return_pct,
@@ -339,9 +404,17 @@ def write_site_data(db_path: Path = DEFAULT_DB_PATH, output_dir: Path = DEFAULT_
     rows = list_execution_log(db_path=db_path)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # The public trade-by-trade ledger must not include an ENTRY/EXIT leg that
+    # didn't survive _clean_trade_rows's quarantine chain -- same reasoning as
+    # _strategy_stats above, applied to the raw ledger export instead of the
+    # aggregates. WATCH/NO_TRADE rows are never trade legs and pass through
+    # unfiltered (see _clean_trade_rows's own docstring).
+    clean_trade_ids = {r.id for r in _clean_trade_rows(rows) if r.id is not None}
+    ledger_rows = [r for r in rows if r.signal_type not in _TRADE_SIGNAL_TYPES or r.id in clean_trade_ids]
+
     exports = {
-        "ledger_full.json": build_ledger_export(rows, limit=None, now=now),
-        "ledger_recent.json": build_ledger_export(rows, limit=RECENT_LEDGER_LIMIT, now=now),
+        "ledger_full.json": build_ledger_export(ledger_rows, limit=None, now=now),
+        "ledger_recent.json": build_ledger_export(ledger_rows, limit=RECENT_LEDGER_LIMIT, now=now),
         "stats.json": build_stats_export(rows, now=now),
         "strategies.json": build_strategies_export(now=now),
     }

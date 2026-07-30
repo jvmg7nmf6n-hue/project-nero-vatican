@@ -218,9 +218,14 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
 
       <section>
         <h2 className="font-serif text-xl text-parchment mb-4">Performance summary</h2>
-        {!statsRow || statsRow.resolved_trades <= 0 ? (
+        {!statsRow || (statsRow.resolved_trades <= 0 && (statsRow.unverified_trades ?? 0) <= 0) ? (
           <p data-testid="performance-awaiting" className="text-muted">
             Awaiting first signal &mdash; no resolved trades yet.
+          </p>
+        ) : statsRow.resolved_trades <= 0 ? (
+          <p data-testid="performance-pending-verification" className="text-muted">
+            {statsRow.unverified_trades} trade{statsRow.unverified_trades === 1 ? "" : "s"} pending source
+            verification &mdash; not enough confirmed data to report a performance number yet.
           </p>
         ) : (
           <div data-testid="performance-summary" className="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-2xl">

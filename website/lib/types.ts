@@ -59,6 +59,12 @@ export interface StrategyStats {
   strategy_version: string;
   asset: string;
   resolved_trades: number;
+  // Resolved round trips excluded by the export pipeline's quarantine filter
+  // (quarantined incident window, mismatched entry/exit source, or unrecorded
+  // source) -- optional because older cached exports predate this field.
+  // resolved_trades==0 && unverified_trades==0 means "no signal yet"; > 0
+  // means "trades happened but aren't confirmed clean" -- see lib/statLine.ts.
+  unverified_trades?: number;
   win_rate: number | null;
   expectancy_r: number | null;
   avg_return_pct: number | null;
