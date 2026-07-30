@@ -85,7 +85,39 @@ class HypothesisGenParameters:
     claude_model: str = "claude-sonnet-5"
     claude_api_url: str = "https://api.anthropic.com/v1/messages"
     claude_api_version: str = "2023-06-01"
-    claude_max_tokens: int = 1500
+    # Diagnostics finding (2026-07-30): a real Actions run billed $0.021354 for
+    # a response whose ENTIRE content array was one thinking block with
+    # thinking="" and zero text blocks -- claude-sonnet-5 runs adaptive
+    # thinking by default when `thinking` is omitted (confirmed against the
+    # Claude API's own current model reference), and that thinking exhausted
+    # the old max_tokens=1500 budget before any JSON could be written.
+    #
+    # Two changes, not either/or:
+    # 1. `claude_thinking` (below) explicitly disables thinking --
+    #    `{"type": "disabled"}` is documented as cleanly supported on
+    #    claude-sonnet-5, unlike claude-fable-5 where it 400s. With thinking
+    #    off, this failure mode -- adaptive thinking silently consuming the
+    #    whole budget -- is structurally impossible, not just less likely.
+    # 2. max_tokens is still raised, sized off the ACTUAL 11-key JSON schema
+    #    this call asks for (hypothesis_name, mechanism, entry_rule,
+    #    structured_entry_rule {conditions:[...]}, exit_rule, stop_rule,
+    #    structured_exit_plan {stop_atr_multiple, target_r_multiple,
+    #    max_holding_hours}, asset, timeframe, differs_from_graveyard,
+    #    expected_frequency_claim), not copied from news_sentiment_llm's
+    #    single-field classification (800) or the ChatBot's conversational
+    #    reply (1024) -- both answer a much smaller shape than this one.
+    #    A representative filled-in instance of this schema (2-3 sentence
+    #    mechanism, 3-condition structured_entry_rule, full exit plan,
+    #    2-sentence differs_from_graveyard) serializes to ~450 tokens
+    #    (measured via json.dumps char-count / 3.5 chars-per-token). Tripling
+    #    that for verbosity variance (longer prose fields, more entry
+    #    conditions) gives ~1350 tokens; 2048 leaves ~700 tokens of margin
+    #    above that -- comfortable without being an arbitrary round number.
+    #    Since thinking is now disabled, none of this budget is spent on
+    #    thinking (that was the old failure's entire mechanism) -- it is
+    #    pure output headroom.
+    claude_max_tokens: int = 2048
+    claude_thinking: dict = field(default_factory=lambda: {"type": "disabled"})
     claude_timeout_seconds: int = 30
     input_cost_per_mtok: float = INPUT_COST_PER_MTOK
     output_cost_per_mtok: float = OUTPUT_COST_PER_MTOK
@@ -279,6 +311,7 @@ def _call_claude(prompt: str, api_key: str, params: HypothesisGenParameters) -> 
         json={
             "model": params.claude_model,
             "max_tokens": params.claude_max_tokens,
+            "thinking": params.claude_thinking,
             "messages": [{"role": "user", "content": prompt}],
         },
         timeout=params.claude_timeout_seconds,
@@ -328,7 +361,12 @@ def validate_api_key(api_key: str, params: HypothesisGenParameters = DEFAULT_PAR
                 "anthropic-version": params.claude_api_version,
                 "content-type": "application/json",
             },
-            json={"model": params.claude_model, "max_tokens": 1, "messages": [{"role": "user", "content": "Hi"}]},
+            json={
+                "model": params.claude_model,
+                "max_tokens": 1,
+                "thinking": params.claude_thinking,
+                "messages": [{"role": "user", "content": "Hi"}],
+            },
             timeout=params.claude_timeout_seconds,
         )
     except requests.RequestException as exc:

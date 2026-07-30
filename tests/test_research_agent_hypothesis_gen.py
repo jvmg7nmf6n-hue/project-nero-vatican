@@ -199,6 +199,112 @@ class GenerateHypothesesTest(unittest.TestCase):
         self.assertGreater(result.total_cost_usd, 0.0)
         self.assertIn("call WAS billed", result.errors[-1]["message"])
 
+    def test_thinking_only_empty_string_exact_real_shape_still_records_billed_cost_distinctly(self) -> None:
+        # Diagnostics finding (2026-07-30): a real Actions run returned this
+        # EXACT shape -- one thinking block whose `thinking` field is the
+        # empty string (claude-sonnet-5's `display: "omitted"` default) and
+        # NO text block at all, having exhausted the old max_tokens=1500
+        # budget before writing anything. This is a regression guard: even
+        # though thinking is now explicitly disabled on the real request
+        # (making this shape unreachable in production), the parsing path
+        # must still turn an unparseable-but-billed response into a loud,
+        # distinct error -- never "0 hypotheses, no error" (the pre-Tier-4
+        # symptom this whole diagnostics effort started from).
+        payload = {
+            "content": [{"type": "thinking", "thinking": ""}],
+            "usage": {"input_tokens": 3177, "output_tokens": 1500},
+        }
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse(payload)):
+            result = generate_hypotheses([_finding()], [], "fake-key", now=NOW)
+
+        expected_cost = (3177 / 1_000_000.0) * 2.00 + (1500 / 1_000_000.0) * 10.00
+        self.assertEqual(result.hypotheses, [])
+        self.assertAlmostEqual(result.total_cost_usd, expected_cost, places=8)
+        self.assertGreater(result.total_cost_usd, 0.0)
+        self.assertEqual(result.llm_calls_made, 1)
+        self.assertIn("call WAS billed", result.errors[-1]["message"])
+        self.assertIn(f"${expected_cost:.6f}", result.errors[-1]["message"])
+        self.assertIn("NoTextBlockError", result.errors[-1]["message"])
+
+    def test_request_payload_explicitly_disables_thinking(self) -> None:
+        # Primary fix: the raw request body must carry an explicit
+        # thinking-disabled directive on every call (preflight AND the real
+        # per-finding call) -- this is what makes the empty-thinking-block
+        # failure structurally impossible in production, not just less
+        # likely. Confirmed against the Claude API reference that
+        # {"type": "disabled"} is cleanly supported on claude-sonnet-5.
+        payload = _claude_payload(VALID_HYPOTHESIS_DATA)
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse(payload)) as mock_post:
+            generate_hypotheses([_finding()], [], "fake-key", now=NOW)
+
+        self.assertEqual(mock_post.call_count, 2)  # preflight + the real call
+        for call in mock_post.call_args_list:
+            self.assertEqual(call.kwargs["json"]["thinking"], {"type": "disabled"})
+        preflight_call, real_call = mock_post.call_args_list
+        self.assertEqual(preflight_call.kwargs["json"]["max_tokens"], 1)
+        self.assertEqual(real_call.kwargs["json"]["max_tokens"], DEFAULT_PARAMETERS.claude_max_tokens)
+
+    def test_max_tokens_has_real_margin_over_a_realistic_full_schema_response(self) -> None:
+        # Sizing guard, not a guess-and-hope check: builds one representative
+        # instance of the actual 11-key schema this call asks for (2-3
+        # sentence mechanism, a 3-condition structured_entry_rule, a full
+        # structured_exit_plan, a 2-sentence differs_from_graveyard -- see
+        # _build_prompt's own field descriptions), measures its serialized
+        # size, and asserts the configured max_tokens clears it with margin.
+        # A future accidental shrink of claude_max_tokens back toward 1500
+        # fails this test instead of failing silently in production again.
+        realistic_response = {
+            "hypothesis_name": "ZSCORE_REVERSION_BTC_1H_V2",
+            "mechanism": (
+                "When price deviates more than 2 standard deviations below its 20-period "
+                "moving average on low timeframes, short-term liquidity providers tend to "
+                "step in and absorb the imbalance, producing a mean-reverting bounce within "
+                "a few candles. This effect is strongest during high-volume regimes where "
+                "market makers are actively quoting both sides."
+            ),
+            "entry_rule": (
+                "Enter long when zscore20 is less than -2.0 and rsi14 is less than 30 and "
+                "volume is greater than its 20-period average, on the 1h BTC chart."
+            ),
+            "structured_entry_rule": {
+                "conditions": [
+                    {"field": "zscore20", "op": "lt", "value": -2.0},
+                    {"field": "rsi14", "op": "lt", "value": 30},
+                    {"field": "volume", "op": "gt", "compare_to_field": "ma20"},
+                ]
+            },
+            "exit_rule": "Exit when price closes back above the 20-period moving average, or when the target R-multiple is reached, whichever comes first.",
+            "stop_rule": "Stop loss placed at 1.5x ATR(14) below the entry price.",
+            "structured_exit_plan": {"stop_atr_multiple": 1.5, "target_r_multiple": 2.0, "max_holding_hours": 24},
+            "asset": "BTC",
+            "timeframe": "1h",
+            "differs_from_graveyard": (
+                "Unlike the previously-killed RSI_OVERSOLD_BOUNCE mechanism, this variant "
+                "requires a volume confirmation filter and a stricter zscore threshold, "
+                "which should reduce false signals in low-liquidity chop."
+            ),
+            "expected_frequency_claim": 45.0,
+        }
+        # Conservative (undercounts real tokens -- chars/3, not chars/4) proxy
+        # so this assertion errs toward requiring MORE margin, not less.
+        estimated_tokens = len(json.dumps(realistic_response)) / 3.0
+        self.assertGreater(
+            DEFAULT_PARAMETERS.claude_max_tokens,
+            estimated_tokens * 2,
+            "claude_max_tokens no longer has real margin over a realistic full-schema response",
+        )
+
+        payload = {
+            "content": [{"type": "text", "text": json.dumps(realistic_response)}],
+            "usage": {"input_tokens": 1200, "output_tokens": round(estimated_tokens)},
+        }
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse(payload)):
+            result = generate_hypotheses([_finding()], [], "fake-key", now=NOW)
+
+        self.assertEqual(len(result.hypotheses), 1)
+        self.assertEqual(result.hypotheses[0]["hypothesis_name"], "ZSCORE_REVERSION_BTC_1H_V2")
+        self.assertEqual(result.hypotheses[0]["structured_exit_plan"], realistic_response["structured_exit_plan"])
+
     def test_transport_failure_never_reports_a_fabricated_cost(self) -> None:
         # Regression guard: a genuine transport failure (nothing billed, no
         # usage available at all) must NOT be conflated with the billed-but-
