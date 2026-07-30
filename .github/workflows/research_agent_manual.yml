@@ -1,0 +1,50 @@
+name: Research Agent (manual run)
+
+# workflow_dispatch ONLY -- no `schedule:` block. This is the agent's first
+# real run and every run after it must be a deliberate, watched click from
+# the Actions tab, not an automation. RESEARCH_AGENT_ENABLED is set inline in
+# this one job's one step below, not as a repo secret/variable and not as a
+# change to any other workflow's env -- the kill switch default (false)
+# everywhere else is untouched.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  research-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Research Agent pipeline
+        run: python -m nero_core.research_agent.pipeline
+        env:
+          RESEARCH_AGENT_ENABLED: "true"
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        continue-on-error: false
+
+      - name: Print readable run summary
+        run: python tools/research_agent_run_summary.py
+
+      # No commit/push step on purpose: this run's output must not become
+      # part of the record until a human has inspected it (agent_hypotheses.
+      # json is append-only, so bad entries can't be cleanly removed later).
+      # The three JSON files are uploaded as a downloadable artifact instead.
+      - name: Upload run output as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-agent-run-${{ github.run_id }}
+          path: |
+            docs/site_data/agent_hypotheses.json
+            docs/site_data/agent_test_results.json
+            docs/site_data/agent_performance.json
+          if-no-files-found: warn
+          retention-days: 30
