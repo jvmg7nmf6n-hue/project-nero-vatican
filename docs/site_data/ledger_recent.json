@@ -1,7 +1,18 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-30T17:06:22.258207+00:00",
+  "last_updated": "2026-07-30T18:56:26.540884+00:00",
   "rows": [
+    {
+      "timestamp": "2026-07-30T18:56:22.097431+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
+      "asset": "BTC",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 64872.0,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=0.2728",
+      "candle_timestamp": "2026-07-30T17:59:59.999000+00:00"
+    },
     {
       "timestamp": "2026-07-30T17:06:17.908293+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
