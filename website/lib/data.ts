@@ -1,6 +1,9 @@
 import { candleFilename } from "./candleData";
 import type { CandleFile } from "./candleData";
 import type {
+  AgentHypothesis,
+  AgentPerformanceExport,
+  AgentTestResult,
   FailurePatternEntry,
   GraveyardEntry,
   HeartbeatStatus,
@@ -97,6 +100,25 @@ export function fetchQuantMetrics(): Promise<QuantMetricsExport | null> {
 // scheduler's export step has run" convention as fetchQuantMetrics.
 export function fetchQuantCrossAsset(): Promise<QuantCrossAssetExport | null> {
   return fetchJson<QuantCrossAssetExport>("quant_cross_asset.json");
+}
+
+// Research Agent (feature/research-agent) -- append-only hypothesis log
+// written by nero_core.research_agent.hypothesis_gen. null (not an error)
+// until the pipeline has generated at least one hypothesis.
+export function fetchAgentHypotheses(): Promise<AgentHypothesis[] | null> {
+  return fetchJson<AgentHypothesis[]>("agent_hypotheses.json");
+}
+
+// One entry per hypothesis tested or gate-rejected, written by
+// nero_core.research_agent.auto_tester. Same null convention as above.
+export function fetchAgentTestResults(): Promise<AgentTestResult[] | null> {
+  return fetchJson<AgentTestResult[]>("agent_test_results.json");
+}
+
+// Cumulative + per-run Research Agent metrics, written by
+// nero_core.research_agent.performance after every enabled pipeline run.
+export function fetchAgentPerformance(): Promise<AgentPerformanceExport | null> {
+  return fetchJson<AgentPerformanceExport>("agent_performance.json");
 }
 
 export type CandleFetchResult =
