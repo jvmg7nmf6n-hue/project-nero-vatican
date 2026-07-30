@@ -1,7 +1,18 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-30T14:27:43.061693+00:00",
+  "last_updated": "2026-07-30T15:32:36.108177+00:00",
   "rows": [
+    {
+      "timestamp": "2026-07-30T15:32:31.043327+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
+      "asset": "ETH",
+      "signal_type": "ENTRY",
+      "entry_price": 1917.4,
+      "exit_price": null,
+      "reasoning": "direction=LONG stop_loss=1894.15428571 imbalance_ratio=20.5910",
+      "candle_timestamp": "2026-07-30T14:59:59.999000+00:00"
+    },
     {
       "timestamp": "2026-07-30T14:27:21.916840+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
