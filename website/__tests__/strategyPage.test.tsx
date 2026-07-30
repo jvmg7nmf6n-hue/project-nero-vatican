@@ -134,6 +134,26 @@ describe("StrategyDetailPage", () => {
     expect(screen.queryByTestId("equity-curve-chart")).not.toBeInTheDocument();
   });
 
+  it("shows a pending-verification state when trades exist but none are confirmed clean", async () => {
+    setupMocks({
+      stats: {
+        schema_version: 1,
+        last_updated: "x",
+        strategies: [statsRow({ resolved_trades: 0, unverified_trades: 4 })],
+      },
+    });
+
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    const pending = screen.getByTestId("performance-pending-verification");
+    expect(pending).toHaveTextContent("4 trades pending source verification");
+    expect(screen.queryByTestId("performance-awaiting")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("performance-summary")).not.toBeInTheDocument();
+    // No fabricated stat anywhere on the page for this strategy.
+    expect(screen.queryByText("0.0%")).not.toBeInTheDocument();
+  });
+
   it("renders the performance summary and trade history table when trades exist", async () => {
     setupMocks({
       stats: {
