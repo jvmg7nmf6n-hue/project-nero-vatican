@@ -151,14 +151,24 @@ class TestResult:
         }
 
 
-def _parse_generated_at(raw: object, fallback: datetime) -> datetime:
-    if isinstance(raw, str):
-        try:
-            parsed = datetime.fromisoformat(raw)
-            return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
-        except ValueError:
-            pass
-    return fallback
+def _parse_generated_at(raw: object) -> datetime | None:
+    """Returns the parsed, tz-aware datetime, or None if `raw` is missing, not a
+    string, or not a valid ISO8601 timestamp. Returning None instead of a
+    fallback (e.g. `now()`) is deliberate: generated_at becomes the frequency
+    gate's no-lookahead cutoff (measure_entry_frequency's own `generated_at`
+    parameter) -- a fabricated fallback would silently WIDEN that cutoff to
+    admit every candle up to the current moment, defeating the exact
+    lookahead-bias guarantee this project has a hard test for
+    (test_research_agent_frequency_gate.py). test_hypothesis rejects a None
+    result as UNTESTABLE rather than ever backtesting against a fabricated
+    cutoff."""
+    if not isinstance(raw, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
 
 
 def _size_entry_for_hypothesis(
@@ -268,7 +278,20 @@ def test_hypothesis(
     hypothesis_name = str(hypothesis.get("hypothesis_name", ""))
     asset = str(hypothesis.get("asset", ""))
     timeframe = str(hypothesis.get("timeframe", ""))
-    generated_at = _parse_generated_at(hypothesis.get("generated_at"), now)
+    raw_generated_at = hypothesis.get("generated_at")
+    generated_at = _parse_generated_at(raw_generated_at)
+
+    if generated_at is None:
+        # Reject rather than default to now() -- see _parse_generated_at's own
+        # docstring. A missing/malformed generated_at must never silently
+        # become the most permissive possible lookahead cutoff.
+        return TestResult(
+            hypothesis_name, asset, timeframe, VERDICT_UNTESTABLE, REVIEW_UNTESTABLE, UNMEASURABLE,
+            None, None,
+            f"generated_at missing or unparseable ({raw_generated_at!r}) -- rejected rather than "
+            f"defaulting to now(), which would silently widen the frequency gate's no-lookahead cutoff",
+            None, None, now.isoformat(),
+        )
 
     gate: FrequencyMeasurement = measure_entry_frequency(candles, hypothesis.get("structured_entry_rule"), generated_at)
 
