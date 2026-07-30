@@ -32,12 +32,21 @@ PAIRS_VERSION = "cointegration-pairs-v1.0.0"
 PAIRS_ASSET = "BTC-ETH"
 
 
+# Default data_source represents a CONFIRMED-CLEAN row -- every test in this file
+# that builds a round trip and expects it to count as resolved is implicitly
+# asserting "clean data behaves as before the quarantine fix" (see
+# QuarantineAwareStatsTest below for the None/mismatched-source cases this default
+# deliberately does NOT cover).
+CLEAN_SOURCE = "TEST_SOURCE"
+
+
 def _row(id_: int, run_id: str, strategy: str, version: str, asset: str, signal_type: str,
-         candle_timestamp: int, entry_price=None, exit_price=None, reasoning: str = "x") -> ExecutionLogRow:
+         candle_timestamp: int, entry_price=None, exit_price=None, reasoning: str = "x",
+         data_source: str | None = CLEAN_SOURCE) -> ExecutionLogRow:
     return ExecutionLogRow(
         id=id_, run_id=run_id, timestamp=NOW, strategy=strategy, strategy_version=version, asset=asset,
         signal_type=signal_type, entry_price=entry_price, exit_price=exit_price, reasoning=reasoning,
-        candle_timestamp=candle_timestamp, created_at=NOW,
+        candle_timestamp=candle_timestamp, created_at=NOW, data_source=data_source,
     )
 
 
@@ -246,6 +255,126 @@ class RoundTripStatsTest(unittest.TestCase):
         )
 
 
+class QuarantineAwareStatsTest(unittest.TestCase):
+    """Structural fix (2026-07-30): _strategy_stats must run every round trip
+    through nero_core.execution.quarantine's exclude functions before aggregating
+    -- confirmed here for a synthetic strategy (GOLD_STRATEGY/BNB_STRATEGY, same
+    fixtures RoundTripStatsTest uses), not an ORDERFLOW-specific check, since the
+    fix lives in the shared function every roster entry runs through."""
+
+    def test_unrecorded_source_round_trip_is_excluded_but_counted_as_unverified(self) -> None:
+        rows = [
+            _row(1, "r1", GOLD_STRATEGY, GOLD_VERSION, "GOLD", "ENTRY", candle_timestamp=1000,
+                 entry_price=100.0, data_source=None),
+            _row(2, "r1", GOLD_STRATEGY, GOLD_VERSION, "GOLD", "EXIT", candle_timestamp=2000, exit_price=110.0,
+                 reasoning="TARGET exit, r_multiple=1.250", data_source=None),
+        ]
+        export = build_stats_export(rows, now=NOW)
+        gold_stats = next(s for s in export["strategies"] if s["strategy"] == GOLD_STRATEGY)
+
+        self.assertEqual(gold_stats["resolved_trades"], 0)
+        self.assertEqual(gold_stats["unverified_trades"], 1)
+        self.assertIsNone(gold_stats["win_rate"])
+        self.assertIsNone(gold_stats["avg_return_pct"])
+        self.assertIsNone(gold_stats["expectancy_r"])
+
+    def test_mismatched_source_round_trip_is_excluded_but_counted_as_unverified(self) -> None:
+        rows = [
+            _row(1, "r1", GOLD_STRATEGY, GOLD_VERSION, "GOLD", "ENTRY", candle_timestamp=1000,
+                 entry_price=100.0, data_source="Binance"),
+            _row(2, "r1", GOLD_STRATEGY, GOLD_VERSION, "GOLD", "EXIT", candle_timestamp=2000, exit_price=110.0,
+                 reasoning="TARGET exit, r_multiple=1.250", data_source="Coinbase"),
+        ]
+        export = build_stats_export(rows, now=NOW)
+        gold_stats = next(s for s in export["strategies"] if s["strategy"] == GOLD_STRATEGY)
+
+        self.assertEqual(gold_stats["resolved_trades"], 0)
+        self.assertEqual(gold_stats["unverified_trades"], 1)
+        self.assertIsNone(gold_stats["win_rate"])
+
+    def test_mixed_clean_and_unverified_round_trips_only_averages_the_clean_ones(self) -> None:
+        rows = [
+            # Clean: 100 -> 110, win.
+            _row(1, "r1", BNB_STRATEGY, BNB_VERSION, "BNB", "ENTRY", candle_timestamp=1000, entry_price=100.0),
+            _row(2, "r1", BNB_STRATEGY, BNB_VERSION, "BNB", "EXIT", candle_timestamp=2000, exit_price=110.0,
+                 reasoning="r_multiple=1.000"),
+            # Clean: 200 -> 190, loss.
+            _row(3, "r1", BNB_STRATEGY, BNB_VERSION, "BNB", "ENTRY", candle_timestamp=3000, entry_price=200.0),
+            _row(4, "r1", BNB_STRATEGY, BNB_VERSION, "BNB", "EXIT", candle_timestamp=4000, exit_price=190.0,
+                 reasoning="r_multiple=-1.000"),
+            # Unrecorded source: 300 -> 600 (would be a huge win if counted -- must not
+            # move win_rate/avg_return_pct at all).
+            _row(5, "r1", BNB_STRATEGY, BNB_VERSION, "BNB", "ENTRY", candle_timestamp=5000,
+                 entry_price=300.0, data_source=None),
+            _row(6, "r1", BNB_STRATEGY, BNB_VERSION, "BNB", "EXIT", candle_timestamp=6000, exit_price=600.0,
+                 reasoning="r_multiple=5.000", data_source=None),
+        ]
+        export = build_stats_export(rows, now=NOW)
+        bnb_stats = next(s for s in export["strategies"] if s["strategy"] == BNB_STRATEGY)
+
+        self.assertEqual(bnb_stats["resolved_trades"], 2)
+        self.assertEqual(bnb_stats["unverified_trades"], 1)
+        self.assertEqual(bnb_stats["win_rate"], 0.5)
+        self.assertAlmostEqual(bnb_stats["expectancy_r"], 0.0, places=6)
+
+    def test_trailing_unpaired_entry_with_unrecorded_source_is_not_reported_as_open_position(self) -> None:
+        rows = [
+            _row(1, "r1", BNB_STRATEGY, BNB_VERSION, "BNB", "ENTRY", candle_timestamp=1000,
+                 entry_price=500.0, data_source=None),
+        ]
+        export = build_stats_export(rows, now=NOW)
+        bnb_stats = next(s for s in export["strategies"] if s["strategy"] == BNB_STRATEGY)
+
+        self.assertIsNone(bnb_stats["open_position"])
+
+    def test_unverified_trades_is_zero_when_nothing_was_ever_logged(self) -> None:
+        # Distinguishes "truly awaiting first signal" (0/0) from "has unverified
+        # trades pending" (0 resolved, >0 unverified) -- the website needs both
+        # numbers to choose the right honest state (lib/statLine.ts).
+        export = build_stats_export([], now=NOW)
+        for s in export["strategies"]:
+            self.assertEqual(s["unverified_trades"], 0)
+
+    def test_orderflow_quarantine_cutoff_excludes_pre_cutoff_trades_even_with_a_recorded_source(self) -> None:
+        # Real cutoffs from nero_core.execution.quarantine.QUARANTINE_CUTOFFS -- a row
+        # with a genuinely recorded, matching source is STILL excluded if it predates
+        # the documented incident cutoff for its (strategy, version, asset) key.
+        from nero_core.execution.quarantine import QUARANTINE_CUTOFFS
+        from nero_core.strategies.orderflow_imbalance import STRATEGY_ID, STRATEGY_VERSION
+
+        cutoff = QUARANTINE_CUTOFFS[(STRATEGY_ID, STRATEGY_VERSION, "BTC")]
+        rows = [
+            _row(1, "r1", STRATEGY_ID, STRATEGY_VERSION, "BTC", "ENTRY", candle_timestamp=cutoff - 10_000,
+                 entry_price=100.0, data_source="Binance BTCUSDT 1h candles | orderbook: x"),
+            _row(2, "r1", STRATEGY_ID, STRATEGY_VERSION, "BTC", "EXIT", candle_timestamp=cutoff - 5_000,
+                 exit_price=110.0, reasoning="r_multiple=1.000", data_source="Binance BTCUSDT 1h candles | orderbook: x"),
+        ]
+        export = build_stats_export(rows, now=NOW)
+        orderflow_btc = next(
+            s for s in export["strategies"] if s["strategy"] == STRATEGY_ID and s["asset"] == "BTC"
+        )
+
+        self.assertEqual(orderflow_btc["resolved_trades"], 0)
+        self.assertEqual(orderflow_btc["unverified_trades"], 1)
+
+    def test_signal_counts_are_not_reduced_by_quarantine(self) -> None:
+        # signal_counts is an activity tally, not a performance claim -- it must stay
+        # raw even when the round trip it came from is unverified/quarantined.
+        rows = [
+            _row(1, "r1", GOLD_STRATEGY, GOLD_VERSION, "GOLD", "NO_TRADE", candle_timestamp=500, data_source=None),
+            _row(2, "r1", GOLD_STRATEGY, GOLD_VERSION, "GOLD", "ENTRY", candle_timestamp=1000,
+                 entry_price=100.0, data_source=None),
+            _row(3, "r1", GOLD_STRATEGY, GOLD_VERSION, "GOLD", "EXIT", candle_timestamp=2000, exit_price=110.0,
+                 data_source=None),
+        ]
+        export = build_stats_export(rows, now=NOW)
+        gold_stats = next(s for s in export["strategies"] if s["strategy"] == GOLD_STRATEGY)
+
+        self.assertEqual(gold_stats["signal_counts"], {"ENTRY": 1, "EXIT": 1, "WATCH": 0, "NO_TRADE": 1})
+        self.assertEqual(gold_stats["resolved_trades"], 0)
+        self.assertEqual(gold_stats["unverified_trades"], 1)
+
+
 class BuildStrategiesExportTest(unittest.TestCase):
     def test_roster_includes_verification_status_from_the_mapping(self) -> None:
         export = build_strategies_export(now=NOW)
@@ -348,6 +477,74 @@ class WriteSiteDataTest(unittest.TestCase):
                 main()
             except Exception as exc:  # noqa: BLE001
                 self.fail(f"main() must never raise; raised {exc!r}")
+
+    def test_ledger_excludes_unrecorded_source_trade_legs_but_keeps_watch_rows(self) -> None:
+        # The unverified ENTRY/EXIT pair (data_source unset -> None) must not appear
+        # in the public ledger, but the WATCH row for the same config must -- it's
+        # not a trade leg and carries no performance claim.
+        insert_execution_log_row(
+            run_id="r1", strategy=GOLD_STRATEGY, strategy_version=GOLD_VERSION, asset="GOLD",
+            signal_type="WATCH", reasoning="watching", candle_timestamp=500, timestamp=NOW, db_path=self.db_path,
+        )
+        insert_execution_log_row(
+            run_id="r1", strategy=GOLD_STRATEGY, strategy_version=GOLD_VERSION, asset="GOLD",
+            signal_type="ENTRY", reasoning="x", candle_timestamp=1000, entry_price=100.0,
+            timestamp=NOW, db_path=self.db_path,
+        )
+        insert_execution_log_row(
+            run_id="r1", strategy=GOLD_STRATEGY, strategy_version=GOLD_VERSION, asset="GOLD",
+            signal_type="EXIT", reasoning="x", candle_timestamp=2000, exit_price=110.0,
+            timestamp=NOW, db_path=self.db_path,
+        )
+
+        write_site_data(db_path=self.db_path, output_dir=self.output_dir, now=NOW)
+
+        ledger = json.loads((self.output_dir / "ledger_full.json").read_text(encoding="utf-8"))
+        signal_types = [r["signal_type"] for r in ledger["rows"]]
+        self.assertIn("WATCH", signal_types)
+        self.assertNotIn("ENTRY", signal_types)
+        self.assertNotIn("EXIT", signal_types)
+
+    def test_ledger_excludes_mismatched_source_round_trip(self) -> None:
+        insert_execution_log_row(
+            run_id="r1", strategy=GOLD_STRATEGY, strategy_version=GOLD_VERSION, asset="GOLD",
+            signal_type="ENTRY", reasoning="x", candle_timestamp=1000, entry_price=100.0,
+            timestamp=NOW, data_source="Binance", db_path=self.db_path,
+        )
+        insert_execution_log_row(
+            run_id="r1", strategy=GOLD_STRATEGY, strategy_version=GOLD_VERSION, asset="GOLD",
+            signal_type="EXIT", reasoning="x", candle_timestamp=2000, exit_price=110.0,
+            timestamp=NOW, data_source="Coinbase", db_path=self.db_path,
+        )
+
+        write_site_data(db_path=self.db_path, output_dir=self.output_dir, now=NOW)
+
+        ledger = json.loads((self.output_dir / "ledger_full.json").read_text(encoding="utf-8"))
+        self.assertEqual(ledger["rows"], [])
+
+    def test_ledger_keeps_a_confirmed_clean_round_trip(self) -> None:
+        # Regression: a genuinely clean round trip (matching, recorded source) must
+        # still appear in the ledger -- this fix must not turn into "hide everything."
+        insert_execution_log_row(
+            run_id="r1", strategy=GOLD_STRATEGY, strategy_version=GOLD_VERSION, asset="GOLD",
+            signal_type="ENTRY", reasoning="x", candle_timestamp=1000, entry_price=100.0,
+            timestamp=NOW, data_source="Binance", db_path=self.db_path,
+        )
+        insert_execution_log_row(
+            run_id="r1", strategy=GOLD_STRATEGY, strategy_version=GOLD_VERSION, asset="GOLD",
+            signal_type="EXIT", reasoning="x", candle_timestamp=2000, exit_price=110.0,
+            timestamp=NOW, data_source="Binance", db_path=self.db_path,
+        )
+
+        write_site_data(db_path=self.db_path, output_dir=self.output_dir, now=NOW)
+
+        ledger = json.loads((self.output_dir / "ledger_full.json").read_text(encoding="utf-8"))
+        self.assertEqual([r["signal_type"] for r in ledger["rows"]], ["EXIT", "ENTRY"])  # newest first
+
+        stats = json.loads((self.output_dir / "stats.json").read_text(encoding="utf-8"))
+        gold_stats = next(s for s in stats["strategies"] if s["strategy"] == GOLD_STRATEGY)
+        self.assertEqual(gold_stats["resolved_trades"], 1)
+        self.assertEqual(gold_stats["unverified_trades"], 0)
 
 
 if __name__ == "__main__":
