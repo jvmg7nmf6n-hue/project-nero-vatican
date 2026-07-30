@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-29T23:40:14.515972+00:00",
+  "last_updated": "2026-07-30T00:58:12.113550+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -30,7 +30,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 3
+        "NO_TRADE": 4
       },
       "open_position": null
     },
@@ -46,7 +46,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 6
+        "NO_TRADE": 7
       },
       "open_position": null
     },
@@ -62,7 +62,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 6
+        "NO_TRADE": 7
       },
       "open_position": null
     },
@@ -78,7 +78,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 6
+        "NO_TRADE": 7
       },
       "open_position": null
     },
@@ -94,7 +94,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 6
+        "NO_TRADE": 7
       },
       "open_position": null
     },
@@ -110,7 +110,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 6
+        "NO_TRADE": 7
       },
       "open_position": null
     },
@@ -158,7 +158,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 8
+        "NO_TRADE": 9
       },
       "open_position": null
     },
@@ -174,7 +174,7 @@
         "ENTRY": 1,
         "EXIT": 1,
         "WATCH": 0,
-        "NO_TRADE": 7
+        "NO_TRADE": 8
       },
       "open_position": null
     },
@@ -206,7 +206,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 3
+        "NO_TRADE": 4
       },
       "open_position": null
     },
@@ -214,21 +214,17 @@
       "strategy": "ORDERFLOW_IMBALANCE",
       "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
-      "resolved_trades": 31,
-      "win_rate": 0.4838709677419355,
+      "resolved_trades": 32,
+      "win_rate": 0.5,
       "expectancy_r": null,
-      "avg_return_pct": -0.16416167136246956,
+      "avg_return_pct": -0.15698974557411743,
       "signal_counts": {
         "ENTRY": 32,
-        "EXIT": 31,
+        "EXIT": 32,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": {
-        "entry_price": 63942.5,
-        "entry_timestamp": "2026-07-29T23:40:10.246480+00:00",
-        "candle_timestamp": "2026-07-29T22:59:59.999000+00:00"
-      }
+      "open_position": null
     },
     {
       "strategy": "ORDERFLOW_IMBALANCE",
@@ -239,12 +235,16 @@
       "expectancy_r": null,
       "avg_return_pct": 0.18799020995946558,
       "signal_counts": {
-        "ENTRY": 27,
+        "ENTRY": 28,
         "EXIT": 27,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": {
+        "entry_price": 1910.72,
+        "entry_timestamp": "2026-07-30T00:57:23.563669+00:00",
+        "candle_timestamp": "2026-07-29T23:59:59.999000+00:00"
+      }
     },
     {
       "strategy": "GOLD_SILVER_RATIO_MR",
@@ -258,7 +258,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 0
+        "NO_TRADE": 1
       },
       "open_position": null
     },
