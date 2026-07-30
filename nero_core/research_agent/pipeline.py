@@ -90,10 +90,21 @@ def default_candles_provider(asset: str, timeframe: str, candles_dir: Path = DEF
         return None
 
 
+# status distinguishes "ran fine" from "something failed" -- the exact
+# distinction the run summary previously couldn't make (a 401, a network
+# failure, and a genuinely-uneventful run all printed identically). See
+# run_pipeline's own computation below.
+STATUS_DISABLED = "disabled"
+STATUS_ERROR = "error"
+STATUS_CLEAN = "clean"
+
+
 @dataclass(frozen=True)
 class PipelineRunResult:
     enabled: bool
     reason: str = ""
+    status: str = STATUS_CLEAN
+    errors: list = field(default_factory=list)
     scan_result: ScanResult | None = None
     hypotheses_generated: int = 0
     duplicates_skipped: int = 0
@@ -122,7 +133,10 @@ def run_pipeline(
     # an action; performance.record_run is only ever called on the enabled
     # path below. See test_research_agent_kill_switch.py.
     if not is_enabled():
-        return PipelineRunResult(enabled=False, reason="research_agent.enabled is False (RESEARCH_AGENT_ENABLED not set) -- pipeline did nothing")
+        return PipelineRunResult(
+            enabled=False, status=STATUS_DISABLED,
+            reason="research_agent.enabled is False (RESEARCH_AGENT_ENABLED not set) -- pipeline did nothing",
+        )
 
     now = now or datetime.now(timezone.utc)
 
@@ -140,6 +154,18 @@ def run_pipeline(
         all_findings, failure_patterns, api_key, existing_hypotheses, max_calls_per_run, now
     )
     hypothesis_gen.persist_hypotheses(generation.hypotheses)
+
+    # Both ScanResult.scan_errors and GenerationRunResult.errors already exist
+    # and already populate correctly at their own layer -- this run was
+    # previously discarding both. Normalized into one shape (phase + context +
+    # message) so main() can print one uniform, prominent error section
+    # instead of two differently-shaped internal lists nothing ever read.
+    errors: list[dict] = []
+    for e in scan_result.scan_errors:
+        errors.append({"phase": "scan", "context": e.get("source", ""), "message": e.get("message", "")})
+    for e in generation.errors:
+        errors.append({"phase": "hypothesis_gen", "context": e.get("scan_finding", ""), "message": e.get("message", "")})
+    status = STATUS_ERROR if errors else STATUS_CLEAN
 
     too_slow = unmeasurable = survived = watchlist = died = untestable = no_candles = 0
     test_results: list[auto_tester.TestResult] = []
@@ -170,6 +196,8 @@ def run_pipeline(
 
     result = PipelineRunResult(
         enabled=True,
+        status=status,
+        errors=errors,
         scan_result=scan_result,
         hypotheses_generated=len(generation.hypotheses),
         duplicates_skipped=len(generation.duplicates_skipped),
@@ -197,12 +225,28 @@ def main() -> None:
     that check. Prints only aggregate, non-secret counts."""
     api_key = os.getenv("ANTHROPIC_API_KEY", "")
     result = run_pipeline(api_key=api_key)
-    print(f"enabled={result.enabled} reason={result.reason!r}")
+    # status is the headline: "disabled" (kill switch off), "error" (something
+    # in scan/hypothesis_gen failed -- see the ERRORS section below), or
+    # "clean" (ran fully with no failures; hypotheses_generated/duplicates_
+    # skipped/etc. above already say whether anything INTERESTING happened --
+    # a clean run that found nothing is not the same claim as a failed run).
+    print(f"status={result.status} enabled={result.enabled} reason={result.reason!r}")
     print(f"hypotheses_generated={result.hypotheses_generated} duplicates_skipped={result.duplicates_skipped}")
     print(f"llm_calls_made={result.llm_calls_made} total_llm_cost_usd={result.total_llm_cost_usd:.6f} cost_limit_hit={result.cost_limit_hit}")
     print(f"too_slow_rejected={result.too_slow_rejected} unmeasurable_rejected={result.unmeasurable_rejected}")
     print(f"survived={result.survived} promising_watchlist={result.promising_watchlist} died={result.died} untestable={result.untestable}")
     print(f"no_candles_available={result.no_candles_available}")
+    # Errors printed as prominently as every summary line above -- status code
+    # or exception class name only, NEVER the api_key value (every message
+    # here comes from ScanResult.scan_errors / GenerationRunResult.errors,
+    # neither of which is ever built from api_key itself -- see
+    # test_research_agent_secret_handling.py).
+    if result.errors:
+        print(f"=== ERRORS ({len(result.errors)}) ===")
+        for err in result.errors:
+            print(f"  [{err['phase']}] {err['context']}: {err['message']}")
+    else:
+        print("errors=none")
 
 
 if __name__ == "__main__":

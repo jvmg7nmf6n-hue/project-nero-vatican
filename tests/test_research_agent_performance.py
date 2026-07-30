@@ -16,6 +16,8 @@ NOW = datetime(2026, 7, 29, tzinfo=timezone.utc)
 class _FakeResult:
     enabled: bool
     reason: str = ""
+    status: str = "clean"
+    errors: list = field(default_factory=list)
     hypotheses_generated: int = 0
     duplicates_skipped: int = 0
     llm_calls_made: int = 0
@@ -63,6 +65,23 @@ class RecordRunTest(unittest.TestCase):
         self.assertAlmostEqual(state["cumulative"]["survival_rate"], 2 / 3)
         self.assertEqual(len(state["runs"]), 1)
         self.assertEqual(state["runs"][0]["run_at"], NOW.isoformat())
+
+    def test_status_and_errors_are_persisted_into_the_run_entry(self) -> None:
+        # A failed run must leave a durable record here, not just console
+        # output that scrolls away once the Actions log closes.
+        errors = [{"phase": "hypothesis_gen", "context": "(preflight key validation)", "message": "401 rejected"}]
+        result = _FakeResult(enabled=True, status="error", errors=errors, hypotheses_generated=0)
+        state = record_run(result, self.path, now=NOW)
+
+        self.assertEqual(state["runs"][0]["status"], "error")
+        self.assertEqual(state["runs"][0]["errors"], errors)
+
+    def test_clean_run_persists_empty_errors_list(self) -> None:
+        result = _FakeResult(enabled=True, status="clean", hypotheses_generated=0)
+        state = record_run(result, self.path, now=NOW)
+
+        self.assertEqual(state["runs"][0]["status"], "clean")
+        self.assertEqual(state["runs"][0]["errors"], [])
 
     def test_cumulative_accumulates_across_multiple_runs(self) -> None:
         record_run(_FakeResult(enabled=True, hypotheses_generated=3, survived=1, died=1), self.path, now=NOW)

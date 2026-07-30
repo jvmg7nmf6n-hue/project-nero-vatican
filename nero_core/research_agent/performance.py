@@ -67,6 +67,11 @@ def _run_entry(result, now: datetime) -> dict:
         "run_at": now.isoformat(),
         "enabled": result.enabled,
         "reason": result.reason,
+        # status + errors: a failed run must leave a durable record here, not
+        # just console output that scrolls away once the Actions log closes.
+        # See pipeline.PipelineRunResult's own STATUS_* constants.
+        "status": result.status,
+        "errors": result.errors,
         "hypotheses_generated": result.hypotheses_generated,
         "duplicates_skipped": result.duplicates_skipped,
         "too_slow_rejected": result.too_slow_rejected,
