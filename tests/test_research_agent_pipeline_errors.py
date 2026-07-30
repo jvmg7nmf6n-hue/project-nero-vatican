@@ -29,6 +29,7 @@ class ScanErrorsSurfaceTest(unittest.TestCase):
         with patch("nero_core.research_agent.pipeline.is_enabled", return_value=True), \
              patch("nero_core.research_agent.pipeline.scanner.run_scan", return_value=scan_with_error), \
              patch("nero_core.research_agent.pipeline.hypothesis_gen.load_existing_hypotheses", return_value=[]), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.generate_web_hypotheses", return_value=GenerationRunResult()), \
              patch("nero_core.research_agent.pipeline.hypothesis_gen.persist_hypotheses"), \
              patch("nero_core.research_agent.pipeline.auto_tester.persist_test_results"), \
              patch("nero_core.research_agent.pipeline.performance.record_run"):
@@ -44,6 +45,7 @@ class ScanErrorsSurfaceTest(unittest.TestCase):
         with patch("nero_core.research_agent.pipeline.is_enabled", return_value=True), \
              patch("nero_core.research_agent.pipeline.scanner.run_scan", return_value=EMPTY_SCAN), \
              patch("nero_core.research_agent.pipeline.hypothesis_gen.load_existing_hypotheses", return_value=[]), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.generate_web_hypotheses", return_value=GenerationRunResult()), \
              patch("nero_core.research_agent.pipeline.hypothesis_gen.persist_hypotheses"), \
              patch("nero_core.research_agent.pipeline.auto_tester.persist_test_results"), \
              patch("nero_core.research_agent.pipeline.performance.record_run"):
@@ -67,6 +69,7 @@ class HypothesisGenErrorsSurfaceTest(unittest.TestCase):
              patch("nero_core.research_agent.pipeline.scanner.run_scan", return_value=EMPTY_SCAN), \
              patch("nero_core.research_agent.pipeline.hypothesis_gen.load_existing_hypotheses", return_value=[]), \
              patch("nero_core.research_agent.pipeline.hypothesis_gen.generate_hypotheses", return_value=generation_with_error), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.generate_web_hypotheses", return_value=GenerationRunResult()), \
              patch("nero_core.research_agent.pipeline.hypothesis_gen.persist_hypotheses"), \
              patch("nero_core.research_agent.pipeline.auto_tester.persist_test_results"), \
              patch("nero_core.research_agent.pipeline.performance.record_run"):
@@ -93,6 +96,7 @@ class HypothesisGenErrorsSurfaceTest(unittest.TestCase):
              patch("nero_core.research_agent.pipeline.scanner.run_scan", return_value=EMPTY_SCAN), \
              patch("nero_core.research_agent.pipeline.hypothesis_gen.load_existing_hypotheses", return_value=[]), \
              patch("nero_core.research_agent.pipeline.hypothesis_gen.generate_hypotheses", return_value=generation_with_error), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.generate_web_hypotheses", return_value=GenerationRunResult()), \
              patch("nero_core.research_agent.pipeline.hypothesis_gen.persist_hypotheses"), \
              patch("nero_core.research_agent.pipeline.auto_tester.persist_test_results"), \
              patch("nero_core.research_agent.pipeline.performance.record_run"):
@@ -120,6 +124,7 @@ class MainPrintsErrorsProminentlyTest(unittest.TestCase):
              patch("nero_core.research_agent.pipeline.scanner.run_scan", return_value=EMPTY_SCAN), \
              patch("nero_core.research_agent.pipeline.hypothesis_gen.load_existing_hypotheses", return_value=[]), \
              patch("nero_core.research_agent.pipeline.hypothesis_gen.generate_hypotheses", return_value=generation_with_error), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.generate_web_hypotheses", return_value=GenerationRunResult()), \
              patch("nero_core.research_agent.pipeline.hypothesis_gen.persist_hypotheses"), \
              patch("nero_core.research_agent.pipeline.auto_tester.persist_test_results"), \
              patch("nero_core.research_agent.pipeline.performance.record_run"):
@@ -135,9 +140,14 @@ class MainPrintsErrorsProminentlyTest(unittest.TestCase):
         self.assertNotIn("errors=none", printed)
 
     def test_main_prints_errors_none_and_status_clean_for_an_uneventful_run(self) -> None:
+        # This test does not patch os.environ, so ANTHROPIC_API_KEY (if set in
+        # the real shell environment) would otherwise flow into a REAL
+        # generate_web_hypotheses call -- mocked explicitly here for the same
+        # reason as every other test in this class/file.
         with patch("nero_core.research_agent.pipeline.is_enabled", return_value=True), \
              patch("nero_core.research_agent.pipeline.scanner.run_scan", return_value=EMPTY_SCAN), \
              patch("nero_core.research_agent.pipeline.hypothesis_gen.load_existing_hypotheses", return_value=[]), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.generate_web_hypotheses", return_value=GenerationRunResult()), \
              patch("nero_core.research_agent.pipeline.hypothesis_gen.persist_hypotheses"), \
              patch("nero_core.research_agent.pipeline.auto_tester.persist_test_results"), \
              patch("nero_core.research_agent.pipeline.performance.record_run"):
@@ -149,6 +159,61 @@ class MainPrintsErrorsProminentlyTest(unittest.TestCase):
         self.assertIn("status=clean", printed)
         self.assertIn("errors=none", printed)
         self.assertNotIn("=== ERRORS", printed)
+
+
+class WebSearchChannelMergeTest(unittest.TestCase):
+    """Proves the scanner and web-search channels' hypotheses are actually
+    MERGED into one list and driven through the SAME per-hypothesis loop
+    (candles_provider -> auto_tester.test_hypothesis) -- not two separate
+    loops with different logic. This is pipeline.py's own half of the "no
+    special treatment" guarantee; the gate/harness-level half is proven
+    directly in test_research_agent_web_hypothesis_gen.py's
+    NoSpecialTreatmentTest."""
+
+    def test_both_channels_hypotheses_reach_auto_tester_and_counts_add_up(self) -> None:
+        scanner_hyp = {
+            "hypothesis_name": "SCANNER_ONE", "asset": "BTC", "timeframe": "1h",
+            "generated_at": "2026-07-31T00:00:00+00:00",
+            "structured_entry_rule": {"conditions": [{"field": "ret_1", "op": "gt", "value": -1.0}]},
+            "structured_exit_plan": {"stop_atr_multiple": 1.5, "target_r_multiple": 2.0, "max_holding_hours": 24.0},
+        }
+        web_hyp = {
+            "hypothesis_name": "WEB_ONE", "asset": "EUR/USD", "timeframe": "4h",
+            "generated_at": "2026-07-31T00:00:00+00:00",
+            "structured_entry_rule": {"conditions": [{"field": "ret_1", "op": "gt", "value": -1.0}]},
+            "structured_exit_plan": {"stop_atr_multiple": 1.5, "target_r_multiple": 2.0, "max_holding_hours": 24.0},
+            "discovery_channel": "web_search", "source_tier": "unknown_unverifiable",
+        }
+        scanner_generation = GenerationRunResult(hypotheses=[scanner_hyp], llm_calls_made=1, total_cost_usd=0.02)
+        web_generation = GenerationRunResult(hypotheses=[web_hyp], llm_calls_made=1, total_cost_usd=0.05)
+
+        seen_pairs = []
+
+        def _candles_provider(asset, timeframe):
+            seen_pairs.append((asset, timeframe))
+            return None  # no_candles_available -- fine, this test is about REACHING the loop, not the verdict
+
+        with patch("nero_core.research_agent.pipeline.is_enabled", return_value=True), \
+             patch("nero_core.research_agent.pipeline.scanner.run_scan", return_value=EMPTY_SCAN), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.load_existing_hypotheses", return_value=[]), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.generate_hypotheses", return_value=scanner_generation), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.generate_web_hypotheses", return_value=web_generation), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.persist_hypotheses"), \
+             patch("nero_core.research_agent.pipeline.auto_tester.persist_test_results"), \
+             patch("nero_core.research_agent.pipeline.performance.record_run"):
+            result = run_pipeline(api_key="fake-key", candles_provider=_candles_provider)
+
+        # Both hypotheses' (asset, timeframe) actually reached the SAME
+        # candles_provider callback -- proof the merge happened, not just two
+        # separate result objects nothing ever combined.
+        self.assertEqual(set(seen_pairs), {("BTC", "1h"), ("EUR/USD", "4h")})
+        self.assertEqual(result.hypotheses_generated, 2)
+        self.assertEqual(result.web_hypotheses_generated, 1)
+        self.assertEqual(result.no_candles_available, 2)
+        self.assertEqual(result.llm_calls_made, 2)
+        self.assertEqual(result.web_llm_calls_made, 1)
+        self.assertAlmostEqual(result.total_llm_cost_usd, 0.07, places=8)
+        self.assertAlmostEqual(result.web_total_llm_cost_usd, 0.05, places=8)
 
 
 if __name__ == "__main__":

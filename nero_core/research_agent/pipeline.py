@@ -139,12 +139,24 @@ class PipelineRunResult:
     untestable: int = 0
     no_candles_available: int = 0
     test_results: list = field(default_factory=list)
+    # Web-sourced discovery channel breakdown (added alongside the scanner
+    # path, not replacing it -- hypotheses_generated/llm_calls_made/
+    # total_llm_cost_usd/cost_limit_hit above are the COMBINED totals across
+    # BOTH channels; these track the web channel's own contribution, so a
+    # reader can see how much of the combined total came from web search
+    # specifically. Every hypothesis dict itself also carries its own
+    # discovery_channel field for per-hypothesis attribution.
+    web_hypotheses_generated: int = 0
+    web_llm_calls_made: int = 0
+    web_total_llm_cost_usd: float = 0.0
+    web_cost_limit_hit: bool = False
 
 
 def run_pipeline(
     api_key: str = "",
     candles_provider: CandlesProvider = default_candles_provider,
     max_calls_per_run: int = hypothesis_gen.DEFAULT_MAX_CALLS_PER_RUN,
+    web_max_calls_per_run: int = hypothesis_gen.DEFAULT_WEB_MAX_CALLS_PER_RUN,
     now: datetime | None = None,
 ) -> PipelineRunResult:
     # Kill switch: checked BEFORE `now` is even resolved, and returns with no
@@ -175,6 +187,20 @@ def run_pipeline(
     )
     hypothesis_gen.persist_hypotheses(generation.hypotheses)
 
+    # Web-sourced discovery: an INDEPENDENT, parallel channel -- NOT gated on
+    # the scanner finding nothing (see docs/research_agent_web_scaling_notes
+    # -- Part 1's approved design: gating on scanner-emptiness would bias
+    # web-sourced ideas toward the least-informative runs). `existing_hypotheses
+    # + generation.hypotheses` (not just existing_hypotheses) so this run's own
+    # scanner-sourced output is also visible as "already proposed" context to
+    # the web-search prompt, same in-run-dedup spirit generate_hypotheses
+    # already applies to itself via its own `known` list.
+    tracked_pairs = hypothesis_gen.load_tracked_asset_timeframes()
+    web_generation = hypothesis_gen.generate_web_hypotheses(
+        existing_hypotheses + generation.hypotheses, failure_patterns, api_key, tracked_pairs, web_max_calls_per_run, now
+    )
+    hypothesis_gen.persist_hypotheses(web_generation.hypotheses)
+
     # Both ScanResult.scan_errors and GenerationRunResult.errors already exist
     # and already populate correctly at their own layer -- this run was
     # previously discarding both. Normalized into one shape (phase + context +
@@ -185,11 +211,23 @@ def run_pipeline(
         errors.append({"phase": "scan", "context": e.get("source", ""), "message": e.get("message", "")})
     for e in generation.errors:
         errors.append({"phase": "hypothesis_gen", "context": e.get("scan_finding", ""), "message": e.get("message", "")})
+    for e in web_generation.errors:
+        errors.append({"phase": "hypothesis_gen", "context": e.get("scan_finding", ""), "message": e.get("message", "")})
     status = STATUS_ERROR if errors else STATUS_CLEAN
+
+    # RULE 1 (no special trust): scanner-sourced and web-sourced hypotheses are
+    # concatenated into ONE list and fed through this SAME loop below -- not a
+    # separate branch, not a separate call to auto_tester/frequency_gate with
+    # different arguments. This is the strongest available proof that a
+    # web-sourced hypothesis gets zero special treatment: it is, literally,
+    # the same code path as a scanner-sourced one from this point on. See
+    # tests/test_research_agent_web_hypothesis_gen.py's NoSpecialTreatmentTest
+    # for the direct gate/harness-level proof this loop's uniformity implies.
+    all_hypotheses = generation.hypotheses + web_generation.hypotheses
 
     too_slow = unmeasurable = survived = watchlist = died = untestable = no_candles = 0
     test_results: list[auto_tester.TestResult] = []
-    for record in generation.hypotheses:
+    for record in all_hypotheses:
         candles = candles_provider(record["asset"], record["timeframe"])
         if candles is None or candles.empty:
             no_candles += 1
@@ -219,11 +257,11 @@ def run_pipeline(
         status=status,
         errors=errors,
         scan_result=scan_result,
-        hypotheses_generated=len(generation.hypotheses),
-        duplicates_skipped=len(generation.duplicates_skipped),
-        llm_calls_made=generation.llm_calls_made,
-        total_llm_cost_usd=generation.total_cost_usd,
-        cost_limit_hit=generation.cost_limit_hit,
+        hypotheses_generated=len(all_hypotheses),
+        duplicates_skipped=len(generation.duplicates_skipped) + len(web_generation.duplicates_skipped),
+        llm_calls_made=generation.llm_calls_made + web_generation.llm_calls_made,
+        total_llm_cost_usd=generation.total_cost_usd + web_generation.total_cost_usd,
+        cost_limit_hit=generation.cost_limit_hit or web_generation.cost_limit_hit,
         too_slow_rejected=too_slow,
         unmeasurable_rejected=unmeasurable,
         survived=survived,
@@ -232,6 +270,10 @@ def run_pipeline(
         untestable=untestable,
         no_candles_available=no_candles,
         test_results=test_results,
+        web_hypotheses_generated=len(web_generation.hypotheses),
+        web_llm_calls_made=web_generation.llm_calls_made,
+        web_total_llm_cost_usd=web_generation.total_cost_usd,
+        web_cost_limit_hit=web_generation.cost_limit_hit,
     )
     performance.record_run(result, now=now)
     return result
@@ -253,6 +295,9 @@ def main() -> None:
     print(f"status={result.status} enabled={result.enabled} reason={result.reason!r}")
     print(f"hypotheses_generated={result.hypotheses_generated} duplicates_skipped={result.duplicates_skipped}")
     print(f"llm_calls_made={result.llm_calls_made} total_llm_cost_usd={result.total_llm_cost_usd:.6f} cost_limit_hit={result.cost_limit_hit}")
+    print(f"  of which web_search: web_hypotheses_generated={result.web_hypotheses_generated} "
+          f"web_llm_calls_made={result.web_llm_calls_made} web_total_llm_cost_usd={result.web_total_llm_cost_usd:.6f} "
+          f"web_cost_limit_hit={result.web_cost_limit_hit}")
     print(f"too_slow_rejected={result.too_slow_rejected} unmeasurable_rejected={result.unmeasurable_rejected}")
     print(f"survived={result.survived} promising_watchlist={result.promising_watchlist} died={result.died} untestable={result.untestable}")
     print(f"no_candles_available={result.no_candles_available}")

@@ -69,8 +69,24 @@ from nero_core.research_agent.storage import append_json_list, read_json_list
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_HYPOTHESES_PATH = REPO_ROOT / "docs" / "site_data" / "agent_hypotheses.json"
+# Same file scanner.py's own low_strategy_coverage check already reads as the
+# tracked-universe source of truth -- reused here (not re-globbed from
+# docs/site_data/candles/ directly) so web-sourced generation and the scanner
+# agree on what "currently tracked" means from the exact same export.
+DEFAULT_QUANT_METRICS_PATH = REPO_ROOT / "docs" / "site_data" / "quant_metrics.json"
 
 DEFAULT_MAX_CALLS_PER_RUN = 10
+
+# Web-sourced discovery (added 2026-07-31): a SEPARATE, independent channel and
+# budget from the scanner path above -- Part 1 of this investigation confirmed
+# the Research Agent's own GitHub Actions workflow (research_agent_manual.yml)
+# is workflow_dispatch-ONLY (no `schedule:` block), so run frequency is already
+# human-gated; the two channels are kept on separate caps so neither silently
+# starves the other of the same fixed budget, not because of a scheduling risk.
+# Deliberately conservative for the first real run (10x smaller than the
+# scanner path's own cap) given the higher per-hypothesis cost below -- raise
+# once real cost data from actual use justifies it.
+DEFAULT_WEB_MAX_CALLS_PER_RUN = 3
 
 # Pricing effective 2026-07-29 (introductory rate through 2026-08-31): $2.00
 # input / $10.00 output per MTok for claude-sonnet-5. Reverts to the standard
@@ -78,6 +94,36 @@ DEFAULT_MAX_CALLS_PER_RUN = 10
 # Source: the Claude API pricing reference, cached 2026-06-24.
 INPUT_COST_PER_MTOK = 2.00
 OUTPUT_COST_PER_MTOK = 10.00
+
+# Anthropic's server-side web_search tool: $10 per 1,000 searches ($0.01/search),
+# billed ON TOP OF normal token costs for the search results injected into
+# context -- confirmed via the pricing note in this task's own approval, not
+# guessed. A web-sourced hypothesis's real cost is token cost (see
+# INPUT_COST_PER_MTOK/OUTPUT_COST_PER_MTOK above) PLUS this per-search fee --
+# see _web_search_count/_web_call_cost_usd below for how the two are combined.
+WEB_SEARCH_COST_PER_SEARCH = 0.01
+
+# web_search_20260209 is the dynamic-filtering tool variant (code execution
+# runs under the hood for result filtering -- do NOT also declare a standalone
+# code_execution tool alongside it, per the Claude API's own guidance, since a
+# second execution environment would confuse the model). Confirmed compatible
+# with claude-sonnet-5 (this module's own claude_model default) -- the
+# _20260209 variants require Opus 5/4.8/4.7/4.6, Sonnet 5, or Sonnet 4.6.
+# max_uses caps search calls WITHIN one hypothesis-generation request -- a
+# cost safety net independent of DEFAULT_WEB_MAX_CALLS_PER_RUN, which caps how
+# many separate hypothesis-generation REQUESTS a run makes.
+WEB_SEARCH_TOOL: dict = {"type": "web_search_20260209", "name": "web_search", "max_uses": 5}
+
+# Rule 2 (source quality must be recorded, not just the idea): recorded for
+# transparency/audit, never used to skip, weight, or soften the frequency gate
+# or auto_tester -- see check_graveyard_match's own docstring and
+# test_research_agent_web_hypothesis_gen.py's no-special-treatment test.
+SOURCE_TIERS = (
+    "peer_reviewed_academic",
+    "established_financial_publication",
+    "trading_forum_social_media",
+    "unknown_unverifiable",
+)
 
 
 @dataclass(frozen=True)
@@ -294,13 +340,28 @@ class ResponseParseError(Exception):
         self.usage = usage
 
 
-def _call_claude(prompt: str, api_key: str, params: HypothesisGenParameters) -> tuple[dict, dict]:
+def _call_claude(
+    prompt: str, api_key: str, params: HypothesisGenParameters, tools: list[dict] | None = None
+) -> tuple[dict, dict]:
     """Returns (parsed_json_data, usage_dict). Raises requests.RequestException
     on a transport/HTTP-status failure (nothing billed, no usage available) or
     ResponseParseError on a 2xx response this module can't parse (billed --
     carries `usage`) -- the caller (generate_hypotheses) is responsible for
     catching and recording either, matching this project's existing per-call
-    error handling convention (news_sentiment_llm.analyze_headline)."""
+    error handling convention (news_sentiment_llm.analyze_headline).
+
+    `tools` (added for web-sourced generation -- see generate_web_hypotheses):
+    when given, added to the request body as-is (e.g. [WEB_SEARCH_TOOL]) --
+    the scanner path's own calls never pass this, so its request body is
+    byte-for-byte unchanged from before this parameter existed."""
+    body = {
+        "model": params.claude_model,
+        "max_tokens": params.claude_max_tokens,
+        "thinking": params.claude_thinking,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    if tools:
+        body["tools"] = tools
     response = requests.post(
         params.claude_api_url,
         headers={
@@ -308,12 +369,7 @@ def _call_claude(prompt: str, api_key: str, params: HypothesisGenParameters) -> 
             "anthropic-version": params.claude_api_version,
             "content-type": "application/json",
         },
-        json={
-            "model": params.claude_model,
-            "max_tokens": params.claude_max_tokens,
-            "thinking": params.claude_thinking,
-            "messages": [{"role": "user", "content": prompt}],
-        },
+        json=body,
         timeout=params.claude_timeout_seconds,
     )
     response.raise_for_status()
@@ -385,12 +441,119 @@ def _call_cost_usd(usage: dict, params: HypothesisGenParameters) -> float:
     return (input_tokens / 1_000_000.0) * params.input_cost_per_mtok + (output_tokens / 1_000_000.0) * params.output_cost_per_mtok
 
 
-def _build_record(finding: ScanFinding, data: dict, cost_usd: float, now: datetime) -> dict:
+def _web_search_count(usage: dict) -> int:
+    """Real search-call count from Anthropic's own reported usage, NEVER
+    guessed or estimated: the Messages API reports server-tool invocation
+    counts under usage.server_tool_use.web_search_requests. Returns 0 (not a
+    fabricated default) if that key is absent -- e.g. a response that never
+    reached the tool-use step, or a provider/response shape this hasn't been
+    observed against yet."""
+    server_tool_use = usage.get("server_tool_use") or {}
+    return int(server_tool_use.get("web_search_requests", 0) or 0)
+
+
+def _web_call_cost_usd(usage: dict, params: HypothesisGenParameters) -> float:
+    """Token cost (identical formula to _call_cost_usd) PLUS the real
+    per-search fee ($0.01/search, WEB_SEARCH_COST_PER_SEARCH) for however many
+    searches Anthropic's own usage reports actually ran -- see the pricing
+    note in this module's WEB_SEARCH_COST_PER_SEARCH docstring. Never assumes
+    a search occurred that isn't reflected in `usage` itself."""
+    return _call_cost_usd(usage, params) + _web_search_count(usage) * WEB_SEARCH_COST_PER_SEARCH
+
+
+# --- Graveyard check (Rule 4: applies equally regardless of web vs scanner
+# origin -- see this module's own docstring update below and
+# test_research_agent_hypothesis_gen.py's cross-origin test) ------------------
+
+# Deliberately small and generic -- filtered out before the overlap check so a
+# real repeat isn't masked by two mechanisms merely sharing common English
+# connective words, not the substance of the mechanism itself.
+_GRAVEYARD_STOPWORDS = frozenset({
+    "this", "that", "these", "those", "with", "from", "into", "than", "then",
+    "each", "both", "near", "real", "only", "over", "such", "less", "more",
+    "will", "have", "been", "were", "when", "what", "which", "while", "does",
+    "would", "could", "should", "about", "after", "before", "under", "above",
+})
+
+# Overlap coefficient (intersection / smaller-set size), not Jaccard (which
+# would dilute against a long fix_rationale paragraph): a short hypothesis
+# mechanism sharing most of its distinctive words with EITHER a short `name`+
+# `family` pair OR a long `fix_rationale` should count as a real match either
+# way -- Jaccard's union-based denominator would silently under-flag the
+# long-text case. Threshold chosen to require substantial, not incidental,
+# overlap -- see test_research_agent_hypothesis_gen.py for the calibration
+# checks (a real near-repeat clears it; an unrelated mechanism does not).
+GRAVEYARD_OVERLAP_THRESHOLD = 0.35
+
+
+@dataclass(frozen=True)
+class GraveyardCheckResult:
+    is_likely_repeat: bool
+    method: str  # human-readable, always names the matched pattern + overlap when True
+    matched_pattern_name: str | None = None
+
+
+def _significant_words(text: str) -> set[str]:
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    return {w for w in words if len(w) >= 4 and w not in _GRAVEYARD_STOPWORDS}
+
+
+def check_graveyard_match(hypothesis_name: str, mechanism: str, failure_patterns: list[dict]) -> GraveyardCheckResult:
+    """Coarse, deliberately auditable word-overlap check against every entry
+    in failure_patterns.json -- same "no fuzzy text similarity, no embeddings"
+    discipline as check_duplicate above, applied to a DIFFERENT question
+    (does this mechanism resemble one that already DIED, not "is this the
+    exact same scan finding"). Applies identically regardless of whether the
+    hypothesis came from the scanner or from web search -- neither path calls
+    this with different logic or a different threshold; see
+    test_research_agent_hypothesis_gen.py's cross-origin test.
+
+    Advisory only: a likely-repeat is FLAGGED (recorded on the hypothesis
+    record for a human/downstream reader to see), never used to silently
+    reject or skip a hypothesis -- that decision stays with frequency_gate/
+    auto_tester's own measured-frequency verdict, untouched by this check."""
+    hyp_words = _significant_words(f"{hypothesis_name} {mechanism}")
+    if not hyp_words:
+        return GraveyardCheckResult(False, "hypothesis text has no significant words to compare")
+
+    best_name: str | None = None
+    best_overlap = 0.0
+    for pattern in failure_patterns:
+        pattern_text = " ".join(
+            str(pattern.get(key, "")) for key in ("name", "family", "fix_rationale")
+        )
+        pattern_words = _significant_words(pattern_text)
+        if not pattern_words:
+            continue
+        shared = hyp_words & pattern_words
+        overlap = len(shared) / min(len(hyp_words), len(pattern_words))
+        if overlap > best_overlap:
+            best_overlap = overlap
+            best_name = str(pattern.get("name", ""))
+
+    if best_overlap >= GRAVEYARD_OVERLAP_THRESHOLD:
+        return GraveyardCheckResult(
+            True,
+            f"overlap={best_overlap:.2f} (>= threshold {GRAVEYARD_OVERLAP_THRESHOLD}) with "
+            f"failure_patterns.json entry {best_name!r}",
+            best_name,
+        )
+    return GraveyardCheckResult(
+        False,
+        f"no failure_patterns.json entry cleared the overlap threshold "
+        f"(best={best_overlap:.2f} < {GRAVEYARD_OVERLAP_THRESHOLD})",
+    )
+
+
+def _build_record(finding: ScanFinding, data: dict, cost_usd: float, now: datetime, failure_patterns: list[dict]) -> dict:
+    hypothesis_name = str(data.get("hypothesis_name", "")).strip()
+    mechanism = str(data.get("mechanism", "")).strip()
+    graveyard_check = check_graveyard_match(hypothesis_name, mechanism, failure_patterns)
     return {
         "scan_finding": finding.description,
         "scan_finding_type": finding.finding_type,
-        "hypothesis_name": str(data.get("hypothesis_name", "")).strip(),
-        "mechanism": str(data.get("mechanism", "")).strip(),
+        "hypothesis_name": hypothesis_name,
+        "mechanism": mechanism,
         "entry_rule": str(data.get("entry_rule", "")).strip(),
         "structured_entry_rule": data.get("structured_entry_rule"),
         "exit_rule": str(data.get("exit_rule", "")).strip(),
@@ -403,6 +566,12 @@ def _build_record(finding: ScanFinding, data: dict, cost_usd: float, now: dateti
         "generated_at": now.isoformat(),
         "cost_usd": cost_usd,
         "source": "claude",
+        "discovery_channel": "scanner",
+        "graveyard_check": {
+            "is_likely_repeat": graveyard_check.is_likely_repeat,
+            "method": graveyard_check.method,
+            "matched_pattern_name": graveyard_check.matched_pattern_name,
+        },
     }
 
 
@@ -495,7 +664,7 @@ def generate_hypotheses(
         calls_made += 1
         cost = _call_cost_usd(usage, params)
         total_cost += cost
-        record = _build_record(finding, data, cost, now)
+        record = _build_record(finding, data, cost, now, failure_patterns)
         hypotheses.append(record)
         known.append(record)
 
@@ -509,3 +678,298 @@ def persist_hypotheses(hypotheses: list[dict], path: Path = DEFAULT_HYPOTHESES_P
 
 def load_existing_hypotheses(path: Path = DEFAULT_HYPOTHESES_PATH) -> list[dict]:
     return read_json_list(path)
+
+
+def load_tracked_asset_timeframes(path: Path = DEFAULT_QUANT_METRICS_PATH) -> list[tuple[str, str]]:
+    """Every (asset, timeframe) pair this project currently has real candle
+    data for, derived from quant_metrics.json (the same per-file export
+    scanner.py's own low_strategy_coverage check reads) -- NEVER a guessed or
+    hardcoded list. This exists specifically so a web-sourced hypothesis is
+    constrained to a pair that can actually be tested: without it, an LLM
+    asked to "pick an asset" has no way to know which of its own training-data
+    knowledge of tickers actually has a candle file on this platform, which is
+    exactly the USD/JPY-4h class of defect this project's own prior
+    investigation found in the scanner-sourced path (a hypothesis for an
+    untracked pair silently becomes no_candles_available, never reaching the
+    gate). Returns an empty list (never a fabricated fallback) if the export
+    is missing or unparseable."""
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return []
+    metrics = data.get("metrics") if isinstance(data, dict) else None
+    if not isinstance(metrics, list):
+        return []
+    pairs = {
+        (str(m["asset"]), str(m["timeframe"]))
+        for m in metrics
+        if isinstance(m, dict) and "asset" in m and "timeframe" in m
+    }
+    return sorted(pairs)
+
+
+WEB_HYPOTHESIS_JSON_KEYS = (
+    "hypothesis_name", "mechanism", "source_url", "source_description", "source_tier",
+    "paraphrase_confirmed", "entry_rule", "structured_entry_rule", "exit_rule", "stop_rule",
+    "structured_exit_plan", "asset", "timeframe", "differs_from_graveyard", "expected_frequency_claim",
+)
+
+
+def _build_web_search_prompt(
+    tracked_pairs: list[tuple[str, str]], known_hypothesis_names: list[str], failure_patterns: list[dict]
+) -> str:
+    pairs_line = ", ".join(f"{asset}/{timeframe}" for asset, timeframe in tracked_pairs) or "(none currently tracked)"
+    known_line = ", ".join(n for n in known_hypothesis_names if n) or "(none yet)"
+
+    return f"""You are a quantitative research assistant for Project Vatican, a paper-trading
+research platform (never real-money execution) for gold, crypto, forex, and stocks.
+
+Use web search to find a real, documented trading strategy idea from ANY of: an academic
+paper, published quantitative-finance research, a well-known technical pattern, or a
+strategy writeup. Then propose ONE new trading hypothesis adapting that idea to one of
+this project's own currently-tracked (asset, timeframe) pairs, listed below -- do NOT
+invent an untracked asset or timeframe; a hypothesis for a pair with no real candle data
+on this platform can never be measured or tested, no matter how sound the idea is.
+
+CURRENTLY TRACKED (asset, timeframe) PAIRS -- pick exactly one of these:
+{pairs_line}
+
+ALREADY-PROPOSED HYPOTHESES (avoid a near-duplicate of any of these):
+{known_line}
+
+KNOWN DEAD MECHANISMS (never propose a hypothesis whose core mechanism matches one of
+these -- they have already been tested on this platform and failed):
+{_format_failure_patterns(failure_patterns)}
+
+CRITICAL SOURCING RULES -- read carefully, these are non-negotiable:
+1. Web provenance is NOT a credibility shortcut. This hypothesis will go through the exact
+   same measured-frequency gate and statistical harness as every other hypothesis on this
+   platform -- being "from a paper" or "from a well-known pattern" earns it no special
+   trust, no skipped checks, no softened bar.
+2. You MUST record where the idea came from: a URL if you found one via search (source_url),
+   AND the specific publication/platform/paper name (source_description) -- a URL alone is
+   not a durable citation. Also classify the source into exactly one tier: source_tier must
+   be exactly one of "peer_reviewed_academic", "established_financial_publication",
+   "trading_forum_social_media", "unknown_unverifiable".
+3. NEVER reproduce a source's exact rule text, code, or proprietary wording verbatim.
+   Describe the mechanism ENTIRELY in your own words. If you genuinely cannot paraphrase
+   the source's exact rules without copying them (e.g. a paid course's specific numeric
+   thresholds presented as its proprietary system), do NOT fabricate a paraphrase and do
+   NOT propose a hypothesis from that source -- instead return EXACTLY this JSON and
+   nothing else: {{"skipped": true, "skip_reason": "<why this source could not be safely
+   paraphrased>"}}.
+
+CRITICAL REQUIREMENT: Vatican needs hypotheses that generate AT LEAST 20-30 trades per
+year. A mechanism that only fires 2-3 times per year is USELESS for this platform no
+matter how sound the reasoning is, because it would take years to accumulate enough
+resolved trades to know whether it actually works. Design the entry condition to be
+FREQUENT, not rare.
+
+If you are proceeding (not skipping), return STRICT JSON only, with exactly these keys
+and no others:
+- hypothesis_name: a short unique identifier, e.g. "TURN_OF_MONTH_BTC_24H"
+- mechanism: 2-3 sentences on WHY this should work, described entirely in your own words
+- source_url: the URL you found this at, or "" if the citation is better expressed as a
+  publication/platform name (put that in source_description instead)
+- source_description: the publication, platform, paper title, or author (e.g. "Journal of
+  Finance, Smith & Jones 2019" or "r/algotrading community writeup") -- required even when
+  source_url is present
+- source_tier: exactly one of "peer_reviewed_academic", "established_financial_publication",
+  "trading_forum_social_media", "unknown_unverifiable"
+- paraphrase_confirmed: true (only ever true in a non-skipped response -- if you could not
+  confirm this, you should have returned the skip JSON above instead)
+- entry_rule: a precise, human-readable entry condition
+- structured_entry_rule: a machine-checkable version of entry_rule, shaped exactly as
+  {{"conditions": [{{"field": <field>, "op": <op>, "value": <number>}}, ...]}} (multiple
+  conditions are ANDed together). Allowed fields: close, ma20, ma50, ma200, zscore20,
+  atr14, rsi14, adx14, ret_1, volume. Allowed ops: gt, gte, lt, lte, eq, cross_above,
+  cross_below. Each condition's right-hand side is EITHER a fixed "value" (a number) OR a
+  "compare_to_field" naming another one of the allowed fields above -- exactly one of the
+  two, never both. If the entry condition genuinely cannot be expressed with these
+  fields/ops, set structured_entry_rule to null -- do NOT force an approximate mapping.
+- exit_rule: a precise exit condition
+- stop_rule: a precise stop-loss condition
+- structured_exit_plan: a machine-checkable exit/stop shape, shaped exactly as
+  {{"stop_atr_multiple": <number>, "target_r_multiple": <number>, "max_holding_hours":
+  <number>}}. All three must be positive numbers. If exit_rule/stop_rule genuinely cannot
+  be expressed this way, set structured_exit_plan to null -- do NOT force an approximate
+  mapping.
+- asset: exactly one asset string from the tracked pairs list above
+- timeframe: exactly one timeframe string from the tracked pairs list above, matching the
+  asset you chose
+- differs_from_graveyard: 1-2 sentences on how this differs from every dead mechanism
+  listed above
+- expected_frequency_claim: your own numeric estimate of trades/year (a float) -- recorded
+  for reference ONLY. Vatican independently MEASURES the real historical frequency from
+  candle data and will reject this hypothesis if the measured number doesn't clear the
+  20-30/year bar above, regardless of what you estimate here.
+
+Do not include any field other than these fourteen (or, if skipping, exactly the two
+skip fields and nothing else)."""
+
+
+@dataclass(frozen=True)
+class WebHypothesisResult:
+    record: dict | None  # None when the LLM returned a skip
+    skipped: bool
+    skip_reason: str | None = None
+
+
+def _build_web_record(data: dict, cost_usd: float, now: datetime, failure_patterns: list[dict]) -> WebHypothesisResult:
+    """Mirrors _build_record's field-building discipline, but for the
+    web-sourced schema (Rule 2/3 fields added, no ScanFinding to fall back to
+    for asset/timeframe -- an LLM that omits them gets an empty string, which
+    honestly fails no_candles_available downstream rather than fabricating a
+    default asset)."""
+    if data.get("skipped"):
+        return WebHypothesisResult(None, True, str(data.get("skip_reason", "")).strip() or "no reason given")
+
+    source_tier = str(data.get("source_tier", "")).strip()
+    if source_tier not in SOURCE_TIERS:
+        # Never silently upgrade an unrecognized/missing tier -- the most
+        # conservative tier is the honest default, not a guess in either
+        # direction.
+        source_tier = "unknown_unverifiable"
+
+    hypothesis_name = str(data.get("hypothesis_name", "")).strip()
+    mechanism = str(data.get("mechanism", "")).strip()
+    graveyard_check = check_graveyard_match(hypothesis_name, mechanism, failure_patterns)
+
+    record = {
+        "hypothesis_name": hypothesis_name,
+        "mechanism": mechanism,
+        "entry_rule": str(data.get("entry_rule", "")).strip(),
+        "structured_entry_rule": data.get("structured_entry_rule"),
+        "exit_rule": str(data.get("exit_rule", "")).strip(),
+        "stop_rule": str(data.get("stop_rule", "")).strip(),
+        "structured_exit_plan": data.get("structured_exit_plan"),
+        "asset": str(data.get("asset", "")).strip(),
+        "timeframe": str(data.get("timeframe", "")).strip(),
+        "differs_from_graveyard": str(data.get("differs_from_graveyard", "")).strip(),
+        "expected_frequency_claim": data.get("expected_frequency_claim"),
+        "generated_at": now.isoformat(),
+        "cost_usd": cost_usd,
+        "source": "claude",
+        "discovery_channel": "web_search",
+        "source_url": str(data.get("source_url", "")).strip(),
+        "source_description": str(data.get("source_description", "")).strip(),
+        "source_tier": source_tier,
+        "paraphrase_confirmed": bool(data.get("paraphrase_confirmed", False)),
+        "graveyard_check": {
+            "is_likely_repeat": graveyard_check.is_likely_repeat,
+            "method": graveyard_check.method,
+            "matched_pattern_name": graveyard_check.matched_pattern_name,
+        },
+    }
+    return WebHypothesisResult(record, False)
+
+
+def generate_web_hypotheses(
+    existing_hypotheses: list[dict],
+    failure_patterns: list[dict],
+    api_key: str,
+    tracked_pairs: list[tuple[str, str]],
+    max_calls_per_run: int = DEFAULT_WEB_MAX_CALLS_PER_RUN,
+    now: datetime | None = None,
+    params: HypothesisGenParameters = DEFAULT_PARAMETERS,
+) -> GenerationRunResult:
+    """Web-search-based discovery -- an INDEPENDENT, parallel channel from
+    generate_hypotheses (the scanner path), per this project's own approved
+    design: not gated on the scanner finding nothing (that would bias
+    web-sourced ideas toward the least-informative runs), own separate call
+    budget (max_calls_per_run, default DEFAULT_WEB_MAX_CALLS_PER_RUN=3 --
+    deliberately smaller than the scanner path's 10, given the higher
+    per-call cost: token cost plus Anthropic's real $0.01/search server fee,
+    see WEB_SEARCH_COST_PER_SEARCH).
+
+    RULE 1 (no special trust): every non-skipped record returned here has the
+    EXACT SAME core fields (hypothesis_name/entry_rule/structured_entry_rule/
+    exit_rule/stop_rule/structured_exit_plan/asset/timeframe/generated_at)
+    that frequency_gate.py and auto_tester.py already consume from the
+    scanner path. Neither of those two modules was changed to add this
+    function, and neither reads discovery_channel/source_url/source_tier/
+    paraphrase_confirmed/graveyard_check at all -- confirmed directly in
+    test_research_agent_web_hypothesis_gen.py's own no-special-treatment
+    test, not just asserted here.
+
+    RULE 3 (no copyrighted reproduction): a source the LLM flags as
+    un-paraphraseable returns {"skipped": true, "skip_reason": ...} instead of
+    a hypothesis -- the call is still counted against calls_made/total_cost
+    (it was real and billed) but produces no hypothesis record, logged in
+    `errors` rather than silently discarded.
+
+    RULE 4 (graveyard check applies equally): every record is built via
+    _build_web_record, which calls the SAME check_graveyard_match function
+    (same threshold, same code path) generate_hypotheses already calls for
+    scanner-sourced records.
+
+    RULE 5 (lookahead protection applies equally): unaffected by this
+    function entirely -- frequency_gate.measure_entry_frequency enforces its
+    own generated_at cutoff internally regardless of which function produced
+    the hypothesis dict it's given."""
+    now = now or datetime.now(timezone.utc)
+    known_names = [str(h.get("hypothesis_name", "")) for h in existing_hypotheses if h.get("hypothesis_name")]
+    hypotheses: list[dict] = []
+    errors: list[dict] = []
+    calls_made = 0
+    total_cost = 0.0
+    cost_limit_hit = False
+
+    if not api_key.strip():
+        return GenerationRunResult(
+            hypotheses, [], 0, 0.0, False,
+            [{"scan_finding": "(web search)", "message": "no Claude API key configured -- no call made"}],
+        )
+    if not tracked_pairs:
+        return GenerationRunResult(
+            hypotheses, [], 0, 0.0, False,
+            [{"scan_finding": "(web search)", "message": "no tracked (asset, timeframe) pairs available -- "
+                                                           "no call made (nothing to test a hypothesis against)"}],
+        )
+
+    try:
+        preflight_note = validate_api_key(api_key, params)
+    except ApiKeyRejectedError as exc:
+        return GenerationRunResult(hypotheses, [], 1, 0.0, False, [{"scan_finding": "(preflight key validation)", "message": str(exc)}])
+    if preflight_note:
+        errors.append({"scan_finding": "(preflight key validation)", "message": preflight_note})
+
+    for _ in range(max_calls_per_run):
+        prompt = _build_web_search_prompt(tracked_pairs, known_names, failure_patterns)
+        try:
+            data, usage = _call_claude(prompt, api_key, params, tools=[WEB_SEARCH_TOOL])
+        except ResponseParseError as exc:
+            calls_made += 1
+            billed_cost = _web_call_cost_usd(exc.usage, params)
+            total_cost += billed_cost
+            errors.append({
+                "scan_finding": "(web search)",
+                "message": f"{exc} (call WAS billed: ${billed_cost:.6f} -- Anthropic processed "
+                           f"this request even though the response couldn't be used)",
+            })
+            continue
+        except (requests.RequestException, KeyError, ValueError) as exc:
+            calls_made += 1  # attempt consumed budget; nothing billed
+            errors.append({"scan_finding": "(web search)", "message": f"{exc.__class__.__name__}: {exc}"})
+            continue
+
+        calls_made += 1
+        cost = _web_call_cost_usd(usage, params)
+        total_cost += cost
+        result = _build_web_record(data, cost, now, failure_patterns)
+        if result.skipped:
+            errors.append({
+                "scan_finding": "(web search)",
+                "message": f"source skipped -- could not be safely paraphrased (call WAS billed: "
+                           f"${cost:.6f}): {result.skip_reason}",
+            })
+            continue
+        hypotheses.append(result.record)
+        known_names.append(result.record["hypothesis_name"])
+
+    if calls_made >= max_calls_per_run:
+        cost_limit_hit = True
+
+    return GenerationRunResult(hypotheses, [], calls_made, total_cost, cost_limit_hit, errors)
