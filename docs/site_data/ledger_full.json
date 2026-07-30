@@ -1,7 +1,29 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-30T11:29:59.271543+00:00",
+  "last_updated": "2026-07-30T13:09:03.518681+00:00",
   "rows": [
+    {
+      "timestamp": "2026-07-30T13:08:43.302181+00:00",
+      "strategy": "COINTEGRATION_PAIRS",
+      "strategy_version": "cointegration-pairs-v1.0.0",
+      "asset": "BTC-ETH",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "|z|=0.32 below entry threshold 2.0",
+      "candle_timestamp": "2026-07-30T11:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-07-30T13:08:43.302181+00:00",
+      "strategy": "TREND_PULLBACK",
+      "strategy_version": "trend-pullback-v1.0.0",
+      "asset": "BNB",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NOT_IN_ESTABLISHED_UPTREND, RSI_OUTSIDE_NEUTRAL_BAND",
+      "candle_timestamp": "2026-07-30T11:59:59.999000+00:00"
+    },
     {
       "timestamp": "2026-07-30T11:29:55.484346+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
