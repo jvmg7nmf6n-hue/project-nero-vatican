@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -59,7 +60,16 @@ def _load_failure_patterns(path: Path) -> list[dict]:
         return []
     try:
         data = json.loads(path.read_text())
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exc:
+        # Loud, not silent: a corrupted failure_patterns.json previously meant
+        # every prompt silently lost its "known dead mechanisms" list, risking
+        # a regenerated-and-already-killed hypothesis with zero indication why.
+        print(
+            f"ERROR: {path} is corrupted (JSONDecodeError: {exc}) -- proceeding with an EMPTY "
+            f"known-dead-mechanisms list this run. Every prompt this run will be missing that "
+            f"context until the file is restored.",
+            file=sys.stderr,
+        )
         return []
     return data if isinstance(data, list) else []
 
@@ -70,10 +80,14 @@ def default_candles_provider(asset: str, timeframe: str, candles_dir: Path = DEF
     export_candle_data's own filename convention (never re-derived). Returns
     None (never fabricated data) if no file exists for this exact pair; the
     pipeline records that hypothesis as `no_candles_available` rather than
-    guessing at a price history."""
+    guessing at a price history. A file that EXISTS but is malformed is a
+    different, worse problem than one that simply hasn't been generated yet --
+    both still count toward no_candles_available (this function's contract is
+    unchanged), but only the malformed case prints an ERROR, so the two are
+    distinguishable in the log rather than silently identical."""
     path = candles_dir / candle_filename(asset, timeframe)
     if not path.exists():
-        return None
+        return None  # benign: this (asset, timeframe) pair just hasn't been exported yet
     try:
         data = json.loads(path.read_text())
         rows = data["candles"]
@@ -86,7 +100,13 @@ def default_candles_provider(asset: str, timeframe: str, candles_dir: Path = DEF
                 "volume": [float(c.get("volume") or 0.0) for c in rows],
             }
         )
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        print(
+            f"ERROR: {path} EXISTS but is malformed ({exc.__class__.__name__}: {exc}) -- "
+            f"treating as no_candles_available, same as a missing file, but this is a different "
+            f"problem (a broken export, not an unexported asset) and should be investigated.",
+            file=sys.stderr,
+        )
         return None
 
 

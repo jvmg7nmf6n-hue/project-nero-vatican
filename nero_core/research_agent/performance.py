@@ -25,6 +25,7 @@ rate the harness itself is achieving on what it actually evaluates. `null`
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -52,7 +53,18 @@ def _load(path: Path) -> dict:
         return {"schema_version": SCHEMA_VERSION, "last_updated": None, "cumulative": _empty_cumulative(), "runs": []}
     try:
         data = json.loads(path.read_text())
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exc:
+        # Fail LOUDLY, not silently: this file is the Agent's entire cumulative
+        # career record. Silently resetting it to empty on a corrupted read
+        # previously meant that record could vanish with zero trace -- degrade
+        # to a fresh state (crashing the run over this would be worse), but
+        # say so.
+        print(
+            f"ERROR: {path} is corrupted (JSONDecodeError: {exc}) -- resetting the cumulative "
+            f"performance record to empty. Restore it from git history before the next run if "
+            f"this wasn't intended.",
+            file=sys.stderr,
+        )
         return {"schema_version": SCHEMA_VERSION, "last_updated": None, "cumulative": _empty_cumulative(), "runs": []}
     if not isinstance(data, dict):
         return {"schema_version": SCHEMA_VERSION, "last_updated": None, "cumulative": _empty_cumulative(), "runs": []}

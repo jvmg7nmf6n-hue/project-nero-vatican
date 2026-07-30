@@ -10,6 +10,7 @@ handful of hypotheses per run)."""
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 
@@ -17,12 +18,25 @@ def read_json_list(path: Path) -> list[dict]:
     """[] (never an error) if the file is missing or unparseable -- a fresh
     deployment or a corrupted export must never crash the pipeline, matching
     this project's fail-independent convention elsewhere (e.g.
-    export_quant_metrics's per-file try/except)."""
+    export_quant_metrics's per-file try/except). A CORRUPTED file (as opposed
+    to a merely-missing one) still degrades to [] -- crashing the whole run
+    over one bad file would be worse -- but does so LOUDLY: this silently
+    returning [] previously meant a corrupted agent_hypotheses.json looked
+    identical to "no history yet," defeating duplicate detection (every
+    finding re-proposed) with zero trace, and a corrupted file passed to
+    append_json_list gets its entire prior content silently overwritten by
+    just the new items on the next write."""
     if not path.exists():
         return []
     try:
         data = json.loads(path.read_text())
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exc:
+        print(
+            f"ERROR: {path} is corrupted (JSONDecodeError: {exc}) -- treating as empty. "
+            f"Restore it from git history before the next run, or its prior content will be "
+            f"permanently lost on the next write.",
+            file=sys.stderr,
+        )
         return []
     return data if isinstance(data, list) else []
 

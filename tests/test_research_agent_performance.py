@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import io
 import shutil
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -108,11 +110,29 @@ class RecordRunTest(unittest.TestCase):
         self.assertIsNone(state["cumulative"]["survival_rate"])
 
     def test_load_missing_file_returns_a_well_formed_empty_state(self) -> None:
-        state = load_performance(self.tmp / "does_not_exist.json")
+        err = io.StringIO()
+        with redirect_stderr(err):
+            state = load_performance(self.tmp / "does_not_exist.json")
         self.assertEqual(state["schema_version"], 1)
         self.assertEqual(state["runs"], [])
         for key in ("hypotheses_generated", "survived", "died", "tested"):
             self.assertEqual(state["cumulative"][key], 0)
+        self.assertEqual(err.getvalue(), "")  # missing is benign -- nothing printed
+
+    def test_corrupted_file_prints_a_loud_error_and_resets_to_empty(self) -> None:
+        # Item #10 from the diagnostics audit: previously silent -- the
+        # Agent's entire cumulative career record could vanish with zero
+        # trace on a corrupted read.
+        self.path.write_text("{not valid json")
+        err = io.StringIO()
+        with redirect_stderr(err):
+            state = load_performance(self.path)
+
+        self.assertEqual(state["runs"], [])
+        self.assertIsNone(state["cumulative"]["survival_rate"])
+        self.assertIn("ERROR", err.getvalue())
+        self.assertIn(str(self.path), err.getvalue())
+        self.assertIn("corrupted", err.getvalue())
 
 
 if __name__ == "__main__":

@@ -77,12 +77,18 @@ def _load_json(path: Path) -> dict | list | None:
         return None
 
 
-def _asset_series_map(candles_dir: Path) -> dict[tuple[str, str], pd.DataFrame]:
+def _asset_series_map(
+    candles_dir: Path, errors: list[dict[str, str]] | None = None
+) -> dict[tuple[str, str], pd.DataFrame]:
     """(asset, timeframe) -> a candles-shaped DataFrame (close_time ms,
     close/high/low/volume) built from the raw candle JSON, reusing
     quant.cross_asset.load_candle_series for the file-loading part but
     re-attaching high/low/volume (that loader only keeps `closes`, which
-    isn't enough for rule_dsl's indicator frame)."""
+    isn't enough for rule_dsl's indicator frame). A malformed individual
+    candle file is skipped (never crashes the scan over one bad file) but,
+    if `errors` is given, is appended to it -- previously a bare `continue`
+    with zero record anywhere, meaning one corrupt file silently vanished
+    from every scan that reads this map with no trace in scan_errors."""
     out: dict[tuple[str, str], pd.DataFrame] = {}
     if not candles_dir.exists():
         return out
@@ -100,7 +106,9 @@ def _asset_series_map(candles_dir: Path) -> dict[tuple[str, str], pd.DataFrame]:
                 }
             )
             out[(data["asset"], data["timeframe"])] = frame.sort_values("close_time").reset_index(drop=True)
-        except (KeyError, TypeError, ValueError, OSError, json.JSONDecodeError):
+        except (KeyError, TypeError, ValueError, OSError, json.JSONDecodeError) as exc:
+            if errors is not None:
+                errors.append({"source": str(path), "message": f"{exc.__class__.__name__}: {exc}"})
             continue
     return out
 
@@ -126,7 +134,7 @@ def _measure_directional_frequency(frame: pd.DataFrame, field: str, op: str, thr
 
 
 def scan_extreme_zscore(
-    quant_metrics: dict | None, candles_dir: Path, now: datetime
+    quant_metrics: dict | None, candles_dir: Path, now: datetime, errors: list[dict[str, str]] | None = None
 ) -> list[ScanFinding]:
     """|zscore_current| > ZSCORE_EXTREME_THRESHOLD, read directly from Day 4's
     quant_metrics.json export (never recomputed here -- that IS the current
@@ -136,7 +144,7 @@ def scan_extreme_zscore(
     available candle history, annualized over that history's own span."""
     if not quant_metrics or "metrics" not in quant_metrics:
         return []
-    series_map = _asset_series_map(candles_dir)
+    series_map = _asset_series_map(candles_dir, errors)
     findings: list[ScanFinding] = []
     for entry in quant_metrics["metrics"]:
         z = entry.get("zscore_current")
@@ -217,6 +225,7 @@ def scan_regime_transitions(
     candles_dir: Path,
     now: datetime,
     state_path: Path = DEFAULT_SCANNER_STATE_PATH,
+    errors: list[dict[str, str]] | None = None,
 ) -> list[ScanFinding]:
     """Flags a CALM<->TURBULENT transition by comparing TODAY's regime (Day
     5's own quant_cross_asset.json export) against the last regime this
@@ -227,7 +236,7 @@ def scan_regime_transitions(
     updated with every observed regime on every call, transition or not."""
     if not volatility_regimes_current:
         return []
-    series_map = _asset_series_map(candles_dir)
+    series_map = _asset_series_map(candles_dir, errors)
     previous_state: dict = _load_json(state_path) or {}
     previous_regimes: dict[str, str] = previous_state.get("last_regime", {})
     new_regimes: dict[str, str] = dict(previous_regimes)
@@ -348,9 +357,9 @@ def run_scan(
         errors.append({"source": str(quant_cross_asset_path), "message": "missing or unparseable"})
 
     return ScanResult(
-        extreme_zscore=scan_extreme_zscore(quant_metrics, candles_dir, now),
+        extreme_zscore=scan_extreme_zscore(quant_metrics, candles_dir, now, errors),
         regime_transitions=scan_regime_transitions(
-            (quant_cross_asset or {}).get("volatility_regimes"), candles_dir, now, state_path
+            (quant_cross_asset or {}).get("volatility_regimes"), candles_dir, now, state_path, errors
         ),
         correlation_breakdowns=scan_correlation_breakdowns(candles_dir, now) if quant_cross_asset else [],
         low_strategy_coverage=scan_low_strategy_coverage(strategies_export, quant_metrics, now),

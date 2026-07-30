@@ -284,16 +284,19 @@ class ApiKeyRejectedError(Exception):
     existed. The message never carries the api_key value."""
 
 
-def validate_api_key(api_key: str, params: HypothesisGenParameters = DEFAULT_PARAMETERS) -> None:
+def validate_api_key(api_key: str, params: HypothesisGenParameters = DEFAULT_PARAMETERS) -> str | None:
     """One minimal (max_tokens=1) preflight call. Raises ApiKeyRejectedError
-    ONLY on a 401 response. Any other outcome -- 200, a different error
-    status, or the request failing to complete at all (network error) -- is
-    NOT treated as fatal here: distinguishing "definitely fine" from "some
-    other problem" isn't this function's job, only catching the one failure
-    mode (key present but rejected) that is guaranteed to repeat on every
-    subsequent call and is therefore worth stopping the whole run for. Every
+    ONLY on a 401 response -- that failure mode is guaranteed to repeat on
+    every subsequent call, so it's worth stopping the whole run for; every
     other failure surfaces normally, per-hypothesis, in generate_hypotheses's
-    own main loop."""
+    own main loop, and is NOT treated as fatal here.
+
+    Returns None on a normal/inconclusive outcome (200, or a non-401 status).
+    Returns a short descriptive message (never raises) when the preflight
+    request itself couldn't complete (network/timeout/DNS/SSL) -- previously
+    a bare `return`, this failure left ZERO trace anywhere; the caller now
+    records the returned message as a non-fatal note before proceeding to
+    the real per-finding calls."""
     try:
         response = requests.post(
             params.claude_api_url,
@@ -305,13 +308,14 @@ def validate_api_key(api_key: str, params: HypothesisGenParameters = DEFAULT_PAR
             json={"model": params.claude_model, "max_tokens": 1, "messages": [{"role": "user", "content": "Hi"}]},
             timeout=params.claude_timeout_seconds,
         )
-    except requests.RequestException:
-        return  # not a 401 -- let the real calls surface whatever this is, per-hypothesis
+    except requests.RequestException as exc:
+        return f"preflight key check did not complete: {exc.__class__.__name__}: {exc}"
     if response.status_code == 401:
         raise ApiKeyRejectedError(
             "ANTHROPIC_API_KEY is present but was rejected (401 Unauthorized) by the Claude API. "
             "No further calls were attempted this run -- check the key's validity before retrying."
         )
+    return None
 
 
 def _call_cost_usd(usage: dict, params: HypothesisGenParameters) -> float:
@@ -381,10 +385,15 @@ def generate_hypotheses(
     non_duplicate_findings_exist = any(not check_duplicate(f, known).is_duplicate for f in scan_findings)
     if api_key.strip() and non_duplicate_findings_exist:
         try:
-            validate_api_key(api_key, params)
+            preflight_note = validate_api_key(api_key, params)
         except ApiKeyRejectedError as exc:
             errors.append({"scan_finding": "(preflight key validation)", "message": str(exc)})
             return GenerationRunResult(hypotheses, duplicates, 1, total_cost, cost_limit_hit, errors)
+        if preflight_note:
+            # Non-fatal (see validate_api_key's own docstring -- only a 401 stops
+            # the run here) but no longer silent: previously this note vanished
+            # with zero trace anywhere.
+            errors.append({"scan_finding": "(preflight key validation)", "message": preflight_note})
 
     for finding in scan_findings:
         if calls_made >= max_calls_per_run:

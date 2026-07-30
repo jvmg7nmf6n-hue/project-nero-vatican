@@ -173,7 +173,9 @@ class DynamicApiKeyNeverLeaksTest(unittest.TestCase):
         ):
             result = generate_hypotheses([_finding()], [], FAKE_SECRET, now=NOW)
 
-        self.assertEqual(len(result.errors), 1)
+        # Both the preflight's own non-fatal note (item #3's fix) and the real
+        # per-finding call's failure hit this same mocked ConnectionError.
+        self.assertEqual(len(result.errors), 2)
         self.assertNotIn(FAKE_SECRET, _flatten_for_leak_check(result))
 
     def test_key_absent_from_result_on_bad_http_status(self) -> None:
