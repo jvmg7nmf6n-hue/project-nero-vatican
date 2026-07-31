@@ -118,10 +118,22 @@ WEB_SEARCH_TOOL: dict = {"type": "web_search_20260209", "name": "web_search", "m
 # transparency/audit, never used to skip, weight, or soften the frequency gate
 # or auto_tester -- see check_graveyard_match's own docstring and
 # test_research_agent_web_hypothesis_gen.py's no-special-treatment test.
+#
+# Expanded from 4 to 6 tiers (2026-07-31): the original "trading_forum_social_media"
+# tier merged Reddit-style threaded discussion with Twitter/X-style short posts --
+# two sources with different verifiability -- into one bucket, and had no tier at
+# all for an independent blog/newsletter, which fell into unknown_unverifiable
+# indistinguishable from a genuinely unclassifiable source. source_tier is assigned
+# once at generation time and never re-derivable later, so a coarse schema
+# permanently loses "which source types actually produce SURVIVED hypotheses" --
+# this expansion exists purely for that future analysis; it does not change how
+# any tier is used today (still metadata only, see the docstring above).
 SOURCE_TIERS = (
     "peer_reviewed_academic",
     "established_financial_publication",
-    "trading_forum_social_media",
+    "independent_blog_or_newsletter",
+    "forum_discussion",
+    "social_media_post",
     "unknown_unverifiable",
 )
 
@@ -752,7 +764,8 @@ CRITICAL SOURCING RULES -- read carefully, these are non-negotiable:
    AND the specific publication/platform/paper name (source_description) -- a URL alone is
    not a durable citation. Also classify the source into exactly one tier: source_tier must
    be exactly one of "peer_reviewed_academic", "established_financial_publication",
-   "trading_forum_social_media", "unknown_unverifiable".
+   "independent_blog_or_newsletter", "forum_discussion", "social_media_post",
+   "unknown_unverifiable" -- see the tier definitions below.
 3. NEVER reproduce a source's exact rule text, code, or proprietary wording verbatim.
    Describe the mechanism ENTIRELY in your own words. If you genuinely cannot paraphrase
    the source's exact rules without copying them (e.g. a paid course's specific numeric
@@ -776,8 +789,21 @@ and no others:
 - source_description: the publication, platform, paper title, or author (e.g. "Journal of
   Finance, Smith & Jones 2019" or "r/algotrading community writeup") -- required even when
   source_url is present
-- source_tier: exactly one of "peer_reviewed_academic", "established_financial_publication",
-  "trading_forum_social_media", "unknown_unverifiable"
+- source_tier: exactly one of the six tiers below -- pick the one that actually matches;
+  do NOT default to unknown_unverifiable just because you're unsure between two close
+  tiers, but DO use it when the source genuinely doesn't fit any other definition:
+  - peer_reviewed_academic: a paper published in or under review at an academic journal
+    or conference
+  - established_financial_publication: a recognized financial/quant publication, research
+    desk, or institutional report (not a single author's personal site)
+  - independent_blog_or_newsletter: a single author's or small independent outlet's blog,
+    newsletter, or Substack -- not affiliated with an established financial publication
+  - forum_discussion: a threaded, multi-participant discussion board (e.g. Reddit,
+    dedicated trading forums)
+  - social_media_post: a short-form, single-author post (e.g. Twitter/X, a single
+    Discord/Telegram message) -- not a threaded discussion
+  - unknown_unverifiable: the source doesn't fit any tier above, or you cannot determine
+    what kind of source it is
 - paraphrase_confirmed: true (only ever true in a non-skipped response -- if you could not
   confirm this, you should have returned the skip JSON above instead)
 - entry_rule: a precise, human-readable entry condition
