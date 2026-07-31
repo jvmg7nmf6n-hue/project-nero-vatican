@@ -105,7 +105,14 @@ function setupMocks(overrides: {
 
 describe("StrategyDetailPage", () => {
   afterEach(() => {
-    jest.resetAllMocks();
+    // clearAllMocks, not resetAllMocks -- resetAllMocks strips the manual
+    // __mocks__/lightweight-charts.ts mock's createChart implementation
+    // (set once at module load, never re-established per-test), which made
+    // createChart() return undefined starting with the second test in any
+    // block that renders a chart. Every test here already calls setupMocks()
+    // (or sets its own overrides) fresh before asserting, so clearing call
+    // counts without touching implementations is sufficient and correct.
+    jest.clearAllMocks();
   });
 
   it("renders the header, tier badge, and description for a known strategy", async () => {
@@ -223,7 +230,14 @@ describe("StrategyDetailPage", () => {
 
 describe("StrategyDetailPage candlestick chart (Day 2)", () => {
   afterEach(() => {
-    jest.resetAllMocks();
+    // clearAllMocks, not resetAllMocks -- resetAllMocks strips the manual
+    // __mocks__/lightweight-charts.ts mock's createChart implementation
+    // (set once at module load, never re-established per-test), which made
+    // createChart() return undefined starting with the second test in any
+    // block that renders a chart. Every test here already calls setupMocks()
+    // (or sets its own overrides) fresh before asserting, so clearing call
+    // counts without touching implementations is sufficient and correct.
+    jest.clearAllMocks();
   });
 
   it("shows the chart/equity-curve tab toggle and defaults to Price Chart when a candle file exists", async () => {
@@ -362,7 +376,14 @@ describe("StrategyDetailPage candlestick chart (Day 2)", () => {
 
 describe("StrategyDetailPage Quant Panel (Day 4)", () => {
   afterEach(() => {
-    jest.resetAllMocks();
+    // clearAllMocks, not resetAllMocks -- resetAllMocks strips the manual
+    // __mocks__/lightweight-charts.ts mock's createChart implementation
+    // (set once at module load, never re-established per-test), which made
+    // createChart() return undefined starting with the second test in any
+    // block that renders a chart. Every test here already calls setupMocks()
+    // (or sets its own overrides) fresh before asserting, so clearing call
+    // counts without touching implementations is sufficient and correct.
+    jest.clearAllMocks();
   });
 
   it("renders the Quant Panel with real metrics when a matching quant_metrics.json entry exists", async () => {
@@ -451,7 +472,14 @@ function candleResultOk(candles = SAMPLE_CANDLES): CandleFetchResult {
 
 describe("StrategyDetailPage Live Market Status Widget (Day 7)", () => {
   afterEach(() => {
-    jest.resetAllMocks();
+    // clearAllMocks, not resetAllMocks -- resetAllMocks strips the manual
+    // __mocks__/lightweight-charts.ts mock's createChart implementation
+    // (set once at module load, never re-established per-test), which made
+    // createChart() return undefined starting with the second test in any
+    // block that renders a chart. Every test here already calls setupMocks()
+    // (or sets its own overrides) fresh before asserting, so clearing call
+    // counts without touching implementations is sufficient and correct.
+    jest.clearAllMocks();
   });
 
   it("renders price, change, regime, countdown, and signal pill from real data", async () => {
@@ -547,7 +575,14 @@ describe("StrategyDetailPage Live Market Status Widget (Day 7)", () => {
 
 describe("StrategyDetailPage Chart Description (Day 7)", () => {
   afterEach(() => {
-    jest.resetAllMocks();
+    // clearAllMocks, not resetAllMocks -- resetAllMocks strips the manual
+    // __mocks__/lightweight-charts.ts mock's createChart implementation
+    // (set once at module load, never re-established per-test), which made
+    // createChart() return undefined starting with the second test in any
+    // block that renders a chart. Every test here already calls setupMocks()
+    // (or sets its own overrides) fresh before asserting, so clearing call
+    // counts without touching implementations is sufficient and correct.
+    jest.clearAllMocks();
   });
 
   it("renders the collapsible chart description when a candle file exists", async () => {
@@ -602,7 +637,14 @@ describe("StrategyDetailPage ChatBot (Day 7)", () => {
   const originalApiKey = process.env.ANTHROPIC_API_KEY;
 
   afterEach(() => {
-    jest.resetAllMocks();
+    // clearAllMocks, not resetAllMocks -- resetAllMocks strips the manual
+    // __mocks__/lightweight-charts.ts mock's createChart implementation
+    // (set once at module load, never re-established per-test), which made
+    // createChart() return undefined starting with the second test in any
+    // block that renders a chart. Every test here already calls setupMocks()
+    // (or sets its own overrides) fresh before asserting, so clearing call
+    // counts without touching implementations is sufficient and correct.
+    jest.clearAllMocks();
     process.env.ANTHROPIC_API_KEY = originalApiKey;
   });
 
