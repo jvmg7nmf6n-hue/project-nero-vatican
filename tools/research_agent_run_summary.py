@@ -71,6 +71,29 @@ def build_summary(hypotheses: list[dict], test_results: list[dict], run_entry: d
             f"total_llm_cost_usd=${run_entry.get('total_llm_cost_usd', 0.0):.6f} "
             f"cost_limit_hit={run_entry.get('cost_limit_hit')}"
         )
+        # By-channel split -- web_* keys are absent on run entries recorded
+        # before the web-search channel existed, so .get(..., 0) defaults are
+        # the honest value there (zero web activity), not a placeholder.
+        # Scanner-only counts are derived (combined - web) rather than stored
+        # separately, since combined == scanner + web by construction in
+        # pipeline.run_pipeline.
+        web_hyp = run_entry.get("web_hypotheses_generated", 0)
+        web_calls = run_entry.get("web_llm_calls_made", 0)
+        web_cost = run_entry.get("web_total_llm_cost_usd", 0.0)
+        web_cost_limit = run_entry.get("web_cost_limit_hit", False)
+        scanner_hyp = run_entry.get("hypotheses_generated", 0) - web_hyp
+        scanner_calls = run_entry.get("llm_calls_made", 0) - web_calls
+        scanner_cost = run_entry.get("total_llm_cost_usd", 0.0) - web_cost
+        lines.append(
+            f"  by channel: scanner hypotheses={scanner_hyp} calls={scanner_calls} cost=${scanner_cost:.6f} | "
+            f"web_search hypotheses={web_hyp} calls={web_calls} cost=${web_cost:.6f} cost_limit_hit={web_cost_limit}"
+        )
+        if web_calls > 0 and web_hyp == 0:
+            lines.append(
+                f"  NOTE: web_search made {web_calls} call(s) this run but produced zero hypotheses -- "
+                f"generate_web_hypotheses always spends its call budget with no early exit on success, "
+                f"so this can be a normal completion (nothing usable found), not necessarily a failure."
+            )
         lines.append(
             f"too_slow_rejected={run_entry.get('too_slow_rejected')} "
             f"unmeasurable_rejected={run_entry.get('unmeasurable_rejected')}"
@@ -84,6 +107,7 @@ def build_summary(hypotheses: list[dict], test_results: list[dict], run_entry: d
         )
 
     claim_by_name = {h.get("hypothesis_name"): h.get("expected_frequency_claim") for h in hypotheses}
+    channel_by_name = {h.get("hypothesis_name"): h.get("discovery_channel") for h in hypotheses}
     tested_names = {r.get("hypothesis_name") for r in test_results}
 
     lines.append("")
@@ -93,10 +117,11 @@ def build_summary(hypotheses: list[dict], test_results: list[dict], run_entry: d
     for r in test_results:
         name = r.get("hypothesis_name")
         claim = claim_by_name.get(name)
+        channel = channel_by_name.get(name)
         measured = r.get("measured_trades_per_year")
         months = r.get("expected_time_to_30_trades_months")
         lines.append(
-            f"[{name}] asset={r.get('asset')} timeframe={r.get('timeframe')} | "
+            f"[{name}] asset={r.get('asset')} timeframe={r.get('timeframe')} channel={channel} | "
             f"LLM claim={claim} trades/yr | measured={measured} trades/yr | "
             f"time-to-30-trades={months} months | "
             f"classification={r.get('frequency_classification')} | verdict={r.get('verdict')}"

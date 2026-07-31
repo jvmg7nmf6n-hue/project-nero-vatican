@@ -19,6 +19,54 @@ class BuildSummaryTest(unittest.TestCase):
         self.assertIn("total_llm_cost_usd=$0.012300", out)
         self.assertIn("too_slow_rejected=1 unmeasurable_rejected=0", out)
 
+    def test_by_channel_breakdown_splits_scanner_from_web_search(self) -> None:
+        run_entry = {
+            "hypotheses_generated": 2, "duplicates_skipped": 0, "llm_calls_made": 5,
+            "total_llm_cost_usd": 0.08, "cost_limit_hit": True,
+            "too_slow_rejected": 0, "unmeasurable_rejected": 0,
+            "survived": 0, "promising_watchlist": 0, "died": 0, "untestable": 0,
+            "no_candles_available": 0,
+            "web_hypotheses_generated": 0, "web_llm_calls_made": 3,
+            "web_total_llm_cost_usd": 0.05, "web_cost_limit_hit": True,
+        }
+        out = build_summary([], [], run_entry)
+        self.assertIn(
+            "by channel: scanner hypotheses=2 calls=2 cost=$0.030000 | "
+            "web_search hypotheses=0 calls=3 cost=$0.050000 cost_limit_hit=True",
+            out,
+        )
+        self.assertIn("NOTE: web_search made 3 call(s) this run but produced zero hypotheses", out)
+
+    def test_by_channel_breakdown_defaults_to_zero_web_activity_on_pre_web_channel_run_entries(self) -> None:
+        # Run entries recorded before the web-search channel existed have no
+        # web_* keys at all -- .get(..., 0) must read that as zero web
+        # activity (the honest historical fact), not crash or fabricate.
+        run_entry = {
+            "hypotheses_generated": 5, "duplicates_skipped": 0, "llm_calls_made": 5,
+            "total_llm_cost_usd": 0.10, "cost_limit_hit": False,
+            "too_slow_rejected": 0, "unmeasurable_rejected": 0,
+            "survived": 0, "promising_watchlist": 0, "died": 0, "untestable": 0,
+            "no_candles_available": 0,
+        }
+        out = build_summary([], [], run_entry)
+        self.assertIn(
+            "by channel: scanner hypotheses=5 calls=5 cost=$0.100000 | "
+            "web_search hypotheses=0 calls=0 cost=$0.000000 cost_limit_hit=False",
+            out,
+        )
+        self.assertNotIn("NOTE: web_search made", out)
+
+    def test_per_hypothesis_line_shows_discovery_channel(self) -> None:
+        hypotheses = [{"hypothesis_name": "H1", "asset": "BTC", "timeframe": "1h",
+                       "expected_frequency_claim": 40.0, "discovery_channel": "web_search"}]
+        test_results = [{
+            "hypothesis_name": "H1", "asset": "BTC", "timeframe": "1h",
+            "verdict": "DIED", "frequency_classification": "VIABLE",
+            "measured_trades_per_year": 25.0, "expected_time_to_30_trades_months": 14.4,
+        }]
+        out = build_summary(hypotheses, test_results, None)
+        self.assertIn("[H1] asset=BTC timeframe=1h channel=web_search", out)
+
     def test_missing_run_entry_reports_unavailable_instead_of_crashing(self) -> None:
         out = build_summary([], [], None)
         self.assertIn("aggregate counts unavailable", out)

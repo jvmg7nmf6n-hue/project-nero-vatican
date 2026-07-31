@@ -33,6 +33,10 @@ class _FakeResult:
     untestable: int = 0
     no_candles_available: int = 0
     test_results: list = field(default_factory=list)
+    web_hypotheses_generated: int = 0
+    web_llm_calls_made: int = 0
+    web_total_llm_cost_usd: float = 0.0
+    web_cost_limit_hit: bool = False
 
 
 class RecordRunTest(unittest.TestCase):
@@ -108,6 +112,39 @@ class RecordRunTest(unittest.TestCase):
         state = record_run(result, self.path, now=NOW)
         self.assertEqual(state["cumulative"]["tested"], 0)
         self.assertIsNone(state["cumulative"]["survival_rate"])
+
+    def test_web_channel_breakdown_is_readable_from_the_run_entry_and_cumulative(self) -> None:
+        # This is the exact split that previously only existed in the
+        # process's own stdout for the run's duration -- confirms it now
+        # survives into the durable file both per-run and cumulatively.
+        result = _FakeResult(
+            enabled=True, hypotheses_generated=2, llm_calls_made=5, total_llm_cost_usd=0.08,
+            cost_limit_hit=True,
+            web_hypotheses_generated=0, web_llm_calls_made=3, web_total_llm_cost_usd=0.05,
+            web_cost_limit_hit=True,
+        )
+        state = record_run(result, self.path, now=NOW)
+
+        run_entry = state["runs"][0]
+        self.assertEqual(run_entry["web_hypotheses_generated"], 0)
+        self.assertEqual(run_entry["web_llm_calls_made"], 3)
+        self.assertAlmostEqual(run_entry["web_total_llm_cost_usd"], 0.05)
+        self.assertTrue(run_entry["web_cost_limit_hit"])
+        # Scanner-only counts are still recoverable by subtracting the web
+        # breakdown from the combined totals on the same entry.
+        self.assertEqual(run_entry["hypotheses_generated"] - run_entry["web_hypotheses_generated"], 2)
+        self.assertEqual(run_entry["llm_calls_made"] - run_entry["web_llm_calls_made"], 2)
+
+        self.assertEqual(state["cumulative"]["web_hypotheses_generated"], 0)
+        self.assertEqual(state["cumulative"]["web_llm_calls_made"], 3)
+        self.assertAlmostEqual(state["cumulative"]["web_total_llm_cost_usd"], 0.05)
+
+        # Reloading from disk (as a fresh process/tool invocation would) sees
+        # the same breakdown -- proves it's actually persisted, not just
+        # returned in-memory by record_run.
+        reloaded = load_performance(self.path)
+        self.assertEqual(reloaded["runs"][0]["web_llm_calls_made"], 3)
+        self.assertAlmostEqual(reloaded["cumulative"]["web_total_llm_cost_usd"], 0.05)
 
     def test_load_missing_file_returns_a_well_formed_empty_state(self) -> None:
         err = io.StringIO()
