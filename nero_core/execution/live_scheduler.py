@@ -513,8 +513,8 @@ def process_pead_config(
     not a re-derived live-path copy."""
     def _fetch() -> tuple:
         events_df = fetch_earnings_surprises(config.ticker, limit=100)
-        candles = fetch_stock_ohlcv(config.ticker, "1day").prices
-        return events_df, candles
+        stock_result = fetch_stock_ohlcv(config.ticker, "1day")
+        return events_df, stock_result.prices, stock_result.source
 
     fetch_result, fetch_error = fetch_with_retry(
         _fetch, sleep_fn, retryable_exceptions=(EarningsDataUnavailableError, StockDataUnavailableError)
@@ -522,7 +522,7 @@ def process_pead_config(
     if fetch_error is not None:
         return "SKIPPED", {"asset": config.ticker, "strategy": PEAD_ID, **fetch_error}
 
-    events_df, candles = fetch_result
+    events_df, candles, data_source = fetch_result
     enriched = pead_add_atr(candles, config.params)
     if enriched.dropna(subset=["atr"]).empty:
         return "SKIPPED", {
@@ -539,7 +539,7 @@ def process_pead_config(
             run_id=run_id, strategy=PEAD_ID, strategy_version=config.strategy_version,
             asset=config.ticker, signal_type=event.signal_type, reasoning=event.reasoning,
             candle_timestamp=event.candle_close_time, entry_price=event.entry_price, exit_price=event.exit_price,
-            timestamp=now, db_path=db_path,
+            timestamp=now, data_source=data_source, db_path=db_path,
         )
     return "EVALUATED", None
 
@@ -560,14 +560,15 @@ def process_donchian_forex_config(
     the strategy mechanics."""
     spec = VARIANT_SPECS[config.variant_key]
 
-    def _fetch() -> pd.DataFrame:
-        return fetch_forex_ohlcv(config.pair, DONCHIAN_FOREX_TIMEFRAME).prices
+    def _fetch() -> tuple:
+        forex_result = fetch_forex_ohlcv(config.pair, DONCHIAN_FOREX_TIMEFRAME)
+        return forex_result.prices, forex_result.source
 
     fetch_result, fetch_error = fetch_with_retry(_fetch, sleep_fn, retryable_exceptions=(ForexDataUnavailableError,))
     if fetch_error is not None:
         return "SKIPPED", {"asset": config.pair, "strategy": DONCHIAN_TREND_ID, **fetch_error}
 
-    candles = fetch_result
+    candles, data_source = fetch_result
     enriched = spec.add_indicators_fn(candles, spec.params)
     dropna_columns = [c for c in INDICATOR_COLUMNS_TO_CHECK if c in enriched.columns]
     evaluable = enriched.dropna(subset=dropna_columns).reset_index(drop=True)
@@ -586,7 +587,7 @@ def process_donchian_forex_config(
             run_id=run_id, strategy=DONCHIAN_TREND_ID, strategy_version=config.strategy_version,
             asset=config.pair, signal_type=event.signal_type, reasoning=event.reasoning,
             candle_timestamp=event.candle_close_time, entry_price=event.entry_price, exit_price=event.exit_price,
-            timestamp=now, db_path=db_path,
+            timestamp=now, data_source=data_source, db_path=db_path,
         )
     return "EVALUATED", None
 
