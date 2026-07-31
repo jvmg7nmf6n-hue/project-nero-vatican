@@ -65,12 +65,14 @@ from nero_core.research_agent.rule_dsl import (
     RuleAmbiguousError,
     StructuredRule,
     compute_indicator_frame,
+    evaluate_condition,
     parse_exit_plan,
     parse_structured_rule,
     rule_fires_at,
 )
 from nero_core.research_agent.storage import append_json_list, read_json_list
 from nero_core.strategies.mean_reversion import (
+    ExitEvent,
     MeanReversionParameters,
     MeanReversionState,
     OpenTrade,
@@ -192,7 +194,16 @@ def _size_entry_for_hypothesis(
     if risk_per_unit <= 0:
         return None
     stop_loss = entry_price - risk_per_unit
-    target = entry_price + risk_per_unit * exit_plan.target_r_multiple
+    # Dynamic-target plans (exit_plan.dynamic_target_condition set) never read this
+    # field -- _evaluate_exit_for_hypothesis checks the CURRENT candle's own indicator
+    # value directly each row instead of a value frozen at entry. NaN, never a guessed
+    # number, so an accidental read (there shouldn't be one) can never spuriously
+    # compare True against a real high/low.
+    target = (
+        entry_price + risk_per_unit * exit_plan.target_r_multiple
+        if exit_plan.target_r_multiple is not None
+        else float("nan")
+    )
 
     risk_dollars = state.equity * params.risk_per_trade
     quantity = risk_dollars / risk_per_unit
@@ -212,6 +223,116 @@ def _size_entry_for_hypothesis(
     )
 
 
+def _evaluate_exit_for_hypothesis(
+    candle: pd.Series, state: MeanReversionState, params: MeanReversionParameters, exit_plan: ExitPlan
+) -> ExitEvent | None:
+    """Generalizes mean_reversion.evaluate_exit to support ExitPlan's optional
+    dynamic-target and regime-break-hysteresis shapes (see ExitPlan's own
+    docstring). Only ever called for a plan using at least one of those --
+    _make_exit_evaluator returns evaluate_exit ITSELF, unchanged, for every
+    old-shape plan (see that function), so this never runs for one.
+
+    state.regime_break_streak is updated on EVERY call, whether or not a trade
+    is open -- matching nero_core.strategies.range_mean_reversion.evaluate_exit's
+    own identical convention (consecutive_high_adx_bars) for the same strategy
+    family this exit shape was built for: the streak must reflect actual
+    consecutive closed candles, not just ones a trade happened to be open for.
+
+    Priority when multiple conditions fire on the same candle: STOP, then
+    TARGET (dynamic or fixed), then REGIME_BREAK, then TIME -- identical
+    ordering to both evaluate_exit's own (STOP always wins a same-candle tie)
+    and range_mean_reversion.evaluate_exit's (STOP, REGIME_BREAK, REVERSION_
+    TARGET checked in that same priority)."""
+    if exit_plan.regime_break_condition is not None:
+        fires = evaluate_condition(candle, exit_plan.regime_break_condition, None) is True
+        state.regime_break_streak = state.regime_break_streak + 1 if fires else 0
+
+    trade = state.open_trade
+    if trade is None:
+        return None
+
+    candle_time = int(candle["close_time"])
+    hours_held = (candle_time - trade.open_close_time) / 3_600_000.0
+    low = float(candle["low"])
+    close = float(candle["close"])
+
+    exit_reason: str | None = None
+    raw_exit: float | None = None
+
+    if low <= trade.stop_loss:
+        exit_reason, raw_exit = "SL", trade.stop_loss
+    elif exit_plan.dynamic_target_condition is not None:
+        if evaluate_condition(candle, exit_plan.dynamic_target_condition, None) is True:
+            # Deliberate convention match to nero_core.strategies.range_mean_reversion.
+            # evaluate_exit (Vatican's own already-live port): a crossing-type exit
+            # executes at the candle's own CLOSE, not the compared field's value --
+            # matches every other crossing/regime exit's convention in this codebase.
+            # The external source's ORIGINAL implementation used the compared field's
+            # own value instead; this is a deliberate choice to match Vatican's own
+            # established convention, not a re-derivation of that source exactly.
+            exit_reason, raw_exit = "TARGET", close
+    else:
+        high = float(candle["high"])
+        if high >= trade.target:
+            exit_reason, raw_exit = "TARGET", trade.target
+
+    if (
+        exit_reason is None
+        and exit_plan.regime_break_condition is not None
+        and state.regime_break_streak >= exit_plan.regime_break_consecutive_bars
+    ):
+        exit_reason, raw_exit = "REGIME_BREAK", close
+
+    if exit_reason is None and exit_plan.max_holding_hours is not None and hours_held >= exit_plan.max_holding_hours:
+        exit_reason, raw_exit = "TIME", close
+
+    if exit_reason is None:
+        return None
+
+    # Accounting deliberately duplicated from mean_reversion.evaluate_exit rather than
+    # factored into a shared helper -- keeps this project's live exit machinery
+    # (evaluate_exit itself) completely untouched by this research-agent-only
+    # extension; see ExitPlan's own docstring / this branch's design notes.
+    exit_price = apply_slippage(raw_exit, params.slippage_bps, "sell")
+    quantity = trade.quantity
+    gross_pnl = (exit_price - trade.entry_price) * quantity
+    exit_fee = exit_price * quantity * params.fee_bps / 10000.0
+    total_fees = trade.entry_fee + exit_fee
+    net_pnl = gross_pnl - total_fees
+    risk_dollars = max(trade.risk_dollars, 1e-9)
+    r_multiple = net_pnl / risk_dollars
+    equity_after = state.equity + net_pnl
+
+    state.equity = equity_after
+    state.daily_r = state.daily_r + r_multiple
+    state.open_trade = None
+    state.regime_break_streak = 0
+
+    return ExitEvent(
+        exit_reason=exit_reason, exit_price=exit_price, gross_pnl=gross_pnl, fees=total_fees,
+        net_pnl=net_pnl, r_multiple=r_multiple, holding_hours=hours_held, equity_after=equity_after,
+        exit_close_time=candle_time,
+    )
+
+
+def _make_exit_evaluator(
+    exit_plan: ExitPlan,
+) -> Callable[[pd.Series, MeanReversionState, MeanReversionParameters], ExitEvent | None]:
+    """Returns evaluate_exit ITSELF (not a reimplementation -- the literal same
+    function object) for a plan using none of ExitPlan's extended fields, so
+    every existing fixed-shape hypothesis's behavior is byte-identical to
+    before this extension existed. Only returns _evaluate_exit_for_hypothesis
+    when the plan actually needs it."""
+    uses_only_fixed_shape = (
+        exit_plan.dynamic_target_condition is None
+        and exit_plan.regime_break_condition is None
+        and exit_plan.max_holding_hours is not None
+    )
+    if uses_only_fixed_shape:
+        return evaluate_exit
+    return lambda candle, state, params: _evaluate_exit_for_hypothesis(candle, state, params, exit_plan)
+
+
 def run_backtest(
     frame: pd.DataFrame, rule: StructuredRule, exit_plan: ExitPlan, params: MeanReversionParameters
 ) -> tuple[list, MeanReversionState]:
@@ -221,9 +342,10 @@ def run_backtest(
     indicator_frame)."""
     state = MeanReversionState(equity=params.initial_equity)
     trades = []
+    exit_evaluator = _make_exit_evaluator(exit_plan)
     for i in range(len(frame)):
         candle = frame.iloc[i]
-        exit_event = evaluate_exit(candle, state, params)
+        exit_event = exit_evaluator(candle, state, params)
         if exit_event is not None:
             trades.append(exit_event)
         if state.open_trade is None and rule_fires_at(frame, i, rule):
@@ -258,8 +380,13 @@ def _half_stats(trades: list, frame: pd.DataFrame, rule: StructuredRule, exit_pl
         def _size_entry_fn(candle: pd.Series, state: MeanReversionState, p: MeanReversionParameters) -> OpenTrade | None:
             return _size_entry_for_hypothesis(candle, state, p, exit_plan)
 
+        # Same exit rules as the real backtest (_make_exit_evaluator) -- for an
+        # old-shape plan this is evaluate_exit itself, unchanged; for a plan using
+        # ExitPlan's extended fields, the random baseline must exercise the SAME
+        # dynamic-target/regime-break/no-time-cap exit logic or the comparison
+        # between real and random expectancy would be measuring two different games.
         baseline = random_entry_baseline_single_asset(
-            frame, eligible_mask, params, _size_entry_fn, expectancy_r, n, evaluate_exit_fn=evaluate_exit
+            frame, eligible_mask, params, _size_entry_fn, expectancy_r, n, evaluate_exit_fn=_make_exit_evaluator(exit_plan)
         )
     return HalfStats(trades=n, expectancy_r=expectancy_r, ci=ci, random_baseline=baseline)
 
@@ -317,6 +444,14 @@ def test_hypothesis(
     # max_holding_hours always comes from the hypothesis's own exit_plan, never a caller
     # override -- every other knob (equity, risk, fees, slippage) takes the caller's
     # backtest_params if given, else this project's own MeanReversionParameters defaults.
+    # exit_plan.max_holding_hours may be None ("no time-based exit" -- see ExitPlan's own
+    # docstring); passed through literally, NEVER substituted with base's own default --
+    # doing so would silently reintroduce a time cap the hypothesis deliberately has none
+    # of. This is safe to pass through as-is: params.max_holding_hours is only ever
+    # consulted by mean_reversion.evaluate_exit's own TIME check, and
+    # _make_exit_evaluator only ever routes to evaluate_exit when exit_plan.
+    # max_holding_hours is NOT None (see that function) -- so a None here is
+    # provably never read.
     base = backtest_params or MeanReversionParameters()
     params = MeanReversionParameters(
         initial_equity=base.initial_equity, risk_per_trade=base.risk_per_trade,
