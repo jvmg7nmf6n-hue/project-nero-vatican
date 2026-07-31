@@ -6,11 +6,13 @@ import pandas as pd
 
 from nero_core.research_agent.rule_dsl import (
     Condition,
+    ExitPlan,
     RuleAmbiguousError,
     compute_indicator_frame,
     count_triggers,
     evaluate_condition,
     find_trigger_timestamps,
+    parse_exit_plan,
     parse_structured_rule,
     rule_fires_at,
 )
@@ -93,6 +95,20 @@ class ParseStructuredRuleTest(unittest.TestCase):
         rule = parse_structured_rule({"conditions": [{"field": "rsi14", "op": "lt", "value": 30.0}]})
         self.assertEqual(rule.conditions[0].field, "rsi14")
 
+    def test_adx14_is_an_allowed_field(self) -> None:
+        # ADX added for feature/exitplan-dynamic-target-and-hysteresis --
+        # RMR_LONG_ONLY_EURUSD_4H's entry (ADX < 25) and regime-break exit
+        # (ADX >= 28) were previously unrepresentable, indistinguishable from a
+        # genuinely ambiguous rule purely because of an incomplete field list.
+        rule = parse_structured_rule({"conditions": [{"field": "adx14", "op": "lt", "value": 25.0}]})
+        self.assertEqual(rule.conditions[0].field, "adx14")
+
+    def test_bb_lower_and_bb_upper_are_allowed_fields(self) -> None:
+        rule = parse_structured_rule({"conditions": [{"field": "close", "op": "lt", "compare_to_field": "bb_lower"}]})
+        self.assertEqual(rule.conditions[0].compare_to_field, "bb_lower")
+        rule = parse_structured_rule({"conditions": [{"field": "close", "op": "gt", "compare_to_field": "bb_upper"}]})
+        self.assertEqual(rule.conditions[0].compare_to_field, "bb_upper")
+
     def test_compare_to_field_parses(self) -> None:
         rule = parse_structured_rule({"conditions": [{"field": "ma20", "op": "cross_above", "compare_to_field": "ma50"}]})
         self.assertEqual(rule.conditions[0].compare_to_field, "ma50")
@@ -159,6 +175,48 @@ class IndicatorFrameTest(unittest.TestCase):
         pd.testing.assert_series_equal(
             frame["rsi14"].iloc[14:].reset_index(drop=True), expected.iloc[14:].reset_index(drop=True), check_names=False
         )
+
+    def test_adx14_matches_the_reused_range_mean_reversion_function_exactly(self) -> None:
+        # adx() has no .fillna() step to undo (see rule_dsl.py's own module-level
+        # comment on this) -- so, unlike rsi14, this must match the canonical
+        # function EXACTLY, including matching NaN warmup positions, with no
+        # re-masking step in between.
+        from nero_core.strategies.range_mean_reversion import adx as range_mean_reversion_adx
+
+        closes = [100.0 + 8.0 * ((i % 20) - 10) / 10.0 for i in range(60)]  # oscillating, not monotonic
+        candles = _candles(len(closes), closes=closes)
+        frame = compute_indicator_frame(candles)
+        sorted_candles = candles.sort_values("close_time").reset_index(drop=True)
+        expected = range_mean_reversion_adx(sorted_candles, period=14)
+        pd.testing.assert_series_equal(frame["adx14"], expected, check_names=False)
+
+    def test_adx14_warmup_rows_are_nan_not_fabricated(self) -> None:
+        closes = [100.0 + 8.0 * ((i % 20) - 10) / 10.0 for i in range(60)]
+        frame = compute_indicator_frame(_candles(len(closes), closes=closes))
+        self.assertTrue(frame["adx14"].iloc[:26].isna().all())
+        self.assertFalse(pd.isna(frame["adx14"].iloc[-1]))
+
+    def test_bb_lower_and_bb_upper_match_the_range_mean_reversion_bollinger_formula(self) -> None:
+        # bollinger_period=20, bollinger_std=2.0, ddof=0 -- the SAME convention
+        # range_mean_reversion.add_indicators uses for its own bb_lower/bb_upper
+        # (NOT this module's own zscore20, which uses ddof=1).
+        closes = [100.0 + (i % 7) * 0.3 for i in range(40)]
+        frame = compute_indicator_frame(_candles(len(closes), closes=closes))
+        close = pd.Series(closes)
+        expected_ma20 = close.rolling(20).mean()
+        expected_std = close.rolling(20).std(ddof=0)
+        expected_bb_lower = expected_ma20 - 2.0 * expected_std
+        expected_bb_upper = expected_ma20 + 2.0 * expected_std
+        pd.testing.assert_series_equal(frame["bb_lower"], expected_bb_lower, check_names=False)
+        pd.testing.assert_series_equal(frame["bb_upper"], expected_bb_upper, check_names=False)
+
+    def test_bb_lower_bb_upper_warmup_rows_are_nan(self) -> None:
+        closes = [100.0 + (i % 7) * 0.3 for i in range(40)]
+        frame = compute_indicator_frame(_candles(len(closes), closes=closes))
+        self.assertTrue(frame["bb_lower"].iloc[:19].isna().all())
+        self.assertTrue(frame["bb_upper"].iloc[:19].isna().all())
+        self.assertFalse(pd.isna(frame["bb_lower"].iloc[19]))
+        self.assertFalse(pd.isna(frame["bb_upper"].iloc[19]))
 
 
 class FieldVsFieldEvaluationTest(unittest.TestCase):
@@ -253,6 +311,130 @@ class RuleFiresAtTest(unittest.TestCase):
         # only indices 1 and 2 satisfy BOTH gt 15 and lt 25
         fires = [rule_fires_at(frame, i, rule) for i in range(len(frame))]
         self.assertEqual(fires, [False, True, True, False, False])
+
+
+class ParseExitPlanBackwardCompatibilityTest(unittest.TestCase):
+    """The original, still-default fixed-three-number shape must parse and
+    behave identically after feature/exitplan-dynamic-target-and-hysteresis --
+    every one of ~27 existing live configs' own strategy modules never uses
+    ExitPlan at all (it's research_agent-only), but every EXISTING research_
+    agent hypothesis's structured_exit_plan uses exactly this shape."""
+
+    def test_original_shape_parses_with_all_extended_fields_defaulted_to_none(self) -> None:
+        plan = parse_exit_plan({"stop_atr_multiple": 1.5, "target_r_multiple": 2.0, "max_holding_hours": 48.0})
+        self.assertEqual(plan, ExitPlan(stop_atr_multiple=1.5, target_r_multiple=2.0, max_holding_hours=48.0))
+        self.assertIsNone(plan.dynamic_target_condition)
+        self.assertIsNone(plan.regime_break_condition)
+        self.assertIsNone(plan.regime_break_consecutive_bars)
+
+    def test_missing_stop_atr_multiple_still_raises_ambiguous(self) -> None:
+        with self.assertRaises(RuleAmbiguousError):
+            parse_exit_plan({"target_r_multiple": 2.0, "max_holding_hours": 48.0})
+
+    def test_non_positive_target_r_multiple_still_raises_ambiguous(self) -> None:
+        with self.assertRaises(RuleAmbiguousError):
+            parse_exit_plan({"stop_atr_multiple": 1.5, "target_r_multiple": 0.0, "max_holding_hours": 48.0})
+
+    def test_non_positive_max_holding_hours_still_raises_ambiguous_when_present(self) -> None:
+        with self.assertRaises(RuleAmbiguousError):
+            parse_exit_plan({"stop_atr_multiple": 1.5, "target_r_multiple": 2.0, "max_holding_hours": -1.0})
+
+    def test_non_dict_still_raises_ambiguous(self) -> None:
+        with self.assertRaises(RuleAmbiguousError):
+            parse_exit_plan("not a dict")
+
+
+class ParseExitPlanExtendedShapeTest(unittest.TestCase):
+    def test_max_holding_hours_omitted_means_no_time_cap(self) -> None:
+        # See nero_core.strategies.range_mean_reversion.RangeMeanReversionParameters's
+        # own "No max_holding_hours field" docstring -- a real, deliberate mechanism
+        # in this codebase already, not something ExitPlan invents.
+        plan = parse_exit_plan({"stop_atr_multiple": 2.0, "target_r_multiple": 2.0})
+        self.assertIsNone(plan.max_holding_hours)
+
+    def test_max_holding_hours_explicit_none_also_means_no_time_cap(self) -> None:
+        plan = parse_exit_plan({"stop_atr_multiple": 2.0, "target_r_multiple": 2.0, "max_holding_hours": None})
+        self.assertIsNone(plan.max_holding_hours)
+
+    def test_both_target_r_multiple_and_dynamic_target_condition_raises_ambiguous(self) -> None:
+        with self.assertRaises(RuleAmbiguousError):
+            parse_exit_plan({
+                "stop_atr_multiple": 2.0, "target_r_multiple": 2.0,
+                "dynamic_target_condition": {"field": "close", "op": "gte", "compare_to_field": "ma20"},
+            })
+
+    def test_neither_target_r_multiple_nor_dynamic_target_condition_raises_ambiguous(self) -> None:
+        with self.assertRaises(RuleAmbiguousError):
+            parse_exit_plan({"stop_atr_multiple": 2.0})
+
+    def test_dynamic_target_condition_parses(self) -> None:
+        plan = parse_exit_plan({
+            "stop_atr_multiple": 2.0,
+            "dynamic_target_condition": {"field": "close", "op": "gte", "compare_to_field": "ma20"},
+        })
+        self.assertIsNone(plan.target_r_multiple)
+        self.assertEqual(plan.dynamic_target_condition, Condition(field="close", op="gte", compare_to_field="ma20"))
+
+    def test_dynamic_target_condition_rejects_cross_ops(self) -> None:
+        # No prior-row access at exit-evaluation time (see rule_dsl._parse_condition's
+        # own docstring) -- a crossing check here could never fire correctly.
+        with self.assertRaises(RuleAmbiguousError):
+            parse_exit_plan({
+                "stop_atr_multiple": 2.0,
+                "dynamic_target_condition": {"field": "close", "op": "cross_above", "compare_to_field": "ma20"},
+            })
+
+    def test_regime_break_condition_without_consecutive_bars_raises_ambiguous(self) -> None:
+        with self.assertRaises(RuleAmbiguousError):
+            parse_exit_plan({
+                "stop_atr_multiple": 2.0, "target_r_multiple": 2.0,
+                "regime_break_condition": {"field": "adx14", "op": "gte", "value": 28.0},
+            })
+
+    def test_regime_break_consecutive_bars_without_condition_raises_ambiguous(self) -> None:
+        with self.assertRaises(RuleAmbiguousError):
+            parse_exit_plan({
+                "stop_atr_multiple": 2.0, "target_r_multiple": 2.0,
+                "regime_break_consecutive_bars": 2,
+            })
+
+    def test_regime_break_consecutive_bars_must_be_an_integer(self) -> None:
+        with self.assertRaises(RuleAmbiguousError):
+            parse_exit_plan({
+                "stop_atr_multiple": 2.0, "target_r_multiple": 2.0,
+                "regime_break_condition": {"field": "adx14", "op": "gte", "value": 28.0},
+                "regime_break_consecutive_bars": 2.0,
+            })
+
+    def test_regime_break_consecutive_bars_must_be_at_least_one(self) -> None:
+        with self.assertRaises(RuleAmbiguousError):
+            parse_exit_plan({
+                "stop_atr_multiple": 2.0, "target_r_multiple": 2.0,
+                "regime_break_condition": {"field": "adx14", "op": "gte", "value": 28.0},
+                "regime_break_consecutive_bars": 0,
+            })
+
+    def test_regime_break_condition_rejects_cross_ops(self) -> None:
+        with self.assertRaises(RuleAmbiguousError):
+            parse_exit_plan({
+                "stop_atr_multiple": 2.0, "target_r_multiple": 2.0,
+                "regime_break_condition": {"field": "adx14", "op": "cross_above", "value": 28.0},
+                "regime_break_consecutive_bars": 2,
+            })
+
+    def test_full_rmr_shaped_exit_plan_parses(self) -> None:
+        plan = parse_exit_plan({
+            "stop_atr_multiple": 2.0,
+            "dynamic_target_condition": {"field": "close", "op": "gte", "compare_to_field": "ma20"},
+            "regime_break_condition": {"field": "adx14", "op": "gte", "value": 28.0},
+            "regime_break_consecutive_bars": 2,
+        })
+        self.assertEqual(plan.stop_atr_multiple, 2.0)
+        self.assertIsNone(plan.target_r_multiple)
+        self.assertIsNone(plan.max_holding_hours)
+        self.assertEqual(plan.dynamic_target_condition, Condition(field="close", op="gte", compare_to_field="ma20"))
+        self.assertEqual(plan.regime_break_condition, Condition(field="adx14", op="gte", value=28.0))
+        self.assertEqual(plan.regime_break_consecutive_bars, 2)
 
 
 if __name__ == "__main__":

@@ -77,6 +77,15 @@ class MeanReversionState:
     daily_guard_day: str | None = None
     open_trade: OpenTrade | None = None
     last_evaluated_close_time: int = 0
+    # Added for nero_core.research_agent.auto_tester's dynamic-exit-shape hypotheses
+    # (ExitPlan.regime_break_condition) -- a per-trade "how many CONSECUTIVE closed
+    # candles has this condition held" counter, incremented/reset ONLY by auto_tester's
+    # own exit evaluator. Every existing caller of this dataclass (every live strategy
+    # sharing this state class via evaluate_exit) never reads or writes it, so this is
+    # fully inert for them -- same additive-field convention as
+    # nero_core.strategies.range_mean_reversion.RangeMeanReversionState's own
+    # consecutive_high_adx_bars, which solves the identical problem for that strategy.
+    regime_break_streak: int = 0
 
 
 @dataclass(frozen=True)
