@@ -25,6 +25,11 @@ NOW_24H_DUE = datetime(2026, 7, 27, 0, 10, tzinfo=timezone.utc)
 NOW_1WEEK_DUE = datetime(2026, 7, 24, 0, 10, tzinfo=timezone.utc)
 NOW_12H_DUE = datetime(2026, 7, 27, 12, 5, tzinfo=timezone.utc)
 NOW_NOTHING_DUE = datetime(2026, 7, 27, 6, 0, tzinfo=timezone.utc)
+# Isolated 4h-only due window: 08:05 UTC is >240min past midnight (24h not due) and
+# not a multiple-of-12h boundary within MULTI_SHOT_TOLERANCE_MINUTES (12h not due),
+# so only the "4h" cadence bucket is exercised here, matching NOW_1WEEK_DUE's own
+# "isolate exactly one cadence" convention above.
+NOW_4H_DUE = datetime(2026, 7, 27, 8, 5, tzinfo=timezone.utc)
 
 
 def _make_candles(n: int = 5, start_ms: int = 0, step_ms: int = 86_400_000, volume: float = 1000.0) -> pd.DataFrame:
@@ -75,7 +80,38 @@ class InScopePairsTest(unittest.TestCase):
         self.assertNotIn("ETH", assets)
 
     def test_expected_pair_count(self) -> None:
-        self.assertEqual(len(IN_SCOPE_PAIRS), 17)
+        self.assertEqual(len(IN_SCOPE_PAIRS), 32)
+
+    def test_candle_data_gaps_batch_additions_are_present(self) -> None:
+        # feature/candle-data-gaps: two consecutive Research Agent runs generated
+        # hypotheses (ZSCORE_MOMENTUM_USDJPY_4H, ZSCORE_EXTREME_USDJPY_1D) the tester
+        # couldn't run against -- no candle file existed for either. Confirms the
+        # full batch that closed that gap (and the other confirmed-viable combos
+        # found in the same pass) actually landed in the roster.
+        keys = {(p.asset, p.timeframe) for p in IN_SCOPE_PAIRS}
+        expected_new = {
+            ("USD/JPY", "4h"), ("USD/JPY", "1day"),
+            ("BNB", "4h"), ("BNB", "24h"),
+            ("BTC", "4h"), ("GOLD", "4h"), ("SILVER", "4h"),
+            ("EUR/USD", "1day"),
+            ("AAPL", "4h"), ("MSFT", "4h"), ("GOOGL", "4h"), ("TSLA", "4h"),
+            ("AMZN", "4h"), ("NVDA", "4h"), ("META", "4h"),
+        }
+        self.assertTrue(expected_new.issubset(keys))
+
+    def test_eurusd_4h_deliberately_not_added_here(self) -> None:
+        # EUR/USD/4h is already in flight on a separate, unmerged branch
+        # (feature/eurusd-4h-and-adx-dsl) -- not duplicated by this batch.
+        keys = {(p.asset, p.timeframe) for p in IN_SCOPE_PAIRS}
+        self.assertNotIn(("EUR/USD", "4h"), keys)
+
+    def test_new_4h_pairs_use_4h_cadence(self) -> None:
+        # Unlike the 1day-labeled entries (which reuse the "24h" cadence bucket,
+        # same convention as the stock pairs), every new "4h"-timeframe pair must
+        # gate on its own "4h" cadence, not silently inherit another bucket.
+        for p in IN_SCOPE_PAIRS:
+            if p.timeframe == "4h":
+                self.assertEqual(p.cadence_timeframe, "4h", msg=f"{p.asset}/4h")
 
     def test_no_duplicate_asset_timeframe_pairs(self) -> None:
         keys = [(p.asset, p.timeframe) for p in IN_SCOPE_PAIRS]
@@ -222,6 +258,29 @@ class ExportCandleDataTest(unittest.TestCase):
         weekly_filenames = {candle_filename(p.asset, p.timeframe) for p in IN_SCOPE_PAIRS if p.cadence_timeframe == "1week"}
         self.assertTrue(weekly_filenames.issubset(set(result.skipped_fresh)))
         mock_forex2.assert_not_called()
+
+    def test_a_4h_series_is_not_refetched_on_a_second_run_the_same_4h_bucket(self) -> None:
+        # _already_fresh had no "4h" case before this batch (only 1week/24h/12h) --
+        # falling through to its default `return False` would have refetched every
+        # 4h pair on every scheduler tick inside the same ~40-minute due window
+        # instead of once per real 4h close, the same waste dff71f4 (a separate,
+        # unmerged branch) already found and fixed for EUR/USD/4h. NOW_4H_DUE
+        # isolates the 4h cadence specifically (24h/12h/1week are all NOT due at
+        # that timestamp), so a failure here can only be the 4h bucket logic.
+        p_ctc, p_forex, p_stock = self._patch_all_fetchers()
+        with p_ctc, p_forex, p_stock:
+            run_export(now=NOW_4H_DUE, output_dir=self.output_dir)
+
+        p_ctc2, p_forex2, p_stock2 = self._patch_all_fetchers()
+        later_same_bucket = NOW_4H_DUE.replace(minute=35)  # still within the same due window, same 4h bucket
+        with p_ctc2 as mock_ctc2, p_forex2 as mock_forex2, p_stock2 as mock_stock2:
+            result = run_export(now=later_same_bucket, output_dir=self.output_dir)
+
+        h4_filenames = {candle_filename(p.asset, p.timeframe) for p in IN_SCOPE_PAIRS if p.cadence_timeframe == "4h"}
+        self.assertTrue(h4_filenames.issubset(set(result.skipped_fresh)))
+        mock_ctc2.assert_not_called()
+        mock_forex2.assert_not_called()
+        mock_stock2.assert_not_called()
 
     def test_one_asset_failing_does_not_block_the_others(self) -> None:
         p_ctc, p_forex, p_stock = self._patch_all_fetchers()
