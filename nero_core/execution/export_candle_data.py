@@ -92,7 +92,7 @@ class CandlePair:
 
 
 # Derived from docs/site_data/strategies.json's live roster -- see the module
-# docstring for exactly what was excluded and why. 17 pairs.
+# docstring for exactly what was excluded and why. 32 pairs.
 #
 # EXCEPTION (Day 7): BTC/12h has no live roster entry as of this commit -- added
 # ahead of one, per explicit instruction, using the identical Binance 12h fetch
@@ -100,24 +100,68 @@ class CandlePair:
 # actually registered; the strategy detail page has no route that reaches this
 # file yet (fetchCandleData is keyed off a roster entry's own timeframe), so this
 # is intentionally inert data, not a claim that a BTC/12h config is live.
+#
+# CANDLE-DATA-GAPS BATCH (feature/candle-data-gaps): two consecutive Research
+# Agent runs generated hypotheses (ZSCORE_MOMENTUM_USDJPY_4H, ZSCORE_EXTREME_
+# USDJPY_1D) the tester couldn't run against -- no candle file existed for
+# either timeframe. Investigation found this is a recurring pattern, not a
+# one-off: every (asset, timeframe) combo below was confirmed to have no
+# existing export file AND to fetch cleanly from its real provider (live-
+# tested directly, not assumed from provider docs) before being added here.
+# Chart-only / hypothesis-testing data ahead of any live strategy registration
+# for these specific (asset, timeframe) pairs, same convention as BTC/12h
+# above -- not a claim that a strategy is live at any of these.
+#   - USD/JPY 4h + 1day, EUR/USD 1day: Twelve Data native, no resampling
+#     (forex_data.py's TWELVE_DATA_NATIVE_INTERVAL already covers all of
+#     1h/4h/1day/1week for every FOREX_PAIRS entry -- confirmed live for
+#     USD/JPY and GBP/USD; EUR/USD 1day not independently live-tested this
+#     pass but uses the identical fetch path, so this is the same near-
+#     certain case, not a distinct one). EUR/USD/4h itself is deliberately
+#     NOT added here -- already in flight on a separate, unmerged branch
+#     (feature/eurusd-4h-and-adx-dsl); not duplicated.
+#   - BNB 4h + 24h, BTC 4h: Binance native, same fetch_timeframe_candles path
+#     every other crypto entry above already uses.
+#   - GOLD 4h: Twelve Data native (XAU/USD).
+#   - SILVER 4h: resampled (4 consecutive 1h candles) from YFinance SI=F 1h --
+#     not native (Twelve Data 404s SILVER on this plan, pre-existing), but the
+#     same resample path SILVER's other timeframes already rely on.
+#   - All 7 stocks' 4h: yfinance session-aware resample (fetch_stock_ohlcv's
+#     own existing "4h" handling -- 4 consecutive 1h candles per RTH session),
+#     live-tested against AAPL; identical code path for all 7, no per-ticker
+#     branching in that function.
 IN_SCOPE_PAIRS: tuple[CandlePair, ...] = (
     CandlePair("BTC", "24h", "24h", "crypto_metals"),
     CandlePair("BTC", "12h", "12h", "crypto_metals"),
+    CandlePair("BTC", "4h", "4h", "crypto_metals"),
     CandlePair("BNB", "12h", "12h", "crypto_metals"),
+    CandlePair("BNB", "24h", "24h", "crypto_metals"),
+    CandlePair("BNB", "4h", "4h", "crypto_metals"),
     CandlePair("GOLD", "1week", "1week", "crypto_metals"),
     CandlePair("GOLD", "24h", "24h", "crypto_metals"),
+    CandlePair("GOLD", "4h", "4h", "crypto_metals"),
     CandlePair("SILVER", "1week", "1week", "crypto_metals"),
     CandlePair("SILVER", "24h", "24h", "crypto_metals"),
+    CandlePair("SILVER", "4h", "4h", "crypto_metals"),
     CandlePair("EUR/USD", "1week", "1week", "forex"),
+    CandlePair("EUR/USD", "1day", "24h", "forex"),
     CandlePair("GBP/USD", "1week", "1week", "forex"),
     CandlePair("USD/JPY", "1week", "1week", "forex"),
+    CandlePair("USD/JPY", "4h", "4h", "forex"),
+    CandlePair("USD/JPY", "1day", "24h", "forex"),
     CandlePair("AAPL", "1day", "24h", "stock"),
+    CandlePair("AAPL", "4h", "4h", "stock"),
     CandlePair("MSFT", "1day", "24h", "stock"),
+    CandlePair("MSFT", "4h", "4h", "stock"),
     CandlePair("GOOGL", "1day", "24h", "stock"),
+    CandlePair("GOOGL", "4h", "4h", "stock"),
     CandlePair("TSLA", "1day", "24h", "stock"),
+    CandlePair("TSLA", "4h", "4h", "stock"),
     CandlePair("AMZN", "1day", "24h", "stock"),
+    CandlePair("AMZN", "4h", "4h", "stock"),
     CandlePair("NVDA", "1day", "24h", "stock"),
+    CandlePair("NVDA", "4h", "4h", "stock"),
     CandlePair("META", "1day", "24h", "stock"),
+    CandlePair("META", "4h", "4h", "stock"),
 )
 
 
@@ -179,6 +223,8 @@ def _already_fresh(existing: datetime | None, cadence_timeframe: str, now: datet
         return existing.date() == now.date()
     if cadence_timeframe == "12h":
         return (existing.date(), existing.hour // 12) == (now.date(), now.hour // 12)
+    if cadence_timeframe == "4h":
+        return (existing.date(), existing.hour // 4) == (now.date(), now.hour // 4)
     return False
 
 

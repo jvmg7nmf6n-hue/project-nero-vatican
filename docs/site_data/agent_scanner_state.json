@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-29T17:17:27.996329+00:00",
+  "last_updated": "2026-07-31T10:48:03.943097+00:00",
   "last_regime": {
     "AAPL|1day": "NORMAL",
     "AMZN|1day": "NORMAL",
-    "BNB|12h": "LOW",
+    "BNB|12h": "NORMAL",
     "BTC|12h": "NORMAL",
     "BTC|24h": "NORMAL",
-    "EUR/USD|1week": "LOW",
+    "EUR/USD|1week": "NORMAL",
     "GBP/USD|1week": "NORMAL",
     "GOLD|1week": "NORMAL",
     "GOLD|24h": "NORMAL",
@@ -18,6 +18,6 @@
     "SILVER|1week": "EXTREME",
     "SILVER|24h": "NORMAL",
     "TSLA|1day": "HIGH",
-    "USD/JPY|1week": "LOW"
+    "USD/JPY|1week": "NORMAL"
   }
 }
