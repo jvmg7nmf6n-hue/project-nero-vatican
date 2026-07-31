@@ -689,12 +689,15 @@ class DataSourcePersistenceTest(LiveSchedulerTestCase):
 
     def test_data_source_is_none_when_not_supplied(self) -> None:
         """insert_execution_log_row's default (no data_source passed) must stay None,
-        not an empty string or fabricated value -- callers not yet wired to a real
-        provenance string (e.g. process_pead_config, process_donchian_forex_config, as
-        of this test) must read back as honestly "not recorded", never silently
-        blank. (process_pairs and process_gold_silver_ratio were wired in the
-        orderflow-verification Task 3 follow-up -- see PairsAndGoldSilverRatioDataSource
-        Test below.)"""
+        not an empty string or fabricated value -- a caller that genuinely has no
+        provenance string to give it must read back as honestly "not recorded", never
+        silently blank. As of this test every live_scheduler call site IS wired
+        (process_single_asset in 38405e7; process_orderflow_imbalance in c877025;
+        process_pairs/process_gold_silver_ratio in c29a825; process_pead_config/
+        process_donchian_forex_config in the pead-donchian-provenance follow-up -- see
+        PairsAndGoldSilverRatioDataSourceTest and PeadAndDonchianForexDataSourceTest
+        below) -- this test exercises insert_execution_log_row's own default directly,
+        not a scheduler call site that discards a source it has."""
         from nero_core.truth_ledger.execution_log import insert_execution_log_row
 
         row = insert_execution_log_row(
@@ -772,6 +775,63 @@ class PairsAndGoldSilverRatioDataSourceTest(LiveSchedulerTestCase):
         self.assertTrue(rows, "expected at least one GOLD_SILVER_RATIO_MR/GOLD-SILVER row")
         for row in rows:
             self.assertEqual(row.data_source, "GOLD: NATIVE: Twelve Data XAU/USD daily candles | SILVER: NATIVE: YFinance SI=F daily candles")
+
+
+class PeadAndDonchianForexDataSourceTest(LiveSchedulerTestCase):
+    """pead-donchian-provenance follow-up: process_pead_config and process_donchian_
+    forex_config discarded their fetch's provenance the same way process_single_asset
+    did before 38405e7 -- both now persist a real data_source string. Unlike
+    process_pairs/process_gold_silver_ratio (above), neither combines two legs: PEAD's
+    data_source is the stock-candle source ONLY, since fetch_earnings_surprises is a
+    single hardcoded yfinance call with no provenance field at all (nothing to combine
+    it with); Donchian forex is a plain single-value fetch, identical in shape to
+    process_single_asset. Each test uses a source string distinct from any other
+    fixture's default ("test-fixture" etc.) so a fix that silently dropped the real
+    value in favor of a hardcoded placeholder would fail."""
+
+    def test_pead_persists_the_stock_candle_source(self) -> None:
+        from nero_core.data_sources.stock_data import StockDataResult
+        from nero_core.strategies.pead import PeadParameters
+        from tests.test_live_wiring_post_batch import _pead_candles, _pead_events
+
+        candles = _pead_candles(n=40)
+        # process_pead_config always starts a fresh account (nothing logged yet for
+        # this db_path) at replay_pead_events's PEAD-specific fresh-start index --
+        # newest row minus holding_window_sessions, NOT candle 0 -- so the
+        # announcement must fall within that window (idx 34, matching
+        # PeadLiveReplayTest.test_fresh_deployment_still_catches_a_recent_qualifying_
+        # event's own convention) or it's correctly ignored as pre-inception history.
+        ann_time = candles.iloc[34]["date"]
+        events_df = _pead_events([(ann_time, 1.0, 1.10, 10.0)])  # qualifying 10% positive surprise
+        params = PeadParameters(surprise_threshold_pct=0.05, holding_window_sessions=5)
+        config = live_scheduler.PeadLiveConfig(ticker="AAPL", strategy_version="pead-test-v1", params=params)
+        stock_result = StockDataResult(prices=candles, source="YFinance AAPL daily candles", symbol="AAPL", timeframe="1day")
+
+        with patch("nero_core.execution.live_scheduler.fetch_earnings_surprises", return_value=events_df), \
+                patch("nero_core.execution.live_scheduler.fetch_stock_ohlcv", return_value=stock_result):
+            status, record = live_scheduler.process_pead_config(config, run_id="test-run", now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path)
+
+        self.assertEqual(status, "EVALUATED", f"expected EVALUATED, got SKIPPED: {record}")
+        rows = list_execution_log(db_path=self.db_path, asset="AAPL", strategy=live_scheduler.PEAD_ID)
+        self.assertTrue(rows, "expected at least one PEAD/AAPL row")
+        for row in rows:
+            self.assertEqual(row.data_source, "YFinance AAPL daily candles")
+
+    def test_donchian_forex_persists_the_fetch_source(self) -> None:
+        config = live_scheduler.DONCHIAN_FOREX_CONFIGS[0]  # EUR/USD, N20
+        forex_result = ForexDataResult(
+            prices=self.forex_history, source="Twelve Data EUR/USD weekly candles",
+            pair=config.pair, timeframe=live_scheduler.DONCHIAN_FOREX_TIMEFRAME,
+        )
+
+        with patch("nero_core.execution.live_scheduler.fetch_forex_ohlcv", return_value=forex_result):
+            status, record = live_scheduler.process_donchian_forex_config(config, run_id="test-run", now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path)
+
+        self.assertEqual(status, "EVALUATED", f"expected EVALUATED, got SKIPPED: {record}")
+        rows = list_execution_log(db_path=self.db_path, asset=config.pair, strategy=live_scheduler.DONCHIAN_TREND_ID)
+        self.assertTrue(rows, "expected at least one DONCHIAN_TREND/EUR/USD row")
+        for row in rows:
+            self.assertEqual(row.data_source, "Twelve Data EUR/USD weekly candles")
 
 
 class ApiKeyStartupValidationTest(LiveSchedulerTestCase):
