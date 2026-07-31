@@ -14,6 +14,7 @@ from nero_core.data_sources.stock_data import StockDataResult
 from nero_core.execution import export_candle_data
 from nero_core.execution.export_candle_data import (
     IN_SCOPE_PAIRS,
+    _already_fresh,
     candle_filename,
     export_candle_data as run_export,
     sanitize_asset_for_filename,
@@ -80,7 +81,7 @@ class InScopePairsTest(unittest.TestCase):
         self.assertNotIn("ETH", assets)
 
     def test_expected_pair_count(self) -> None:
-        self.assertEqual(len(IN_SCOPE_PAIRS), 32)
+        self.assertEqual(len(IN_SCOPE_PAIRS), 33)
 
     def test_candle_data_gaps_batch_additions_are_present(self) -> None:
         # feature/candle-data-gaps: two consecutive Research Agent runs generated
@@ -99,12 +100,6 @@ class InScopePairsTest(unittest.TestCase):
         }
         self.assertTrue(expected_new.issubset(keys))
 
-    def test_eurusd_4h_deliberately_not_added_here(self) -> None:
-        # EUR/USD/4h is already in flight on a separate, unmerged branch
-        # (feature/eurusd-4h-and-adx-dsl) -- not duplicated by this batch.
-        keys = {(p.asset, p.timeframe) for p in IN_SCOPE_PAIRS}
-        self.assertNotIn(("EUR/USD", "4h"), keys)
-
     def test_new_4h_pairs_use_4h_cadence(self) -> None:
         # Unlike the 1day-labeled entries (which reuse the "24h" cadence bucket,
         # same convention as the stock pairs), every new "4h"-timeframe pair must
@@ -112,6 +107,16 @@ class InScopePairsTest(unittest.TestCase):
         for p in IN_SCOPE_PAIRS:
             if p.timeframe == "4h":
                 self.assertEqual(p.cadence_timeframe, "4h", msg=f"{p.asset}/4h")
+
+    def test_eurusd_4h_is_included_as_a_deliberate_pre_roster_exception(self) -> None:
+        # See the IN_SCOPE_PAIRS docstring's RMR_LONG_ONLY_EURUSD_4H EXCEPTION
+        # note: added ahead of a live roster entry, using forex_data.py's
+        # already-confirmed native 4h Twelve Data interval -- no resampling.
+        # Lands after the candle-data-gaps batch above, which deliberately
+        # skipped EUR/USD/4h as already in flight on this branch.
+        pair = next(p for p in IN_SCOPE_PAIRS if p.asset == "EUR/USD" and p.timeframe == "4h")
+        self.assertEqual(pair.cadence_timeframe, "4h")
+        self.assertEqual(pair.fetch_family, "forex")
 
     def test_no_duplicate_asset_timeframe_pairs(self) -> None:
         keys = [(p.asset, p.timeframe) for p in IN_SCOPE_PAIRS]
@@ -123,6 +128,26 @@ class InScopePairsTest(unittest.TestCase):
         pair = next(p for p in IN_SCOPE_PAIRS if p.asset == "BTC" and p.timeframe == "12h")
         self.assertEqual(pair.cadence_timeframe, "12h")
         self.assertEqual(pair.fetch_family, "crypto_metals")
+
+
+class AlreadyFreshTest(unittest.TestCase):
+    """Direct unit coverage of the "4h" branch added alongside EUR/USD/4h --
+    previously unhandled (fell through to the unconditional `return False`),
+    which would have meant EUR/USD/4h was refetched on every scheduler tick
+    inside the same ~40-minute due window instead of once per real 4h close."""
+
+    def test_same_4h_bucket_is_fresh(self) -> None:
+        existing = datetime(2026, 7, 24, 0, 10, tzinfo=timezone.utc)
+        now = existing.replace(minute=30)  # same day, same hour -- same 4h bucket
+        self.assertTrue(_already_fresh(existing, "4h", now))
+
+    def test_different_4h_bucket_is_not_fresh(self) -> None:
+        existing = datetime(2026, 7, 24, 0, 10, tzinfo=timezone.utc)
+        now = datetime(2026, 7, 24, 4, 5, tzinfo=timezone.utc)  # next 4h bucket
+        self.assertFalse(_already_fresh(existing, "4h", now))
+
+    def test_no_existing_file_is_never_fresh(self) -> None:
+        self.assertFalse(_already_fresh(None, "4h", datetime(2026, 7, 24, 0, 10, tzinfo=timezone.utc)))
 
 
 class ExportCandleDataTest(unittest.TestCase):
@@ -166,6 +191,19 @@ class ExportCandleDataTest(unittest.TestCase):
         candle = payload["candles"][0]
         self.assertEqual(set(candle.keys()), {"time", "open", "high", "low", "close", "volume"})
         self.assertEqual(candle["volume"], 1000.0)  # crypto -- genuine volume, passed through
+
+    def test_eurusd_4h_pair_is_exported_with_correct_schema_and_null_volume(self) -> None:
+        p_ctc, p_forex, p_stock = self._patch_all_fetchers(forex_frame=_make_candles(n=3))
+        with p_ctc, p_forex, p_stock:
+            result = run_export(now=NOW_NOTHING_DUE.replace(minute=10), output_dir=self.output_dir, force=True)
+
+        self.assertIn("EURUSD_4h.json", result.exported)
+        payload = json.loads((self.output_dir / "EURUSD_4h.json").read_text())
+        self.assertEqual(payload["asset"], "EUR/USD")
+        self.assertEqual(payload["timeframe"], "4h")
+        self.assertEqual(len(payload["candles"]), 3)
+        for candle in payload["candles"]:
+            self.assertIsNone(candle["volume"])  # same forex volume-honesty rule as EUR/USD/1week
 
     def test_forex_pair_is_exported_with_null_volume(self) -> None:
         p_ctc, p_forex, p_stock = self._patch_all_fetchers()

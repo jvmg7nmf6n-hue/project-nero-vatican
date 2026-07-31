@@ -47,6 +47,19 @@ MIN_OBSERVATIONS = 30
 # asset class ever reuses "1day" for a 24/7 market (or "24h" for a 5-day one) this
 # table would need an asset-class-aware key instead of a bare timeframe string --
 # flagged here rather than silently assumed to hold forever.
+#
+# "4h" is deliberately ABSENT from this table (2026-07-31 cross-branch review,
+# merging feature/candle-data-gaps + feature/eurusd-4h-and-adx-dsl together):
+# the candle-data-gaps batch landed "4h" exports for several 24/7 assets (BTC,
+# BNB, GOLD, SILVER) and session-based stocks in the same window this branch
+# added a forex-only "4h": 1560 entry (5 days x 24h / 4h per candle x 52 weeks).
+# Because this table is keyed by bare timeframe string with no asset-class
+# awareness, a single "4h" entry sized for forex's 24/5 week would have silently
+# mis-annualized Sharpe/vol/return for every non-forex 4h asset instead of the
+# honest null they show today (periods_per_year_for_timeframe returns None ->
+# annualized fields null, per this function's own contract). Left out entirely
+# until this table is made asset-class-aware (e.g. keyed by (asset_class,
+# timeframe)) -- tracked as a follow-up, not fixed here.
 TIMEFRAME_PERIODS_PER_YEAR: dict[str, int] = {
     "12h": 730,   # crypto, 24/7: 2 candles/day x 365
     "24h": 365,   # crypto/metals, 24/7

@@ -192,6 +192,16 @@ class PeriodsPerYearLookupTest(unittest.TestCase):
         self.assertEqual(qp.periods_per_year_for_timeframe("1day"), 252)
         self.assertEqual(qp.periods_per_year_for_timeframe("1week"), 52)
 
+    def test_4h_is_absent_pending_asset_class_awareness(self) -> None:
+        # "4h" is deliberately excluded from TIMEFRAME_PERIODS_PER_YEAR (see this
+        # table's own docstring): candle-data-gaps landed 4h exports for several
+        # 24/7 assets (BTC, BNB, GOLD, SILVER) and session-based stocks in the
+        # same window a forex-only 4h value would otherwise have been added here,
+        # and the table has no asset-class key to disambiguate them. Every 4h
+        # combo -- forex included -- must degrade to the same honest null this
+        # function already returns for any unrecognized timeframe.
+        self.assertIsNone(qp.periods_per_year_for_timeframe("4h"))
+
     def test_unknown_timeframe_returns_none_not_a_guess(self) -> None:
         self.assertIsNone(qp.periods_per_year_for_timeframe("snapshot"))
         self.assertIsNone(qp.periods_per_year_for_timeframe("3day"))

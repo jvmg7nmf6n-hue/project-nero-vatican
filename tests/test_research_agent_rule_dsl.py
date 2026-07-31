@@ -93,6 +93,13 @@ class ParseStructuredRuleTest(unittest.TestCase):
         rule = parse_structured_rule({"conditions": [{"field": "rsi14", "op": "lt", "value": 30.0}]})
         self.assertEqual(rule.conditions[0].field, "rsi14")
 
+    def test_adx14_is_an_allowed_field(self) -> None:
+        # ADX added 2026-07-30 -- RMR_LONG_ONLY_EURUSD_4H's entry (ADX < 25) and
+        # regime-break exit (ADX >= 28) were previously unrepresentable, indistinguishable
+        # from a genuinely ambiguous rule purely because of an incomplete field list.
+        rule = parse_structured_rule({"conditions": [{"field": "adx14", "op": "lt", "value": 25.0}]})
+        self.assertEqual(rule.conditions[0].field, "adx14")
+
     def test_compare_to_field_parses(self) -> None:
         rule = parse_structured_rule({"conditions": [{"field": "ma20", "op": "cross_above", "compare_to_field": "ma50"}]})
         self.assertEqual(rule.conditions[0].compare_to_field, "ma50")
@@ -159,6 +166,26 @@ class IndicatorFrameTest(unittest.TestCase):
         pd.testing.assert_series_equal(
             frame["rsi14"].iloc[14:].reset_index(drop=True), expected.iloc[14:].reset_index(drop=True), check_names=False
         )
+
+    def test_adx14_matches_the_reused_range_mean_reversion_function_exactly(self) -> None:
+        # adx() has no .fillna() step to undo (see rule_dsl.py's own module-level
+        # comment on this) -- so, unlike rsi14, this must match the canonical
+        # function EXACTLY, including matching NaN warmup positions, with no
+        # re-masking step in between.
+        from nero_core.strategies.range_mean_reversion import adx as range_mean_reversion_adx
+
+        closes = [100.0 + 8.0 * ((i % 20) - 10) / 10.0 for i in range(60)]  # oscillating, not monotonic
+        candles = _candles(len(closes), closes=closes)
+        frame = compute_indicator_frame(candles)
+        sorted_candles = candles.sort_values("close_time").reset_index(drop=True)
+        expected = range_mean_reversion_adx(sorted_candles, period=14)
+        pd.testing.assert_series_equal(frame["adx14"], expected, check_names=False)
+
+    def test_adx14_warmup_rows_are_nan_not_fabricated(self) -> None:
+        closes = [100.0 + 8.0 * ((i % 20) - 10) / 10.0 for i in range(60)]
+        frame = compute_indicator_frame(_candles(len(closes), closes=closes))
+        self.assertTrue(frame["adx14"].iloc[:26].isna().all())
+        self.assertFalse(pd.isna(frame["adx14"].iloc[-1]))
 
 
 class FieldVsFieldEvaluationTest(unittest.TestCase):

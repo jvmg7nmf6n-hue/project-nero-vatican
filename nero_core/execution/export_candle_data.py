@@ -92,7 +92,7 @@ class CandlePair:
 
 
 # Derived from docs/site_data/strategies.json's live roster -- see the module
-# docstring for exactly what was excluded and why. 32 pairs.
+# docstring for exactly what was excluded and why. 33 pairs.
 #
 # EXCEPTION (Day 7): BTC/12h has no live roster entry as of this commit -- added
 # ahead of one, per explicit instruction, using the identical Binance 12h fetch
@@ -129,6 +129,15 @@ class CandlePair:
 #     own existing "4h" handling -- 4 consecutive 1h candles per RTH session),
 #     live-tested against AAPL; identical code path for all 7, no per-ticker
 #     branching in that function.
+#
+# EXCEPTION (added for RMR_LONG_ONLY_EURUSD_4H): EUR/USD/4h has no live roster
+# entry either, same justification as BTC/12h above -- added ahead of one so
+# this candidate strategy has real candle history to develop/test against.
+# fetch_forex_ohlcv's own TWELVE_DATA_NATIVE_INTERVAL already has a native "4h"
+# entry (see nero_core/data_sources/forex_data.py) -- no resampling needed here,
+# unlike GOLD's 12h (Twelve Data has no native 12h for metals). This lands after
+# the CANDLE-DATA-GAPS batch above, which deliberately skipped EUR/USD/4h as
+# already in flight on this branch -- not a duplicate.
 IN_SCOPE_PAIRS: tuple[CandlePair, ...] = (
     CandlePair("BTC", "24h", "24h", "crypto_metals"),
     CandlePair("BTC", "12h", "12h", "crypto_metals"),
@@ -144,6 +153,7 @@ IN_SCOPE_PAIRS: tuple[CandlePair, ...] = (
     CandlePair("SILVER", "4h", "4h", "crypto_metals"),
     CandlePair("EUR/USD", "1week", "1week", "forex"),
     CandlePair("EUR/USD", "1day", "24h", "forex"),
+    CandlePair("EUR/USD", "4h", "4h", "forex"),
     CandlePair("GBP/USD", "1week", "1week", "forex"),
     CandlePair("USD/JPY", "1week", "1week", "forex"),
     CandlePair("USD/JPY", "4h", "4h", "forex"),
