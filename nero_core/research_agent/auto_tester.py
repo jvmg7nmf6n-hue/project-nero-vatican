@@ -176,34 +176,57 @@ def _parse_generated_at(raw: object) -> datetime | None:
 def _size_entry_for_hypothesis(
     candle: pd.Series, state: MeanReversionState, params: MeanReversionParameters, exit_plan: ExitPlan
 ) -> OpenTrade | None:
-    """LONG-only, ATR stop, R-multiple target, risk-based sizing -- the same
-    shape mean_reversion.size_entry uses, generalized over an arbitrary
-    structured entry trigger. entry_rsi/entry_ma20/entry_bb_lower/entry_ma200
-    are unused filler for this generic path -- evaluate_exit's own logic never
-    reads them, only entry_price/stop_loss/target/quantity/entry_fee/
-    open_close_time do. Returns None (no trade opened) if the risk/reward
-    geometry is invalid (missing/non-positive ATR), same contract as
-    mean_reversion.size_entry."""
-    atr_value = candle.get("atr14")
-    if atr_value is None or pd.isna(atr_value) or atr_value <= 0:
-        return None
+    """LONG-only, risk-based sizing -- the same shape mean_reversion.size_entry
+    uses, generalized over an arbitrary structured entry trigger AND (added for
+    feature/philosophy-hypotheses-dsl-check) an arbitrary stop/target basis.
+    entry_rsi/entry_ma20/entry_bb_lower/entry_ma200 are unused filler for this
+    generic path -- evaluate_exit's own logic never reads them, only
+    entry_price/stop_loss/target/quantity/entry_fee/open_close_time do.
 
+    STOP: exit_plan.stop_atr_multiple and exit_plan.stop_pct_of_entry are
+    mutually exclusive (parse_exit_plan enforces exactly one) -- risk_per_unit
+    is this many ATRs at entry, or this fraction of entry price, respectively.
+    Returns None (no trade opened) if the risk/reward geometry is invalid
+    (missing/non-positive ATR for the ATR-based shape; non-positive risk_per_unit
+    for either shape), same contract as mean_reversion.size_entry. Only the
+    ATR-based shape requires atr14 to be present on the entry candle -- a
+    stop_pct_of_entry plan can open a trade even where atr14 is still NaN,
+    since it never reads that field for sizing (entry_atr is still populated
+    when available, purely informational, same as every other unused-filler
+    field above).
+
+    TARGET: exactly one of target_r_multiple (a multiple of risk_per_unit,
+    whatever its basis), dynamic_target_condition (never read here -- see the
+    NaN comment below), or target_pct_of_entry (a fixed fraction of entry
+    price, independent of risk_per_unit entirely -- NOT an R-multiple, matching
+    a hypothesis that states its target as a flat percentage, not a multiple of
+    its own risk)."""
     raw_entry = float(candle["close"])
     entry_price = apply_slippage(raw_entry, params.slippage_bps, "buy")
-    risk_per_unit = exit_plan.stop_atr_multiple * float(atr_value)
+
+    atr_value = candle.get("atr14")
+    atr_is_valid = atr_value is not None and not pd.isna(atr_value) and atr_value > 0
+
+    if exit_plan.stop_atr_multiple is not None:
+        if not atr_is_valid:
+            return None
+        risk_per_unit = exit_plan.stop_atr_multiple * float(atr_value)
+    else:
+        risk_per_unit = exit_plan.stop_pct_of_entry * entry_price
     if risk_per_unit <= 0:
         return None
     stop_loss = entry_price - risk_per_unit
-    # Dynamic-target plans (exit_plan.dynamic_target_condition set) never read this
-    # field -- _evaluate_exit_for_hypothesis checks the CURRENT candle's own indicator
-    # value directly each row instead of a value frozen at entry. NaN, never a guessed
-    # number, so an accidental read (there shouldn't be one) can never spuriously
-    # compare True against a real high/low.
-    target = (
-        entry_price + risk_per_unit * exit_plan.target_r_multiple
-        if exit_plan.target_r_multiple is not None
-        else float("nan")
-    )
+
+    if exit_plan.target_r_multiple is not None:
+        target = entry_price + risk_per_unit * exit_plan.target_r_multiple
+    elif exit_plan.target_pct_of_entry is not None:
+        target = entry_price * (1.0 + exit_plan.target_pct_of_entry)
+    else:
+        # dynamic_target_condition set -- never read here. _evaluate_exit_for_hypothesis
+        # checks the CURRENT candle's own indicator value directly each row instead of a
+        # value frozen at entry. NaN, never a guessed number, so an accidental read
+        # (there shouldn't be one) can never spuriously compare True against a real high/low.
+        target = float("nan")
 
     risk_dollars = state.equity * params.risk_per_trade
     quantity = risk_dollars / risk_per_unit
@@ -219,7 +242,8 @@ def _size_entry_for_hypothesis(
         entry_price=entry_price, stop_loss=stop_loss, target=target, quantity=quantity,
         notional=notional, risk_dollars=risk_dollars, entry_fee=entry_fee,
         open_close_time=int(candle["close_time"]),
-        entry_rsi=0.0, entry_ma20=0.0, entry_bb_lower=0.0, entry_ma200=0.0, entry_atr=float(atr_value),
+        entry_rsi=0.0, entry_ma20=0.0, entry_bb_lower=0.0, entry_ma200=0.0,
+        entry_atr=float(atr_value) if atr_is_valid else float("nan"),
     )
 
 
@@ -322,7 +346,18 @@ def _make_exit_evaluator(
     function object) for a plan using none of ExitPlan's extended fields, so
     every existing fixed-shape hypothesis's behavior is byte-identical to
     before this extension existed. Only returns _evaluate_exit_for_hypothesis
-    when the plan actually needs it."""
+    when the plan actually needs it.
+
+    stop_pct_of_entry/target_pct_of_entry (feature/philosophy-hypotheses-dsl-check)
+    deliberately do NOT appear in this routing check: evaluate_exit itself only
+    ever reads OpenTrade.stop_loss/.target as already-computed PRICE LEVELS (see
+    mean_reversion.evaluate_exit) -- it has no idea, and no need to know, whether
+    _size_entry_for_hypothesis derived those levels from an ATR multiple or a
+    fixed percentage of entry price. A percentage-shape plan with a real
+    max_holding_hours and no dynamic target/regime break is exactly as eligible
+    for evaluate_exit ITSELF as the original ATR-shape plan is -- proven directly
+    in test_research_agent_exitplan_percentage_shape.py, not just asserted by
+    construction."""
     uses_only_fixed_shape = (
         exit_plan.dynamic_target_condition is None
         and exit_plan.regime_break_condition is None

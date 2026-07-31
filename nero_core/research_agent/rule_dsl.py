@@ -47,11 +47,15 @@ to run a real backtest -- computing an R-multiple needs a stop and a target
 too. ExitPlan/parse_exit_plan apply the exact same "never guess" principle
 (REQUIREMENT 1 above) to that other half of a testable trade definition: a
 hypothesis's exit_rule/stop_rule free text is REJECTED as UNTESTABLE unless it
-also has this fixed, machine-checkable shape -- stop distance in ATR
-multiples, plus EITHER a target as a multiple of that same risk (an
-R-multiple, the original, still-default shape) OR a dynamic target that moves
-with a named indicator (re-evaluated every closed candle, e.g. "close >= ma20"
--- for a strategy whose target is a moving average rather than a fixed price),
+also has this fixed, machine-checkable shape -- stop distance as EITHER a
+multiple of ATR OR a fixed fraction of entry price (stop_pct_of_entry, added
+for feature/philosophy-hypotheses-dsl-check -- for a hypothesis whose own
+stated risk is a literal percentage, not an ATR-derived distance), plus
+EITHER a target as a multiple of that same risk (an R-multiple, the original,
+still-default shape), a dynamic target that moves with a named indicator
+(re-evaluated every closed candle, e.g. "close >= ma20" -- for a strategy
+whose target is a moving average rather than a fixed price), OR a fixed
+fraction of entry price (target_pct_of_entry, same percentage-shape addition),
 plus an OPTIONAL regime-break exit (a condition that must hold for N
 CONSECUTIVE closed candles, e.g. "adx14 >= 28 for 2 bars" -- a hysteresis exit
 independent of price touching stop or target), plus an OPTIONAL maximum
@@ -215,10 +219,37 @@ class ExitPlan:
     to be a positive number whenever the key IS present, identical to before.
 
     Target: exactly one of target_r_multiple (a fixed R-multiple, entry's own
-    stop distance times this factor -- the ORIGINAL, still-default shape) or
+    stop distance times this factor -- the ORIGINAL, still-default shape),
     dynamic_target_condition (a Condition re-evaluated on every closed candle
     against the frame's OWN current-row indicator value, e.g. "close >= ma20"
-    -- for a target that MOVES with the market rather than freezing at entry).
+    -- for a target that MOVES with the market rather than freezing at entry),
+    or target_pct_of_entry (see below).
+
+    Stop: exactly one of stop_atr_multiple (the ORIGINAL, still-default shape
+    -- risk = this many ATRs at entry) or stop_pct_of_entry (see below).
+
+    PERCENTAGE SHAPE (added for feature/philosophy-hypotheses-dsl-check,
+    WISE_MAN_ASYMMETRIC_HOLD's blocker): stop_pct_of_entry / target_pct_of_entry
+    express a stop/target as a fixed FRACTION of entry price (e.g. 0.03 for a
+    3% stop), completely independent of ATR -- for a hypothesis whose own
+    stated risk/reward is "entry -3%" / "entry +1%", not an ATR-derived
+    distance. Converting a fixed percentage into an ATR-multiple was
+    considered and rejected: ATR-as-%-of-price drifts with the volatility
+    regime, so no single stop_atr_multiple equals exactly 3% of entry price on
+    every trade -- only a genuine percentage-based field is faithful to a
+    hypothesis that literally says "3%," not "roughly 3% on average." Exactly
+    one of stop_atr_multiple/stop_pct_of_entry must be set, and exactly one of
+    target_r_multiple/dynamic_target_condition/target_pct_of_entry must be
+    set -- never both, never neither, matching every other exactly-one-of
+    shape in this dataclass. A plan MAY freely mix bases (e.g.
+    stop_pct_of_entry with target_r_multiple) -- auto_tester._size_entry_for_
+    hypothesis computes risk_per_unit from whichever stop field is set, then
+    computes target from whichever target field is set; the two are
+    independent computations, not coupled the way an R-multiple is coupled to
+    its OWN stop distance by definition. A stop_pct_of_entry plan does NOT
+    require atr14 to be present on the entry candle (unlike stop_atr_multiple,
+    which does) -- see _size_entry_for_hypothesis's own atr_is_valid gate,
+    which is only consulted for the ATR-based stop shape.
 
     Regime-break exit (optional, both-or-neither with its bar count):
     regime_break_condition + regime_break_consecutive_bars -- exits when
@@ -227,12 +258,14 @@ class ExitPlan:
     a hysteresis exit against a trend/regime break, independent of price
     touching either the stop or the target)."""
 
-    stop_atr_multiple: float
+    stop_atr_multiple: float | None = None
     target_r_multiple: float | None = None
     dynamic_target_condition: Condition | None = None
     max_holding_hours: float | None = None
     regime_break_condition: Condition | None = None
     regime_break_consecutive_bars: int | None = None
+    stop_pct_of_entry: float | None = None
+    target_pct_of_entry: float | None = None
 
 
 def _parse_positive_number(raw: dict, key: str) -> float:
@@ -258,18 +291,38 @@ def parse_exit_plan(raw: object) -> ExitPlan:
         }
     (max_holding_hours omitted above -- see ExitPlan's own docstring on why that
     means "no time-based exit," not a missing/invalid field.)
+    Percentage shape (stop/target as a fixed fraction of entry price, e.g.
+    WISE_MAN_ASYMMETRIC_HOLD's own -- target +1%, stop -3%, no time cap):
+        {"stop_pct_of_entry": 0.03, "target_pct_of_entry": 0.01}
 
     Raises RuleAmbiguousError (never a guessed substitute) if `raw` isn't a
-    dict; stop_atr_multiple is missing/non-numeric/non-positive; max_holding_hours
-    (if present at all) is non-numeric/non-positive; neither or both of
-    target_r_multiple/dynamic_target_condition are set; dynamic_target_condition
-    (if given) isn't itself a valid, non-crossing Condition; or
-    regime_break_condition/regime_break_consecutive_bars are given one without
-    the other, or either is malformed."""
+    dict; neither or both of stop_atr_multiple/stop_pct_of_entry are set (or
+    the one that is set is non-numeric/non-positive); max_holding_hours (if
+    present at all) is non-numeric/non-positive; not exactly one of
+    target_r_multiple/dynamic_target_condition/target_pct_of_entry is set;
+    dynamic_target_condition (if given) isn't itself a valid, non-crossing
+    Condition; or regime_break_condition/regime_break_consecutive_bars are
+    given one without the other, or either is malformed."""
     if not isinstance(raw, dict):
         raise RuleAmbiguousError(f"structured_exit_plan must be a dict, got {type(raw).__name__}")
 
-    stop_atr_multiple = _parse_positive_number(raw, "stop_atr_multiple")
+    stop_atr_multiple_raw = raw.get("stop_atr_multiple")
+    stop_pct_of_entry_raw = raw.get("stop_pct_of_entry")
+    has_stop_atr = stop_atr_multiple_raw is not None
+    has_stop_pct = stop_pct_of_entry_raw is not None
+    if has_stop_atr and has_stop_pct:
+        raise RuleAmbiguousError(
+            "structured_exit_plan must set exactly one of 'stop_atr_multiple'/'stop_pct_of_entry', got both"
+        )
+    if not has_stop_atr and not has_stop_pct:
+        raise RuleAmbiguousError("structured_exit_plan must set exactly one of 'stop_atr_multiple'/'stop_pct_of_entry'")
+
+    stop_atr_multiple: float | None = None
+    stop_pct_of_entry: float | None = None
+    if has_stop_atr:
+        stop_atr_multiple = _parse_positive_number(raw, "stop_atr_multiple")
+    else:
+        stop_pct_of_entry = _parse_positive_number(raw, "stop_pct_of_entry")
 
     max_holding_hours_raw = raw.get("max_holding_hours")
     if max_holding_hours_raw is None:
@@ -279,21 +332,25 @@ def parse_exit_plan(raw: object) -> ExitPlan:
 
     target_r_multiple_raw = raw.get("target_r_multiple")
     dynamic_target_condition_raw = raw.get("dynamic_target_condition")
-    has_target_r = target_r_multiple_raw is not None
-    has_dynamic_target = dynamic_target_condition_raw is not None
-    if has_target_r and has_dynamic_target:
+    target_pct_of_entry_raw = raw.get("target_pct_of_entry")
+    target_shapes_set = sum(
+        x is not None for x in (target_r_multiple_raw, dynamic_target_condition_raw, target_pct_of_entry_raw)
+    )
+    if target_shapes_set != 1:
         raise RuleAmbiguousError(
-            "structured_exit_plan must set exactly one of 'target_r_multiple'/'dynamic_target_condition', got both"
+            "structured_exit_plan must set exactly one of 'target_r_multiple'/'dynamic_target_condition'/"
+            f"'target_pct_of_entry', got {target_shapes_set}"
         )
-    if not has_target_r and not has_dynamic_target:
-        raise RuleAmbiguousError("structured_exit_plan must set exactly one of 'target_r_multiple'/'dynamic_target_condition'")
 
     target_r_multiple: float | None = None
     dynamic_target_condition: Condition | None = None
-    if has_target_r:
+    target_pct_of_entry: float | None = None
+    if target_r_multiple_raw is not None:
         target_r_multiple = _parse_positive_number(raw, "target_r_multiple")
-    else:
+    elif dynamic_target_condition_raw is not None:
         dynamic_target_condition = _parse_condition(dynamic_target_condition_raw, allow_cross_ops=False)
+    else:
+        target_pct_of_entry = _parse_positive_number(raw, "target_pct_of_entry")
 
     regime_break_condition_raw = raw.get("regime_break_condition")
     regime_break_consecutive_bars_raw = raw.get("regime_break_consecutive_bars")
@@ -326,6 +383,8 @@ def parse_exit_plan(raw: object) -> ExitPlan:
         max_holding_hours=max_holding_hours,
         regime_break_condition=regime_break_condition,
         regime_break_consecutive_bars=regime_break_consecutive_bars,
+        stop_pct_of_entry=stop_pct_of_entry,
+        target_pct_of_entry=target_pct_of_entry,
     )
 
 
