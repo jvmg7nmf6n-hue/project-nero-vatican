@@ -536,7 +536,12 @@ describe("POST /api/chat", () => {
 
   it("calls the Anthropic API with the correct URL, headers, and model on success", async () => {
     process.env.ANTHROPIC_API_KEY = "test-key";
-    const mockFetch = jest.fn().mockResolvedValue(sseResponse([]));
+    // Must include a real text_delta event -- an empty stream produces empty
+    // replyText, which route.ts (intentionally, since 64611a3) treats as a
+    // 502 failure, not the 200 success this test is meant to exercise.
+    const mockFetch = jest.fn().mockResolvedValue(
+      sseResponse(['data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hi"}}\n'])
+    );
     global.fetch = mockFetch as unknown as typeof fetch;
 
     const response = await POST(jsonRequest({ message: "hi", strategyContext: CONTEXT, history: [] }));
@@ -793,7 +798,14 @@ describe("Next.js Route Handler export contract", () => {
 describe("API key server-only boundary", () => {
   it("route.ts is not a client component (no 'use client' directive)", () => {
     const source = fs.readFileSync(path.join(__dirname, "..", "app", "api", "chat", "route.ts"), "utf-8");
-    expect(source).not.toContain('"use client"');
+    // A precise directive check, not a raw substring search -- route.ts's own
+    // header comment describes this invariant using the literal words
+    // '"use client"' inside a // comment, which a blunt .not.toContain(...)
+    // misflags as the directive itself being present. A real directive is a
+    // standalone statement: only the quoted string (plus optional semicolon)
+    // on its own line.
+    const DIRECTIVE_STATEMENT = /^\s*["']use client["'];?\s*$/m;
+    expect(DIRECTIVE_STATEMENT.test(source)).toBe(false);
   });
 
   it("ChatBot.tsx never references ANTHROPIC_API_KEY or reads process.env directly", () => {
@@ -802,8 +814,18 @@ describe("API key server-only boundary", () => {
     expect(source).not.toContain("process.env");
   });
 
-  it("only route.ts references ANTHROPIC_API_KEY anywhere under app/ or components/", () => {
+  it("outside route.ts, ANTHROPIC_API_KEY is never read as a value under app/ or components/ -- only Boolean(...) presence-checks and comments are allowed", () => {
+    // A bare string search here would flag app/strategy/[id]/page.tsx's
+    // `Boolean(process.env.ANTHROPIC_API_KEY)` -- a documented, intentional
+    // presence-check (see route.ts's own header comment) whose result never
+    // leaves the server as anything but a boolean. That's not a leak. What
+    // WOULD be a leak is any other code shape referencing the env var --
+    // e.g. assigning `process.env.ANTHROPIC_API_KEY` to a variable that
+    // isn't immediately wrapped in Boolean(...), or a template string
+    // embedding it. This distinguishes the two instead of banning the name
+    // outright.
     const roots = ["app", "components"].map((dir) => path.join(__dirname, "..", dir));
+    const SAFE_PRESENCE_CHECK = /Boolean\(\s*process\.env\.ANTHROPIC_API_KEY\s*\)/;
     const offenders: string[] = [];
 
     function walk(dir: string) {
@@ -812,9 +834,18 @@ describe("API key server-only boundary", () => {
         if (entry.isDirectory()) {
           walk(full);
         } else if (/\.(ts|tsx)$/.test(entry.name)) {
+          if (full.endsWith(path.join("api", "chat", "route.ts"))) continue;
           const contents = fs.readFileSync(full, "utf-8");
-          if (contents.includes("ANTHROPIC_API_KEY") && !full.endsWith(path.join("api", "chat", "route.ts"))) {
-            offenders.push(full);
+          if (!contents.includes("ANTHROPIC_API_KEY")) continue;
+
+          const unsafeLines = contents
+            .split("\n")
+            .filter((line) => line.includes("ANTHROPIC_API_KEY"))
+            .filter((line) => !line.trim().startsWith("//"))
+            .filter((line) => !SAFE_PRESENCE_CHECK.test(line));
+
+          if (unsafeLines.length > 0) {
+            offenders.push(`${full}: ${unsafeLines.join(" | ")}`);
           }
         }
       }

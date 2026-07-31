@@ -44,8 +44,11 @@ describe("AssetTabs tab switching", () => {
     fireEvent.click(screen.getByTestId("tab-Crypto"));
 
     const cards = screen.getAllByTestId("strategy-card");
-    // BTC (ORDERFLOW_IMBALANCE) + BTC-ETH pair (COINTEGRATION_PAIRS), not GOLD/BNB.
-    expect(cards).toHaveLength(2);
+    // BNB (TREND_PULLBACK) + BTC (ORDERFLOW_IMBALANCE) + BTC-ETH pair
+    // (COINTEGRATION_PAIRS), not GOLD -- BNB is a recognized crypto asset
+    // (see lib/assetClass.ts's CRYPTO_ASSETS set).
+    expect(cards).toHaveLength(3);
+    expect(screen.getByText("TREND_PULLBACK")).toBeInTheDocument();
     expect(screen.getByText("ORDERFLOW_IMBALANCE")).toBeInTheDocument();
     expect(screen.getByText("COINTEGRATION_PAIRS")).toBeInTheDocument();
     expect(screen.queryByText("BREAKOUT_MOMENTUM")).not.toBeInTheDocument();
@@ -69,8 +72,8 @@ describe("AssetTabs tab switching", () => {
 
   it("shows a tab count badge reflecting the roster size for that class", () => {
     render(<AssetTabs roster={ROSTER} recentRows={[]} stats={[]} />);
-    // BTC single asset + BTC-ETH pair = 2 Crypto entries.
-    expect(screen.getByTestId("tab-Crypto")).toHaveTextContent("Crypto (2)");
+    // BNB + BTC single assets + BTC-ETH pair = 3 Crypto entries.
+    expect(screen.getByTestId("tab-Crypto")).toHaveTextContent("Crypto (3)");
     expect(screen.getByTestId("tab-All")).toHaveTextContent("All (4)");
   });
 });
