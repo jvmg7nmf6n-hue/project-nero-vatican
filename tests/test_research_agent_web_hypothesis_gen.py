@@ -170,11 +170,37 @@ class GenerateWebHypothesesTest(unittest.TestCase):
         # for the first real run, given the higher per-hypothesis cost.
         self.assertEqual(DEFAULT_WEB_MAX_CALLS_PER_RUN, 3)
 
-    def test_all_source_tiers_are_the_four_documented_categories(self) -> None:
+    def test_all_source_tiers_are_the_six_documented_categories(self) -> None:
         self.assertEqual(
             set(SOURCE_TIERS),
-            {"peer_reviewed_academic", "established_financial_publication", "trading_forum_social_media", "unknown_unverifiable"},
+            {
+                "peer_reviewed_academic",
+                "established_financial_publication",
+                "independent_blog_or_newsletter",
+                "forum_discussion",
+                "social_media_post",
+                "unknown_unverifiable",
+            },
         )
+
+    def test_all_six_tiers_are_mutually_distinguishable(self) -> None:
+        # No duplicates, no aliasing -- each of the six tiers is its own distinct
+        # string, so a later "which source types produce SURVIVED hypotheses"
+        # analysis can group by source_tier without any two categories colliding.
+        self.assertEqual(len(SOURCE_TIERS), 6)
+        self.assertEqual(len(set(SOURCE_TIERS)), len(SOURCE_TIERS))
+
+    def test_blog_forum_and_social_media_tiers_pass_through_unchanged(self) -> None:
+        # unknown_unverifiable must be a genuine fallback (invalid/missing tier
+        # only) -- NOT a dumping ground that a valid blog/forum/social_media tier
+        # silently collapses into. Each of the three newest tiers survives
+        # _build_web_record's validation as-is.
+        for tier in ("independent_blog_or_newsletter", "forum_discussion", "social_media_post"):
+            data = dict(WEB_HYPOTHESIS_DATA, source_tier=tier)
+            payload = _payload(data)
+            with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse(payload)):
+                result = generate_web_hypotheses([], [], "fake-key", TRACKED_PAIRS, max_calls_per_run=1, now=NOW)
+            self.assertEqual(result.hypotheses[0]["source_tier"], tier)
 
     def test_cost_limit_hit_when_max_calls_per_run_reached(self) -> None:
         payload = _payload(WEB_HYPOTHESIS_DATA)
@@ -342,7 +368,7 @@ class NoSpecialTreatmentTest(unittest.TestCase):
         scanner_hypothesis = self._hypothesis({"scan_finding": "x", "scan_finding_type": "extreme_zscore", "source": "claude"})
         web_hypothesis = self._hypothesis({
             "discovery_channel": "web_search", "source_url": "https://example.com/x",
-            "source_tier": "trading_forum_social_media", "paraphrase_confirmed": True,
+            "source_tier": "forum_discussion", "paraphrase_confirmed": True,
             "graveyard_check": {"is_likely_repeat": False, "method": "no match", "matched_pattern_name": None},
         })
 
