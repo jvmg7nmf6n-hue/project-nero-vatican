@@ -114,19 +114,28 @@ def run_hypothesis_live(
     now: datetime,
     client: MarketDataClient | None = None,
     run_grid_shift: bool = True,
+    backtest_params=None,
 ) -> dict:
     """The reusable per-hypothesis submission: frequency_gate + full harness in
     one call (auto_tester.test_hypothesis already runs the gate as its own
     first step -- see that module's docstring), then, ONLY for a hypothesis
     that cleared FAST/VIABLE, a grid-shift re-run across all 4 possible 4h
     alignments. Returns {"result": TestResult, "grid_shift": {label:
-    TestResult} | None}."""
-    result = auto_tester.test_hypothesis(hypothesis, candles, now)
+    TestResult} | None}.
+
+    `backtest_params` (added for feature/external-candidates-formal-test,
+    a nero_core.strategies.mean_reversion.MeanReversionParameters instance --
+    e.g. for an asset-specific fee_bps distinct from auto_tester's own
+    crypto-sized default) is forwarded UNCHANGED to both test_hypothesis and
+    run_grid_shift_check, so a hypothesis's cost assumptions stay identical
+    across its main run and every grid-shift re-run -- omitting it (the
+    default, None) reproduces this function's exact prior behavior."""
+    result = auto_tester.test_hypothesis(hypothesis, candles, now, backtest_params=backtest_params)
     grid_shift: dict[str, auto_tester.TestResult] | None = None
     if run_grid_shift and result.frequency_classification in (frequency_gate.FAST, frequency_gate.VIABLE):
         client = client or MarketDataClient()
         grids = build_4h_grids(hypothesis["asset"], client)
-        grid_shift = auto_tester.run_grid_shift_check(hypothesis, grids, now)
+        grid_shift = auto_tester.run_grid_shift_check(hypothesis, grids, now, backtest_params=backtest_params)
     return {"result": result, "grid_shift": grid_shift}
 
 

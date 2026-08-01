@@ -239,6 +239,39 @@ class GridShiftCheckTest(unittest.TestCase):
         self.assertEqual(set(results.keys()), {"native", "offset+3h"})
         self.assertEqual(results["native"].hypothesis_name, "TEST_HYPOTHESIS")
 
+    def test_backtest_params_forwarded_unchanged_to_every_grids_test_hypothesis_call(self) -> None:
+        # feature/external-candidates-formal-test: closes a latent gap --
+        # test_hypothesis already supported a custom backtest_params (e.g. a
+        # forex-specific fee_bps), but its own grid-shift companion silently
+        # never forwarded one, which would have made a hypothesis's cost
+        # assumptions inconsistent between its main run and its grid-shift
+        # verification. Proven here by mocking test_hypothesis directly and
+        # checking every call received the SAME object, not by inference from
+        # a P&L difference.
+        from nero_core.strategies.mean_reversion import MeanReversionParameters
+
+        custom_params = MeanReversionParameters(fee_bps=2.0, slippage_bps=2.0)
+        hypothesis = _hypothesis(generated_at=datetime.now(timezone.utc).isoformat())
+        grids = {"native": _flat_noise_candles(50), "offset+1h": _flat_noise_candles(50)}
+
+        with patch("nero_core.research_agent.auto_tester.test_hypothesis") as mock_test_hypothesis:
+            run_grid_shift_check(hypothesis, grids, backtest_params=custom_params)
+
+        self.assertEqual(mock_test_hypothesis.call_count, 2)
+        for call in mock_test_hypothesis.call_args_list:
+            self.assertIs(call.kwargs["backtest_params"], custom_params)
+
+    def test_omitting_backtest_params_is_byte_identical_to_before_this_parameter_existed(self) -> None:
+        candles_a = _flat_noise_candles(200)
+        generated_at = datetime.fromtimestamp((START_MS + 200 * HOUR_MS) / 1000, tz=timezone.utc)
+        hypothesis = _hypothesis(generated_at=generated_at.isoformat())
+        fixed_now = datetime.now(timezone.utc)  # held fixed across both calls -- tested_at would otherwise differ trivially
+
+        with_explicit_none = run_grid_shift_check(hypothesis, {"native": candles_a}, now=fixed_now, backtest_params=None)
+        without_the_kwarg_at_all = run_grid_shift_check(hypothesis, {"native": candles_a}, now=fixed_now)
+
+        self.assertEqual(with_explicit_none["native"].to_dict(), without_the_kwarg_at_all["native"].to_dict())
+
 
 class PersistTestResultsTest(unittest.TestCase):
     def setUp(self) -> None:

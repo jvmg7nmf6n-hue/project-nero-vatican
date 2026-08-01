@@ -149,6 +149,31 @@ class RunHypothesisLiveTest(unittest.TestCase):
         mock_build_grids.assert_not_called()
         self.assertIsNone(run["grid_shift"])
 
+    def test_backtest_params_forwarded_unchanged_to_both_the_main_run_and_every_grid_shift_call(self) -> None:
+        # feature/external-candidates-formal-test: a hypothesis's cost
+        # assumptions (e.g. a forex-specific fee_bps) must stay identical
+        # across its main run and its grid-shift verification -- proven by
+        # mocking both auto_tester entry points directly, not inferred from
+        # a P&L difference.
+        from nero_core.strategies.mean_reversion import MeanReversionParameters
+
+        custom_params = MeanReversionParameters(fee_bps=2.0, slippage_bps=2.0)
+        candles = _dip_history(400)
+        hypothesis = self._hypothesis("FIRES_OFTEN")
+        fake_grids = {"native (offset+0h)": candles}
+        # Computed BEFORE the patch context -- the real function, not the mock.
+        base_result = auto_tester.test_hypothesis(hypothesis, candles, self.NOW)
+        self.assertIn(base_result.frequency_classification, (frequency_gate.FAST, frequency_gate.VIABLE))
+
+        with patch("tools.philosophy_hypotheses_live_test.auto_tester.test_hypothesis") as mock_test_hypothesis, \
+             patch("tools.philosophy_hypotheses_live_test.auto_tester.run_grid_shift_check") as mock_grid_check, \
+             patch("tools.philosophy_hypotheses_live_test.build_4h_grids", return_value=fake_grids):
+            mock_test_hypothesis.return_value = base_result
+            run_hypothesis_live(hypothesis, candles, self.NOW, backtest_params=custom_params)
+
+        self.assertIs(mock_test_hypothesis.call_args.kwargs["backtest_params"], custom_params)
+        self.assertIs(mock_grid_check.call_args.kwargs["backtest_params"], custom_params)
+
 
 class NoAutoWireTest(unittest.TestCase):
     """Same static AST check as tests/test_research_agent_no_auto_wire.py,
