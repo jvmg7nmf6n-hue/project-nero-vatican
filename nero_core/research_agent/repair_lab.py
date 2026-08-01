@@ -662,3 +662,65 @@ def check_in_chain_duplicate(
             )
 
     return InChainDuplicateResult(False, "no exact match against the original hypothesis or any prior attempt in this chain")
+
+
+# ---------------------------------------------------------------------------
+# TASK 5 -- THE 4-ATTEMPT CAP (launches, not resolutions) + PERMANENTLY_DIED
+# ---------------------------------------------------------------------------
+
+
+def count_launched_attempts(chain_attempts: list[dict]) -> int:
+    """Counts attempts LAUNCHED, not resolved -- every dict in
+    `chain_attempts` represents an attempt whose fresh-data allocation was
+    already locked in (a historical segment reserved, or a forward-tracking
+    tick registered), regardless of its CURRENT status -- including
+    PENDING_FORWARD_DATA, still in flight. Counting at launch (not
+    resolution) closes the cherry-picking loophole the investigation's Task
+    2 identified: if only resolved attempts counted, nothing would stop
+    launching unlimited concurrent forward-testing attempts and only
+    "counting" the ones that happen to pan out. A REJECTED proposal
+    (validate_modification/check_in_chain_duplicate rejected it before any
+    fresh data was allocated) is never passed to this function -- nothing
+    was launched, so nothing is counted; see Task 6's chain record for how
+    a rejection is recorded distinctly from a launch."""
+    return len(chain_attempts)
+
+
+def can_launch_new_attempt(chain_attempts: list[dict]) -> tuple[bool, str]:
+    """Hard cap enforcement. False (never a soft warning) once
+    MAX_ATTEMPTS_PER_CHAIN attempts have been launched -- a hypothesis with
+    2 attempts still PENDING_FORWARD_DATA and 2 DIED has used its full cap
+    and cannot launch a 5th, exactly per the task's own explicit example."""
+    launched = count_launched_attempts(chain_attempts)
+    if launched >= MAX_ATTEMPTS_PER_CHAIN:
+        return False, (
+            f"rejected: {launched}/{MAX_ATTEMPTS_PER_CHAIN} attempts already launched for this chain -- "
+            f"cap reached regardless of resolution status (a PENDING_FORWARD_DATA attempt counts toward "
+            f"the cap exactly the same as a resolved DIED)"
+        )
+    return True, f"{launched}/{MAX_ATTEMPTS_PER_CHAIN} attempts launched -- may launch {MAX_ATTEMPTS_PER_CHAIN - launched} more"
+
+
+def evaluate_chain_terminal_state(chain_attempts: list[dict]) -> str | None:
+    """None while the chain is still OPEN: fewer than MAX_ATTEMPTS_PER_CHAIN
+    have been launched, or at least one launched attempt is still PENDING_
+    FORWARD_DATA (not yet resolved either way) -- a chain is never declared
+    PERMANENTLY_DIED just because attempts are merely still in flight.
+
+    CHAIN_RESOLVED the instant any attempt reaches SURVIVED or PROMISING-
+    WATCHLIST -- per this module's own CRITICAL SAFETY guarantee (module
+    docstring), this only ever routes to the same human-review queue any
+    other research-agent output reaches; nothing auto-registers, and no
+    further repair attempts are proposed once a chain resolves.
+
+    CHAIN_PERMANENTLY_DIED only when EVERY launched attempt has reached the
+    terminal FAILURE status (DIED, via either fresh-data method) AND the
+    cap is fully used (MAX_ATTEMPTS_PER_CHAIN launches) AND no attempt
+    reached SURVIVED/PROMISING-WATCHLIST -- explicit, never silent, and
+    never re-derived by silently reusing data any attempt already
+    consumed to manufacture a 5th."""
+    if any(a["status"] in (ATTEMPT_SURVIVED, ATTEMPT_PROMISING_WATCHLIST) for a in chain_attempts):
+        return CHAIN_RESOLVED
+    if len(chain_attempts) >= MAX_ATTEMPTS_PER_CHAIN and all(a["status"] in TERMINAL_FAILURE_STATUSES for a in chain_attempts):
+        return CHAIN_PERMANENTLY_DIED
+    return None
