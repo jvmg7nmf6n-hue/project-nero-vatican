@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-31T23:47:15.063436+00:00",
+  "last_updated": "2026-08-01T00:09:08.315532+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -32,7 +32,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 7
+        "NO_TRADE": 8
       },
       "open_position": null
     },
@@ -49,7 +49,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 8
+        "NO_TRADE": 9
       },
       "open_position": null
     },
@@ -66,7 +66,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 8
+        "NO_TRADE": 9
       },
       "open_position": null
     },
@@ -83,7 +83,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 8
+        "NO_TRADE": 9
       },
       "open_position": null
     },
@@ -100,7 +100,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 8
+        "NO_TRADE": 9
       },
       "open_position": null
     },
@@ -117,7 +117,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 8
+        "NO_TRADE": 9
       },
       "open_position": null
     },
@@ -168,7 +168,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 10
+        "NO_TRADE": 11
       },
       "open_position": null
     },
@@ -185,7 +185,7 @@
         "ENTRY": 1,
         "EXIT": 1,
         "WATCH": 0,
-        "NO_TRADE": 9
+        "NO_TRADE": 10
       },
       "open_position": null
     },
@@ -219,7 +219,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 7
+        "NO_TRADE": 8
       },
       "open_position": null
     },
@@ -233,12 +233,16 @@
       "expectancy_r": null,
       "avg_return_pct": -0.19115857683062645,
       "signal_counts": {
-        "ENTRY": 37,
+        "ENTRY": 38,
         "EXIT": 37,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": {
+        "entry_price": 62887.88,
+        "entry_timestamp": "2026-08-01T00:08:17.682257+00:00",
+        "candle_timestamp": "2026-07-31T23:59:59.999000+00:00"
+      }
     },
     {
       "strategy": "ORDERFLOW_IMBALANCE",
@@ -250,12 +254,16 @@
       "expectancy_r": null,
       "avg_return_pct": 0.05365406358494785,
       "signal_counts": {
-        "ENTRY": 31,
+        "ENTRY": 32,
         "EXIT": 31,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": {
+        "entry_price": 1862.6,
+        "entry_timestamp": "2026-08-01T00:08:17.682257+00:00",
+        "candle_timestamp": "2026-07-31T23:59:59.999000+00:00"
+      }
     },
     {
       "strategy": "GOLD_SILVER_RATIO_MR",
@@ -270,7 +278,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 2
+        "NO_TRADE": 3
       },
       "open_position": null
     },
@@ -284,12 +292,16 @@
       "expectancy_r": null,
       "avg_return_pct": null,
       "signal_counts": {
-        "ENTRY": 0,
+        "ENTRY": 1,
         "EXIT": 0,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": {
+        "entry_price": 333.16662610473634,
+        "entry_timestamp": "2026-08-01T00:08:17.682257+00:00",
+        "candle_timestamp": "2026-07-31T04:00:00+00:00"
+      }
     },
     {
       "strategy": "PEAD",
@@ -352,12 +364,16 @@
       "expectancy_r": null,
       "avg_return_pct": null,
       "signal_counts": {
-        "ENTRY": 0,
+        "ENTRY": 1,
         "EXIT": 0,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": {
+        "entry_price": 233.39667610473631,
+        "entry_timestamp": "2026-08-01T00:08:17.682257+00:00",
+        "candle_timestamp": "2026-07-31T04:00:00+00:00"
+      }
     },
     {
       "strategy": "PEAD",
@@ -471,12 +487,16 @@
       "expectancy_r": null,
       "avg_return_pct": null,
       "signal_counts": {
-        "ENTRY": 0,
+        "ENTRY": 1,
         "EXIT": 0,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": {
+        "entry_price": 233.39667610473631,
+        "entry_timestamp": "2026-08-01T00:08:17.682257+00:00",
+        "candle_timestamp": "2026-07-31T04:00:00+00:00"
+      }
     },
     {
       "strategy": "PEAD",
