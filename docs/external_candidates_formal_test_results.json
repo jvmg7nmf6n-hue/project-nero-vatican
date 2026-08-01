@@ -1,0 +1,332 @@
+{
+  "generated_at": "2026-08-01T09:04:23.346322+00:00",
+  "runs": {
+    "EXT_WISE_MAN_HOLD_V5_ETH_4H": {
+      "name": "EXT_WISE_MAN_HOLD_V5_ETH_4H",
+      "asset": "ETH",
+      "timeframe": "4h",
+      "result": {
+        "hypothesis_name": "EXT_WISE_MAN_HOLD_V5_ETH_4H",
+        "asset": "ETH",
+        "timeframe": "4h",
+        "verdict": "DIED",
+        "review_status": "dead",
+        "frequency_classification": "VIABLE",
+        "measured_trades_per_year": 33.27560379088963,
+        "expected_time_to_30_trades_months": 10.818736821796234,
+        "reason": "train: N=176 ExpR=-0.342; test: N=53 ExpR=-0.057 -> DIED",
+        "train": {
+          "trades": 176,
+          "expectancy_r": -0.34180760010132877,
+          "bootstrap_ci": {
+            "sample_size": 176,
+            "mean_r": -0.34180760010132877,
+            "lower_2_5": -0.5251405627449923,
+            "upper_97_5": -0.15206499857289407,
+            "crosses_zero": false
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.34180760010132877,
+            "mean_random_expectancy_r": -0.19448189938804514,
+            "p95_random_expectancy_r": -0.06742627052049598,
+            "edge_over_random": -0.14732570071328363,
+            "target_trade_count": 176,
+            "realized_mean_trade_count": 174.375,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "test": {
+          "trades": 53,
+          "expectancy_r": -0.05678639856052252,
+          "bootstrap_ci": {
+            "sample_size": 53,
+            "mean_r": -0.05678639856052252,
+            "lower_2_5": -0.4099011219640421,
+            "upper_97_5": 0.32004582352903843,
+            "crosses_zero": true
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.05678639856052252,
+            "mean_random_expectancy_r": -0.1338684938900083,
+            "p95_random_expectancy_r": 0.0545924893209807,
+            "edge_over_random": 0.07708209532948578,
+            "target_trade_count": 53,
+            "realized_mean_trade_count": 52.085,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "tested_at": "2026-08-01T09:04:23.346322+00:00"
+      },
+      "grid_shift": {
+        "native (offset+0h)": {
+          "hypothesis_name": "EXT_WISE_MAN_HOLD_V5_ETH_4H",
+          "asset": "ETH",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 33.49892999082849,
+          "expected_time_to_30_trades_months": 10.746611909650923,
+          "reason": "train: N=176 ExpR=-0.330; test: N=53 ExpR=-0.057 -> DIED",
+          "train": {
+            "trades": 176,
+            "expectancy_r": -0.3301031093684315,
+            "bootstrap_ci": {
+              "sample_size": 176,
+              "mean_r": -0.3301031093684315,
+              "lower_2_5": -0.5209416457298556,
+              "upper_97_5": -0.1343578248346931,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.3301031093684315,
+              "mean_random_expectancy_r": -0.1967782237883902,
+              "p95_random_expectancy_r": -0.04604623035715437,
+              "edge_over_random": -0.13332488558004132,
+              "target_trade_count": 176,
+              "realized_mean_trade_count": 174.17,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 53,
+            "expectancy_r": -0.05678639856052252,
+            "bootstrap_ci": {
+              "sample_size": 53,
+              "mean_r": -0.05678639856052252,
+              "lower_2_5": -0.4099011219640421,
+              "upper_97_5": 0.32004582352903843,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.05678639856052252,
+              "mean_random_expectancy_r": -0.14591266665480648,
+              "p95_random_expectancy_r": 0.07215913523717282,
+              "edge_over_random": 0.08912626809428396,
+              "target_trade_count": 53,
+              "realized_mean_trade_count": 52.115,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-08-01T09:04:23.346322+00:00"
+        },
+        "offset+1h": {
+          "hypothesis_name": "EXT_WISE_MAN_HOLD_V5_ETH_4H",
+          "asset": "ETH",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 32.71728829104249,
+          "expected_time_to_30_trades_months": 11.003356904079444,
+          "reason": "train: N=170 ExpR=-0.268; test: N=46 ExpR=0.142 -> DIED",
+          "train": {
+            "trades": 170,
+            "expectancy_r": -0.2681405992000358,
+            "bootstrap_ci": {
+              "sample_size": 170,
+              "mean_r": -0.2681405992000358,
+              "lower_2_5": -0.4602143122919424,
+              "upper_97_5": -0.07503652620193346,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.2681405992000358,
+              "mean_random_expectancy_r": -0.1971642659367836,
+              "p95_random_expectancy_r": -0.06591105752897425,
+              "edge_over_random": -0.0709763332632522,
+              "target_trade_count": 170,
+              "realized_mean_trade_count": 168.89,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 46,
+            "expectancy_r": 0.14228245457406094,
+            "bootstrap_ci": {
+              "sample_size": 46,
+              "mean_r": 0.14228245457406094,
+              "lower_2_5": -0.2387975000296891,
+              "upper_97_5": 0.5452210632486255,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": 0.14228245457406094,
+              "mean_random_expectancy_r": -0.11405003375560986,
+              "p95_random_expectancy_r": 0.13307234816497474,
+              "edge_over_random": 0.2563324883296708,
+              "target_trade_count": 46,
+              "realized_mean_trade_count": 45.215,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-08-01T09:04:23.346322+00:00"
+        },
+        "offset+2h": {
+          "hypothesis_name": "EXT_WISE_MAN_HOLD_V5_ETH_4H",
+          "asset": "ETH",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 34.95233121019108,
+          "expected_time_to_30_trades_months": 10.299742178428273,
+          "reason": "train: N=195 ExpR=-0.395; test: N=57 ExpR=-0.126 -> DIED",
+          "train": {
+            "trades": 195,
+            "expectancy_r": -0.39540943500010106,
+            "bootstrap_ci": {
+              "sample_size": 195,
+              "mean_r": -0.39540943500010106,
+              "lower_2_5": -0.5642791833855836,
+              "upper_97_5": -0.21955987455507547,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.39540943500010106,
+              "mean_random_expectancy_r": -0.1953641009907802,
+              "p95_random_expectancy_r": -0.07460451228852355,
+              "edge_over_random": -0.20004533400932087,
+              "target_trade_count": 195,
+              "realized_mean_trade_count": 192.655,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 57,
+            "expectancy_r": -0.1260121377842444,
+            "bootstrap_ci": {
+              "sample_size": 57,
+              "mean_r": -0.1260121377842444,
+              "lower_2_5": -0.45408135704513986,
+              "upper_97_5": 0.2197190572253488,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.1260121377842444,
+              "mean_random_expectancy_r": -0.1575487090034036,
+              "p95_random_expectancy_r": 0.06151660711203253,
+              "edge_over_random": 0.031536571219159204,
+              "target_trade_count": 57,
+              "realized_mean_trade_count": 55.955,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-08-01T09:04:23.346322+00:00"
+        },
+        "offset+3h": {
+          "hypothesis_name": "EXT_WISE_MAN_HOLD_V5_ETH_4H",
+          "asset": "ETH",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 34.72899363057324,
+          "expected_time_to_30_trades_months": 10.365978462533922,
+          "reason": "train: N=188 ExpR=-0.347; test: N=57 ExpR=-0.103 -> DIED",
+          "train": {
+            "trades": 188,
+            "expectancy_r": -0.34664812183505567,
+            "bootstrap_ci": {
+              "sample_size": 188,
+              "mean_r": -0.34664812183505567,
+              "lower_2_5": -0.5247698135585399,
+              "upper_97_5": -0.16576964964187532,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.34664812183505567,
+              "mean_random_expectancy_r": -0.19944588422741658,
+              "p95_random_expectancy_r": -0.052793905182058426,
+              "edge_over_random": -0.1472022376076391,
+              "target_trade_count": 188,
+              "realized_mean_trade_count": 185.865,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 57,
+            "expectancy_r": -0.10334562543716216,
+            "bootstrap_ci": {
+              "sample_size": 57,
+              "mean_r": -0.10334562543716216,
+              "lower_2_5": -0.4556218739652471,
+              "upper_97_5": 0.2509640790069312,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.10334562543716216,
+              "mean_random_expectancy_r": -0.11217858871346077,
+              "p95_random_expectancy_r": 0.0789583665101685,
+              "edge_over_random": 0.008832963276298608,
+              "target_trade_count": 57,
+              "realized_mean_trade_count": 55.89,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-08-01T09:04:23.346322+00:00"
+        }
+      }
+    },
+    "EXT_WISE_MAN_HOLD_V6_EURUSD_4H": {
+      "name": "EXT_WISE_MAN_HOLD_V6_EURUSD_4H",
+      "asset": "EUR/USD",
+      "timeframe": "4h",
+      "result": {
+        "hypothesis_name": "EXT_WISE_MAN_HOLD_V6_EURUSD_4H",
+        "asset": "EUR/USD",
+        "timeframe": "4h",
+        "verdict": "SKIPPED",
+        "review_status": "rejected_too_slow",
+        "frequency_classification": "TOO_SLOW",
+        "measured_trades_per_year": 27.164549116826773,
+        "expected_time_to_30_trades_months": 13.252566735112936,
+        "reason": "Measured 80 trigger(s) over 1076 eligible days (27.16 trades/year) -> ~13.3 months to 30 resolved trades -> TOO_SLOW.",
+        "train": null,
+        "test": null,
+        "tested_at": "2026-08-01T09:04:23.346322+00:00"
+      },
+      "grid_shift": null
+    },
+    "EXT_WISE_MAN_HOLD_V5_EURUSD_4H": {
+      "name": "EXT_WISE_MAN_HOLD_V5_EURUSD_4H",
+      "asset": "EUR/USD",
+      "timeframe": "4h",
+      "result": {
+        "hypothesis_name": "EXT_WISE_MAN_HOLD_V5_EURUSD_4H",
+        "asset": "EUR/USD",
+        "timeframe": "4h",
+        "verdict": "SKIPPED",
+        "review_status": "rejected_too_slow",
+        "frequency_classification": "TOO_SLOW",
+        "measured_trades_per_year": 27.164549116826773,
+        "expected_time_to_30_trades_months": 13.252566735112936,
+        "reason": "Measured 80 trigger(s) over 1076 eligible days (27.16 trades/year) -> ~13.3 months to 30 resolved trades -> TOO_SLOW.",
+        "train": null,
+        "test": null,
+        "tested_at": "2026-08-01T09:04:23.346322+00:00"
+      },
+      "grid_shift": null
+    },
+    "EXT_ADX_RANGE_V3_BTC_1D": {
+      "name": "EXT_ADX_RANGE_V3_BTC_1D",
+      "verdict": "UNTESTABLE",
+      "reason": "Rule requires a BIDIRECTIONAL (long AND short) entry/exit with a direction-aware stop and a dynamic SMA20 target on either side. Verified directly: nero_core.research_agent.auto_tester's entry/exit machinery is unconditionally long-only throughout (_size_entry_for_hypothesis always enters via apply_slippage(..., \"buy\"), prices stop below / target above entry; _evaluate_exit_for_hypothesis checks low <= stop_loss, never high >=) -- no direction field exists anywhere in StructuredRule/Condition/ExitPlan. The only bidirectional backtest machinery in this codebase (RANGE_MEAN_REVERSION's allow_short, FVG_REVERSION's own logic) is bespoke to that strategy's own specific mechanism, not a generic DSL -- reusing either would not be testing this rule. Building new short-side engine machinery would be a real, foundational extension outside this task's reuse-the-harness instruction, with real risk of a subtle direction-inversion bug if done under this task's scope. Flagged UNTESTABLE, not approximated (e.g. NOT silently tested long-side-only, which would misrepresent the rule)."
+    },
+    "EXT_ADX_RANGE_V4_BTC_1D": {
+      "name": "EXT_ADX_RANGE_V4_BTC_1D",
+      "verdict": "UNTESTABLE",
+      "reason": "Rule requires a BIDIRECTIONAL (long AND short) entry/exit with a direction-aware stop and a dynamic SMA20 target on either side. Verified directly: nero_core.research_agent.auto_tester's entry/exit machinery is unconditionally long-only throughout (_size_entry_for_hypothesis always enters via apply_slippage(..., \"buy\"), prices stop below / target above entry; _evaluate_exit_for_hypothesis checks low <= stop_loss, never high >=) -- no direction field exists anywhere in StructuredRule/Condition/ExitPlan. The only bidirectional backtest machinery in this codebase (RANGE_MEAN_REVERSION's allow_short, FVG_REVERSION's own logic) is bespoke to that strategy's own specific mechanism, not a generic DSL -- reusing either would not be testing this rule. Building new short-side engine machinery would be a real, foundational extension outside this task's reuse-the-harness instruction, with real risk of a subtle direction-inversion bug if done under this task's scope. Flagged UNTESTABLE, not approximated (e.g. NOT silently tested long-side-only, which would misrepresent the rule)."
+    }
+  }
+}

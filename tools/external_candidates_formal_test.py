@@ -241,6 +241,12 @@ def main(report_path: Path = DEFAULT_REPORT_PATH) -> dict:
 
     print(f"=== external_candidates_formal_test: {len(EXTERNAL_CANDIDATES)} pre-registered candidates, now={now.isoformat()} ===", flush=True)
 
+    def _write_report() -> dict:
+        report = {"generated_at": now.isoformat(), "runs": runs}
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(json.dumps(report, indent=2, default=str))
+        return report
+
     for idx, candidate in enumerate(EXTERNAL_CANDIDATES, start=1):
         name = candidate["name"]
         assert name not in NATIVE_NAME_COLLISIONS_TO_AVOID, f"{name} collides with a native graveyard name"
@@ -248,6 +254,7 @@ def main(report_path: Path = DEFAULT_REPORT_PATH) -> dict:
         if candidate["untestable_reason"] is not None:
             print(f"[{idx}/{len(EXTERNAL_CANDIDATES)}] {name}: UNTESTABLE -- {candidate['untestable_reason'][:100]}...", flush=True)
             runs[name] = {"name": name, "verdict": auto_tester.VERDICT_UNTESTABLE, "reason": candidate["untestable_reason"]}
+            _write_report()
             continue
 
         asset, timeframe = candidate["asset"], candidate["timeframe"]
@@ -274,10 +281,10 @@ def main(report_path: Path = DEFAULT_REPORT_PATH) -> dict:
             flush=True,
         )
         runs[name] = {"name": name, "asset": asset, "timeframe": timeframe, **_to_jsonable(run)}
+        _write_report()
+        print(f"  -> report updated at {report_path} ({len(runs)}/{len(EXTERNAL_CANDIDATES)} runs so far)", flush=True)
 
-    report = {"generated_at": now.isoformat(), "runs": runs}
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(json.dumps(report, indent=2, default=str))
+    report = _write_report()
     print(f"\n=== DONE. report written to {report_path} ===", flush=True)
     return report
 
