@@ -595,3 +595,70 @@ def load_repair_candidates(path: Path = DEFAULT_REPAIR_CANDIDATES_PATH) -> list[
         return json.loads(path.read_text())
     except json.JSONDecodeError:
         return []
+
+
+# ---------------------------------------------------------------------------
+# TASK 3 -- IN-CHAIN DUPLICATE CHECK
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class InChainDuplicateResult:
+    is_duplicate: bool
+    reason: str
+    matched_attempt_id: str | None = None
+
+
+def _rule_bundle(record: dict) -> tuple[StructuredRule, StructuredRule | None, ExitPlan]:
+    """The 3 fields that fully determine what a hypothesis/attempt actually
+    TESTS -- entry rule, optional short entry rule, exit plan -- parsed to
+    their real dataclasses so equality is exact structural equality (these
+    are all @dataclass(frozen=True), so Python's own generated __eq__ is
+    already exact field-by-field comparison), never a string/JSON-text
+    comparison that could be fooled by key ordering or float formatting."""
+    rule = parse_structured_rule(record.get("structured_entry_rule"))
+    short_raw = record.get("structured_entry_rule_short")
+    short = parse_structured_rule(short_raw) if short_raw is not None else None
+    exit_plan = parse_exit_plan(record.get("structured_exit_plan"))
+    return rule, short, exit_plan
+
+
+def check_in_chain_duplicate(
+    proposal: dict, original_hypothesis: dict, prior_attempts: list[dict]
+) -> InChainDuplicateResult:
+    """Cheap, chain-scoped duplicate check (docs/repair_lab_investigation_
+    report.md Task 4): exact StructuredRule/ExitPlan equality against the
+    ORIGINAL hypothesis and every prior attempt in the SAME repair chain --
+    NOT a global check across all hypotheses (that's hypothesis_gen.
+    check_duplicate's/check_graveyard_match's own, separate, already-known
+    backlog item, untouched by this function). A proposal that's byte-
+    identical to something already tried in its own chain is rejected
+    BEFORE it can consume one of the 4 launch-cap slots -- nothing was
+    tested, so no slot is spent.
+
+    `prior_attempts` is a list of dicts, each carrying at least
+    structured_entry_rule/structured_entry_rule_short/structured_exit_plan
+    and an "attempt_id" (used only for the reported reason string)."""
+    try:
+        proposal_bundle = _rule_bundle(proposal)
+    except RuleAmbiguousError as exc:
+        return InChainDuplicateResult(False, f"cannot compare -- proposal isn't machine-checkable: {exc}")
+
+    candidates: list[tuple[str, dict]] = [("original", original_hypothesis)]
+    candidates += [(str(a.get("attempt_id", "?")), a) for a in prior_attempts]
+
+    for attempt_id, candidate in candidates:
+        try:
+            candidate_bundle = _rule_bundle(candidate)
+        except RuleAmbiguousError:
+            continue  # an unparseable prior record can never be an exact-structure match
+        if candidate_bundle == proposal_bundle:
+            return InChainDuplicateResult(
+                True,
+                f"rejected: byte-identical (structured_entry_rule, structured_entry_rule_short, "
+                f"structured_exit_plan) to {attempt_id!r} already in this chain -- exact "
+                f"StructuredRule/ExitPlan equality, not fuzzy matching",
+                attempt_id,
+            )
+
+    return InChainDuplicateResult(False, "no exact match against the original hypothesis or any prior attempt in this chain")
