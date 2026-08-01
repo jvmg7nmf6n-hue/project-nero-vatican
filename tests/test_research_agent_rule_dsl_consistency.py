@@ -93,8 +93,8 @@ class GateAndTesterConsistencyTest(unittest.TestCase):
         executed_entry_timestamps: list[int] = []
         real_size_entry = auto_tester._size_entry_for_hypothesis
 
-        def _spy(candle, state, p, ep):
-            trade = real_size_entry(candle, state, p, ep)
+        def _spy(candle, state, p, ep, direction="LONG"):
+            trade = real_size_entry(candle, state, p, ep, direction)
             if trade is not None:
                 executed_entry_timestamps.append(trade.open_close_time)
             return trade
@@ -193,8 +193,8 @@ class AdxConsistencyTest(unittest.TestCase):
         executed_entry_timestamps: list[int] = []
         real_size_entry = auto_tester._size_entry_for_hypothesis
 
-        def _spy(candle, state, p, ep):
-            trade = real_size_entry(candle, state, p, ep)
+        def _spy(candle, state, p, ep, direction="LONG"):
+            trade = real_size_entry(candle, state, p, ep, direction)
             if trade is not None:
                 executed_entry_timestamps.append(trade.open_close_time)
             return trade
@@ -224,8 +224,8 @@ class FieldVsFieldConsistencyTest(unittest.TestCase):
         executed_entry_timestamps: list[int] = []
         real_size_entry = auto_tester._size_entry_for_hypothesis
 
-        def _spy(candle, state, p, ep):
-            trade = real_size_entry(candle, state, p, ep)
+        def _spy(candle, state, p, ep, direction="LONG"):
+            trade = real_size_entry(candle, state, p, ep, direction)
             if trade is not None:
                 executed_entry_timestamps.append(trade.open_close_time)
             return trade
@@ -291,8 +291,8 @@ class AdxConsistencyTest(unittest.TestCase):
         executed_entry_timestamps: list[int] = []
         real_size_entry = auto_tester._size_entry_for_hypothesis
 
-        def _spy(candle, state, p, ep):
-            trade = real_size_entry(candle, state, p, ep)
+        def _spy(candle, state, p, ep, direction="LONG"):
+            trade = real_size_entry(candle, state, p, ep, direction)
             if trade is not None:
                 executed_entry_timestamps.append(trade.open_close_time)
             return trade
@@ -340,8 +340,8 @@ class RmrShapedExitPlanConsistencyTest(unittest.TestCase):
         executed_entry_timestamps: list[int] = []
         real_size_entry = auto_tester._size_entry_for_hypothesis
 
-        def _spy(candle, state, p, ep):
-            trade = real_size_entry(candle, state, p, ep)
+        def _spy(candle, state, p, ep, direction="LONG"):
+            trade = real_size_entry(candle, state, p, ep, direction)
             if trade is not None:
                 executed_entry_timestamps.append(trade.open_close_time)
             return trade

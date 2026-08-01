@@ -1,0 +1,3667 @@
+{
+  "generated_at": "2026-07-31T23:52:58.390822+00:00",
+  "candle_source": {
+    "EUR/USD/4h": "live-fetched, see run log",
+    "BTC/4h": "live-fetched, see run log"
+  },
+  "candle_counts": {
+    "EUR/USD/4h": 4998,
+    "BTC/4h": 19608
+  },
+  "runs": {
+    "RMR_LONG_ONLY_EURUSD_4H": {
+      "aliases": [],
+      "asset": "EUR/USD",
+      "timeframe": "4h",
+      "is_proxy": false,
+      "proxy_note": null,
+      "result": {
+        "hypothesis_name": "RMR_LONG_ONLY_EURUSD_4H",
+        "asset": "EUR/USD",
+        "timeframe": "4h",
+        "verdict": "SKIPPED",
+        "review_status": "rejected_too_slow",
+        "frequency_classification": "TOO_SLOW",
+        "measured_trades_per_year": 27.109942786454308,
+        "expected_time_to_30_trades_months": 13.279260780287473,
+        "reason": "Measured 80 trigger(s) over 1078 eligible days (27.11 trades/year) -> ~13.3 months to 30 resolved trades -> TOO_SLOW.",
+        "train": null,
+        "test": null,
+        "tested_at": "2026-07-31T23:52:58.390822+00:00"
+      },
+      "grid_shift": null
+    },
+    "WISE_MAN_HOLD_V1": {
+      "aliases": [],
+      "asset": "BTC",
+      "timeframe": "4h",
+      "is_proxy": false,
+      "proxy_note": null,
+      "result": {
+        "hypothesis_name": "WISE_MAN_HOLD_V1",
+        "asset": "BTC",
+        "timeframe": "4h",
+        "verdict": "DIED",
+        "review_status": "dead",
+        "frequency_classification": "VIABLE",
+        "measured_trades_per_year": 34.509172909341075,
+        "expected_time_to_30_trades_months": 10.432008931241405,
+        "reason": "train: N=159 ExpR=-0.081; test: N=54 ExpR=-0.122 -> DIED",
+        "train": {
+          "trades": 159,
+          "expectancy_r": -0.08137840150943332,
+          "bootstrap_ci": {
+            "sample_size": 159,
+            "mean_r": -0.08137840150943332,
+            "lower_2_5": -0.15675954867924463,
+            "upper_97_5": -0.013535369056602947,
+            "crosses_zero": false
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.08137840150943332,
+            "mean_random_expectancy_r": -0.07267992802930869,
+            "p95_random_expectancy_r": -0.01655640376406749,
+            "edge_over_random": -0.008698473480124633,
+            "target_trade_count": 159,
+            "realized_mean_trade_count": 152.68,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "test": {
+          "trades": 54,
+          "expectancy_r": -0.12158167999999912,
+          "bootstrap_ci": {
+            "sample_size": 54,
+            "mean_r": -0.12158167999999912,
+            "lower_2_5": -0.2547550399999992,
+            "upper_97_5": 0.011591680000000602,
+            "crosses_zero": true
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.12158167999999912,
+            "mean_random_expectancy_r": -0.06098175559216234,
+            "p95_random_expectancy_r": 0.03169331924528371,
+            "edge_over_random": -0.060599924407836785,
+            "target_trade_count": 54,
+            "realized_mean_trade_count": 51.525,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "tested_at": "2026-07-31T23:52:58.390822+00:00"
+      },
+      "grid_shift": {
+        "native (offset+0h)": {
+          "hypothesis_name": "WISE_MAN_HOLD_V1",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 34.62085308056872,
+          "expected_time_to_30_trades_months": 10.39835728952772,
+          "reason": "train: N=161 ExpR=-0.079; test: N=54 ExpR=-0.122 -> DIED",
+          "train": {
+            "trades": 161,
+            "expectancy_r": -0.07856916621117947,
+            "bootstrap_ci": {
+              "sample_size": 161,
+              "mean_r": -0.07856916621117947,
+              "lower_2_5": -0.15301390161490608,
+              "upper_97_5": -0.004124430807452851,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.07856916621117947,
+              "mean_random_expectancy_r": -0.06629462755556884,
+              "p95_random_expectancy_r": 0.0009261407010715449,
+              "edge_over_random": -0.012274538655610637,
+              "target_trade_count": 161,
+              "realized_mean_trade_count": 154.955,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 54,
+            "expectancy_r": -0.12158167999999912,
+            "bootstrap_ci": {
+              "sample_size": 54,
+              "mean_r": -0.12158167999999912,
+              "lower_2_5": -0.2547550399999992,
+              "upper_97_5": 0.011591680000000602,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.12158167999999912,
+              "mean_random_expectancy_r": -0.0688907431795238,
+              "p95_random_expectancy_r": 0.021867144119309977,
+              "edge_over_random": -0.05269093682047532,
+              "target_trade_count": 54,
+              "realized_mean_trade_count": 51.485,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+1h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V1",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 31.717168628650054,
+          "expected_time_to_30_trades_months": 11.35031957659716,
+          "reason": "train: N=152 ExpR=-0.139; test: N=41 ExpR=-0.148 -> DIED",
+          "train": {
+            "trades": 152,
+            "expectancy_r": -0.1391044905263151,
+            "bootstrap_ci": {
+              "sample_size": 152,
+              "mean_r": -0.1391044905263151,
+              "lower_2_5": -0.22584240263157795,
+              "upper_97_5": -0.06025184315789409,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.1391044905263151,
+              "mean_random_expectancy_r": -0.07727636150278668,
+              "p95_random_expectancy_r": -0.021466768337422837,
+              "edge_over_random": -0.061828129023528425,
+              "target_trade_count": 152,
+              "realized_mean_trade_count": 146.44,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 41,
+            "expectancy_r": -0.14756672585365782,
+            "bootstrap_ci": {
+              "sample_size": 41,
+              "mean_r": -0.14756672585365782,
+              "lower_2_5": -0.3229657853658524,
+              "upper_97_5": -0.0014008429268285117,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.14756672585365782,
+              "mean_random_expectancy_r": -0.07356091158277807,
+              "p95_random_expectancy_r": 0.03257026753409178,
+              "edge_over_random": -0.07400581427087975,
+              "target_trade_count": 41,
+              "realized_mean_trade_count": 39.62,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+2h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V1",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 33.16901085460938,
+          "expected_time_to_30_trades_months": 10.853504241594592,
+          "reason": "train: N=160 ExpR=-0.147; test: N=46 ExpR=0.041 -> DIED",
+          "train": {
+            "trades": 160,
+            "expectancy_r": -0.1473840184999994,
+            "bootstrap_ci": {
+              "sample_size": 160,
+              "mean_r": -0.1473840184999994,
+              "lower_2_5": -0.22978503499999942,
+              "upper_97_5": -0.0724740034999993,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.1473840184999994,
+              "mean_random_expectancy_r": -0.07361308006268465,
+              "p95_random_expectancy_r": -0.018249289387754664,
+              "edge_over_random": -0.07377093843731476,
+              "target_trade_count": 160,
+              "realized_mean_trade_count": 154.06,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 46,
+            "expectancy_r": 0.040542410434783294,
+            "bootstrap_ci": {
+              "sample_size": 46,
+              "mean_r": 0.040542410434783294,
+              "lower_2_5": -0.06368021913043424,
+              "upper_97_5": 0.11870938260869658,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": 0.040542410434783294,
+              "mean_random_expectancy_r": -0.07656903504802115,
+              "p95_random_expectancy_r": 0.030670289390836374,
+              "edge_over_random": 0.11711144548280444,
+              "target_trade_count": 46,
+              "realized_mean_trade_count": 44.065,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+3h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V1",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 34.73253325179636,
+          "expected_time_to_30_trades_months": 10.36492205708551,
+          "reason": "train: N=149 ExpR=-0.153; test: N=55 ExpR=-0.073 -> DIED",
+          "train": {
+            "trades": 149,
+            "expectancy_r": -0.15286401288590545,
+            "bootstrap_ci": {
+              "sample_size": 149,
+              "mean_r": -0.15286401288590545,
+              "lower_2_5": -0.24134832590603955,
+              "upper_97_5": -0.07242372832214707,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.15286401288590545,
+              "mean_random_expectancy_r": -0.07330807664617356,
+              "p95_random_expectancy_r": -0.010705783888055133,
+              "edge_over_random": -0.0795559362397319,
+              "target_trade_count": 149,
+              "realized_mean_trade_count": 143.91,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 55,
+            "expectancy_r": -0.07315500363636278,
+            "bootstrap_ci": {
+              "sample_size": 55,
+              "mean_r": -0.07315500363636278,
+              "lower_2_5": -0.20390702981818093,
+              "upper_97_5": 0.03580501818181921,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.07315500363636278,
+              "mean_random_expectancy_r": -0.07717870239084713,
+              "p95_random_expectancy_r": 0.025026521905883222,
+              "edge_over_random": 0.004023698754484356,
+              "target_trade_count": 55,
+              "realized_mean_trade_count": 52.435,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        }
+      }
+    },
+    "WISE_MAN_ASYMMETRIC_HOLD": {
+      "aliases": [
+        "WISE_MAN_HOLD_V2",
+        "WISE_MAN_HOLD_V9"
+      ],
+      "asset": "BTC",
+      "timeframe": "4h",
+      "is_proxy": false,
+      "proxy_note": null,
+      "result": {
+        "hypothesis_name": "WISE_MAN_ASYMMETRIC_HOLD",
+        "asset": "BTC",
+        "timeframe": "4h",
+        "verdict": "DIED",
+        "review_status": "dead",
+        "frequency_classification": "VIABLE",
+        "measured_trades_per_year": 34.509172909341075,
+        "expected_time_to_30_trades_months": 10.432008931241405,
+        "reason": "train: N=152 ExpR=-0.170; test: N=51 ExpR=-0.132 -> DIED",
+        "train": {
+          "trades": 152,
+          "expectancy_r": -0.16970212456140246,
+          "bootstrap_ci": {
+            "sample_size": 152,
+            "mean_r": -0.16970212456140246,
+            "lower_2_5": -0.2660775824561394,
+            "upper_97_5": -0.07332666666666554,
+            "crosses_zero": false
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.16970212456140246,
+            "mean_random_expectancy_r": -0.09950446864977841,
+            "p95_random_expectancy_r": -0.022975644635659223,
+            "edge_over_random": -0.07019765591162405,
+            "target_trade_count": 152,
+            "realized_mean_trade_count": 146.51,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "test": {
+          "trades": 51,
+          "expectancy_r": -0.13207961960784237,
+          "bootstrap_ci": {
+            "sample_size": 51,
+            "mean_r": -0.13207961960784237,
+            "lower_2_5": -0.3148665843137247,
+            "upper_97_5": 0.024594921568628306,
+            "crosses_zero": true
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.13207961960784237,
+            "mean_random_expectancy_r": -0.100874362521394,
+            "p95_random_expectancy_r": 0.04218083945578303,
+            "edge_over_random": -0.031205257086448362,
+            "target_trade_count": 51,
+            "realized_mean_trade_count": 48.9,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "tested_at": "2026-07-31T23:52:58.390822+00:00"
+      },
+      "grid_shift": {
+        "native (offset+0h)": {
+          "hypothesis_name": "WISE_MAN_ASYMMETRIC_HOLD",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 34.62085308056872,
+          "expected_time_to_30_trades_months": 10.39835728952772,
+          "reason": "train: N=154 ExpR=-0.155; test: N=51 ExpR=-0.132 -> DIED",
+          "train": {
+            "trades": 154,
+            "expectancy_r": -0.15547906406926298,
+            "bootstrap_ci": {
+              "sample_size": 154,
+              "mean_r": -0.15547906406926298,
+              "lower_2_5": -0.25060289264069163,
+              "upper_97_5": -0.060355235497834385,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.15547906406926298,
+              "mean_random_expectancy_r": -0.10070497912665678,
+              "p95_random_expectancy_r": -0.01732077573101614,
+              "edge_over_random": -0.0547740849426062,
+              "target_trade_count": 154,
+              "realized_mean_trade_count": 148.22,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 51,
+            "expectancy_r": -0.13207961960784237,
+            "bootstrap_ci": {
+              "sample_size": 51,
+              "mean_r": -0.13207961960784237,
+              "lower_2_5": -0.3148665843137247,
+              "upper_97_5": 0.024594921568628306,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.13207961960784237,
+              "mean_random_expectancy_r": -0.0988139067866835,
+              "p95_random_expectancy_r": 0.02019841404912347,
+              "edge_over_random": -0.033265712821158866,
+              "target_trade_count": 51,
+              "realized_mean_trade_count": 48.9,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+1h": {
+          "hypothesis_name": "WISE_MAN_ASYMMETRIC_HOLD",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 31.717168628650054,
+          "expected_time_to_30_trades_months": 11.35031957659716,
+          "reason": "train: N=149 ExpR=-0.196; test: N=40 ExpR=-0.107 -> DIED",
+          "train": {
+            "trades": 149,
+            "expectancy_r": -0.19622154586129673,
+            "bootstrap_ci": {
+              "sample_size": 149,
+              "mean_r": -0.19622154586129673,
+              "lower_2_5": -0.2947608944519011,
+              "upper_97_5": -0.097905642505592,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.19622154586129673,
+              "mean_random_expectancy_r": -0.1042466497898448,
+              "p95_random_expectancy_r": -0.018121336832877692,
+              "edge_over_random": -0.09197489607145193,
+              "target_trade_count": 149,
+              "realized_mean_trade_count": 143.83,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 40,
+            "expectancy_r": -0.10662000666666567,
+            "bootstrap_ci": {
+              "sample_size": 40,
+              "mean_r": -0.10662000666666567,
+              "lower_2_5": -0.30638004666666535,
+              "upper_97_5": 0.059846693333334554,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.10662000666666567,
+              "mean_random_expectancy_r": -0.09058022699405037,
+              "p95_random_expectancy_r": 0.05472464102564184,
+              "edge_over_random": -0.0160397796726153,
+              "target_trade_count": 40,
+              "realized_mean_trade_count": 38.77,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+2h": {
+          "hypothesis_name": "WISE_MAN_ASYMMETRIC_HOLD",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 33.16901085460938,
+          "expected_time_to_30_trades_months": 10.853504241594592,
+          "reason": "train: N=161 ExpR=-0.195; test: N=46 ExpR=-0.001 -> DIED",
+          "train": {
+            "trades": 161,
+            "expectancy_r": -0.19533331635610712,
+            "bootstrap_ci": {
+              "sample_size": 161,
+              "mean_r": -0.19533331635610712,
+              "lower_2_5": -0.2945929635610761,
+              "upper_97_5": -0.10434530641821868,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.19533331635610712,
+              "mean_random_expectancy_r": -0.09825740422025796,
+              "p95_random_expectancy_r": -0.029693780082814446,
+              "edge_over_random": -0.09707591213584917,
+              "target_trade_count": 161,
+              "realized_mean_trade_count": 154.845,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 46,
+            "expectancy_r": -0.0009498405797090212,
+            "bootstrap_ci": {
+              "sample_size": 46,
+              "mean_r": -0.0009498405797090212,
+              "lower_2_5": -0.17465422318840407,
+              "upper_97_5": 0.14380381159420413,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.0009498405797090212,
+              "mean_random_expectancy_r": -0.09700414632590997,
+              "p95_random_expectancy_r": 0.032508259674798076,
+              "edge_over_random": 0.09605430574620094,
+              "target_trade_count": 46,
+              "realized_mean_trade_count": 44.115,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+3h": {
+          "hypothesis_name": "WISE_MAN_ASYMMETRIC_HOLD",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 34.73253325179636,
+          "expected_time_to_30_trades_months": 10.36492205708551,
+          "reason": "train: N=147 ExpR=-0.230; test: N=54 ExpR=-0.110 -> DIED",
+          "train": {
+            "trades": 147,
+            "expectancy_r": -0.22960152789115568,
+            "bootstrap_ci": {
+              "sample_size": 147,
+              "mean_r": -0.22960152789115568,
+              "lower_2_5": -0.3383144748299312,
+              "upper_97_5": -0.12994799319727812,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.22960152789115568,
+              "mean_random_expectancy_r": -0.11300711461914985,
+              "p95_random_expectancy_r": -0.04224594655416588,
+              "edge_over_random": -0.11659441327200583,
+              "target_trade_count": 147,
+              "realized_mean_trade_count": 141.865,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 54,
+            "expectancy_r": -0.11031926666666582,
+            "bootstrap_ci": {
+              "sample_size": 54,
+              "mean_r": -0.11031926666666582,
+              "lower_2_5": -0.28295139999999913,
+              "upper_97_5": 0.037651133333334315,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.11031926666666582,
+              "mean_random_expectancy_r": -0.09334726392426662,
+              "p95_random_expectancy_r": 0.0382352270175449,
+              "edge_over_random": -0.016972002742399198,
+              "target_trade_count": 54,
+              "realized_mean_trade_count": 51.545,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        }
+      }
+    },
+    "WISE_MAN_HOLD_V3": {
+      "aliases": [],
+      "asset": "BTC",
+      "timeframe": "4h",
+      "is_proxy": false,
+      "proxy_note": null,
+      "result": {
+        "hypothesis_name": "WISE_MAN_HOLD_V3",
+        "asset": "BTC",
+        "timeframe": "4h",
+        "verdict": "DIED",
+        "review_status": "dead",
+        "frequency_classification": "VIABLE",
+        "measured_trades_per_year": 34.509172909341075,
+        "expected_time_to_30_trades_months": 10.432008931241405,
+        "reason": "train: N=141 ExpR=-0.126; test: N=51 ExpR=-0.044 -> DIED",
+        "train": {
+          "trades": 141,
+          "expectancy_r": -0.12645433687943394,
+          "bootstrap_ci": {
+            "sample_size": 141,
+            "mean_r": -0.12645433687943394,
+            "lower_2_5": -0.24333521134751898,
+            "upper_97_5": -0.00957346241134914,
+            "crosses_zero": false
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.12645433687943394,
+            "mean_random_expectancy_r": -0.08870187167901049,
+            "p95_random_expectancy_r": 0.017527831526059447,
+            "edge_over_random": -0.037752465200423455,
+            "target_trade_count": 141,
+            "realized_mean_trade_count": 134.425,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "test": {
+          "trades": 51,
+          "expectancy_r": -0.04395019019608007,
+          "bootstrap_ci": {
+            "sample_size": 51,
+            "mean_r": -0.04395019019608007,
+            "lower_2_5": -0.2495855254901971,
+            "upper_97_5": 0.13230866862744917,
+            "crosses_zero": true
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.04395019019608007,
+            "mean_random_expectancy_r": -0.09849012848786369,
+            "p95_random_expectancy_r": 0.083789181505838,
+            "edge_over_random": 0.05453993829178362,
+            "target_trade_count": 51,
+            "realized_mean_trade_count": 48.14,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "tested_at": "2026-07-31T23:52:58.390822+00:00"
+      },
+      "grid_shift": {
+        "native (offset+0h)": {
+          "hypothesis_name": "WISE_MAN_HOLD_V3",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 34.62085308056872,
+          "expected_time_to_30_trades_months": 10.39835728952772,
+          "reason": "train: N=143 ExpR=-0.108; test: N=51 ExpR=-0.044 -> DIED",
+          "train": {
+            "trades": 143,
+            "expectancy_r": -0.10824975058275191,
+            "bootstrap_ci": {
+              "sample_size": 143,
+              "mean_r": -0.10824975058275191,
+              "lower_2_5": -0.2234959275058287,
+              "upper_97_5": 0.006996426340324759,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.10824975058275191,
+              "mean_random_expectancy_r": -0.09081620861039152,
+              "p95_random_expectancy_r": -0.0030712439448590456,
+              "edge_over_random": -0.017433541972360383,
+              "target_trade_count": 143,
+              "realized_mean_trade_count": 136.24,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 51,
+            "expectancy_r": -0.04395019019608007,
+            "bootstrap_ci": {
+              "sample_size": 51,
+              "mean_r": -0.04395019019608007,
+              "lower_2_5": -0.2495855254901971,
+              "upper_97_5": 0.13230866862744917,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.04395019019608007,
+              "mean_random_expectancy_r": -0.0995196182775706,
+              "p95_random_expectancy_r": 0.06752300682012327,
+              "edge_over_random": 0.05556942808149053,
+              "target_trade_count": 51,
+              "realized_mean_trade_count": 48.105,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+1h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V3",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 31.717168628650054,
+          "expected_time_to_30_trades_months": 11.35031957659716,
+          "reason": "train: N=134 ExpR=-0.222; test: N=38 ExpR=-0.165 -> DIED",
+          "train": {
+            "trades": 134,
+            "expectancy_r": -0.22240132338308596,
+            "bootstrap_ci": {
+              "sample_size": 134,
+              "mean_r": -0.22240132338308596,
+              "lower_2_5": -0.34538791517413053,
+              "upper_97_5": -0.09941473159204124,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.22240132338308596,
+              "mean_random_expectancy_r": -0.08336622973804608,
+              "p95_random_expectancy_r": 0.019928325931115265,
+              "edge_over_random": -0.13903509364503988,
+              "target_trade_count": 134,
+              "realized_mean_trade_count": 127.755,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 38,
+            "expectancy_r": -0.16532142192982596,
+            "bootstrap_ci": {
+              "sample_size": 38,
+              "mean_r": -0.16532142192982596,
+              "lower_2_5": -0.4018793640350888,
+              "upper_97_5": 0.07123652017543639,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.16532142192982596,
+              "mean_random_expectancy_r": -0.11455235277192555,
+              "p95_random_expectancy_r": 0.09373455726190276,
+              "edge_over_random": -0.050769069157900415,
+              "target_trade_count": 38,
+              "realized_mean_trade_count": 36.47,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+2h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V3",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 33.16901085460938,
+          "expected_time_to_30_trades_months": 10.853504241594592,
+          "reason": "train: N=144 ExpR=-0.198; test: N=42 ExpR=-0.038 -> DIED",
+          "train": {
+            "trades": 144,
+            "expectancy_r": -0.198176691666668,
+            "bootstrap_ci": {
+              "sample_size": 144,
+              "mean_r": -0.198176691666668,
+              "lower_2_5": -0.3230267166666676,
+              "upper_97_5": -0.0733266666666685,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.198176691666668,
+              "mean_random_expectancy_r": -0.08695805691193652,
+              "p95_random_expectancy_r": 0.0032851307740337414,
+              "edge_over_random": -0.11121863475473147,
+              "target_trade_count": 144,
+              "realized_mean_trade_count": 137.075,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 42,
+            "expectancy_r": -0.03765523095238269,
+            "bootstrap_ci": {
+              "sample_size": 42,
+              "mean_r": -0.03765523095238269,
+              "lower_2_5": -0.2516838452380965,
+              "upper_97_5": 0.17637338333333066,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.03765523095238269,
+              "mean_random_expectancy_r": -0.09777954291085905,
+              "p95_random_expectancy_r": 0.08049953995970548,
+              "edge_over_random": 0.06012431195847636,
+              "target_trade_count": 42,
+              "realized_mean_trade_count": 40.1,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+3h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V3",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 34.73253325179636,
+          "expected_time_to_30_trades_months": 10.36492205708551,
+          "reason": "train: N=140 ExpR=-0.227; test: N=51 ExpR=-0.132 -> DIED",
+          "train": {
+            "trades": 140,
+            "expectancy_r": -0.2267138402380964,
+            "bootstrap_ci": {
+              "sample_size": 140,
+              "mean_r": -0.2267138402380964,
+              "lower_2_5": -0.34442957809523916,
+              "upper_97_5": -0.09829667166666838,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.2267138402380964,
+              "mean_random_expectancy_r": -0.08797616183337509,
+              "p95_random_expectancy_r": -0.004909366224736286,
+              "edge_over_random": -0.13873767840472132,
+              "target_trade_count": 140,
+              "realized_mean_trade_count": 133.29,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 51,
+            "expectancy_r": -0.13207961960784456,
+            "bootstrap_ci": {
+              "sample_size": 51,
+              "mean_r": -0.13207961960784456,
+              "lower_2_5": -0.3377149549019616,
+              "upper_97_5": 0.07355571568627245,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.13207961960784456,
+              "mean_random_expectancy_r": -0.09499856759626463,
+              "p95_random_expectancy_r": 0.0871723591823881,
+              "edge_over_random": -0.037081052011579935,
+              "target_trade_count": 51,
+              "realized_mean_trade_count": 48.105,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        }
+      }
+    },
+    "WISE_MAN_HOLD_V4": {
+      "aliases": [],
+      "asset": "BTC",
+      "timeframe": "4h",
+      "is_proxy": false,
+      "proxy_note": null,
+      "result": {
+        "hypothesis_name": "WISE_MAN_HOLD_V4",
+        "asset": "BTC",
+        "timeframe": "4h",
+        "verdict": "DIED",
+        "review_status": "dead",
+        "frequency_classification": "VIABLE",
+        "measured_trades_per_year": 34.509172909341075,
+        "expected_time_to_30_trades_months": 10.432008931241405,
+        "reason": "train: N=149 ExpR=-0.291; test: N=55 ExpR=-0.164 -> DIED",
+        "train": {
+          "trades": 149,
+          "expectancy_r": -0.2909806402684548,
+          "bootstrap_ci": {
+            "sample_size": 149,
+            "mean_r": -0.2909806402684548,
+            "lower_2_5": -0.4518612093959716,
+            "upper_97_5": -0.130100071140938,
+            "crosses_zero": false
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.2909806402684548,
+            "mean_random_expectancy_r": -0.1288805344537296,
+            "p95_random_expectancy_r": -0.003696711238600158,
+            "edge_over_random": -0.16210010581472523,
+            "target_trade_count": 149,
+            "realized_mean_trade_count": 142.415,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "test": {
+          "trades": 55,
+          "expectancy_r": -0.1644700109090901,
+          "bootstrap_ci": {
+            "sample_size": 55,
+            "mean_r": -0.1644700109090901,
+            "lower_2_5": -0.41871006181818127,
+            "upper_97_5": 0.08977004000000124,
+            "crosses_zero": true
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.1644700109090901,
+            "mean_random_expectancy_r": -0.13397059533394365,
+            "p95_random_expectancy_r": 0.08311137200000149,
+            "edge_over_random": -0.03049941557514646,
+            "target_trade_count": 55,
+            "realized_mean_trade_count": 51.775,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "tested_at": "2026-07-31T23:52:58.390822+00:00"
+      },
+      "grid_shift": {
+        "native (offset+0h)": {
+          "hypothesis_name": "WISE_MAN_HOLD_V4",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 34.62085308056872,
+          "expected_time_to_30_trades_months": 10.39835728952772,
+          "reason": "train: N=149 ExpR=-0.264; test: N=55 ExpR=-0.164 -> DIED",
+          "train": {
+            "trades": 149,
+            "expectancy_r": -0.26416721208053545,
+            "bootstrap_ci": {
+              "sample_size": 149,
+              "mean_r": -0.26416721208053545,
+              "lower_2_5": -0.42504778120805226,
+              "upper_97_5": -0.10328664295301859,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.26416721208053545,
+              "mean_random_expectancy_r": -0.14441000853322541,
+              "p95_random_expectancy_r": -0.026756649999998584,
+              "edge_over_random": -0.11975720354731004,
+              "target_trade_count": 149,
+              "realized_mean_trade_count": 142.355,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 55,
+            "expectancy_r": -0.1644700109090901,
+            "bootstrap_ci": {
+              "sample_size": 55,
+              "mean_r": -0.1644700109090901,
+              "lower_2_5": -0.41871006181818127,
+              "upper_97_5": 0.08977004000000124,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.1644700109090901,
+              "mean_random_expectancy_r": -0.14365279952660287,
+              "p95_random_expectancy_r": 0.05110680645161401,
+              "edge_over_random": -0.02081721138248724,
+              "target_trade_count": 55,
+              "realized_mean_trade_count": 51.77,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+1h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V4",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 31.717168628650054,
+          "expected_time_to_30_trades_months": 11.35031957659716,
+          "reason": "train: N=149 ExpR=-0.318; test: N=43 ExpR=-0.133 -> DIED",
+          "train": {
+            "trades": 149,
+            "expectancy_r": -0.31779406845637465,
+            "bootstrap_ci": {
+              "sample_size": 149,
+              "mean_r": -0.31779406845637465,
+              "lower_2_5": -0.47867463758389134,
+              "upper_97_5": -0.156913499328858,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.31779406845637465,
+              "mean_random_expectancy_r": -0.12940786251522013,
+              "p95_random_expectancy_r": 0.02912998512237945,
+              "edge_over_random": -0.18838620594115452,
+              "target_trade_count": 149,
+              "realized_mean_trade_count": 142.39,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 43,
+            "expectancy_r": -0.13321791162790556,
+            "bootstrap_ci": {
+              "sample_size": 43,
+              "mean_r": -0.13321791162790556,
+              "lower_2_5": -0.41195285116279035,
+              "upper_97_5": 0.14551702790697896,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.13321791162790556,
+              "mean_random_expectancy_r": -0.1309256952428195,
+              "p95_random_expectancy_r": 0.08169463412766188,
+              "edge_over_random": -0.00229221638508606,
+              "target_trade_count": 43,
+              "realized_mean_trade_count": 41.11,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+2h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V4",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 33.16901085460938,
+          "expected_time_to_30_trades_months": 10.853504241594592,
+          "reason": "train: N=158 ExpR=-0.338; test: N=46 ExpR=-0.110 -> DIED",
+          "train": {
+            "trades": 158,
+            "expectancy_r": -0.33756472911392266,
+            "bootstrap_ci": {
+              "sample_size": 158,
+              "mean_r": -0.33756472911392266,
+              "lower_2_5": -0.4892812151898719,
+              "upper_97_5": -0.1858482430379732,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.33756472911392266,
+              "mean_random_expectancy_r": -0.11623823727271809,
+              "p95_random_expectancy_r": 0.010794892740363321,
+              "edge_over_random": -0.22132649184120456,
+              "target_trade_count": 158,
+              "realized_mean_trade_count": 150.315,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 46,
+            "expectancy_r": -0.10998999999999823,
+            "bootstrap_ci": {
+              "sample_size": 46,
+              "mean_r": -0.10998999999999823,
+              "lower_2_5": -0.4139726695652147,
+              "upper_97_5": 0.1939926695652185,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.10998999999999823,
+              "mean_random_expectancy_r": -0.12756872062794128,
+              "p95_random_expectancy_r": 0.10738173434782784,
+              "edge_over_random": 0.01757872062794305,
+              "target_trade_count": 46,
+              "realized_mean_trade_count": 43.715,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+3h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V4",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 34.73253325179636,
+          "expected_time_to_30_trades_months": 10.36492205708551,
+          "reason": "train: N=158 ExpR=-0.325; test: N=57 ExpR=-0.233 -> DIED",
+          "train": {
+            "trades": 158,
+            "expectancy_r": -0.3249216886075938,
+            "bootstrap_ci": {
+              "sample_size": 158,
+              "mean_r": -0.3249216886075938,
+              "lower_2_5": -0.4766381746835432,
+              "upper_97_5": -0.17320520253164443,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.3249216886075938,
+              "mean_random_expectancy_r": -0.13383370550348986,
+              "p95_random_expectancy_r": -0.017870927499998447,
+              "edge_over_random": -0.19108798310410394,
+              "target_trade_count": 158,
+              "realized_mean_trade_count": 150.26,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 57,
+            "expectancy_r": -0.23264967368420889,
+            "bootstrap_ci": {
+              "sample_size": 57,
+              "mean_r": -0.23264967368420889,
+              "lower_2_5": -0.47796902105263045,
+              "upper_97_5": 0.012669673684212878,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.23264967368420889,
+              "mean_random_expectancy_r": -0.13331486869889597,
+              "p95_random_expectancy_r": 0.0973081547169823,
+              "edge_over_random": -0.09933480498531291,
+              "target_trade_count": 57,
+              "realized_mean_trade_count": 53.66,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        }
+      }
+    },
+    "WISE_MAN_HOLD_V5": {
+      "aliases": [],
+      "asset": "BTC",
+      "timeframe": "4h",
+      "is_proxy": false,
+      "proxy_note": null,
+      "result": {
+        "hypothesis_name": "WISE_MAN_HOLD_V5",
+        "asset": "BTC",
+        "timeframe": "4h",
+        "verdict": "DIED",
+        "review_status": "dead",
+        "frequency_classification": "VIABLE",
+        "measured_trades_per_year": 34.509172909341075,
+        "expected_time_to_30_trades_months": 10.432008931241405,
+        "reason": "train: N=158 ExpR=-0.349; test: N=59 ExpR=-0.231 -> DIED",
+        "train": {
+          "trades": 158,
+          "expectancy_r": -0.3489419814345972,
+          "bootstrap_ci": {
+            "sample_size": 158,
+            "mean_r": -0.3489419814345972,
+            "lower_2_5": -0.5385875890295344,
+            "upper_97_5": -0.14033181308016654,
+            "crosses_zero": false
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.3489419814345972,
+            "mean_random_expectancy_r": -0.17410138530932526,
+            "p95_random_expectancy_r": -0.006496854312949954,
+            "edge_over_random": -0.17484059612527195,
+            "target_trade_count": 158,
+            "realized_mean_trade_count": 149.785,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "test": {
+          "trades": 59,
+          "expectancy_r": -0.23129741807909432,
+          "bootstrap_ci": {
+            "sample_size": 59,
+            "mean_r": -0.23129741807909432,
+            "lower_2_5": -0.5868025740112971,
+            "upper_97_5": 0.12420773785310932,
+            "crosses_zero": true
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.23129741807909432,
+            "mean_random_expectancy_r": -0.12398767442180693,
+            "p95_random_expectancy_r": 0.16570011335874202,
+            "edge_over_random": -0.10730974365728739,
+            "target_trade_count": 59,
+            "realized_mean_trade_count": 55.055,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "tested_at": "2026-07-31T23:52:58.390822+00:00"
+      },
+      "grid_shift": {
+        "native (offset+0h)": {
+          "hypothesis_name": "WISE_MAN_HOLD_V5",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 34.62085308056872,
+          "expected_time_to_30_trades_months": 10.39835728952772,
+          "reason": "train: N=158 ExpR=-0.311; test: N=59 ExpR=-0.231 -> DIED",
+          "train": {
+            "trades": 158,
+            "expectancy_r": -0.3110128599156098,
+            "bootstrap_ci": {
+              "sample_size": 158,
+              "mean_r": -0.3110128599156098,
+              "lower_2_5": -0.5196230282700396,
+              "upper_97_5": -0.10240269156117922,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.3110128599156098,
+              "mean_random_expectancy_r": -0.16247988500807406,
+              "p95_random_expectancy_r": 0.007524263555302353,
+              "edge_over_random": -0.14853297490753573,
+              "target_trade_count": 158,
+              "realized_mean_trade_count": 149.735,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 59,
+            "expectancy_r": -0.23129741807909432,
+            "bootstrap_ci": {
+              "sample_size": 59,
+              "mean_r": -0.23129741807909432,
+              "lower_2_5": -0.5868025740112971,
+              "upper_97_5": 0.12420773785310932,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.23129741807909432,
+              "mean_random_expectancy_r": -0.12800158700142913,
+              "p95_random_expectancy_r": 0.19408355026996355,
+              "edge_over_random": -0.10329583107766518,
+              "target_trade_count": 59,
+              "realized_mean_trade_count": 54.965,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+1h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V5",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 31.717168628650054,
+          "expected_time_to_30_trades_months": 11.35031957659716,
+          "reason": "train: N=158 ExpR=-0.463; test: N=47 ExpR=-0.317 -> DIED",
+          "train": {
+            "trades": 158,
+            "expectancy_r": -0.4627293459915587,
+            "bootstrap_ci": {
+              "sample_size": 158,
+              "mean_r": -0.4627293459915587,
+              "lower_2_5": -0.6523749535864954,
+              "upper_97_5": -0.25411917763712827,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.4627293459915587,
+              "mean_random_expectancy_r": -0.1543262812856722,
+              "p95_random_expectancy_r": 0.033130702666668906,
+              "edge_over_random": -0.3084030647058865,
+              "target_trade_count": 158,
+              "realized_mean_trade_count": 149.765,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 47,
+            "expectancy_r": -0.31666187801418283,
+            "bootstrap_ci": {
+              "sample_size": 47,
+              "mean_r": -0.31666187801418283,
+              "lower_2_5": -0.6991811035460981,
+              "upper_97_5": 0.06585734751773281,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.31666187801418283,
+              "mean_random_expectancy_r": -0.1355095548458069,
+              "p95_random_expectancy_r": 0.20607421628851733,
+              "edge_over_random": -0.18115232316837593,
+              "target_trade_count": 47,
+              "realized_mean_trade_count": 44.445,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+2h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V5",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 33.16901085460938,
+          "expected_time_to_30_trades_months": 10.853504241594592,
+          "reason": "train: N=167 ExpR=-0.374; test: N=48 ExpR=-0.022 -> DIED",
+          "train": {
+            "trades": 167,
+            "expectancy_r": -0.3739252351297391,
+            "bootstrap_ci": {
+              "sample_size": 167,
+              "mean_r": -0.3739252351297391,
+              "lower_2_5": -0.5712929393213559,
+              "upper_97_5": -0.15861501237524817,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.3739252351297391,
+              "mean_random_expectancy_r": -0.15579260561063143,
+              "p95_random_expectancy_r": 0.016532936181812258,
+              "edge_over_random": -0.21813262951910764,
+              "target_trade_count": 167,
+              "realized_mean_trade_count": 158.48,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 48,
+            "expectancy_r": -0.021803308333330444,
+            "bootstrap_ci": {
+              "sample_size": 48,
+              "mean_r": -0.021803308333330444,
+              "lower_2_5": -0.45877839583332913,
+              "upper_97_5": 0.4151717791666696,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.021803308333330444,
+              "mean_random_expectancy_r": -0.13070619689337387,
+              "p95_random_expectancy_r": 0.24337729496502394,
+              "edge_over_random": 0.10890288856004343,
+              "target_trade_count": 48,
+              "realized_mean_trade_count": 45.305,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+3h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V5",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 34.73253325179636,
+          "expected_time_to_30_trades_months": 10.36492205708551,
+          "reason": "train: N=173 ExpR=-0.314; test: N=59 ExpR=-0.384 -> DIED",
+          "train": {
+            "trades": 173,
+            "expectancy_r": -0.31408226859344696,
+            "bootstrap_ci": {
+              "sample_size": 173,
+              "mean_r": -0.31408226859344696,
+              "lower_2_5": -0.5046048500963374,
+              "upper_97_5": -0.12355968709055608,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.31408226859344696,
+              "mean_random_expectancy_r": -0.14729115319527086,
+              "p95_random_expectancy_r": 0.00253399804373703,
+              "edge_over_random": -0.1667911153981761,
+              "target_trade_count": 173,
+              "realized_mean_trade_count": 163.855,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 59,
+            "expectancy_r": -0.38365677062146725,
+            "bootstrap_ci": {
+              "sample_size": 59,
+              "mean_r": -0.38365677062146725,
+              "lower_2_5": -0.6883754757062136,
+              "upper_97_5": -0.028151614689263756,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.38365677062146725,
+              "mean_random_expectancy_r": -0.11677615625339699,
+              "p95_random_expectancy_r": 0.16107417767881566,
+              "edge_over_random": -0.26688061436807026,
+              "target_trade_count": 59,
+              "realized_mean_trade_count": 54.925,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        }
+      }
+    },
+    "WISE_MAN_HOLD_V6": {
+      "aliases": [],
+      "asset": "BTC",
+      "timeframe": "4h",
+      "is_proxy": false,
+      "proxy_note": null,
+      "result": {
+        "hypothesis_name": "WISE_MAN_HOLD_V6",
+        "asset": "BTC",
+        "timeframe": "4h",
+        "verdict": "DIED",
+        "review_status": "dead",
+        "frequency_classification": "VIABLE",
+        "measured_trades_per_year": 34.509172909341075,
+        "expected_time_to_30_trades_months": 10.432008931241405,
+        "reason": "train: N=190 ExpR=-0.472; test: N=64 ExpR=-0.345 -> DIED",
+        "train": {
+          "trades": 190,
+          "expectancy_r": -0.4723084715789446,
+          "bootstrap_ci": {
+            "sample_size": 190,
+            "mean_r": -0.4723084715789446,
+            "lower_2_5": -0.6089863936842079,
+            "upper_97_5": -0.33563054947368104,
+            "crosses_zero": false
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.4723084715789446,
+            "mean_random_expectancy_r": -0.3877920001186193,
+            "p95_random_expectancy_r": -0.28889874805529725,
+            "edge_over_random": -0.08451647146032532,
+            "target_trade_count": 190,
+            "realized_mean_trade_count": 186.98,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "test": {
+          "trades": 64,
+          "expectancy_r": -0.344830024999997,
+          "bootstrap_ci": {
+            "sample_size": 64,
+            "mean_r": -0.344830024999997,
+            "lower_2_5": -0.5945300749999963,
+            "upper_97_5": -0.09512997499999722,
+            "crosses_zero": false
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.344830024999997,
+            "mean_random_expectancy_r": -0.2868550567934241,
+            "p95_random_expectancy_r": -0.09110255483870675,
+            "edge_over_random": -0.057974968206572886,
+            "target_trade_count": 64,
+            "realized_mean_trade_count": 62.44,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "tested_at": "2026-07-31T23:52:58.390822+00:00"
+      },
+      "grid_shift": {
+        "native (offset+0h)": {
+          "hypothesis_name": "WISE_MAN_HOLD_V6",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 34.62085308056872,
+          "expected_time_to_30_trades_months": 10.39835728952772,
+          "reason": "train: N=191 ExpR=-0.445; test: N=64 ExpR=-0.345 -> DIED",
+          "train": {
+            "trades": 191,
+            "expectancy_r": -0.44484077801046845,
+            "bootstrap_ci": {
+              "sample_size": 191,
+              "mean_r": -0.44484077801046845,
+              "lower_2_5": -0.5808031089005208,
+              "upper_97_5": -0.30887844712041634,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.44484077801046845,
+              "mean_random_expectancy_r": -0.3794778591375103,
+              "p95_random_expectancy_r": -0.26560380937736366,
+              "edge_over_random": -0.06536291887295814,
+              "target_trade_count": 191,
+              "realized_mean_trade_count": 187.79,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 64,
+            "expectancy_r": -0.344830024999997,
+            "bootstrap_ci": {
+              "sample_size": 64,
+              "mean_r": -0.344830024999997,
+              "lower_2_5": -0.5945300749999963,
+              "upper_97_5": -0.09512997499999722,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.344830024999997,
+              "mean_random_expectancy_r": -0.26578207083682215,
+              "p95_random_expectancy_r": -0.07729425714285486,
+              "edge_over_random": -0.07904795416317484,
+              "target_trade_count": 64,
+              "realized_mean_trade_count": 62.45,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+1h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V6",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 31.717168628650054,
+          "expected_time_to_30_trades_months": 11.35031957659716,
+          "reason": "train: N=185 ExpR=-0.614; test: N=57 ExpR=-0.308 -> DIED",
+          "train": {
+            "trades": 185,
+            "expectancy_r": -0.6141011599999963,
+            "bootstrap_ci": {
+              "sample_size": 185,
+              "mean_r": -0.6141011599999963,
+              "lower_2_5": -0.7436752399999964,
+              "upper_97_5": -0.484527079999996,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.6141011599999963,
+              "mean_random_expectancy_r": -0.3715444170201274,
+              "p95_random_expectancy_r": -0.2579972678349317,
+              "edge_over_random": -0.24255674297986884,
+              "target_trade_count": 185,
+              "realized_mean_trade_count": 181.865,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 57,
+            "expectancy_r": -0.307594052631577,
+            "bootstrap_ci": {
+              "sample_size": 57,
+              "mean_r": -0.307594052631577,
+              "lower_2_5": -0.5529133999999987,
+              "upper_97_5": -0.062274705263155115,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.307594052631577,
+              "mean_random_expectancy_r": -0.24359588546957944,
+              "p95_random_expectancy_r": -0.058614698870965626,
+              "edge_over_random": -0.06399816716199758,
+              "target_trade_count": 57,
+              "realized_mean_trade_count": 55.61,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+2h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V6",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 33.16901085460938,
+          "expected_time_to_30_trades_months": 10.853504241594592,
+          "reason": "train: N=200 ExpR=-0.440; test: N=55 ExpR=-0.020 -> DIED",
+          "train": {
+            "trades": 200,
+            "expectancy_r": -0.4397160439999974,
+            "bootstrap_ci": {
+              "sample_size": 200,
+              "mean_r": -0.4397160439999974,
+              "lower_2_5": -0.5695600699999974,
+              "upper_97_5": -0.30987201799999736,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.4397160439999974,
+              "mean_random_expectancy_r": -0.3608008323690747,
+              "p95_random_expectancy_r": -0.25243374777761374,
+              "edge_over_random": -0.07891521163092274,
+              "target_trade_count": 200,
+              "realized_mean_trade_count": 196.435,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 55,
+            "expectancy_r": -0.020219959999997414,
+            "bootstrap_ci": {
+              "sample_size": 55,
+              "mean_r": -0.020219959999997414,
+              "lower_2_5": -0.2744600109090891,
+              "upper_97_5": 0.2340200909090944,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.020219959999997414,
+              "mean_random_expectancy_r": -0.26512410836523376,
+              "p95_random_expectancy_r": -0.0597109832923037,
+              "edge_over_random": 0.24490414836523633,
+              "target_trade_count": 55,
+              "realized_mean_trade_count": 53.725,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+3h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V6",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 34.73253325179636,
+          "expected_time_to_30_trades_months": 10.36492205708551,
+          "reason": "train: N=194 ExpR=-0.570; test: N=70 ExpR=-0.334 -> DIED",
+          "train": {
+            "trades": 194,
+            "expectancy_r": -0.5700749154639146,
+            "bootstrap_ci": {
+              "sample_size": 194,
+              "mean_r": -0.5700749154639146,
+              "lower_2_5": -0.703934736082471,
+              "upper_97_5": -0.43621509484535775,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.5700749154639146,
+              "mean_random_expectancy_r": -0.3656198838169819,
+              "p95_random_expectancy_r": -0.2507416589374981,
+              "edge_over_random": -0.20445503164693274,
+              "target_trade_count": 194,
+              "realized_mean_trade_count": 190.63,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 70,
+            "expectancy_r": -0.33412859428571157,
+            "bootstrap_ci": {
+              "sample_size": 70,
+              "mean_r": -0.33412859428571157,
+              "lower_2_5": -0.5624257828571398,
+              "upper_97_5": -0.1058314057142829,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.33412859428571157,
+              "mean_random_expectancy_r": -0.27333640292874756,
+              "p95_random_expectancy_r": -0.06183663499999673,
+              "edge_over_random": -0.06079219135696401,
+              "target_trade_count": 70,
+              "realized_mean_trade_count": 68.485,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        }
+      }
+    },
+    "WISE_MAN_HOLD_V7": {
+      "aliases": [],
+      "asset": "BTC",
+      "timeframe": "4h",
+      "is_proxy": false,
+      "proxy_note": null,
+      "result": {
+        "hypothesis_name": "WISE_MAN_HOLD_V7",
+        "asset": "BTC",
+        "timeframe": "4h",
+        "verdict": "DIED",
+        "review_status": "dead",
+        "frequency_classification": "VIABLE",
+        "measured_trades_per_year": 34.509172909341075,
+        "expected_time_to_30_trades_months": 10.432008931241405,
+        "reason": "train: N=174 ExpR=-0.323; test: N=61 ExpR=-0.354 -> DIED",
+        "train": {
+          "trades": 174,
+          "expectancy_r": -0.32268708505746935,
+          "bootstrap_ci": {
+            "sample_size": 174,
+            "mean_r": -0.32268708505746935,
+            "lower_2_5": -0.4374917057471251,
+            "upper_97_5": -0.20764328807471352,
+            "crosses_zero": false
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.32268708505746935,
+            "mean_random_expectancy_r": -0.23338159504814382,
+            "p95_random_expectancy_r": -0.13292561067708183,
+            "edge_over_random": -0.08930549000932553,
+            "target_trade_count": 174,
+            "realized_mean_trade_count": 170.31,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "test": {
+          "trades": 61,
+          "expectancy_r": -0.35405446775956134,
+          "bootstrap_ci": {
+            "sample_size": 61,
+            "mean_r": -0.35405446775956134,
+            "lower_2_5": -0.5450818284152997,
+            "upper_97_5": -0.13573748415300438,
+            "crosses_zero": false
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.35405446775956134,
+            "mean_random_expectancy_r": -0.18793964231065055,
+            "p95_random_expectancy_r": -0.013328639969695393,
+            "edge_over_random": -0.1661148254489108,
+            "target_trade_count": 61,
+            "realized_mean_trade_count": 59.085,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "tested_at": "2026-07-31T23:52:58.390822+00:00"
+      },
+      "grid_shift": {
+        "native (offset+0h)": {
+          "hypothesis_name": "WISE_MAN_HOLD_V7",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 34.62085308056872,
+          "expected_time_to_30_trades_months": 10.39835728952772,
+          "reason": "train: N=175 ExpR=-0.299; test: N=61 ExpR=-0.354 -> DIED",
+          "train": {
+            "trades": 175,
+            "expectancy_r": -0.29885145904761706,
+            "bootstrap_ci": {
+              "sample_size": 175,
+              "mean_r": -0.29885145904761706,
+              "lower_2_5": -0.4225124361904742,
+              "upper_97_5": -0.17519048190476016,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.29885145904761706,
+              "mean_random_expectancy_r": -0.23782450097874702,
+              "p95_random_expectancy_r": -0.1303536656716754,
+              "edge_over_random": -0.06102695806887004,
+              "target_trade_count": 175,
+              "realized_mean_trade_count": 171.265,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 61,
+            "expectancy_r": -0.35405446775956134,
+            "bootstrap_ci": {
+              "sample_size": 61,
+              "mean_r": -0.35405446775956134,
+              "lower_2_5": -0.5450818284152997,
+              "upper_97_5": -0.13573748415300438,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.35405446775956134,
+              "mean_random_expectancy_r": -0.17276342479915982,
+              "p95_random_expectancy_r": 0.016281637413302262,
+              "edge_over_random": -0.18129104296040152,
+              "target_trade_count": 61,
+              "realized_mean_trade_count": 59.045,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+1h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V7",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 31.717168628650054,
+          "expected_time_to_30_trades_months": 11.35031957659716,
+          "reason": "train: N=174 ExpR=-0.361; test: N=51 ExpR=-0.264 -> DIED",
+          "train": {
+            "trades": 174,
+            "expectancy_r": -0.3609552919540207,
+            "bootstrap_ci": {
+              "sample_size": 174,
+              "mean_r": -0.3609552919540207,
+              "lower_2_5": -0.4757599126436764,
+              "upper_97_5": -0.2365836195402277,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.3609552919540207,
+              "mean_random_expectancy_r": -0.23930836758594407,
+              "p95_random_expectancy_r": -0.1519641242797713,
+              "edge_over_random": -0.12164692436807664,
+              "target_trade_count": 174,
+              "realized_mean_trade_count": 170.41,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 51,
+            "expectancy_r": -0.26415923921568546,
+            "bootstrap_ci": {
+              "sample_size": 51,
+              "mean_r": -0.26415923921568546,
+              "lower_2_5": -0.49264294509803874,
+              "upper_97_5": -0.03567553333333284,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.26415923921568546,
+              "mean_random_expectancy_r": -0.16147824664231736,
+              "p95_random_expectancy_r": 0.031328830144380766,
+              "edge_over_random": -0.1026809925733681,
+              "target_trade_count": 51,
+              "realized_mean_trade_count": 49.685,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+2h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V7",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 33.16901085460938,
+          "expected_time_to_30_trades_months": 10.853504241594592,
+          "reason": "train: N=182 ExpR=-0.341; test: N=52 ExpR=-0.057 -> DIED",
+          "train": {
+            "trades": 182,
+            "expectancy_r": -0.3405595992673979,
+            "bootstrap_ci": {
+              "sample_size": 182,
+              "mean_r": -0.3405595992673979,
+              "lower_2_5": -0.45946438498168385,
+              "upper_97_5": -0.22165481355311228,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.3405595992673979,
+              "mean_random_expectancy_r": -0.23990244805868488,
+              "p95_random_expectancy_r": -0.1464743368817189,
+              "edge_over_random": -0.10065715120871299,
+              "target_trade_count": 182,
+              "realized_mean_trade_count": 177.55,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 52,
+            "expectancy_r": -0.05701741794871536,
+            "bootstrap_ci": {
+              "sample_size": 52,
+              "mean_r": -0.05701741794871536,
+              "lower_2_5": -0.2811072064102537,
+              "upper_97_5": 0.1670723705128225,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.05701741794871536,
+              "mean_random_expectancy_r": -0.16245337873399343,
+              "p95_random_expectancy_r": 0.03537908406926564,
+              "edge_over_random": 0.10543596078527807,
+              "target_trade_count": 52,
+              "realized_mean_trade_count": 50.615,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+3h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V7",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 34.73253325179636,
+          "expected_time_to_30_trades_months": 10.36492205708551,
+          "reason": "train: N=177 ExpR=-0.402; test: N=64 ExpR=-0.183 -> DIED",
+          "train": {
+            "trades": 177,
+            "expectancy_r": -0.40246656723163665,
+            "bootstrap_ci": {
+              "sample_size": 177,
+              "mean_r": -0.40246656723163665,
+              "lower_2_5": -0.5247302451977384,
+              "upper_97_5": -0.2802028892655346,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.40246656723163665,
+              "mean_random_expectancy_r": -0.24045503234207072,
+              "p95_random_expectancy_r": -0.1444836626744644,
+              "edge_over_random": -0.16201153488956593,
+              "target_trade_count": 177,
+              "realized_mean_trade_count": 172.835,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 64,
+            "expectancy_r": -0.18306792395833166,
+            "bootstrap_ci": {
+              "sample_size": 64,
+              "mean_r": -0.18306792395833166,
+              "lower_2_5": -0.3911512989583316,
+              "upper_97_5": 0.025015451041667757,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.18306792395833166,
+              "mean_random_expectancy_r": -0.17020339773837317,
+              "p95_random_expectancy_r": -0.025477056195399434,
+              "edge_over_random": -0.012864526219958483,
+              "target_trade_count": 64,
+              "realized_mean_trade_count": 61.93,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        }
+      }
+    },
+    "WISE_MAN_HOLD_V8": {
+      "aliases": [],
+      "asset": "BTC",
+      "timeframe": "4h",
+      "is_proxy": false,
+      "proxy_note": null,
+      "result": {
+        "hypothesis_name": "WISE_MAN_HOLD_V8",
+        "asset": "BTC",
+        "timeframe": "4h",
+        "verdict": "DIED",
+        "review_status": "dead",
+        "frequency_classification": "VIABLE",
+        "measured_trades_per_year": 34.509172909341075,
+        "expected_time_to_30_trades_months": 10.432008931241405,
+        "reason": "train: N=165 ExpR=-0.255; test: N=57 ExpR=-0.241 -> DIED",
+        "train": {
+          "trades": 165,
+          "expectancy_r": -0.25527002909090746,
+          "bootstrap_ci": {
+            "sample_size": 165,
+            "mean_r": -0.25527002909090746,
+            "lower_2_5": -0.37331005272727075,
+            "upper_97_5": -0.14631000727272558,
+            "crosses_zero": false
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.25527002909090746,
+            "mean_random_expectancy_r": -0.17640903671844355,
+            "p95_random_expectancy_r": -0.07906785883881619,
+            "edge_over_random": -0.07886099237246391,
+            "target_trade_count": 165,
+            "realized_mean_trade_count": 160.835,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "test": {
+          "trades": 57,
+          "expectancy_r": -0.2414110789473675,
+          "bootstrap_ci": {
+            "sample_size": 57,
+            "mean_r": -0.2414110789473675,
+            "lower_2_5": -0.4254005894736837,
+            "upper_97_5": -0.05742156842105111,
+            "crosses_zero": false
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.2414110789473675,
+            "mean_random_expectancy_r": -0.13743343280404755,
+            "p95_random_expectancy_r": 0.03529002909091074,
+            "edge_over_random": -0.10397764614331995,
+            "target_trade_count": 57,
+            "realized_mean_trade_count": 54.885,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "tested_at": "2026-07-31T23:52:58.390822+00:00"
+      },
+      "grid_shift": {
+        "native (offset+0h)": {
+          "hypothesis_name": "WISE_MAN_HOLD_V8",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 34.62085308056872,
+          "expected_time_to_30_trades_months": 10.39835728952772,
+          "reason": "train: N=166 ExpR=-0.233; test: N=57 ExpR=-0.241 -> DIED",
+          "train": {
+            "trades": 166,
+            "expectancy_r": -0.23333580783132374,
+            "bootstrap_ci": {
+              "sample_size": 166,
+              "mean_r": -0.23333580783132374,
+              "lower_2_5": -0.3506647469879502,
+              "upper_97_5": -0.1250321716867452,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.23333580783132374,
+              "mean_random_expectancy_r": -0.16570094453031492,
+              "p95_random_expectancy_r": -0.07308043075028307,
+              "edge_over_random": -0.06763486330100882,
+              "target_trade_count": 166,
+              "realized_mean_trade_count": 161.75,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 57,
+            "expectancy_r": -0.2414110789473675,
+            "bootstrap_ci": {
+              "sample_size": 57,
+              "mean_r": -0.2414110789473675,
+              "lower_2_5": -0.4254005894736837,
+              "upper_97_5": -0.05742156842105111,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.2414110789473675,
+              "mean_random_expectancy_r": -0.14542376074587998,
+              "p95_random_expectancy_r": 0.007542611770055742,
+              "edge_over_random": -0.09598731820148751,
+              "target_trade_count": 57,
+              "realized_mean_trade_count": 54.895,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+1h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V8",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 31.717168628650054,
+          "expected_time_to_30_trades_months": 11.35031957659716,
+          "reason": "train: N=164 ExpR=-0.277; test: N=46 ExpR=-0.197 -> DIED",
+          "train": {
+            "trades": 164,
+            "expectancy_r": -0.27747174085365733,
+            "bootstrap_ci": {
+              "sample_size": 164,
+              "mean_r": -0.27747174085365733,
+              "lower_2_5": -0.3962315207317059,
+              "upper_97_5": -0.16761894446646503,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.27747174085365733,
+              "mean_random_expectancy_r": -0.16586873023659046,
+              "p95_random_expectancy_r": -0.07920904179391576,
+              "edge_over_random": -0.11160301061706687,
+              "target_trade_count": 164,
+              "realized_mean_trade_count": 159.715,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 46,
+            "expectancy_r": -0.19684219130434716,
+            "bootstrap_ci": {
+              "sample_size": 46,
+              "mean_r": -0.19684219130434716,
+              "lower_2_5": -0.42482919347826004,
+              "upper_97_5": -0.0014247608695639113,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.19684219130434716,
+              "mean_random_expectancy_r": -0.1299559430264619,
+              "p95_random_expectancy_r": 0.036986137065081914,
+              "edge_over_random": -0.06688624827788525,
+              "target_trade_count": 46,
+              "realized_mean_trade_count": 44.63,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+2h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V8",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 33.16901085460938,
+          "expected_time_to_30_trades_months": 10.853504241594592,
+          "reason": "train: N=173 ExpR=-0.260; test: N=49 ExpR=-0.069 -> DIED",
+          "train": {
+            "trades": 173,
+            "expectancy_r": -0.2600987005780336,
+            "bootstrap_ci": {
+              "sample_size": 173,
+              "mean_r": -0.2600987005780336,
+              "lower_2_5": -0.3726802260115592,
+              "upper_97_5": -0.14751717514450785,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.2600987005780336,
+              "mean_random_expectancy_r": -0.17383569325359635,
+              "p95_random_expectancy_r": -0.08177599856390302,
+              "edge_over_random": -0.08626300732443723,
+              "target_trade_count": 173,
+              "realized_mean_trade_count": 168.275,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 49,
+            "expectancy_r": -0.0692226448979568,
+            "bootstrap_ci": {
+              "sample_size": 49,
+              "mean_r": -0.0692226448979568,
+              "lower_2_5": -0.2832512591836703,
+              "upper_97_5": 0.11423045306122685,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.0692226448979568,
+              "mean_random_expectancy_r": -0.14957468341109753,
+              "p95_random_expectancy_r": -0.004616578899998592,
+              "edge_over_random": 0.08035203851314072,
+              "target_trade_count": 49,
+              "realized_mean_trade_count": 47.43,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+3h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V8",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 34.73253325179636,
+          "expected_time_to_30_trades_months": 10.36492205708551,
+          "reason": "train: N=166 ExpR=-0.333; test: N=61 ExpR=-0.200 -> DIED",
+          "train": {
+            "trades": 166,
+            "expectancy_r": -0.3326141409638542,
+            "bootstrap_ci": {
+              "sample_size": 166,
+              "mean_r": -0.3326141409638542,
+              "lower_2_5": -0.4499430801204802,
+              "upper_97_5": -0.22431050481927584,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.3326141409638542,
+              "mean_random_expectancy_r": -0.17857602675882142,
+              "p95_random_expectancy_r": -0.08285257622147509,
+              "edge_over_random": -0.1540381142050328,
+              "target_trade_count": 166,
+              "realized_mean_trade_count": 161.66,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 61,
+            "expectancy_r": -0.20004575573770372,
+            "bootstrap_ci": {
+              "sample_size": 61,
+              "mean_r": -0.20004575573770372,
+              "lower_2_5": -0.37197038032786833,
+              "upper_97_5": -0.02812113114753944,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.20004575573770372,
+              "mean_random_expectancy_r": -0.13886467000925756,
+              "p95_random_expectancy_r": 0.015131438097827715,
+              "edge_over_random": -0.06118108572844616,
+              "target_trade_count": 61,
+              "realized_mean_trade_count": 58.685,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        }
+      }
+    },
+    "WISE_MAN_HOLD_V10": {
+      "aliases": [],
+      "asset": "BTC",
+      "timeframe": "4h",
+      "is_proxy": false,
+      "proxy_note": null,
+      "result": {
+        "hypothesis_name": "WISE_MAN_HOLD_V10",
+        "asset": "BTC",
+        "timeframe": "4h",
+        "verdict": "DIED",
+        "review_status": "dead",
+        "frequency_classification": "VIABLE",
+        "measured_trades_per_year": 34.509172909341075,
+        "expected_time_to_30_trades_months": 10.432008931241405,
+        "reason": "train: N=144 ExpR=-0.109; test: N=50 ExpR=-0.130 -> DIED",
+        "train": {
+          "trades": 144,
+          "expectancy_r": -0.10874987187499935,
+          "bootstrap_ci": {
+            "sample_size": 144,
+            "mean_r": -0.10874987187499935,
+            "lower_2_5": -0.19545127812499946,
+            "upper_97_5": -0.02204846562499939,
+            "crosses_zero": false
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.10874987187499935,
+            "mean_random_expectancy_r": -0.06670238675912539,
+            "p95_random_expectancy_r": -0.0027481068628369123,
+            "edge_over_random": -0.04204748511587396,
+            "target_trade_count": 144,
+            "realized_mean_trade_count": 138.02,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "test": {
+          "trades": 50,
+          "expectancy_r": -0.1299050149999994,
+          "bootstrap_ci": {
+            "sample_size": 50,
+            "mean_r": -0.1299050149999994,
+            "lower_2_5": -0.30469504999999886,
+            "upper_97_5": 0.0199150150000005,
+            "crosses_zero": true
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.1299050149999994,
+            "mean_random_expectancy_r": -0.07483639655586397,
+            "p95_random_expectancy_r": 0.04198034594898023,
+            "edge_over_random": -0.055068618444135436,
+            "target_trade_count": 50,
+            "realized_mean_trade_count": 47.475,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "tested_at": "2026-07-31T23:52:58.390822+00:00"
+      },
+      "grid_shift": {
+        "native (offset+0h)": {
+          "hypothesis_name": "WISE_MAN_HOLD_V10",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 34.62085308056872,
+          "expected_time_to_30_trades_months": 10.39835728952772,
+          "reason": "train: N=146 ExpR=-0.105; test: N=50 ExpR=-0.130 -> DIED",
+          "train": {
+            "trades": 146,
+            "expectancy_r": -0.10459295513698559,
+            "bootstrap_ci": {
+              "sample_size": 146,
+              "mean_r": -0.10459295513698559,
+              "lower_2_5": -0.19010667089041033,
+              "upper_97_5": -0.01907923938356117,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.10459295513698559,
+              "mean_random_expectancy_r": -0.0673997387888567,
+              "p95_random_expectancy_r": -0.0019576724589682464,
+              "edge_over_random": -0.03719321634812889,
+              "target_trade_count": 146,
+              "realized_mean_trade_count": 139.69,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 50,
+            "expectancy_r": -0.1299050149999994,
+            "bootstrap_ci": {
+              "sample_size": 50,
+              "mean_r": -0.1299050149999994,
+              "lower_2_5": -0.30469504999999886,
+              "upper_97_5": 0.0199150150000005,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.1299050149999994,
+              "mean_random_expectancy_r": -0.07733263909859656,
+              "p95_random_expectancy_r": 0.05983974122340508,
+              "edge_over_random": -0.052572375901402846,
+              "target_trade_count": 50,
+              "realized_mean_trade_count": 47.3,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+1h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V10",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 31.717168628650054,
+          "expected_time_to_30_trades_months": 11.35031957659716,
+          "reason": "train: N=137 ExpR=-0.152; test: N=38 ExpR=-0.134 -> DIED",
+          "train": {
+            "trades": 137,
+            "expectancy_r": -0.15159428941605754,
+            "bootstrap_ci": {
+              "sample_size": 137,
+              "mean_r": -0.15159428941605754,
+              "lower_2_5": -0.24272569452554674,
+              "upper_97_5": -0.06046288430656861,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.15159428941605754,
+              "mean_random_expectancy_r": -0.07113874164279116,
+              "p95_random_expectancy_r": -0.0018807266585857102,
+              "edge_over_random": -0.08045554777326638,
+              "target_trade_count": 137,
+              "realized_mean_trade_count": 131.29,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 38,
+            "expectancy_r": -0.13384764736842011,
+            "bootstrap_ci": {
+              "sample_size": 38,
+              "mean_r": -0.13384764736842011,
+              "lower_2_5": -0.3309792657894723,
+              "upper_97_5": 0.030428701315790407,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.13384764736842011,
+              "mean_random_expectancy_r": -0.06241168479360226,
+              "p95_random_expectancy_r": 0.06098460149126234,
+              "edge_over_random": -0.07143596257481785,
+              "target_trade_count": 38,
+              "realized_mean_trade_count": 36.545,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+2h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V10",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 33.16901085460938,
+          "expected_time_to_30_trades_months": 10.853504241594592,
+          "reason": "train: N=150 ExpR=-0.138; test: N=45 ExpR=0.028 -> DIED",
+          "train": {
+            "trades": 150,
+            "expectancy_r": -0.13822834999999953,
+            "bootstrap_ci": {
+              "sample_size": 150,
+              "mean_r": -0.13822834999999953,
+              "lower_2_5": -0.22978503499999955,
+              "upper_97_5": -0.0549949999999993,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.13822834999999953,
+              "mean_random_expectancy_r": -0.07157266836394952,
+              "p95_random_expectancy_r": -0.0058930065215290345,
+              "edge_over_random": -0.06665568163605001,
+              "target_trade_count": 150,
+              "realized_mean_trade_count": 143.26,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 45,
+            "expectancy_r": 0.028238350000000884,
+            "bootstrap_ci": {
+              "sample_size": 45,
+              "mean_r": 0.028238350000000884,
+              "lower_2_5": -0.11048389999999901,
+              "upper_97_5": 0.13921615000000104,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": 0.028238350000000884,
+              "mean_random_expectancy_r": -0.07758070225551056,
+              "p95_random_expectancy_r": 0.0496550375664459,
+              "edge_over_random": 0.10581905225551144,
+              "target_trade_count": 45,
+              "realized_mean_trade_count": 42.945,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+3h": {
+          "hypothesis_name": "WISE_MAN_HOLD_V10",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "VIABLE",
+          "measured_trades_per_year": 34.73253325179636,
+          "expected_time_to_30_trades_months": 10.36492205708551,
+          "reason": "train: N=136 ExpR=-0.173; test: N=53 ExpR=-0.112 -> DIED",
+          "train": {
+            "trades": 136,
+            "expectancy_r": -0.17250090588235253,
+            "bootstrap_ci": {
+              "sample_size": 136,
+              "mean_r": -0.17250090588235253,
+              "lower_2_5": -0.2645318985753674,
+              "upper_97_5": -0.08069941691176419,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.17250090588235253,
+              "mean_random_expectancy_r": -0.0697048599504519,
+              "p95_random_expectancy_r": 0.00327959275000087,
+              "edge_over_random": -0.10279604593190063,
+              "target_trade_count": 136,
+              "realized_mean_trade_count": 130.47,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 53,
+            "expectancy_r": -0.1115308603773577,
+            "bootstrap_ci": {
+              "sample_size": 53,
+              "mean_r": -0.1115308603773577,
+              "lower_2_5": -0.25287051132075417,
+              "upper_97_5": 0.029808790566038395,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.1115308603773577,
+              "mean_random_expectancy_r": -0.0715881242189621,
+              "p95_random_expectancy_r": 0.0418585410465417,
+              "edge_over_random": -0.039942736158395595,
+              "target_trade_count": 53,
+              "realized_mean_trade_count": 50.13,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        }
+      }
+    },
+    "ADX_RANGE_V1": {
+      "aliases": [],
+      "asset": "BTC",
+      "timeframe": "4h",
+      "is_proxy": true,
+      "proxy_note": "PROXY_TEST result, NOT a real trading edge -- target_r_multiple=50.0 against stop_atr_multiple=2.0 is a practically unreachable placeholder target. Every resolved trade under this plan should exit via REGIME_BREAK/SL/TIME, never TARGET. Survival here means 'the regime-break/time-cap exits fire in a statistically distinguishable pattern vs. random', NOT 'this makes money'.",
+      "result": {
+        "hypothesis_name": "ADX_RANGE_V1",
+        "asset": "BTC",
+        "timeframe": "4h",
+        "verdict": "DIED",
+        "review_status": "dead",
+        "frequency_classification": "FAST",
+        "measured_trades_per_year": 100.62383427610457,
+        "expected_time_to_30_trades_months": 3.5776811983946653,
+        "reason": "train: N=115 ExpR=-0.199; test: N=54 ExpR=0.116 -> DIED",
+        "train": {
+          "trades": 115,
+          "expectancy_r": -0.19853575822861413,
+          "bootstrap_ci": {
+            "sample_size": 115,
+            "mean_r": -0.19853575822861413,
+            "lower_2_5": -0.3705199443243732,
+            "upper_97_5": -0.015422434419685528,
+            "crosses_zero": false
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.19853575822861413,
+            "mean_random_expectancy_r": -0.06426545068090411,
+            "p95_random_expectancy_r": 0.027737462708549654,
+            "edge_over_random": -0.13427030754771002,
+            "target_trade_count": 115,
+            "realized_mean_trade_count": 113.315,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "test": {
+          "trades": 54,
+          "expectancy_r": 0.11555130113697015,
+          "bootstrap_ci": {
+            "sample_size": 54,
+            "mean_r": 0.11555130113697015,
+            "lower_2_5": -0.1815075534540896,
+            "upper_97_5": 0.4296211125793268,
+            "crosses_zero": true
+          },
+          "random_baseline": {
+            "real_expectancy_r": 0.11555130113697015,
+            "mean_random_expectancy_r": -0.07452713256975992,
+            "p95_random_expectancy_r": 0.045212567761167013,
+            "edge_over_random": 0.19007843370673005,
+            "target_trade_count": 54,
+            "realized_mean_trade_count": 52.66,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "tested_at": "2026-07-31T23:52:58.390822+00:00"
+      },
+      "grid_shift": {
+        "native (offset+0h)": {
+          "hypothesis_name": "ADX_RANGE_V1",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "FAST",
+          "measured_trades_per_year": 101.40559547469806,
+          "expected_time_to_30_trades_months": 3.5500999556757638,
+          "reason": "train: N=114 ExpR=-0.215; test: N=54 ExpR=0.116 -> DIED",
+          "train": {
+            "trades": 114,
+            "expectancy_r": -0.21510265960433728,
+            "bootstrap_ci": {
+              "sample_size": 114,
+              "mean_r": -0.21510265960433728,
+              "lower_2_5": -0.39052185460612165,
+              "upper_97_5": -0.03564774774784204,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.21510265960433728,
+              "mean_random_expectancy_r": -0.062294011265407,
+              "p95_random_expectancy_r": 0.04635090900326894,
+              "edge_over_random": -0.15280864833893026,
+              "target_trade_count": 114,
+              "realized_mean_trade_count": 112.345,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 54,
+            "expectancy_r": 0.11555130113697015,
+            "bootstrap_ci": {
+              "sample_size": 54,
+              "mean_r": 0.11555130113697015,
+              "lower_2_5": -0.1815075534540896,
+              "upper_97_5": 0.4296211125793268,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": 0.11555130113697015,
+              "mean_random_expectancy_r": -0.07016336459744106,
+              "p95_random_expectancy_r": 0.05833098822335645,
+              "edge_over_random": 0.1857146657344112,
+              "target_trade_count": 54,
+              "realized_mean_trade_count": 52.62,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+1h": {
+          "hypothesis_name": "ADX_RANGE_V1",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "FAST",
+          "measured_trades_per_year": 104.19759975538908,
+          "expected_time_to_30_trades_months": 3.4549740190285037,
+          "reason": "train: N=111 ExpR=-0.198; test: N=49 ExpR=-0.111 -> DIED",
+          "train": {
+            "trades": 111,
+            "expectancy_r": -0.19773811886300796,
+            "bootstrap_ci": {
+              "sample_size": 111,
+              "mean_r": -0.19773811886300796,
+              "lower_2_5": -0.3901413336254951,
+              "upper_97_5": 0.012295202190293536,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.19773811886300796,
+              "mean_random_expectancy_r": -0.07207615403727623,
+              "p95_random_expectancy_r": 0.01349443695020687,
+              "edge_over_random": -0.12566196482573172,
+              "target_trade_count": 111,
+              "realized_mean_trade_count": 109.67,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 49,
+            "expectancy_r": -0.11075443028223107,
+            "bootstrap_ci": {
+              "sample_size": 49,
+              "mean_r": -0.11075443028223107,
+              "lower_2_5": -0.35677656238116046,
+              "upper_97_5": 0.14641698688033056,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.11075443028223107,
+              "mean_random_expectancy_r": -0.08070825706965831,
+              "p95_random_expectancy_r": 0.06830045949557127,
+              "edge_over_random": -0.03004617321257276,
+              "target_trade_count": 49,
+              "realized_mean_trade_count": 47.955,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+2h": {
+          "hypothesis_name": "ADX_RANGE_V1",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "FAST",
+          "measured_trades_per_year": 97.83182999541354,
+          "expected_time_to_30_trades_months": 3.679783972321454,
+          "reason": "train: N=109 ExpR=-0.134; test: N=51 ExpR=0.090 -> DIED",
+          "train": {
+            "trades": 109,
+            "expectancy_r": -0.134099639038346,
+            "bootstrap_ci": {
+              "sample_size": 109,
+              "mean_r": -0.134099639038346,
+              "lower_2_5": -0.3581816291204234,
+              "upper_97_5": 0.10744524759474572,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.134099639038346,
+              "mean_random_expectancy_r": -0.06876732459653462,
+              "p95_random_expectancy_r": 0.029706639146834805,
+              "edge_over_random": -0.0653323144418114,
+              "target_trade_count": 109,
+              "realized_mean_trade_count": 107.51,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 51,
+            "expectancy_r": 0.08985324532008912,
+            "bootstrap_ci": {
+              "sample_size": 51,
+              "mean_r": 0.08985324532008912,
+              "lower_2_5": -0.2045802431148078,
+              "upper_97_5": 0.4137583940479361,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": 0.08985324532008912,
+              "mean_random_expectancy_r": -0.08039729522771732,
+              "p95_random_expectancy_r": 0.07295680976049135,
+              "edge_over_random": 0.17025054054780644,
+              "target_trade_count": 51,
+              "realized_mean_trade_count": 49.965,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+3h": {
+          "hypothesis_name": "ADX_RANGE_V1",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "FAST",
+          "measured_trades_per_year": 103.30415838556796,
+          "expected_time_to_30_trades_months": 3.48485487540929,
+          "reason": "train: N=113 ExpR=-0.171; test: N=50 ExpR=0.299 -> DIED",
+          "train": {
+            "trades": 113,
+            "expectancy_r": -0.17139262295823432,
+            "bootstrap_ci": {
+              "sample_size": 113,
+              "mean_r": -0.17139262295823432,
+              "lower_2_5": -0.3558066754236161,
+              "upper_97_5": 0.027683870513817776,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.17139262295823432,
+              "mean_random_expectancy_r": -0.06328411186694273,
+              "p95_random_expectancy_r": 0.03288624438618355,
+              "edge_over_random": -0.10810851109129159,
+              "target_trade_count": 113,
+              "realized_mean_trade_count": 111.395,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 50,
+            "expectancy_r": 0.2985811735456291,
+            "bootstrap_ci": {
+              "sample_size": 50,
+              "mean_r": 0.2985811735456291,
+              "lower_2_5": -0.0194217383554501,
+              "upper_97_5": 0.6396551205891476,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": 0.2985811735456291,
+              "mean_random_expectancy_r": -0.0567717749275036,
+              "p95_random_expectancy_r": 0.09190072065355973,
+              "edge_over_random": 0.3553529484731327,
+              "target_trade_count": 50,
+              "realized_mean_trade_count": 48.86,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        }
+      }
+    },
+    "ADX_RANGE_V2": {
+      "aliases": [
+        "ADX_GATED_RANGE_PERSISTENCE"
+      ],
+      "asset": "BTC",
+      "timeframe": "4h",
+      "is_proxy": true,
+      "proxy_note": "PROXY_TEST result, NOT a real trading edge -- target_r_multiple=50.0 against stop_atr_multiple=2.0 is a practically unreachable placeholder target. Every resolved trade under this plan should exit via REGIME_BREAK/SL/TIME, never TARGET. Survival here means 'the regime-break/time-cap exits fire in a statistically distinguishable pattern vs. random', NOT 'this makes money'.",
+      "result": {
+        "hypothesis_name": "ADX_RANGE_V2",
+        "asset": "BTC",
+        "timeframe": "4h",
+        "verdict": "DIED",
+        "review_status": "dead",
+        "frequency_classification": "FAST",
+        "measured_trades_per_year": 290.59180553432196,
+        "expected_time_to_30_trades_months": 1.2388511759237484,
+        "reason": "train: N=239 ExpR=-0.081; test: N=100 ExpR=-0.013 -> DIED",
+        "train": {
+          "trades": 239,
+          "expectancy_r": -0.08147601752147467,
+          "bootstrap_ci": {
+            "sample_size": 239,
+            "mean_r": -0.08147601752147467,
+            "lower_2_5": -0.22218621454642595,
+            "upper_97_5": 0.05819388798768633,
+            "crosses_zero": true
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.08147601752147467,
+            "mean_random_expectancy_r": -0.05897531894174353,
+            "p95_random_expectancy_r": -0.000715424914376893,
+            "edge_over_random": -0.022500698579731138,
+            "target_trade_count": 239,
+            "realized_mean_trade_count": 231.64,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "test": {
+          "trades": 100,
+          "expectancy_r": -0.012505436801113226,
+          "bootstrap_ci": {
+            "sample_size": 100,
+            "mean_r": -0.012505436801113226,
+            "lower_2_5": -0.21106061822820985,
+            "upper_97_5": 0.19895021331847842,
+            "crosses_zero": true
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.012505436801113226,
+            "mean_random_expectancy_r": -0.07367663085626287,
+            "p95_random_expectancy_r": 0.023552318631217973,
+            "edge_over_random": 0.06117119405514965,
+            "target_trade_count": 100,
+            "realized_mean_trade_count": 96.46,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "tested_at": "2026-07-31T23:52:58.390822+00:00"
+      },
+      "grid_shift": {
+        "native (offset+0h)": {
+          "hypothesis_name": "ADX_RANGE_V2",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "FAST",
+          "measured_trades_per_year": 292.26700810273655,
+          "expected_time_to_30_trades_months": 1.2317503858439411,
+          "reason": "train: N=241 ExpR=-0.086; test: N=100 ExpR=-0.013 -> DIED",
+          "train": {
+            "trades": 241,
+            "expectancy_r": -0.086159005197077,
+            "bootstrap_ci": {
+              "sample_size": 241,
+              "mean_r": -0.086159005197077,
+              "lower_2_5": -0.2205654211642775,
+              "upper_97_5": 0.060519200732568126,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.086159005197077,
+              "mean_random_expectancy_r": -0.06143486640319807,
+              "p95_random_expectancy_r": -0.0031531109321379733,
+              "edge_over_random": -0.024724138793878934,
+              "target_trade_count": 241,
+              "realized_mean_trade_count": 233.695,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 100,
+            "expectancy_r": -0.012505436801113226,
+            "bootstrap_ci": {
+              "sample_size": 100,
+              "mean_r": -0.012505436801113226,
+              "lower_2_5": -0.21106061822820985,
+              "upper_97_5": 0.19895021331847842,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.012505436801113226,
+              "mean_random_expectancy_r": -0.07536632476993066,
+              "p95_random_expectancy_r": 0.03562507594813731,
+              "edge_over_random": 0.06286088796881743,
+              "target_trade_count": 100,
+              "realized_mean_trade_count": 96.495,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+1h": {
+          "hypothesis_name": "ADX_RANGE_V2",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "FAST",
+          "measured_trades_per_year": 275.85002293227336,
+          "expected_time_to_30_trades_months": 1.305056987754491,
+          "reason": "train: N=247 ExpR=-0.171; test: N=98 ExpR=0.048 -> DIED",
+          "train": {
+            "trades": 247,
+            "expectancy_r": -0.17118897050299275,
+            "bootstrap_ci": {
+              "sample_size": 247,
+              "mean_r": -0.17118897050299275,
+              "lower_2_5": -0.2989339515456107,
+              "upper_97_5": -0.036063511684985575,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.17118897050299275,
+              "mean_random_expectancy_r": -0.07541133565041223,
+              "p95_random_expectancy_r": -0.023320378113637737,
+              "edge_over_random": -0.09577763485258052,
+              "target_trade_count": 247,
+              "realized_mean_trade_count": 240.065,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 98,
+            "expectancy_r": 0.048266899463047276,
+            "bootstrap_ci": {
+              "sample_size": 98,
+              "mean_r": 0.048266899463047276,
+              "lower_2_5": -0.17438100177387297,
+              "upper_97_5": 0.2975537706314978,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": 0.048266899463047276,
+              "mean_random_expectancy_r": -0.07843189279018384,
+              "p95_random_expectancy_r": -0.010671431673626237,
+              "edge_over_random": 0.1266987922532311,
+              "target_trade_count": 98,
+              "realized_mean_trade_count": 95.12,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+2h": {
+          "hypothesis_name": "ADX_RANGE_V2",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "FAST",
+          "measured_trades_per_year": 291.93196758905367,
+          "expected_time_to_30_trades_months": 1.233164024389286,
+          "reason": "train: N=245 ExpR=-0.087; test: N=98 ExpR=0.041 -> DIED",
+          "train": {
+            "trades": 245,
+            "expectancy_r": -0.08651550742203379,
+            "bootstrap_ci": {
+              "sample_size": 245,
+              "mean_r": -0.08651550742203379,
+              "lower_2_5": -0.22348693466990716,
+              "upper_97_5": 0.06614539059791577,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.08651550742203379,
+              "mean_random_expectancy_r": -0.06595266650630342,
+              "p95_random_expectancy_r": -0.0006432629829747675,
+              "edge_over_random": -0.020562840915730365,
+              "target_trade_count": 245,
+              "realized_mean_trade_count": 237.395,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 98,
+            "expectancy_r": 0.04059497171661056,
+            "bootstrap_ci": {
+              "sample_size": 98,
+              "mean_r": 0.04059497171661056,
+              "lower_2_5": -0.20056890493407548,
+              "upper_97_5": 0.29260463524059477,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": 0.04059497171661056,
+              "mean_random_expectancy_r": -0.07206581366757786,
+              "p95_random_expectancy_r": 0.022658052304775748,
+              "edge_over_random": 0.11266078538418842,
+              "target_trade_count": 98,
+              "realized_mean_trade_count": 94.84,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+3h": {
+          "hypothesis_name": "ADX_RANGE_V2",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "FAST",
+          "measured_trades_per_year": 299.30285889007797,
+          "expected_time_to_30_trades_months": 1.2027950596095498,
+          "reason": "train: N=259 ExpR=-0.138; test: N=91 ExpR=0.063 -> DIED",
+          "train": {
+            "trades": 259,
+            "expectancy_r": -0.13788243972186442,
+            "bootstrap_ci": {
+              "sample_size": 259,
+              "mean_r": -0.13788243972186442,
+              "lower_2_5": -0.2640287506546565,
+              "upper_97_5": -0.00782866084182848,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.13788243972186442,
+              "mean_random_expectancy_r": -0.06248756238576481,
+              "p95_random_expectancy_r": -0.010902078951071103,
+              "edge_over_random": -0.07539487733609962,
+              "target_trade_count": 259,
+              "realized_mean_trade_count": 250.505,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 91,
+            "expectancy_r": 0.06345162973834396,
+            "bootstrap_ci": {
+              "sample_size": 91,
+              "mean_r": 0.06345162973834396,
+              "lower_2_5": -0.16171741543349674,
+              "upper_97_5": 0.2982923472374649,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": 0.06345162973834396,
+              "mean_random_expectancy_r": -0.06178327674764242,
+              "p95_random_expectancy_r": 0.027723310133272044,
+              "edge_over_random": 0.1252349064859864,
+              "target_trade_count": 91,
+              "realized_mean_trade_count": 87.9,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        }
+      }
+    },
+    "ADX_RANGE_V3": {
+      "aliases": [],
+      "asset": "BTC",
+      "timeframe": "4h",
+      "is_proxy": true,
+      "proxy_note": "PROXY_TEST result, NOT a real trading edge -- target_r_multiple=50.0 against stop_atr_multiple=2.0 is a practically unreachable placeholder target. Every resolved trade under this plan should exit via REGIME_BREAK/SL/TIME, never TARGET. Survival here means 'the regime-break/time-cap exits fire in a statistically distinguishable pattern vs. random', NOT 'this makes money'.",
+      "result": {
+        "hypothesis_name": "ADX_RANGE_V3",
+        "asset": "BTC",
+        "timeframe": "4h",
+        "verdict": "DIED",
+        "review_status": "dead",
+        "frequency_classification": "FAST",
+        "measured_trades_per_year": 536.1765020639045,
+        "expected_time_to_30_trades_months": 0.6714206956370743,
+        "reason": "train: N=396 ExpR=-0.071; test: N=156 ExpR=0.001 -> DIED",
+        "train": {
+          "trades": 396,
+          "expectancy_r": -0.07100441444281527,
+          "bootstrap_ci": {
+            "sample_size": 396,
+            "mean_r": -0.07100441444281527,
+            "lower_2_5": -0.17661767461199257,
+            "upper_97_5": 0.0435273467757862,
+            "crosses_zero": true
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.07100441444281527,
+            "mean_random_expectancy_r": -0.0648648257834964,
+            "p95_random_expectancy_r": -0.02135440543615009,
+            "edge_over_random": -0.006139588659318879,
+            "target_trade_count": 396,
+            "realized_mean_trade_count": 378.0,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "test": {
+          "trades": 156,
+          "expectancy_r": 0.0011507647950204482,
+          "bootstrap_ci": {
+            "sample_size": 156,
+            "mean_r": 0.0011507647950204482,
+            "lower_2_5": -0.15599110180579587,
+            "upper_97_5": 0.16577050832155438,
+            "crosses_zero": true
+          },
+          "random_baseline": {
+            "real_expectancy_r": 0.0011507647950204482,
+            "mean_random_expectancy_r": -0.0751372621343463,
+            "p95_random_expectancy_r": -0.009046236776189926,
+            "edge_over_random": 0.07628802692936675,
+            "target_trade_count": 156,
+            "realized_mean_trade_count": 148.675,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "tested_at": "2026-07-31T23:52:58.390822+00:00"
+      },
+      "grid_shift": {
+        "native (offset+0h)": {
+          "hypothesis_name": "ADX_RANGE_V3",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "FAST",
+          "measured_trades_per_year": 537.5166641186363,
+          "expected_time_to_30_trades_months": 0.6697466776965704,
+          "reason": "train: N=393 ExpR=-0.060; test: N=156 ExpR=0.001 -> DIED",
+          "train": {
+            "trades": 393,
+            "expectancy_r": -0.05955121428261073,
+            "bootstrap_ci": {
+              "sample_size": 393,
+              "mean_r": -0.05955121428261073,
+              "lower_2_5": -0.16864225993772233,
+              "upper_97_5": 0.05261739610632298,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.05955121428261073,
+              "mean_random_expectancy_r": -0.06269220139796813,
+              "p95_random_expectancy_r": -0.0194305209241946,
+              "edge_over_random": 0.003140987115357402,
+              "target_trade_count": 393,
+              "realized_mean_trade_count": 375.05,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 156,
+            "expectancy_r": 0.0011507647950204482,
+            "bootstrap_ci": {
+              "sample_size": 156,
+              "mean_r": 0.0011507647950204482,
+              "lower_2_5": -0.15599110180579587,
+              "upper_97_5": 0.16577050832155438,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": 0.0011507647950204482,
+              "mean_random_expectancy_r": -0.07213478065668029,
+              "p95_random_expectancy_r": -0.007965078256869089,
+              "edge_over_random": 0.07328554545170074,
+              "target_trade_count": 156,
+              "realized_mean_trade_count": 148.52,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+1h": {
+          "hypothesis_name": "ADX_RANGE_V3",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "FAST",
+          "measured_trades_per_year": 499.9921265861489,
+          "expected_time_to_30_trades_months": 0.7200113378944815,
+          "reason": "train: N=400 ExpR=-0.070; test: N=151 ExpR=-0.074 -> DIED",
+          "train": {
+            "trades": 400,
+            "expectancy_r": -0.06972775763517561,
+            "bootstrap_ci": {
+              "sample_size": 400,
+              "mean_r": -0.06972775763517561,
+              "lower_2_5": -0.16672609232974533,
+              "upper_97_5": 0.03074953867801251,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.06972775763517561,
+              "mean_random_expectancy_r": -0.07403480193689767,
+              "p95_random_expectancy_r": -0.028733750831312355,
+              "edge_over_random": 0.00430704430172206,
+              "target_trade_count": 400,
+              "realized_mean_trade_count": 383.48,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 151,
+            "expectancy_r": -0.07353236689758783,
+            "bootstrap_ci": {
+              "sample_size": 151,
+              "mean_r": -0.07353236689758783,
+              "lower_2_5": -0.24163206988293126,
+              "upper_97_5": 0.10098866733145734,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.07353236689758783,
+              "mean_random_expectancy_r": -0.08030514588749135,
+              "p95_random_expectancy_r": -0.012898492170542545,
+              "edge_over_random": 0.006772778989903527,
+              "target_trade_count": 151,
+              "realized_mean_trade_count": 144.515,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+2h": {
+          "hypothesis_name": "ADX_RANGE_V3",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "FAST",
+          "measured_trades_per_year": 521.6580798043112,
+          "expected_time_to_30_trades_months": 0.6901072061129508,
+          "reason": "train: N=383 ExpR=-0.059; test: N=151 ExpR=0.016 -> DIED",
+          "train": {
+            "trades": 383,
+            "expectancy_r": -0.05864068095715257,
+            "bootstrap_ci": {
+              "sample_size": 383,
+              "mean_r": -0.05864068095715257,
+              "lower_2_5": -0.169168738536831,
+              "upper_97_5": 0.05818805777684455,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.05864068095715257,
+              "mean_random_expectancy_r": -0.06782798662879942,
+              "p95_random_expectancy_r": -0.01618367484410312,
+              "edge_over_random": 0.009187305671646849,
+              "target_trade_count": 383,
+              "realized_mean_trade_count": 365.59,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 151,
+            "expectancy_r": 0.015952193762322132,
+            "bootstrap_ci": {
+              "sample_size": 151,
+              "mean_r": 0.015952193762322132,
+              "lower_2_5": -0.14707031236910123,
+              "upper_97_5": 0.1988269628555508,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": 0.015952193762322132,
+              "mean_random_expectancy_r": -0.07887087395728998,
+              "p95_random_expectancy_r": -0.006585190234165663,
+              "edge_over_random": 0.0948230677196121,
+              "target_trade_count": 151,
+              "realized_mean_trade_count": 144.345,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+3h": {
+          "hypothesis_name": "ADX_RANGE_V3",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "FAST",
+          "measured_trades_per_year": 546.8977985017581,
+          "expected_time_to_30_trades_months": 0.6582582723613628,
+          "reason": "train: N=404 ExpR=-0.055; test: N=164 ExpR=-0.102 -> DIED",
+          "train": {
+            "trades": 404,
+            "expectancy_r": -0.05472083410505178,
+            "bootstrap_ci": {
+              "sample_size": 404,
+              "mean_r": -0.05472083410505178,
+              "lower_2_5": -0.16605179364720954,
+              "upper_97_5": 0.05947885931981274,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.05472083410505178,
+              "mean_random_expectancy_r": -0.06636625653300951,
+              "p95_random_expectancy_r": -0.015462795532864051,
+              "edge_over_random": 0.011645422427957727,
+              "target_trade_count": 404,
+              "realized_mean_trade_count": 384.71,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 164,
+            "expectancy_r": -0.10191433289080057,
+            "bootstrap_ci": {
+              "sample_size": 164,
+              "mean_r": -0.10191433289080057,
+              "lower_2_5": -0.25270112558901153,
+              "upper_97_5": 0.053690612250320506,
+              "crosses_zero": true
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.10191433289080057,
+              "mean_random_expectancy_r": -0.06723681436518657,
+              "p95_random_expectancy_r": -0.003350119017973184,
+              "edge_over_random": -0.034677518525614,
+              "target_trade_count": 164,
+              "realized_mean_trade_count": 155.11,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        }
+      }
+    },
+    "ADX_RANGE_V4": {
+      "aliases": [],
+      "asset": "BTC",
+      "timeframe": "4h",
+      "is_proxy": true,
+      "proxy_note": "PROXY_TEST result, NOT a real trading edge -- target_r_multiple=50.0 against stop_atr_multiple=2.0 is a practically unreachable placeholder target. Every resolved trade under this plan should exit via REGIME_BREAK/SL/TIME, never TARGET. Survival here means 'the regime-break/time-cap exits fire in a statistically distinguishable pattern vs. random', NOT 'this makes money'.",
+      "result": {
+        "hypothesis_name": "ADX_RANGE_V4",
+        "asset": "BTC",
+        "timeframe": "4h",
+        "verdict": "DIED",
+        "review_status": "dead",
+        "frequency_classification": "FAST",
+        "measured_trades_per_year": 811.9148448249503,
+        "expected_time_to_30_trades_months": 0.44339625306101704,
+        "reason": "train: N=1905 ExpR=-0.073; test: N=730 ExpR=-0.087 -> DIED",
+        "train": {
+          "trades": 1905,
+          "expectancy_r": -0.07329470510700255,
+          "bootstrap_ci": {
+            "sample_size": 1905,
+            "mean_r": -0.07329470510700255,
+            "lower_2_5": -0.09989523620638692,
+            "upper_97_5": -0.04532972096961086,
+            "crosses_zero": false
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.07329470510700255,
+            "mean_random_expectancy_r": -0.06456206397570875,
+            "p95_random_expectancy_r": -0.05059551574738461,
+            "edge_over_random": -0.008732641131293795,
+            "target_trade_count": 1905,
+            "realized_mean_trade_count": 1642.23,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "test": {
+          "trades": 730,
+          "expectancy_r": -0.08662764710676868,
+          "bootstrap_ci": {
+            "sample_size": 730,
+            "mean_r": -0.08662764710676868,
+            "lower_2_5": -0.1279494411511763,
+            "upper_97_5": -0.04353312207166725,
+            "crosses_zero": false
+          },
+          "random_baseline": {
+            "real_expectancy_r": -0.08662764710676868,
+            "mean_random_expectancy_r": -0.08686128288557265,
+            "p95_random_expectancy_r": -0.059746369449511554,
+            "edge_over_random": 0.00023363577880397557,
+            "target_trade_count": 730,
+            "realized_mean_trade_count": 629.685,
+            "n_runs": 200,
+            "caveat": null
+          }
+        },
+        "tested_at": "2026-07-31T23:52:58.390822+00:00"
+      },
+      "grid_shift": {
+        "native (offset+0h)": {
+          "hypothesis_name": "ADX_RANGE_V4",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "FAST",
+          "measured_trades_per_year": 809.7929215716251,
+          "expected_time_to_30_trades_months": 0.4445580967802501,
+          "reason": "train: N=1875 ExpR=-0.073; test: N=730 ExpR=-0.087 -> DIED",
+          "train": {
+            "trades": 1875,
+            "expectancy_r": -0.07276135560076334,
+            "bootstrap_ci": {
+              "sample_size": 1875,
+              "mean_r": -0.07276135560076334,
+              "lower_2_5": -0.09994942421270331,
+              "upper_97_5": -0.0440031390008147,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.07276135560076334,
+              "mean_random_expectancy_r": -0.06262586549059414,
+              "p95_random_expectancy_r": -0.04581073466019522,
+              "edge_over_random": -0.010135490110169204,
+              "target_trade_count": 1875,
+              "realized_mean_trade_count": 1615.525,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 730,
+            "expectancy_r": -0.08662764710676868,
+            "bootstrap_ci": {
+              "sample_size": 730,
+              "mean_r": -0.08662764710676868,
+              "lower_2_5": -0.1279494411511763,
+              "upper_97_5": -0.04353312207166725,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.08662764710676868,
+              "mean_random_expectancy_r": -0.08404711049145462,
+              "p95_random_expectancy_r": -0.058866120081753195,
+              "edge_over_random": -0.002580536615314058,
+              "target_trade_count": 730,
+              "realized_mean_trade_count": 629.425,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+1h": {
+          "hypothesis_name": "ADX_RANGE_V4",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "FAST",
+          "measured_trades_per_year": 773.8319064363247,
+          "expected_time_to_30_trades_months": 0.46521731270797995,
+          "reason": "train: N=1901 ExpR=-0.061; test: N=715 ExpR=-0.098 -> DIED",
+          "train": {
+            "trades": 1901,
+            "expectancy_r": -0.060832355076040505,
+            "bootstrap_ci": {
+              "sample_size": 1901,
+              "mean_r": -0.060832355076040505,
+              "lower_2_5": -0.08672699003440065,
+              "upper_97_5": -0.03375952148719318,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.060832355076040505,
+              "mean_random_expectancy_r": -0.06726347514242845,
+              "p95_random_expectancy_r": -0.05251867108512296,
+              "edge_over_random": 0.006431120066387942,
+              "target_trade_count": 1901,
+              "realized_mean_trade_count": 1658.305,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 715,
+            "expectancy_r": -0.098371630286024,
+            "bootstrap_ci": {
+              "sample_size": 715,
+              "mean_r": -0.098371630286024,
+              "lower_2_5": -0.14200503587229857,
+              "upper_97_5": -0.053197532697973664,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.098371630286024,
+              "mean_random_expectancy_r": -0.09031880248809403,
+              "p95_random_expectancy_r": -0.061417643308088396,
+              "edge_over_random": -0.00805282779792997,
+              "target_trade_count": 715,
+              "realized_mean_trade_count": 628.83,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+2h": {
+          "hypothesis_name": "ADX_RANGE_V4",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "FAST",
+          "measured_trades_per_year": 782.6546399633083,
+          "expected_time_to_30_trades_months": 0.45997299654018176,
+          "reason": "train: N=1757 ExpR=-0.083; test: N=736 ExpR=-0.100 -> DIED",
+          "train": {
+            "trades": 1757,
+            "expectancy_r": -0.08253350687012381,
+            "bootstrap_ci": {
+              "sample_size": 1757,
+              "mean_r": -0.08253350687012381,
+              "lower_2_5": -0.11285501784058091,
+              "upper_97_5": -0.05099596401995177,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.08253350687012381,
+              "mean_random_expectancy_r": -0.06544126285421697,
+              "p95_random_expectancy_r": -0.04628727205865222,
+              "edge_over_random": -0.017092244015906838,
+              "target_trade_count": 1757,
+              "realized_mean_trade_count": 1524.655,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 736,
+            "expectancy_r": -0.10010412105385379,
+            "bootstrap_ci": {
+              "sample_size": 736,
+              "mean_r": -0.10010412105385379,
+              "lower_2_5": -0.1420801912792286,
+              "upper_97_5": -0.0549544824841201,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.10010412105385379,
+              "mean_random_expectancy_r": -0.0858617663762987,
+              "p95_random_expectancy_r": -0.06013603473030311,
+              "edge_over_random": -0.01424235467755508,
+              "target_trade_count": 736,
+              "realized_mean_trade_count": 639.445,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        },
+        "offset+3h": {
+          "hypothesis_name": "ADX_RANGE_V4",
+          "asset": "BTC",
+          "timeframe": "4h",
+          "verdict": "DIED",
+          "review_status": "dead",
+          "frequency_classification": "FAST",
+          "measured_trades_per_year": 803.2037914691942,
+          "expected_time_to_30_trades_months": 0.4482050555830914,
+          "reason": "train: N=1737 ExpR=-0.058; test: N=727 ExpR=-0.102 -> DIED",
+          "train": {
+            "trades": 1737,
+            "expectancy_r": -0.05813566815895057,
+            "bootstrap_ci": {
+              "sample_size": 1737,
+              "mean_r": -0.05813566815895057,
+              "lower_2_5": -0.08832683967420499,
+              "upper_97_5": -0.02693410559372893,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.05813566815895057,
+              "mean_random_expectancy_r": -0.06333746232502496,
+              "p95_random_expectancy_r": -0.04739434686950681,
+              "edge_over_random": 0.005201794166074393,
+              "target_trade_count": 1737,
+              "realized_mean_trade_count": 1501.02,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "test": {
+            "trades": 727,
+            "expectancy_r": -0.1018194349621769,
+            "bootstrap_ci": {
+              "sample_size": 727,
+              "mean_r": -0.1018194349621769,
+              "lower_2_5": -0.1454544371069935,
+              "upper_97_5": -0.05731441779598185,
+              "crosses_zero": false
+            },
+            "random_baseline": {
+              "real_expectancy_r": -0.1018194349621769,
+              "mean_random_expectancy_r": -0.08689972921594354,
+              "p95_random_expectancy_r": -0.06303779963901307,
+              "edge_over_random": -0.014919705746233358,
+              "target_trade_count": 727,
+              "realized_mean_trade_count": 624.4,
+              "n_runs": 200,
+              "caveat": null
+            }
+          },
+          "tested_at": "2026-07-31T23:52:58.390822+00:00"
+        }
+      }
+    }
+  }
+}

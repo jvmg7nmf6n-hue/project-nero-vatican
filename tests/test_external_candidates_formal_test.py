@@ -104,13 +104,22 @@ class RuleTranslationCorrectnessTest(unittest.TestCase):
         self.assertEqual(plan.target_pct_of_entry, 0.03)
         self.assertIs(c["backtest_params"], FOREX_PARAMS)
 
-    def test_the_three_testable_candidates_share_the_identical_entry_rule(self) -> None:
-        # Same entry structure across all 3, per the external spec's own
-        # "same entry structure" wording for V6/V5 -- only stop/target differ.
+    def test_all_five_candidates_are_now_testable(self) -> None:
+        # feature/short-side-support resolved the 2 formerly-UNTESTABLE
+        # ADX_RANGE candidates to real bidirectional specs -- every candidate
+        # in the pre-registered set now has untestable_reason=None.
         testable = [c for c in EXTERNAL_CANDIDATES if c["untestable_reason"] is None]
-        self.assertEqual(len(testable), 3)
-        rules = {json.dumps(c["structured_entry_rule"], sort_keys=True) for c in testable}
-        self.assertEqual(len(rules), 1, "all 3 testable candidates must share the identical entry rule")
+        self.assertEqual(len(testable), 5)
+
+    def test_the_three_wise_man_hold_candidates_share_the_identical_entry_rule(self) -> None:
+        # Same entry structure across all 3 WISE_MAN_HOLD candidates, per the
+        # external spec's own "same entry structure" wording for V6/V5 --
+        # only stop/target differ. The 2 ADX_RANGE candidates are a separate
+        # spec entirely and are deliberately excluded from this comparison.
+        wise_man = [c for c in EXTERNAL_CANDIDATES if c["name"].startswith("EXT_WISE_MAN_HOLD")]
+        self.assertEqual(len(wise_man), 3)
+        rules = {json.dumps(c["structured_entry_rule"], sort_keys=True) for c in wise_man}
+        self.assertEqual(len(rules), 1, "all 3 WISE_MAN_HOLD candidates must share the identical entry rule")
 
     def test_exit_precedence_matches_the_spec_stop_then_target_then_regime_break_no_time_cap(self) -> None:
         # auto_tester._evaluate_exit_for_hypothesis's own existing, UNCHANGED
@@ -147,31 +156,73 @@ class RuleTranslationCorrectnessTest(unittest.TestCase):
         self.assertEqual(event.exit_reason, "SL")
 
 
-class UntestableBidirectionalTest(unittest.TestCase):
-    def test_both_adx_range_candidates_are_marked_untestable_not_run(self) -> None:
+class AdxRangeBidirectionalResolutionTest(unittest.TestCase):
+    """feature/short-side-support: EXT_ADX_RANGE_V3_BTC_1D and _V4_BTC_1D
+    were UNTESTABLE (see UNTESTABLE_BIDIRECTIONAL_REASON, kept below purely
+    as the historical record of *why*) until auto_tester gained genuine
+    bidirectional support. These tests prove the resolution is real, not a
+    relabeling: both candidates now carry real long AND short entry rules,
+    a real exit plan and params, and the harness function they depend on
+    genuinely supports both directions."""
+
+    def test_both_adx_range_candidates_are_no_longer_untestable(self) -> None:
         for name in ("EXT_ADX_RANGE_V3_BTC_1D", "EXT_ADX_RANGE_V4_BTC_1D"):
             c = _candidate(name)
             with self.subTest(name=name):
-                self.assertEqual(c["untestable_reason"], UNTESTABLE_BIDIRECTIONAL_REASON)
-                self.assertIsNone(c["structured_entry_rule"])
-                self.assertIsNone(c["structured_exit_plan"])
-                self.assertIsNone(c["backtest_params"])
+                self.assertIsNone(c["untestable_reason"])
+                self.assertIsNotNone(c["structured_entry_rule"])
+                self.assertIsNotNone(c["structured_entry_rule_short"])
+                self.assertIsNotNone(c["structured_exit_plan"])
+                self.assertIs(c["backtest_params"], CRYPTO_PARAMS)
 
-    def test_untestable_reason_names_the_real_verified_capability_gap_not_a_vague_excuse(self) -> None:
+    def test_adx_range_long_and_short_rules_are_mirror_images_at_their_own_threshold(self) -> None:
+        for name, threshold in (("EXT_ADX_RANGE_V3_BTC_1D", 25.0), ("EXT_ADX_RANGE_V4_BTC_1D", 30.0)):
+            c = _candidate(name)
+            with self.subTest(name=name):
+                long_rule = parse_structured_rule(c["structured_entry_rule"])
+                short_rule = parse_structured_rule(c["structured_entry_rule_short"])
+                self.assertEqual(long_rule, StructuredRule(conditions=(
+                    Condition(field="adx14", op="lt", value=threshold, compare_to_field=None),
+                    Condition(field="close", op="lt", value=None, compare_to_field="bb_lower"),
+                )))
+                self.assertEqual(short_rule, StructuredRule(conditions=(
+                    Condition(field="adx14", op="lt", value=threshold, compare_to_field=None),
+                    Condition(field="close", op="gt", value=None, compare_to_field="bb_upper"),
+                )))
+
+    def test_adx_range_grid_shift_is_explicitly_not_applicable_not_silently_skipped(self) -> None:
+        # BTC/24h is native daily data -- run_hypothesis_live's build_4h_grids
+        # is hardcoded to 4-hour resampling, so grid-shift would silently test
+        # the wrong timeframe if run. Same structural precedent as BTC/1d
+        # elsewhere in this pipeline (watchlist_candidates_recheck.py).
+        for name in ("EXT_ADX_RANGE_V3_BTC_1D", "EXT_ADX_RANGE_V4_BTC_1D"):
+            c = _candidate(name)
+            with self.subTest(name=name):
+                self.assertIs(c["grid_shift_applicable"], False)
+
+    def test_untestable_reason_constant_survives_as_the_historical_record(self) -> None:
+        # No candidate references this constant anymore (proven above), but
+        # the constant itself is kept verbatim as the historical record of
+        # the gap that used to exist -- it must still describe that gap
+        # accurately if anyone reads it later.
         reason = UNTESTABLE_BIDIRECTIONAL_REASON
         self.assertIn("long-only", reason)
         self.assertIn("_size_entry_for_hypothesis", reason)
         self.assertIn("bidirectional", reason.lower())
+        for c in EXTERNAL_CANDIDATES:
+            self.assertNotEqual(c["untestable_reason"], reason)
 
-    def test_auto_tester_entry_sizing_is_verified_hardcoded_long_only(self) -> None:
-        # Direct proof (not just cited in the reason string) that
-        # _size_entry_for_hypothesis always enters via "buy" -- the exact
-        # verified fact the UNTESTABLE reason rests on.
+    def test_auto_tester_entry_sizing_is_verified_genuinely_bidirectional(self) -> None:
+        # Direct proof (not just cited in a comment) that
+        # _size_entry_for_hypothesis now has a real short-entry path -- the
+        # exact capability gap the UNTESTABLE reason used to rest on.
         import inspect
 
         source = inspect.getsource(auto_tester._size_entry_for_hypothesis)
         self.assertIn('"buy"', source)
-        self.assertNotIn('"sell"', source)  # no short-entry path anywhere in this function
+        self.assertIn('"sell"', source)
+        sig = inspect.signature(auto_tester._size_entry_for_hypothesis)
+        self.assertEqual(sig.parameters["direction"].default, "LONG")
 
 
 class NoCollisionWithNativeGraveyardTest(unittest.TestCase):
