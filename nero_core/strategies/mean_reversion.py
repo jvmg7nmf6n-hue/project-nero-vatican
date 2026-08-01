@@ -68,6 +68,13 @@ class OpenTrade:
     entry_bb_lower: float
     entry_ma200: float
     entry_atr: float
+    # feature/short-side-support: appended LAST with a default so every
+    # existing keyword-argument construction site (this module's own
+    # size_entry, every test fixture) stays valid completely unchanged --
+    # MEAN_REVERSION itself is still long-only and never sets this to
+    # anything but "LONG". Only nero_core.research_agent.auto_tester's own
+    # _size_entry_for_hypothesis sets "SHORT", for a bidirectional hypothesis.
+    direction: str = "LONG"  # "LONG" | "SHORT"
 
 
 @dataclass
@@ -255,11 +262,35 @@ def evaluate_exit(
     """Check the open trade (if any) against stop-loss, target, and max-holding-hours,
     in that priority order when a candle's range hits both stop and target. Mutates
     `state` (equity, daily_r, open_trade) in place when a trade is closed, mirroring the
-    original agent's per-candle state evolution."""
+    original agent's per-candle state evolution.
+
+    DIRECTION (feature/short-side-support): reads `trade.direction` via
+    getattr(..., "LONG") rather than a direct attribute access -- this
+    function is reused (duck-typed, not via this module's own OpenTrade
+    class) by many other strategies' own locally-defined OpenTrade-shaped
+    dataclasses (breakout_momentum.py, trend_pullback.py,
+    volatility_squeeze.py, leadlag_follow.py, and others), none of which
+    carry a `direction` field. A direct `trade.direction` access broke every
+    one of them (AttributeError) the moment this branch was implemented --
+    getattr's default keeps every existing caller's long-only behavior
+    completely unchanged, matching the minimal-footprint criterion this
+    branch's own direction-declaration design was chosen under. Only this
+    module's own OpenTrade (used by nero_core.research_agent.auto_tester's
+    _size_entry_for_hypothesis) and range_mean_reversion's already-proven
+    dataclass ever set anything but the implicit "LONG" default. A "SHORT"
+    trade mirrors every comparison exactly the way
+    nero_core.strategies.range_mean_reversion.evaluate_exit's own already-
+    proven SHORT branch does: stop ABOVE entry (hit on `high >=`, not `low
+    <=`), target BELOW entry (hit on `low <=`, not `high >=`), exit slippage
+    "buy" (buying to cover) instead of "sell" (selling to close a long), and
+    gross_pnl = (entry - exit) * quantity (profit on the way DOWN) instead of
+    (exit - entry) * quantity. Reuses that exact, already-live convention --
+    not a new design."""
     trade = state.open_trade
     if trade is None:
         return None
 
+    direction = getattr(trade, "direction", "LONG")
     candle_time = int(candle["close_time"])
     hours_held = (candle_time - trade.open_close_time) / 3600000.0
     stop_loss = trade.stop_loss
@@ -268,20 +299,37 @@ def evaluate_exit(
     high = float(candle["high"])
     close = float(candle["close"])
 
-    if low <= stop_loss and high >= target:
-        exit_reason, raw_exit = "SL", stop_loss
-    elif low <= stop_loss:
-        exit_reason, raw_exit = "SL", stop_loss
-    elif high >= target:
-        exit_reason, raw_exit = "TARGET", target
-    elif hours_held >= params.max_holding_hours:
-        exit_reason, raw_exit = "TIME", close
-    else:
-        return None
+    if direction == "LONG":
+        if low <= stop_loss and high >= target:
+            exit_reason, raw_exit = "SL", stop_loss
+        elif low <= stop_loss:
+            exit_reason, raw_exit = "SL", stop_loss
+        elif high >= target:
+            exit_reason, raw_exit = "TARGET", target
+        elif hours_held >= params.max_holding_hours:
+            exit_reason, raw_exit = "TIME", close
+        else:
+            return None
+    else:  # SHORT -- every comparison mirrored, see docstring
+        if high >= stop_loss and low <= target:
+            exit_reason, raw_exit = "SL", stop_loss
+        elif high >= stop_loss:
+            exit_reason, raw_exit = "SL", stop_loss
+        elif low <= target:
+            exit_reason, raw_exit = "TARGET", target
+        elif hours_held >= params.max_holding_hours:
+            exit_reason, raw_exit = "TIME", close
+        else:
+            return None
 
-    exit_price = apply_slippage(raw_exit, params.slippage_bps, "sell")
-    quantity = trade.quantity
-    gross_pnl = (exit_price - trade.entry_price) * quantity
+    if direction == "LONG":
+        exit_price = apply_slippage(raw_exit, params.slippage_bps, "sell")
+        quantity = trade.quantity
+        gross_pnl = (exit_price - trade.entry_price) * quantity
+    else:  # SHORT: closing = buying back
+        exit_price = apply_slippage(raw_exit, params.slippage_bps, "buy")
+        quantity = trade.quantity
+        gross_pnl = (trade.entry_price - exit_price) * quantity
     exit_fee = exit_price * quantity * params.fee_bps / 10000.0
     total_fees = trade.entry_fee + exit_fee
     net_pnl = gross_pnl - total_fees
