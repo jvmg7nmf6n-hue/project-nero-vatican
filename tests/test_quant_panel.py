@@ -207,16 +207,25 @@ class PeriodsPerYearLookupTest(unittest.TestCase):
         OLD_VALUE = 365
         self.assertEqual(qp.periods_per_year_for_timeframe(qp.CRYPTO, "24h"), OLD_VALUE)
 
-    def test_forex_1day_unchanged(self) -> None:
-        # UNCHANGED VALUE, deliberately: 252 (conventional trading-days/year).
-        # Investigation found this likely does NOT match live data (Twelve
-        # Data's forex "1day" candles include weekends) but that's a SEPARATE,
-        # out-of-scope backlog item (this value is already live on the site) --
-        # this branch's job is only to add the asset_class dimension to the
-        # lookup's SHAPE, never to change this already-live number. See
-        # docs/timeframe_periods_asset_aware_investigation.md.
-        OLD_VALUE = 252
-        self.assertEqual(qp.periods_per_year_for_timeframe(qp.FOREX, "1day"), OLD_VALUE)
+    def test_forex_1day_corrected_from_252_to_365(self) -> None:
+        # Phase 1 Fix B (docs/investigations/phase_b_forex_annualization.md):
+        # 252 (conventional trading-days/year) was flagged by the
+        # timeframe-periods-asset-aware branch's own backlog as likely wrong
+        # and deferred as a separate, dedicated investigation. That
+        # investigation confirmed it empirically: EURUSD_1day.json/
+        # USDJPY_1day.json measure ~366.8 implied candles/year, weekday
+        # distribution statistically uniform Mon-Sun (28-29 each day
+        # including Saturday/Sunday), zero flat-OHLC candles (real, non-
+        # forward-filled weekend movement) -- a continuous 7-day/week quoting
+        # pattern, not a 252-trading-day calendar. 365 (not the noisier raw
+        # 366.83 sample figure) is used for consistency with the CRYPTO/
+        # COMMODITY_SPOT 24h convention already established in this same
+        # table for continuously-quoted asset classes.
+        self.assertEqual(qp.periods_per_year_for_timeframe(qp.FOREX, "1day"), 365)
+        self.assertNotEqual(
+            qp.periods_per_year_for_timeframe(qp.FOREX, "1day"), 252,
+            "252 is the trading-days-only convention this feed does not follow -- see the phase_b investigation.",
+        )
 
     def test_forex_1week_unchanged(self) -> None:
         # 1 candle/week x 52 weeks/year = 52 -- asset-class-independent.

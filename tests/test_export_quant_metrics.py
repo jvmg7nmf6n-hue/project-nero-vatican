@@ -285,11 +285,14 @@ class NonFourHourRegressionTest(unittest.TestCase):
 
     # (asset, timeframe, expected periods_per_year) for every currently-live
     # non-4h combination in docs/site_data/candles/ as of this branch, EXCLUDING
-    # SILVER (see the dedicated test below for why its OLD value must NOT survive).
+    # SILVER (see the dedicated test below for why its OLD value must NOT
+    # survive) and EXCLUDING EUR/USD-USD/JPY "1day" (Phase 1 Fix B,
+    # docs/investigations/phase_b_forex_annualization.md -- see
+    # test_eurusd_and_usdjpy_1day_deliberately_change_from_252_to_365 below;
+    # these two are deliberately NOT byte-identical to the pre-fix value).
     EXISTING_NON_4H_COMBOS = [
         ("BTC", "12h", 730), ("BNB", "12h", 730),
         ("BTC", "24h", 365), ("BNB", "24h", 365), ("GOLD", "24h", 365),
-        ("EUR/USD", "1day", 252), ("USD/JPY", "1day", 252),
         ("AAPL", "1day", 252), ("MSFT", "1day", 252), ("GOOGL", "1day", 252),
         ("TSLA", "1day", 252), ("AMZN", "1day", 252), ("NVDA", "1day", 252), ("META", "1day", 252),
         ("EUR/USD", "1week", 52), ("GBP/USD", "1week", 52), ("USD/JPY", "1week", 52), ("GOLD", "1week", 52),
@@ -340,6 +343,35 @@ class NonFourHourRegressionTest(unittest.TestCase):
             self.assertIsNone(by_key[("SILVER", "1week")]["sharpe"])
             self.assertIsNone(by_key[("SILVER", "24h")]["periods_per_year"])
             self.assertIsNone(by_key[("SILVER", "24h")]["sharpe"])
+
+    def test_eurusd_and_usdjpy_1day_deliberately_change_from_252_to_365(self) -> None:
+        # NOT a byte-identical case, DELIBERATELY (Phase 1 Fix B,
+        # docs/investigations/phase_b_forex_annualization.md): 252 (trading-
+        # days-only) was flagged as likely wrong by the timeframe-periods-
+        # asset-aware branch's own backlog and confirmed empirically by a
+        # dedicated follow-up investigation -- EURUSD_1day.json/
+        # USDJPY_1day.json measure ~366.8 implied candles/year, weekday
+        # distribution statistically uniform including Saturday/Sunday, zero
+        # flat-OHLC candles. 365 (matching the CRYPTO/COMMODITY_SPOT 24h
+        # convention) replaces 252 for FOREX/"1day" specifically -- STOCK's
+        # own "1day" (a genuinely trading-days-only feed) is unaffected, see
+        # EXISTING_NON_4H_COMBOS above.
+        with tempfile.TemporaryDirectory() as tmp:
+            candles_dir = Path(tmp) / "candles"
+            candles_dir.mkdir()
+            output_path = Path(tmp) / "quant_metrics.json"
+            _write_candle_file(candles_dir, "EURUSD_1day.json", "EUR/USD", "1day", _good_closes())
+            _write_candle_file(candles_dir, "USDJPY_1day.json", "USD/JPY", "1day", _good_closes())
+
+            eqm.export_quant_metrics(
+                candles_dir=candles_dir, output_path=output_path, now=FIXED_NOW, rf_fetch_fn=lambda: (0.04, "fred_dff")
+            )
+            by_key = {(m["asset"], m["timeframe"]): m for m in json.loads(output_path.read_text())["metrics"]}
+
+            self.assertEqual(by_key[("EUR/USD", "1day")]["periods_per_year"], 365)
+            self.assertEqual(by_key[("USD/JPY", "1day")]["periods_per_year"], 365)
+            self.assertNotEqual(by_key[("EUR/USD", "1day")]["periods_per_year"], 252)
+            self.assertNotEqual(by_key[("USD/JPY", "1day")]["periods_per_year"], 252)
 
 
 class FetchRiskFreeRateFallbackTest(unittest.TestCase):
