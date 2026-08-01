@@ -228,6 +228,49 @@ class HarnessReuseTest(unittest.TestCase):
         self.assertIs(legacy_harness.auto_tester.run_grid_shift_check, auto_tester.run_grid_shift_check)
 
 
+class DataSourcingTest(unittest.TestCase):
+    """Task 2: confirms each testable candidate's asset dispatches through
+    Vatican's OWN pipeline to the exact provider/method the task specified --
+    checked against real fetch calls (mocked at the transport boundary, same
+    convention as tools.philosophy_hypotheses_live_test's own
+    FetchFullHistoryDispatchTest), not assumed from reading dispatch code
+    alone. See also this module's own live smoke-check (run manually, not as
+    part of the suite, since it needs network): ETH/4h resolved to "NATIVE:
+    Binance ETHUSDT 4h candles" (19,611 candles) and EUR/USD/4h resolved to
+    "NATIVE: Twelve Data EUR/USD 4h" (4,997 candles) -- both native, neither
+    resampled from a finer timeframe."""
+
+    def test_eth_dispatches_through_binance_direct_not_forex(self) -> None:
+        from unittest.mock import patch
+
+        with patch("tools.philosophy_hypotheses_live_test.fetch_timeframe_candles") as mock_tf:
+            mock_tf.return_value = (None, "test-fixture")
+            fetch_full_history("ETH", "4h", client="fake-client")
+        mock_tf.assert_called_once_with("fake-client", "ETH", "4h")
+
+    def test_eurusd_dispatches_through_twelve_data_forex_not_binance(self) -> None:
+        from unittest.mock import patch
+
+        with patch("tools.philosophy_hypotheses_live_test.fetch_forex_ohlcv") as mock_forex:
+            from nero_core.data_sources.forex_data import ForexDataResult
+            import pandas as pd
+
+            mock_forex.return_value = ForexDataResult(prices=pd.DataFrame(), source="test-fixture", pair="EUR/USD", timeframe="4h")
+            legacy_harness.fetch_full_history("EUR/USD", "4h", client=None)
+        mock_forex.assert_called_once_with("EUR/USD", "4h")
+
+    def test_the_three_testable_candidates_use_exactly_the_task_specified_asset_timeframe_pairs(self) -> None:
+        expected = {
+            "EXT_WISE_MAN_HOLD_V5_ETH_4H": ("ETH", "4h"),
+            "EXT_WISE_MAN_HOLD_V6_EURUSD_4H": ("EUR/USD", "4h"),
+            "EXT_WISE_MAN_HOLD_V5_EURUSD_4H": ("EUR/USD", "4h"),
+        }
+        for name, (asset, timeframe) in expected.items():
+            c = _candidate(name)
+            with self.subTest(name=name):
+                self.assertEqual((c["asset"], c["timeframe"]), (asset, timeframe))
+
+
 class RiskSizingInvarianceTest(unittest.TestCase):
     """Task 1's own instruction: confirm (don't assume) that position sizing
     doesn't affect R-multiple-based expectancy/win-rate/PF, since R already
