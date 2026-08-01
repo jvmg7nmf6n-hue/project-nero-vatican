@@ -203,6 +203,78 @@ def parse_structured_rule(raw: object) -> StructuredRule:
     return StructuredRule(conditions=tuple(parsed))
 
 
+def parse_bidirectional_entry_rules(hypothesis: dict) -> tuple[StructuredRule, StructuredRule | None]:
+    """DIRECTION DECLARATION (feature/short-side-support): the ONE place a
+    hypothesis's entry rule(s) are read off the dict, for BOTH the long-only
+    case (every hypothesis before this branch, and the overwhelming majority
+    after it) and the new bidirectional case -- matching this module's own
+    charter ("the ONE place entry_rule is parsed," see module docstring) so
+    frequency_gate.py and auto_tester.py can never silently diverge on what a
+    hypothesis's rule(s) even are, the identical reasoning that already
+    justified this module's own existence.
+
+    `hypothesis["structured_entry_rule"]` is always the LONG rule (required,
+    parsed via parse_structured_rule UNCHANGED -- every existing hypothesis,
+    scanner-sourced, web-search-sourced, or manually submitted, has exactly
+    this one key and nothing else, so this call is byte-for-byte what already
+    ran before this function existed). `hypothesis.get("structured_entry_
+    rule_short")` is OPTIONAL and, when present, is ALSO parsed via
+    parse_structured_rule UNCHANGED (the exact same StructuredRule/Condition
+    shape, just a second, independent instance of it -- no new DSL surface
+    at the condition level at all). A hypothesis becomes bidirectional purely
+    by this second key's PRESENCE -- there is no separate "is_bidirectional"
+    flag to fall out of sync with it, the same presence-implies-feature
+    convention ExitPlan.regime_break_condition/regime_break_consecutive_bars
+    already uses.
+
+    Design alternatives considered and rejected (full reasoning in
+    docs/short_side_support_closing_report.md): (1) a `direction` sub-field
+    on individual Condition entries within one ANDed list -- rejected, breaks
+    StructuredRule's clean "every condition ANDed together" contract by
+    requiring OR-like special-casing inside what's currently a pure AND.
+    (2) A single rule plus an auto-inferred "mirror rule" for the opposite
+    direction -- rejected, auto-inferring e.g. "the short version of rsi14 <
+    30" would be a GUESS (there's no unambiguous mirror for every condition
+    shape), violating this module's own Requirement 1 ("never guess a
+    substitute" -- see module docstring)."""
+    long_rule = parse_structured_rule(hypothesis.get("structured_entry_rule"))
+    short_rule_raw = hypothesis.get("structured_entry_rule_short")
+    short_rule = parse_structured_rule(short_rule_raw) if short_rule_raw is not None else None
+    return long_rule, short_rule
+
+
+# gt/lt and gte/lte swap for the opposite direction's own comparison; eq has
+# no meaningful direction to mirror (a level-touch means the same thing either
+# way); cross_above/cross_below swap for the same reason gt/lt do. Every
+# ALLOWED_OPS value has exactly one entry here -- see
+# test_research_agent_rule_dsl_direction.py's own completeness check.
+_OP_MIRROR = {
+    "gt": "lt", "lt": "gt",
+    "gte": "lte", "lte": "gte",
+    "eq": "eq",
+    "cross_above": "cross_below", "cross_below": "cross_above",
+}
+
+
+def mirror_condition(condition: Condition) -> Condition:
+    """The SHORT-side mirror of a condition authored for LONG semantics --
+    e.g. a dynamic_target_condition written as "close >= ma20" (LONG: target
+    reached on the way up) mirrors to "close <= ma20" (SHORT: target reached
+    on the way down), same fields, same threshold, only the comparison
+    direction flips. This is why ExitPlan needs NO new fields for
+    bidirectional support (see docs/short_side_support_closing_report.md):
+    a hypothesis authors ONE dynamic_target_condition (implicitly LONG-
+    shaped, matching every existing hypothesis exactly), and a SHORT trade's
+    exit evaluator calls this function rather than requiring a second,
+    separately-authored condition. regime_break_condition is deliberately
+    NEVER passed through this function -- it describes a market-REGIME
+    observation (e.g. "ADX >= 28"), not a price-vs-entry relationship, so it
+    applies identically to both directions unchanged (confirmed directly
+    against nero_core.strategies.range_mean_reversion.evaluate_exit, which
+    checks its own regime-break condition identically for LONG and SHORT)."""
+    return Condition(field=condition.field, op=_OP_MIRROR[condition.op], value=condition.value, compare_to_field=condition.compare_to_field)
+
+
 @dataclass(frozen=True)
 class ExitPlan:
     """stop_atr_multiple and (optionally) max_holding_hours are the only fields
