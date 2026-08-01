@@ -89,6 +89,7 @@ from nero_core.execution.quarantine import (
     exclude_mismatched_sources,
     exclude_quarantined,
     exclude_unrecorded_source,
+    is_quarantined,
 )
 from nero_core.execution.source_reports import source_report_for
 from nero_core.execution.verification_status import verification_status_for
@@ -209,7 +210,7 @@ def _strategy_stats(strategy_id: str, strategy_version: str, asset: str, group_r
     # this is exactly the gap that let a 32-trade, all-NULL-source ORDERFLOW_IMBALANCE
     # sample display as if it were verified performance evidence).
     raw_trade_rows = [r for r in chronological if r.signal_type in _TRADE_SIGNAL_TYPES]
-    raw_round_trips, _ = _pair_round_trips(raw_trade_rows)
+    raw_round_trips, raw_open_entry = _pair_round_trips(raw_trade_rows)
     clean_trade_rows = _clean_trade_rows(chronological)
     round_trips, open_entry = _pair_round_trips(clean_trade_rows)
 
@@ -229,6 +230,23 @@ def _strategy_stats(strategy_id: str, strategy_version: str, asset: str, group_r
     # app/strategy/[id]/page.tsx), never surfaced as 0 resolved trades pretending
     # nothing happened.
     unverified_trades = len(raw_round_trips) - resolved_trades
+
+    # Phase 1 Fix A (docs/investigations/phase_a_pead_ledger_anomaly.md): the
+    # OPEN-position counterpart to unverified_trades above. A trailing ENTRY
+    # that exists in the raw ledger but was dropped from the clean subset
+    # SOLELY by exclude_unrecorded_source (never quarantined by an incident
+    # cutoff -- that's a materially different, already-flagged case) must not
+    # silently collapse to the same open_position=None a config with no
+    # signal at all shows. A lone open entry can never fail
+    # exclude_mismatched_sources (that filter only drops a PAIRED
+    # ENTRY/EXIT whose sources disagree; an entry with no exit yet has
+    # nothing to disagree with), so checking is_quarantined + data_source is
+    # None fully characterizes "unrecorded-source-only" for this case.
+    unverified_open_entries = 0
+    if open_entry is None and raw_open_entry is not None:
+        if not is_quarantined(raw_open_entry) and raw_open_entry.data_source is None:
+            unverified_open_entries = 1
+
     win_rate: float | None = None
     avg_return_pct: float | None = None
     expectancy_r: float | None = None
@@ -263,6 +281,7 @@ def _strategy_stats(strategy_id: str, strategy_version: str, asset: str, group_r
         "avg_return_pct": avg_return_pct,
         "signal_counts": signal_counts,
         "open_position": open_position,
+        "unverified_open_entries": unverified_open_entries,
     }
 
 

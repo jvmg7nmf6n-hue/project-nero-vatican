@@ -77,4 +77,26 @@ describe("deriveStatLine", () => {
     const stats = [makeStats({ resolved_trades: 2, win_rate: 0.5, unverified_trades: 1 })];
     expect(deriveStatLine(makeEntry(), stats)).toBe("2 resolved trades · 50% win rate");
   });
+
+  // Phase 1 Fix A (docs/investigations/phase_a_pead_ledger_anomaly.md): the
+  // MSFT/TSLA/META PEAD shape -- an ENTRY fired but its source can't be
+  // confirmed, so there's no resolved trade AND no unverified round trip
+  // (that field only counts RESOLVED quarantined round trips). Without this
+  // fix these silently fell back to AWAITING_FIRST_SIGNAL, which is actively
+  // wrong -- a real signal did fire.
+  it("shows a pending-verification state for an unverified open entry, not awaiting-first-signal", () => {
+    const stats = [makeStats({ resolved_trades: 0, unverified_trades: 0, unverified_open_entries: 1 })];
+    expect(deriveStatLine(makeEntry(), stats)).toBe("1 entry pending source verification");
+  });
+
+  it("treats a missing unverified_open_entries field (older cached export) as 0", () => {
+    const stats = [makeStats({ resolved_trades: 0, unverified_trades: 0 })];
+    delete (stats[0] as { unverified_open_entries?: number }).unverified_open_entries;
+    expect(deriveStatLine(makeEntry(), stats)).toBe(AWAITING_FIRST_SIGNAL);
+  });
+
+  it("prefers the unverified-trades (resolved-but-quarantined) message over the open-entry one when both are present", () => {
+    const stats = [makeStats({ resolved_trades: 0, unverified_trades: 1, unverified_open_entries: 1 })];
+    expect(deriveStatLine(makeEntry(), stats)).toBe("1 trade pending source verification");
+  });
 });
