@@ -731,3 +731,18 @@ def persist_test_results(results: list[TestResult], path: Path = DEFAULT_TEST_RE
 
 def load_existing_test_results(path: Path = DEFAULT_TEST_RESULTS_PATH) -> list[dict]:
     return read_json_list(path)
+
+
+# Public re-exports (feature/repair-lab-v1): nero_core.research_agent.repair_
+# forward_tracker's own per-tick evaluation needs the EXACT same generic
+# entry-sizing/exit-evaluation logic this module's own run_backtest loop
+# uses -- reused via alias, not reimplemented or duplicated. _evaluate_exit_
+# for_hypothesis is a strict superset of evaluate_exit's own behavior (its
+# dynamic-target/regime-break branches are no-ops when an ExitPlan doesn't
+# use those fields -- see its own docstring), so it is safe to call
+# unconditionally here, unlike _make_exit_evaluator's own byte-identity-
+# preserving dispatch (which exists only to keep every historical, already-
+# recorded backtest result reproducible -- not a concern for brand-new
+# forward-tracking code with no history to preserve).
+size_entry_for_hypothesis = _size_entry_for_hypothesis
+evaluate_exit_for_hypothesis = _evaluate_exit_for_hypothesis
