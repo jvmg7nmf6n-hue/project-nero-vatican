@@ -219,7 +219,83 @@ logic).
 - Zero changes to live trading logic, entry/exit rules, or the live
   scheduler.
 
-## Backlog (explicitly out of scope for this branch)
+## Follow-up: frontend verification of SILVER's real → null transition
+
+Task 3 verified the null → real direction (the newly-enabled non-forex "4h"
+entries). This follow-up (2026-08-01) verifies the direction not yet
+checked: SILVER/1week and SILVER/24h flipping from a real (but per Task 1,
+unverified/likely-incorrect) number to `null`, on the actual display surface.
+
+**Display surface, found by direct search, not assumed:** exactly one
+component renders any of `log_return_annualized`/`realized_vol_annualized`/
+`sharpe`/`sortino` anywhere on the site — `website/components/QuantPanel.tsx`,
+consumed from exactly one page, `website/app/strategy/[id]/page.tsx` (grepped
+every `.tsx` under `website/app` for the component name and for
+`quant-card-sharpe`/`quant-card-sortino` — one match, not several). The
+`/quant` page (`app/quant/page.tsx`) shows correlation/cointegration/lead-lag
+only, sourced from `quant_cross_asset.json` — confirmed in Task 1 to never
+consume `TIMEFRAME_PERIODS_PER_YEAR` at all, so it was never a candidate
+surface. `MarketsOverview`/`assetHeatmap`/`quantCrossAsset` frontend modules
+were grepped too — none reference `sharpe`/`periods_per_year`.
+
+**Regenerated the real export** (`python -m nero_core.execution.
+export_quant_metrics`, against the actual `docs/site_data/candles/` files,
+with this branch's code) and inspected SILVER's own records directly —
+`periods_per_year`/`log_return_annualized`/`realized_vol_annualized`/
+`sharpe`/`sortino` all `null` for both `1week` and `24h`, `zscore_current`
+still real (no `periods_per_year` dependency), exactly as expected. The
+regenerated file was inspected, not committed — it's a noisy, timestamp/
+risk-free-rate-dependent diff across all 33 assets (every `computed_at` and
+`rf_annual` changes on every regeneration, not just SILVER's fields), fully
+reproducible on demand; the SILVER values that matter were copied verbatim
+into deterministic test fixtures instead (see below), which is stronger,
+reviewable evidence than a one-off noisy file diff.
+
+**Attempted a live rendered-page check** (`npm run dev`, then `curl` the real
+`/strategy/range-mean-reversion--silver--range-mean-reversion-v1-0-0` and
+`/strategy/breakout-momentum--silver--breakout-momentum-v1-6-0-silver-
+calibrated-24h` pages) — this surfaced a real architectural fact worth
+recording: `website/lib/data.ts`'s `fetchJson` always fetches from
+`GITHUB_RAW_BASE` (raw.githubusercontent.com, pinned to `main`), never a
+local file, even in dev mode. So the rendered page reflected `main`'s
+still-live pre-fix numbers, not this unmerged branch's local regeneration —
+expected once understood, not a bug, but it means a true end-to-end page
+screenshot isn't possible for an unmerged branch without standing up a local
+mirror of that URL, which would be disproportionate to what this check needs.
+Fell back to this codebase's own established, equally rigorous alternative:
+real jsdom component rendering via `@testing-library/react` (the same tool
+`QuantPanel.test.tsx` already used for its pre-existing null-em-dash test) —
+literally rendering `QuantPanel` and inspecting its DOM output, using
+SILVER's exact real field values from the regeneration above as fixtures
+(not hand-typed placeholders).
+
+**Result: nothing needed fixing.** `QuantPanel.tsx`'s existing contract
+(`card.value === null ? <em-dash> : card.value`, documented in
+`quantPanel.ts`'s own `QuantMetricCard.value` comment: *"null -> render a
+muted em-dash, never a fabricated number"*) already handled this correctly,
+proven with SILVER's real data specifically:
+- `website/__tests__/QuantPanel.test.tsx`: renders `QuantPanel` with SILVER's
+  exact real (post-fix) `1week` and `24h` records — all 4 annualization-
+  dependent cards show `—`, never a raw `null`/`undefined`/`NaN`/blank string;
+  z-score still renders a real formatted number (proving a *mixed*
+  null/real record — the actual real-world shape — doesn't break anything);
+  layout stays intact (5 cards, grid, context line, no "unavailable" state
+  wrongly triggered).
+- `website/__tests__/quantPanel.test.ts`: `buildQuantMetricCards` and
+  `findQuantMetricsForAsset` both extended with the same real SILVER shapes —
+  including a test that an entry existing with null fields is still *found*
+  (distinct from the pre-existing "no entry at all" case, which happened to
+  also use SILVER as its example asset, a different scenario).
+
+Full website suite: 48 test suites, 535 tests, all passing (24 in the two
+touched files, including the new SILVER-specific ones).
+
+**No display-layer code changes were made.** The task's own instruction —
+fix the display if something breaks, never the data — didn't apply because
+nothing broke; the existing null-handling contract, already covered by
+generic tests, held up under the actual real-world SILVER shape too.
+
+
 
 1. **Verify CME Globex silver trading hours, then add `commodity_futures`
    periods/year constants.** Filed per 2026-08-01 decision — do not fabricate
