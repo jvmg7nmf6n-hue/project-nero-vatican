@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-01T09:04:23.346322+00:00",
+  "generated_at": "2026-08-01T11:46:02.044627+00:00",
   "runs": {
     "EXT_WISE_MAN_HOLD_V5_ETH_4H": {
       "name": "EXT_WISE_MAN_HOLD_V5_ETH_4H",
@@ -320,13 +320,46 @@
     },
     "EXT_ADX_RANGE_V3_BTC_1D": {
       "name": "EXT_ADX_RANGE_V3_BTC_1D",
-      "verdict": "UNTESTABLE",
-      "reason": "Rule requires a BIDIRECTIONAL (long AND short) entry/exit with a direction-aware stop and a dynamic SMA20 target on either side. Verified directly: nero_core.research_agent.auto_tester's entry/exit machinery is unconditionally long-only throughout (_size_entry_for_hypothesis always enters via apply_slippage(..., \"buy\"), prices stop below / target above entry; _evaluate_exit_for_hypothesis checks low <= stop_loss, never high >=) -- no direction field exists anywhere in StructuredRule/Condition/ExitPlan. The only bidirectional backtest machinery in this codebase (RANGE_MEAN_REVERSION's allow_short, FVG_REVERSION's own logic) is bespoke to that strategy's own specific mechanism, not a generic DSL -- reusing either would not be testing this rule. Building new short-side engine machinery would be a real, foundational extension outside this task's reuse-the-harness instruction, with real risk of a subtle direction-inversion bug if done under this task's scope. Flagged UNTESTABLE, not approximated (e.g. NOT silently tested long-side-only, which would misrepresent the rule)."
+      "asset": "BTC",
+      "timeframe": "24h",
+      "grid_shift_applicable": false,
+      "result": {
+        "hypothesis_name": "EXT_ADX_RANGE_V3_BTC_1D",
+        "asset": "BTC",
+        "timeframe": "24h",
+        "verdict": "SKIPPED",
+        "review_status": "rejected_too_slow",
+        "frequency_classification": "TOO_SLOW",
+        "measured_trades_per_year": 11.839908256880733,
+        "expected_time_to_30_trades_months": 30.405641005772733,
+        "reason": "Bidirectional: long 45 trigger(s) + short 61 trigger(s) = 106 combined over 3270 eligible days (11.84 trades/year) -> ~30.4 months to 30 resolved trades -> TOO_SLOW.",
+        "train": null,
+        "test": null,
+        "tested_at": "2026-08-01T11:46:02.044627+00:00"
+      },
+      "grid_shift": null
     },
     "EXT_ADX_RANGE_V4_BTC_1D": {
       "name": "EXT_ADX_RANGE_V4_BTC_1D",
-      "verdict": "UNTESTABLE",
-      "reason": "Rule requires a BIDIRECTIONAL (long AND short) entry/exit with a direction-aware stop and a dynamic SMA20 target on either side. Verified directly: nero_core.research_agent.auto_tester's entry/exit machinery is unconditionally long-only throughout (_size_entry_for_hypothesis always enters via apply_slippage(..., \"buy\"), prices stop below / target above entry; _evaluate_exit_for_hypothesis checks low <= stop_loss, never high >=) -- no direction field exists anywhere in StructuredRule/Condition/ExitPlan. The only bidirectional backtest machinery in this codebase (RANGE_MEAN_REVERSION's allow_short, FVG_REVERSION's own logic) is bespoke to that strategy's own specific mechanism, not a generic DSL -- reusing either would not be testing this rule. Building new short-side engine machinery would be a real, foundational extension outside this task's reuse-the-harness instruction, with real risk of a subtle direction-inversion bug if done under this task's scope. Flagged UNTESTABLE, not approximated (e.g. NOT silently tested long-side-only, which would misrepresent the rule)."
+      "asset": "BTC",
+      "timeframe": "24h",
+      "grid_shift_applicable": false,
+      "result": {
+        "hypothesis_name": "EXT_ADX_RANGE_V4_BTC_1D",
+        "asset": "BTC",
+        "timeframe": "24h",
+        "verdict": "SKIPPED",
+        "review_status": "rejected_too_slow",
+        "frequency_classification": "TOO_SLOW",
+        "measured_trades_per_year": 17.424770642201832,
+        "expected_time_to_30_trades_months": 20.660243247512245,
+        "reason": "Bidirectional: long 61 trigger(s) + short 95 trigger(s) = 156 combined over 3270 eligible days (17.42 trades/year) -> ~20.7 months to 30 resolved trades -> TOO_SLOW.",
+        "train": null,
+        "test": null,
+        "tested_at": "2026-08-01T11:46:02.044627+00:00"
+      },
+      "grid_shift": null
     }
-  }
+  },
+  "task4_adx_range_rerun_at": "2026-08-01T11:46:02.044627+00:00"
 }

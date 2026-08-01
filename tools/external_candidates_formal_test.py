@@ -30,33 +30,22 @@ ETH/EUR-USD instead of BTC) -- renamed anyway, since these are independently
 re-verified on Vatican's own pipeline, never assumed identical in outcome to
 either the native BTC run or the external source's own report.
 
-TASK 1 FINDING -- 2 of 5 are UNTESTABLE, not run: EXT_ADX_RANGE_V3_BTC_1D and
-EXT_ADX_RANGE_V4_BTC_1D specify a BIDIRECTIONAL (long AND short) rule with a
-direction-aware stop and a dynamic SMA20 target on either side. Verified
-directly (not assumed) that nero_core.research_agent.auto_tester has ZERO
-short-side capability anywhere in its entry/exit machinery --
-_size_entry_for_hypothesis unconditionally calls
-`apply_slippage(raw_entry, params.slippage_bps, "buy")` and prices its stop
-BELOW / target ABOVE entry; _evaluate_exit_for_hypothesis checks
-`low <= trade.stop_loss` (never `high >=`) and treats a dynamic target
-crossing the SAME direction as this codebase's own established long-only
-convention throughout. There is no `direction` field anywhere in
-StructuredRule/Condition/ExitPlan. The only bidirectional backtest machinery
-anywhere in this codebase (RANGE_MEAN_REVERSION's own `allow_short` flag,
-FVG_REVERSION's own long+short logic) is bespoke to THAT strategy's own
-specific entry/exit mechanism, not a generic rule_dsl-configurable one -- so
-routing these 2 hypotheses through either would not be "reusing the harness
-for this rule," it would be a different rule running under this rule's name.
-Building genuinely new short-side entry/exit machinery into rule_dsl/
-auto_tester would be a real, foundational engine extension (new P&L sign
-conventions, new stop/target check directions, real risk of a subtle
-direction-inversion bug) -- exactly the kind of thing this task's own
-instruction says to REUSE, not reimplement, and exactly the kind of thing
-this project's own established discipline says to flag rather than guess at
-under task-scope time pressure (same standard as the recent commodity_futures
-None decision -- verify a real capability before claiming it, don't build one
-hastily to force a result). Flagged UNTESTABLE, not run, not approximated
-(e.g. NOT silently tested long-side-only, which would misrepresent the rule).
+HISTORICAL TASK 1 FINDING, NOW RESOLVED (feature/short-side-support):
+EXT_ADX_RANGE_V3_BTC_1D and EXT_ADX_RANGE_V4_BTC_1D were originally flagged
+UNTESTABLE here -- verified directly (not assumed) that
+nero_core.research_agent.auto_tester had ZERO short-side capability anywhere
+in its entry/exit machinery at the time. See UNTESTABLE_BIDIRECTIONAL_REASON
+below for that original reasoning, kept verbatim as the historical record.
+feature/short-side-support subsequently investigated (docs/short_side_
+investigation_report.md) and built (docs/short_side_support_closing_
+report.md) genuine bidirectional support -- rule_dsl.parse_bidirectional_
+entry_rules/mirror_condition, direction-aware auto_tester entry/exit sizing,
+tools.backtest_statistics.random_entry_baseline_bidirectional wired in --
+following range_mean_reversion.py/short_momentum.py's own already-proven
+convention, not inventing a new one. Both candidates below now carry real,
+bidirectional structured_entry_rule/structured_entry_rule_short specs and
+get a genuine final verdict (see docs/short_side_support_closing_report.md's
+own consolidated 5-candidate table) instead of UNTESTABLE.
 
 TASK 2 -- DATA SOURCING: full available history for each asset, Vatican's own
 pipeline, fetched fresh (not the external source's own date-limited window).
@@ -155,6 +144,14 @@ def _wise_man_ext_exit_plan(stop_pct: float, target_pct: float) -> dict:
     }
 
 
+# HISTORICAL (feature/external-candidates-formal-test, superseded by
+# feature/short-side-support): this was EXT_ADX_RANGE_V3/V4's own UNTESTABLE
+# reason before bidirectional support existed. auto_tester._size_entry_for_
+# hypothesis is no longer unconditionally long-only (see that function's own
+# current docstring) -- kept here, verbatim, purely as the historical record
+# of why these two were rejected THEN; no candidate below references it
+# anymore. See docs/short_side_support_closing_report.md for the full
+# resolution.
 UNTESTABLE_BIDIRECTIONAL_REASON = (
     "Rule requires a BIDIRECTIONAL (long AND short) entry/exit with a direction-aware "
     "stop and a dynamic SMA20 target on either side. Verified directly: "
@@ -171,6 +168,47 @@ UNTESTABLE_BIDIRECTIONAL_REASON = (
     "not approximated (e.g. NOT silently tested long-side-only, which would misrepresent the rule)."
 )
 
+# EXT_ADX_RANGE family (feature/short-side-support): long iff ADX14 < threshold
+# AND close < bb_lower; short iff ADX14 < threshold (SAME gate) AND close >
+# bb_upper -- rule_dsl.parse_bidirectional_entry_rules's own two-sibling-keys
+# design (structured_entry_rule = long, structured_entry_rule_short = short).
+# Exit: 2x-ATR stop (direction-aware -- rule_dsl mirrors this at the
+# application site, see auto_tester._size_entry_for_hypothesis), dynamic
+# target = SMA20 ("ma20" in this DSL's own field naming) on cross -- authored
+# ONCE for LONG semantics (close >= ma20), auto-mirrored for SHORT
+# (rule_dsl.mirror_condition) rather than a second, separately-authored
+# condition. Regime-break: adx14 >= 28 for 2 consecutive bars -- "same
+# regime-break rule" as the WISE_MAN_HOLD family, per the original spec.
+# No max_holding_hours -- "no time cap" is a COMMON rule across all 5
+# candidates. BTC's daily fetch cadence in this pipeline is "24h", not "1d"
+# (confirmed directly -- tools.timeframe_data.NATIVE_BINANCE_INTERVAL has no
+# "1d" key; "24h" is the real dispatch key, same fix already established in
+# tools/watchlist_candidates_recheck.py) -- the hypothesis's own `timeframe`
+# field is "24h" (what's actually fetched/measured against), the display NAME
+# keeps "_BTC_1D" unchanged (naming-collision protection, unaffected either way).
+def _adx_range_ext_rules(adx_threshold: float) -> tuple[dict, dict]:
+    long_rule = {
+        "conditions": [
+            {"field": "adx14", "op": "lt", "value": adx_threshold},
+            {"field": "close", "op": "lt", "compare_to_field": "bb_lower"},
+        ],
+    }
+    short_rule = {
+        "conditions": [
+            {"field": "adx14", "op": "lt", "value": adx_threshold},
+            {"field": "close", "op": "gt", "compare_to_field": "bb_upper"},
+        ],
+    }
+    return long_rule, short_rule
+
+
+ADX_RANGE_EXT_EXIT_PLAN = {
+    "stop_atr_multiple": 2.0,
+    "dynamic_target_condition": {"field": "close", "op": "gte", "compare_to_field": "ma20"},
+    "regime_break_condition": {"field": "adx14", "op": "gte", "value": 28.0},
+    "regime_break_consecutive_bars": 2,
+}
+
 # The full, fixed, pre-registered set -- 5 entries, in this exact order.
 # (name, asset, timeframe, params_or_None_if_untestable, entry_rule_or_None, exit_plan_or_None, untestable_reason_or_None)
 EXTERNAL_CANDIDATES = [
@@ -179,7 +217,9 @@ EXTERNAL_CANDIDATES = [
         "asset": "ETH", "timeframe": "4h",
         "backtest_params": CRYPTO_PARAMS,
         "structured_entry_rule": WISE_MAN_EXT_ENTRY_RULE,
+        "structured_entry_rule_short": None,
         "structured_exit_plan": _wise_man_ext_exit_plan(stop_pct=0.015, target_pct=0.03),
+        "grid_shift_applicable": True,
         "untestable_reason": None,
         "external_source_note": (
             "External source itself already reports this candidate as DIED in their own OOS "
@@ -192,7 +232,9 @@ EXTERNAL_CANDIDATES = [
         "asset": "EUR/USD", "timeframe": "4h",
         "backtest_params": FOREX_PARAMS,
         "structured_entry_rule": WISE_MAN_EXT_ENTRY_RULE,
+        "structured_entry_rule_short": None,
         "structured_exit_plan": _wise_man_ext_exit_plan(stop_pct=0.01, target_pct=0.01),
+        "grid_shift_applicable": True,
         "untestable_reason": None,
         "external_source_note": None,
     },
@@ -201,27 +243,53 @@ EXTERNAL_CANDIDATES = [
         "asset": "EUR/USD", "timeframe": "4h",
         "backtest_params": FOREX_PARAMS,
         "structured_entry_rule": WISE_MAN_EXT_ENTRY_RULE,
+        "structured_entry_rule_short": None,
         "structured_exit_plan": _wise_man_ext_exit_plan(stop_pct=0.015, target_pct=0.03),
+        "grid_shift_applicable": True,
         "untestable_reason": None,
         "external_source_note": None,
     },
     {
         "name": "EXT_ADX_RANGE_V3_BTC_1D",
-        "asset": "BTC", "timeframe": "1d",
-        "backtest_params": None,
-        "structured_entry_rule": None,
-        "structured_exit_plan": None,
-        "untestable_reason": UNTESTABLE_BIDIRECTIONAL_REASON,
-        "external_source_note": None,
+        "asset": "BTC", "timeframe": "24h",
+        "backtest_params": CRYPTO_PARAMS,
+        "structured_entry_rule": _adx_range_ext_rules(25.0)[0],
+        "structured_entry_rule_short": _adx_range_ext_rules(25.0)[1],
+        "structured_exit_plan": ADX_RANGE_EXT_EXIT_PLAN,
+        # Grid-shift is structurally NOT_APPLICABLE for BTC/24h, not merely
+        # skipped: run_hypothesis_live's own build_4h_grids is HARDCODED to a
+        # 4-HOUR resampled grid (resample_hourly_to_grid(hourly, 4, offset)) --
+        # calling it for a 24h/daily hypothesis would silently test the WRONG
+        # timeframe entirely, not a legitimate robustness check. Same
+        # structural precedent already established for BTC/1d in the RMR
+        # Variant Research Cycle and tools/watchlist_candidates_recheck.py
+        # (native daily data, no hourly-to-daily resampling path exists in
+        # this pipeline). main() passes run_grid_shift=False for this reason,
+        # not silently -- see this candidate's own report entry.
+        "grid_shift_applicable": False,
+        "untestable_reason": None,
+        "external_source_note": (
+            "feature/short-side-support: previously UNTESTABLE (see UNTESTABLE_BIDIRECTIONAL_"
+            "REASON above, now historical) -- now genuinely bidirectional, run fresh here for "
+            "the first time. No prior external-source verdict to compare against for this pair "
+            "(the original external report itself only ever reported these as a rule spec, not "
+            "a completed OOS result)."
+        ),
     },
     {
         "name": "EXT_ADX_RANGE_V4_BTC_1D",
-        "asset": "BTC", "timeframe": "1d",
-        "backtest_params": None,
-        "structured_entry_rule": None,
-        "structured_exit_plan": None,
-        "untestable_reason": UNTESTABLE_BIDIRECTIONAL_REASON,
-        "external_source_note": None,
+        "asset": "BTC", "timeframe": "24h",
+        "backtest_params": CRYPTO_PARAMS,
+        "structured_entry_rule": _adx_range_ext_rules(30.0)[0],
+        "structured_entry_rule_short": _adx_range_ext_rules(30.0)[1],
+        "structured_exit_plan": ADX_RANGE_EXT_EXIT_PLAN,
+        "grid_shift_applicable": False,  # see EXT_ADX_RANGE_V3_BTC_1D's own comment above
+        "untestable_reason": None,
+        "external_source_note": (
+            "feature/short-side-support: previously UNTESTABLE, now genuinely bidirectional, "
+            "run fresh here for the first time -- identical to EXT_ADX_RANGE_V3_BTC_1D except "
+            "the looser ADX < 30 gate, per the original spec."
+        ),
     },
 ]
 
@@ -269,18 +337,32 @@ def main(report_path: Path = DEFAULT_REPORT_PATH) -> dict:
             "hypothesis_name": name, "asset": asset, "timeframe": timeframe,
             "generated_at": now.isoformat(),
             "structured_entry_rule": candidate["structured_entry_rule"],
+            "structured_entry_rule_short": candidate.get("structured_entry_rule_short"),
             "structured_exit_plan": candidate["structured_exit_plan"],
         }
+        grid_shift_applicable = candidate.get("grid_shift_applicable", True)
         print(f"[{idx}/{len(EXTERNAL_CANDIDATES)}] {name}: running frequency_gate + harness ...", flush=True)
-        run = run_hypothesis_live(hypothesis, candles, now, client=client, backtest_params=candidate["backtest_params"])
+        run = run_hypothesis_live(
+            hypothesis, candles, now, client=client, backtest_params=candidate["backtest_params"],
+            run_grid_shift=grid_shift_applicable,
+        )
         result = run["result"]
-        grid_note = f" grid_shift={len(run['grid_shift'])} offsets" if run["grid_shift"] else ""
+        if not grid_shift_applicable:
+            grid_note = " grid_shift=NOT_APPLICABLE (native daily data, see this candidate's own comment)"
+        elif run["grid_shift"]:
+            grid_note = f" grid_shift={len(run['grid_shift'])} offsets"
+        else:
+            grid_note = ""
         print(
             f"[{idx}/{len(EXTERNAL_CANDIDATES)}] {name} done: freq={result.frequency_classification} "
             f"verdict={result.verdict}{grid_note} -- {result.reason}",
             flush=True,
         )
-        runs[name] = {"name": name, "asset": asset, "timeframe": timeframe, **_to_jsonable(run)}
+        runs[name] = {
+            "name": name, "asset": asset, "timeframe": timeframe,
+            "grid_shift_applicable": grid_shift_applicable,
+            **_to_jsonable(run),
+        }
         _write_report()
         print(f"  -> report updated at {report_path} ({len(runs)}/{len(EXTERNAL_CANDIDATES)} runs so far)", flush=True)
 
