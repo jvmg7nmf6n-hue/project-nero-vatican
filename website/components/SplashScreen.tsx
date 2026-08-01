@@ -132,7 +132,7 @@ export default function SplashScreen() {
         </div>
 
         <p className="mt-6 text-sm tracking-wide text-muted">
-          Every signal. Every loss. On the record.
+          The book of records.
         </p>
       </div>
     </div>

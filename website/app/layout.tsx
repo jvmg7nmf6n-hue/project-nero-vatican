@@ -4,7 +4,7 @@ import Logo from "@/components/Logo";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Vatican — Every signal. Every loss. On the record.",
+  title: "Vatican — The Book of Records. Every signal. Every loss.",
   description:
     "Vatican is a paper-trading research platform for gold and crypto. Every signal and every loss is logged to a public Truth Ledger.",
 };

@@ -61,7 +61,8 @@ export default function HeroStats({ summary, roster, heartbeat = null }: HeroSta
     <section className="text-center py-10">
       <Logo animated className="mx-auto h-16 w-16" />
       <h1 className="mt-4 font-serif text-4xl sm:text-5xl text-parchment">
-        Every signal. Every loss. On the record.
+        The book of records.
+        <br className="hidden sm:block" /> Every signal. Every loss.
       </h1>
       <p className="mt-4 text-muted max-w-2xl mx-auto">
         Vatican is a paper-trading research platform for gold and crypto. Every

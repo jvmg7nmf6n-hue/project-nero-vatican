@@ -1,7 +1,7 @@
 import type { Config } from "tailwindcss";
 
 // DESIGN SYSTEM tokens (see README.md) - navy ink / seal gold / data teal / parchment
-// / muted / muted-red, matching the "Every signal. Every loss. On the record." brand.
+// / muted / muted-red, matching the "The book of records. Every signal. Every loss." brand.
 const config: Config = {
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
   theme: {
