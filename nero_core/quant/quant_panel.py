@@ -16,10 +16,11 @@ window (e.g. 252) per metric family and reports the ACTUALLY-achieved value back
 `window_used` — these functions never assume their caller got that clamping right.
 
 ANNUALIZATION: `periods_per_year` is always an explicit argument, never a default,
-and every function accepts `None` (meaning "this timeframe has no annualization
-factor in TIMEFRAME_PERIODS_PER_YEAR") and returns None for any annualized metric
-rather than silently guessing 252 for everything, which is exactly the kind of
-mistake that quietly makes every volatility number on the site wrong.
+and every function accepts `None` (meaning "this (asset_class, timeframe)
+combination has no annualization factor in TIMEFRAME_PERIODS_PER_YEAR") and
+returns None for any annualized metric rather than silently guessing 252 for
+everything, which is exactly the kind of mistake that quietly makes every
+volatility number on the site wrong.
 
 Log returns are used throughout (continuously compounded), not simple returns —
 see this module's own cross-validation tests for why comparing against a reference
@@ -39,40 +40,109 @@ import pandas as pd
 # grounding. Matches this task's own "e.g. 30" example verbatim.
 MIN_OBSERVATIONS = 30
 
-# Derived directly from Day 1's own export conventions (nero_core.execution.
-# export_candle_data): "24h" is the token that pipeline uses EXCLUSIVELY for
-# crypto/metals, "1day" EXCLUSIVELY for stocks -- there is currently no asset in
-# this codebase where the same literal timeframe string means two different real
-# cadences, so a flat string->periods-per-year lookup is unambiguous. If a future
-# asset class ever reuses "1day" for a 24/7 market (or "24h" for a 5-day one) this
-# table would need an asset-class-aware key instead of a bare timeframe string --
-# flagged here rather than silently assumed to hold forever.
+# feature/timeframe-periods-asset-aware: replaces the old bare-timeframe-string
+# table (see git history) with an (asset_class, timeframe)-keyed one. THE BUG THIS
+# CLOSES: a bare "timeframe" key cannot distinguish two assets that share a
+# timeframe LABEL but not a trading calendar -- "4h" candle-data-gaps landed 4h
+# exports for both 24/7 assets (BTC, BNB, GOLD) and session-based stocks in the
+# same window a separate branch added a forex-only "4h": 1560 entry, which would
+# have silently mis-annualized every non-forex 4h asset. That collision was
+# averted by excluding "4h" entirely as a stopgap (2026-07-31 cross-branch
+# review) -- this table is the permanent fix: every entry is now keyed by BOTH
+# the asset class and the timeframe, so two different cadences can never collide
+# under one string again.
 #
-# "4h" is deliberately ABSENT from this table (2026-07-31 cross-branch review,
-# merging feature/candle-data-gaps + feature/eurusd-4h-and-adx-dsl together):
-# the candle-data-gaps batch landed "4h" exports for several 24/7 assets (BTC,
-# BNB, GOLD, SILVER) and session-based stocks in the same window this branch
-# added a forex-only "4h": 1560 entry (5 days x 24h / 4h per candle x 52 weeks).
-# Because this table is keyed by bare timeframe string with no asset-class
-# awareness, a single "4h" entry sized for forex's 24/5 week would have silently
-# mis-annualized Sharpe/vol/return for every non-forex 4h asset instead of the
-# honest null they show today (periods_per_year_for_timeframe returns None ->
-# annualized fields null, per this function's own contract). Left out entirely
-# until this table is made asset-class-aware (e.g. keyed by (asset_class,
-# timeframe)) -- tracked as a follow-up, not fixed here.
-TIMEFRAME_PERIODS_PER_YEAR: dict[str, int] = {
-    "12h": 730,   # crypto, 24/7: 2 candles/day x 365
-    "24h": 365,   # crypto/metals, 24/7
-    "1day": 252,  # stocks, trading days only
-    "1week": 52,  # any asset class
+# Asset classes are deliberately 5, not the more obvious 4 (forex/crypto/
+# commodity/equity): GOLD and SILVER do NOT share a trading calendar in this
+# codebase's actual data sourcing, verified empirically (not assumed) against
+# real exported candle timestamps -- see docs/timeframe_periods_asset_aware_
+# investigation.md. GOLD is Twelve Data spot XAU/USD, which trades near-
+# continuously (matches crypto's own weekly cadence almost exactly). SILVER's
+# Twelve Data endpoint 404s on this project's current plan (see market_data.py's
+# own comment) and falls back to yfinance's SI=F -- a COMEX FUTURES contract, a
+# different instrument on a different schedule entirely. Collapsing both into one
+# "commodity" bucket would reintroduce the exact class of bug this table exists
+# to prevent, just one level up. So: COMMODITY_SPOT (GOLD) and COMMODITY_FUTURES
+# (SILVER) are separate classes, and COMMODITY_FUTURES intentionally has ZERO
+# entries below -- SILVER's real trading-hours schedule (CME Globex) has not been
+# independently verified, so every SILVER timeframe returns None rather than a
+# fabricated number. See docs/timeframe_periods_asset_aware_investigation.md's
+# backlog section for the follow-up ("verify CME Globex silver trading hours,
+# then add commodity_futures periods/year constants") -- out of scope here.
+CRYPTO = "crypto"
+FOREX = "forex"
+STOCK = "stock"
+COMMODITY_SPOT = "commodity_spot"  # GOLD -- Twelve Data spot XAU/USD
+COMMODITY_FUTURES = "commodity_futures"  # SILVER -- yfinance SI=F futures fallback
+
+TIMEFRAME_PERIODS_PER_YEAR: dict[tuple[str, str], int] = {
+    # CRYPTO (BTC, BNB) -- genuinely 24/7, no asset-class ambiguity, unchanged
+    # values from the old table.
+    (CRYPTO, "12h"): 730,   # 2 candles/day x 365
+    (CRYPTO, "24h"): 365,   # 1 candle/day x 365
+    (CRYPTO, "4h"): 2190,   # NEW (previously excluded entirely): 6 candles/day x 365
+
+    # FOREX (EUR/USD, GBP/USD, USD/JPY).
+    # "1day": 252 -- UNCHANGED VALUE, deliberately kept as-is (feature/timeframe-
+    # periods-asset-aware, 2026-08-01 review): this project's own EURUSD_1day.json/
+    # USDJPY_1day.json measure ~366.8 implied candles/year (Twelve Data serves a
+    # "1day" candle on every calendar day, weekends included, non-flat) -- 252
+    # (a trading-days-only convention) does NOT match that empirically, and is
+    # very likely wrong for what's actually live today. NOT fixed here: this
+    # value is already live on the site (EURUSD_1day/USDJPY_1day Sharpe/vol),
+    # and changing it needs its own dedicated investigation + before/after impact
+    # review, not a side effect of adding "4h". See docs/timeframe_periods_asset_
+    # aware_investigation.md's backlog section.
+    (FOREX, "1day"): 252,
+    (FOREX, "1week"): 52,
+    # "4h": NEW. Deliberately NOT the conventional 24/5-trading-week formula
+    # (120h/week / 4h x 52 = 1560) -- this project's own EURUSD_4h.json/
+    # GOLD_4h.json measure 6.03 candles/day, EVERY day of the week at near-
+    # weekday density (Sat/Sun candles show real, non-flat O/H/L/C movement, not
+    # forward-filled placeholders), statistically indistinguishable from BTC_4h.
+    # json's own 6.03 candles/day. This value is MEASURED from live candle data,
+    # not derived from the conventional forex-week formula -- 1560 would UNDER-
+    # count this data provider's actual candle cadence by ~29%. See docs/
+    # timeframe_periods_asset_aware_investigation.md for the full measurement.
+    (FOREX, "4h"): 2190,
+
+    # STOCK (AAPL, MSFT, GOOGL, TSLA, AMZN, NVDA, META).
+    (STOCK, "1day"): 252,  # trading days only -- unchanged, empirically confirmed correct
+    # "4h": NEW. NOT "6.5h RTH session / 4h ~= 1.6 candles/day" -- verified
+    # against nero_core.data_sources.stock_data.resample_1h_to_4h_market_hours_
+    # aware (and docs/stock_data_calibration_audit.md): a 6.5h RTH session
+    # produces exactly 7 hourly candles, which groups into exactly ONE complete
+    # 4h bar/session (the trailing ~2.5h/3-candle remainder is dropped, same
+    # never-fabricate-a-partial-bar convention used everywhere else in this
+    # codebase) -- confirmed empirically too (AAPL_4h.json: exactly 1 candle per
+    # trading day). So stock "4h" and stock "1day" share the identical real
+    # cadence: 1 sample/trading-day x 252.
+    (STOCK, "4h"): 252,
+
+    # COMMODITY_SPOT (GOLD) -- Twelve Data spot XAU/USD, empirically confirmed to
+    # trade on the same near-continuous, 7-day calendar as crypto (GOLD_4h.json/
+    # GOLD_24h.json both measure candles/day statistically indistinguishable from
+    # BTC's own). No GOLD "1day" export currently exists (GOLD's daily-equivalent
+    # export uses the "24h" cadence key, not "1day") -- deliberately no entry
+    # here for that combination; see the closing report's "still null" section.
+    (COMMODITY_SPOT, "24h"): 365,
+    (COMMODITY_SPOT, "4h"): 2190,
+    (COMMODITY_SPOT, "1week"): 52,
+
+    # COMMODITY_FUTURES (SILVER) -- deliberately NO entries. See this table's own
+    # docstring above.
 }
 
 
-def periods_per_year_for_timeframe(timeframe: str) -> int | None:
-    """None (never a guess) for any timeframe string not in the explicit table
-    above -- callers must treat that as "cannot annualize this," not "assume
-    252."""
-    return TIMEFRAME_PERIODS_PER_YEAR.get(timeframe)
+def periods_per_year_for_timeframe(asset_class: str | None, timeframe: str) -> int | None:
+    """None (never a guess) for any (asset_class, timeframe) combination not in
+    the explicit table above, OR when asset_class itself is None (an asset this
+    project doesn't yet know how to classify) -- callers must treat either case
+    as "cannot annualize this," never "assume 252" or fall back to some other
+    combination's constant."""
+    if asset_class is None:
+        return None
+    return TIMEFRAME_PERIODS_PER_YEAR.get((asset_class, timeframe))
 
 
 def _clean_closes(closes) -> pd.Series:
