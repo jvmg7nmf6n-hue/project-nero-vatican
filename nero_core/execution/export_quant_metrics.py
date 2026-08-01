@@ -40,7 +40,13 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from nero_core.data_sources.fred_rates import fetch_policy_rate, lagged_usable_rate
+from nero_core.execution.export_candle_data import IN_SCOPE_PAIRS
 from nero_core.quant.quant_panel import (
+    COMMODITY_FUTURES,
+    COMMODITY_SPOT,
+    CRYPTO,
+    FOREX,
+    STOCK,
     annualized_log_return,
     periods_per_year_for_timeframe,
     realized_volatility,
@@ -48,6 +54,30 @@ from nero_core.quant.quant_panel import (
     sharpe_ratio,
     sortino_ratio,
 )
+
+# GOLD/SILVER split (feature/timeframe-periods-asset-aware): CandlePair.fetch_
+# family ("crypto_metals"/"forex"/"stock") is a FETCH-ROUTING label, reused
+# exactly as-is below -- not a second classification scheme. But it lumps GOLD
+# and SILVER together despite them not sharing a trading calendar (verified
+# empirically -- see quant_panel.py's own TIMEFRAME_PERIODS_PER_YEAR docstring),
+# so this override sits on top of fetch_family rather than replacing it.
+_ASSET_TO_FETCH_FAMILY: dict[str, str] = {pair.asset: pair.fetch_family for pair in IN_SCOPE_PAIRS}
+_COMMODITY_ASSET_CLASS_OVERRIDE: dict[str, str] = {"GOLD": COMMODITY_SPOT, "SILVER": COMMODITY_FUTURES}
+_FETCH_FAMILY_TO_ASSET_CLASS: dict[str, str] = {"crypto_metals": CRYPTO, "forex": FOREX, "stock": STOCK}
+
+
+def classify_asset_class(asset: str) -> str | None:
+    """None (never a guess) for any asset not on the live IN_SCOPE_PAIRS roster
+    export_candle_data.py itself exports from -- the same roster this file's own
+    candles_dir glob ultimately reads candle files for. GOLD/SILVER are
+    special-cased to their own distinct classes (see the module-level comment
+    above) before falling through to fetch_family's crypto_metals/forex/stock."""
+    if asset in _COMMODITY_ASSET_CLASS_OVERRIDE:
+        return _COMMODITY_ASSET_CLASS_OVERRIDE[asset]
+    fetch_family = _ASSET_TO_FETCH_FAMILY.get(asset)
+    if fetch_family is None:
+        return None
+    return _FETCH_FAMILY_TO_ASSET_CLASS.get(fetch_family)
 
 SCHEMA_VERSION = 1
 DEFAULT_CANDLES_DIR = Path(__file__).resolve().parents[2] / "docs" / "site_data" / "candles"
@@ -109,9 +139,13 @@ def _load_candle_file(path: Path) -> tuple[str, str, pd.Series]:
 def _metrics_for_file(
     asset: str, timeframe: str, closes: pd.Series, rf_annual: float, now: datetime
 ) -> dict[str, object]:
-    periods_per_year = periods_per_year_for_timeframe(timeframe)
+    asset_class = classify_asset_class(asset)
+    periods_per_year = periods_per_year_for_timeframe(asset_class, timeframe)
     if periods_per_year is None:
-        print(f"  NOTE: unrecognized timeframe {timeframe!r} for {asset} -- annualized metrics will be null.")
+        print(
+            f"  NOTE: no periods/year for asset_class={asset_class!r} timeframe={timeframe!r} "
+            f"(asset={asset}) -- annualized metrics will be null."
+        )
 
     return_count = max(len(closes) - 1, 0)
     window_used = min(TARGET_WINDOW_RETURNS, return_count)

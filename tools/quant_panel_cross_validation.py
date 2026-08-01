@@ -36,6 +36,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from nero_core.execution.export_quant_metrics import classify_asset_class
 from nero_core.quant.quant_panel import (
     cross_validates,
     log_returns,
@@ -64,7 +65,7 @@ def cross_validate_asset(filename: str) -> dict[str, object]:
     import empyrical
 
     asset, timeframe, closes = _load_closes(filename)
-    periods_per_year = periods_per_year_for_timeframe(timeframe)
+    periods_per_year = periods_per_year_for_timeframe(classify_asset_class(asset), timeframe)
     returns = log_returns(closes)
     window = len(returns)  # use everything available -- no clamping needed for this check
     per_period_mar = RF_ANNUAL_FOR_TEST / periods_per_year
