@@ -65,6 +65,7 @@ from nero_core.research_agent.rule_dsl import (
     parse_exit_plan,
     parse_structured_rule,
 )
+from nero_core.research_agent.storage import append_json_list, read_json_list
 from tools.backtest_statistics import MIN_SAMPLE_SIZE, VERDICT_DIED, VERDICT_PROMISING_WATCHLIST, VERDICT_SURVIVED
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -78,6 +79,7 @@ MAX_ATTEMPTS_PER_CHAIN = 4
 # forward-testing docstring and every test in test_repair_lab_chain_record.py
 # asserting this distinction holds everywhere the chain is read.
 ATTEMPT_REJECTED = "REJECTED"  # proposal never launched -- duplicate or out-of-boundary
+ATTEMPT_LAUNCHED = "LAUNCHED"  # transient: fresh data allocated, resolution not yet recorded
 ATTEMPT_PENDING_FORWARD_DATA = "PENDING_FORWARD_DATA"
 ATTEMPT_DIED = VERDICT_DIED
 ATTEMPT_SURVIVED = VERDICT_SURVIVED
@@ -724,3 +726,123 @@ def evaluate_chain_terminal_state(chain_attempts: list[dict]) -> str | None:
     if len(chain_attempts) >= MAX_ATTEMPTS_PER_CHAIN and all(a["status"] in TERMINAL_FAILURE_STATUSES for a in chain_attempts):
         return CHAIN_PERMANENTLY_DIED
     return None
+
+
+# ---------------------------------------------------------------------------
+# TASK 6 -- CHAIN RECORD (append-only event log)
+# ---------------------------------------------------------------------------
+
+# Event type strings -- every event ever appended to docs/site_data/
+# repair_attempts.json carries exactly one of these under its "event" key.
+# IMMUTABLE BY DESIGN, matching nero_core.truth_ledger.execution_log's own
+# stated convention: a chain's history is only trustworthy if it can never
+# rewrite its own past -- a status change is a NEW appended event, never an
+# edit to a prior one. Current state for any chain is DERIVED by replaying
+# its own events in order (reconstruct_chain_state below), never stored
+# directly.
+EVENT_CHAIN_OPENED = "chain_opened"
+EVENT_PROPOSAL_REJECTED = "proposal_rejected"  # a proposal that never launched -- duplicate or out-of-boundary
+EVENT_ATTEMPT_LAUNCHED = "attempt_launched"
+EVENT_ATTEMPT_STATUS_CHANGED = "attempt_status_changed"  # e.g. forward-tracking progress, still PENDING_FORWARD_DATA
+EVENT_ATTEMPT_RESOLVED = "attempt_resolved"
+EVENT_CHAIN_CLOSED = "chain_closed"
+
+
+def append_repair_event(event: dict, path: Path = DEFAULT_REPAIR_ATTEMPTS_PATH) -> None:
+    """Append-only, integrated with the EXACT SAME convention agent_
+    hypotheses.json/agent_test_results.json already use (storage.
+    append_json_list: read the whole file, append, rewrite the whole file --
+    no true database-style atomic append, matching this project's own
+    stated at-this-scale tradeoff). Never overwrites a prior record -- every
+    event, including every rejected proposal, stays in the file forever."""
+    append_json_list(path, [event])
+
+
+def load_repair_events(path: Path = DEFAULT_REPAIR_ATTEMPTS_PATH) -> list[dict]:
+    return read_json_list(path)
+
+
+def reconstruct_chain_state(repair_chain_id: str, events: list[dict]) -> dict:
+    """Replays every event carrying this `repair_chain_id`, in file order,
+    into the chain's CURRENT state -- the only way this module ever reads
+    "what happened," never a mutable row updated in place. Every attempt is
+    represented (LAUNCHED / PENDING_FORWARD_DATA / DIED / PROMISING-
+    WATCHLIST / SURVIVED, per the launch event's own fresh_data_method and
+    any later status_changed/resolved events), and every REJECTED proposal
+    is kept in its own `rejected_proposals` list -- distinct from `attempts`
+    since nothing was ever launched for one of these, per Task 5's own
+    "only launches count" cap semantics.
+
+    LINEAGE IS STRUCTURAL, NOT COSMETIC: the returned dict always carries
+    `original_hypothesis_name` and the full, ordered `attempts` list
+    alongside whatever a later attempt's own result is -- there is no way
+    to read this chain's own attempt 3 without also seeing attempts 1-2 and
+    their own outcomes right next to it, so attempt 3's result can never be
+    displayed or mistaken for an independent fresh hypothesis."""
+    chain_events = [e for e in events if e.get("repair_chain_id") == repair_chain_id]
+
+    original_hypothesis_name: str | None = None
+    original_failure_type: str | None = None
+    original_result_ref: str | None = None
+    opened_at: str | None = None
+    attempts_by_id: dict[str, dict] = {}
+    attempt_order: list[str] = []
+    rejected_proposals: list[dict] = []
+    explicit_chain_status: str | None = None
+    closed_at: str | None = None
+
+    for event in chain_events:
+        etype = event.get("event")
+
+        if etype == EVENT_CHAIN_OPENED:
+            original_hypothesis_name = event.get("original_hypothesis_name")
+            original_failure_type = event.get("original_failure_type")
+            original_result_ref = event.get("original_result_ref")
+            opened_at = event.get("opened_at")
+
+        elif etype == EVENT_PROPOSAL_REJECTED:
+            rejected_proposals.append(event)
+
+        elif etype == EVENT_ATTEMPT_LAUNCHED:
+            attempt_id = str(event["attempt_id"])
+            initial_status = ATTEMPT_PENDING_FORWARD_DATA if event.get("fresh_data_method") == "forward_testing" else ATTEMPT_LAUNCHED
+            attempts_by_id[attempt_id] = dict(event, status=initial_status)
+            attempt_order.append(attempt_id)
+
+        elif etype == EVENT_ATTEMPT_STATUS_CHANGED:
+            attempt_id = str(event.get("attempt_id"))
+            if attempt_id in attempts_by_id:
+                attempts_by_id[attempt_id]["status"] = event.get("status")
+                for key, value in event.items():
+                    if key not in ("event", "repair_chain_id", "attempt_id", "status"):
+                        attempts_by_id[attempt_id][key] = value
+
+        elif etype == EVENT_ATTEMPT_RESOLVED:
+            attempt_id = str(event.get("attempt_id"))
+            if attempt_id in attempts_by_id:
+                attempts_by_id[attempt_id]["status"] = event.get("status")
+                attempts_by_id[attempt_id]["result_ref"] = event.get("result_ref")
+                attempts_by_id[attempt_id]["result"] = event.get("result")
+                attempts_by_id[attempt_id]["resolved_at"] = event.get("resolved_at")
+
+        elif etype == EVENT_CHAIN_CLOSED:
+            explicit_chain_status = event.get("chain_status")
+            closed_at = event.get("closed_at")
+
+    ordered_attempts = [attempts_by_id[aid] for aid in attempt_order]
+    chain_status = explicit_chain_status or evaluate_chain_terminal_state(ordered_attempts) or CHAIN_OPEN
+    launched = count_launched_attempts(ordered_attempts)
+
+    return {
+        "repair_chain_id": repair_chain_id,
+        "original_hypothesis_name": original_hypothesis_name,
+        "original_failure_type": original_failure_type,
+        "original_result_ref": original_result_ref,
+        "opened_at": opened_at,
+        "attempts": ordered_attempts,
+        "rejected_proposals": rejected_proposals,
+        "chain_status": chain_status,
+        "closed_at": closed_at,
+        "attempts_launched": launched,
+        "attempts_remaining": max(0, MAX_ATTEMPTS_PER_CHAIN - launched),
+    }
