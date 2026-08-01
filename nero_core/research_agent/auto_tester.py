@@ -524,7 +524,10 @@ def test_hypothesis(
 
 
 def run_grid_shift_check(
-    hypothesis: dict, grids: dict[str, pd.DataFrame], now: datetime | None = None
+    hypothesis: dict,
+    grids: dict[str, pd.DataFrame],
+    now: datetime | None = None,
+    backtest_params: MeanReversionParameters | None = None,
 ) -> dict[str, TestResult]:
     """Reruns test_hypothesis once per named candle grid (e.g. "native",
     "offset+3h", "offset+6h" -- the exact same offsets tools.
@@ -533,9 +536,20 @@ def run_grid_shift_check(
     nero_core.data_sources.candle_resampling.resample_hourly_to_grid, exactly
     as grid_shift_robustness_audit.py's own run_single_asset_config does) --
     this function only reruns the SAME harness against each one, never
-    re-deriving the resampling itself."""
+    re-deriving the resampling itself.
+
+    `backtest_params` (added for feature/external-candidates-formal-test,
+    e.g. a forex-specific fee_bps distinct from the crypto default) is passed
+    straight through to every grid's own test_hypothesis call, unchanged --
+    closing a latent inconsistency test_hypothesis's own custom-cost support
+    already had no companion for here: omitting this parameter (the default,
+    None) is byte-for-byte identical to this function's behavior before this
+    parameter existed, since test_hypothesis's own default is also None."""
     now = now or datetime.now(timezone.utc)
-    return {label: test_hypothesis(hypothesis, grid_candles, now) for label, grid_candles in grids.items()}
+    return {
+        label: test_hypothesis(hypothesis, grid_candles, now, backtest_params=backtest_params)
+        for label, grid_candles in grids.items()
+    }
 
 
 def persist_test_results(results: list[TestResult], path: Path = DEFAULT_TEST_RESULTS_PATH) -> None:

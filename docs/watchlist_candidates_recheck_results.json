@@ -1,0 +1,83 @@
+{
+  "out_of_sample_cutoff": "2026-07-19T00:00:00+00:00",
+  "candidates": {
+    "RMR_LONG_ONLY_BTC_1D": {
+      "name": "RMR_LONG_ONLY_BTC_1D",
+      "verdict": "UNTESTABLE",
+      "oos_candle_count": 13,
+      "reason": "13 out-of-sample candles (2026-07-19 onward; train=9, test=4 raw candles) produced 0 trades in either half -- almost certainly below this strategy family's indicator warmup floor (sma20/bb needs 20 candles, adx14's double-smoothing needs ~28), since no pre-cutoff data was used for warmup (see select_out_of_sample_candles's own docstring). Reported as UNTESTABLE rather than letting classify_verdict silently read 0 trades as a negative (DIED) result.",
+      "train": {
+        "trades": 0,
+        "expectancy_r": 0.0,
+        "win_rate": 0.0,
+        "profit_factor": 0.0,
+        "max_drawdown": 0.0,
+        "below_min_sample": true,
+        "ci": null,
+        "baseline": null
+      },
+      "test": {
+        "trades": 0,
+        "expectancy_r": 0.0,
+        "win_rate": 0.0,
+        "profit_factor": 0.0,
+        "max_drawdown": 0.0,
+        "below_min_sample": true,
+        "ci": null,
+        "baseline": null
+      }
+    },
+    "RMR_CONFIRMATION_BTC_1D": {
+      "name": "RMR_CONFIRMATION_BTC_1D",
+      "verdict": "UNTESTABLE",
+      "oos_candle_count": 13,
+      "reason": "13 out-of-sample candles (2026-07-19 onward; train=9, test=4 raw candles) produced 0 trades in either half -- almost certainly below this strategy family's indicator warmup floor (sma20/bb needs 20 candles, adx14's double-smoothing needs ~28), since no pre-cutoff data was used for warmup (see select_out_of_sample_candles's own docstring). Reported as UNTESTABLE rather than letting classify_verdict silently read 0 trades as a negative (DIED) result.",
+      "train": {
+        "trades": 0,
+        "expectancy_r": 0.0,
+        "win_rate": 0.0,
+        "profit_factor": 0.0,
+        "max_drawdown": 0.0,
+        "below_min_sample": true,
+        "ci": null,
+        "baseline": null
+      },
+      "test": {
+        "trades": 0,
+        "expectancy_r": 0.0,
+        "win_rate": 0.0,
+        "profit_factor": 0.0,
+        "max_drawdown": 0.0,
+        "below_min_sample": true,
+        "ci": null,
+        "baseline": null
+      }
+    },
+    "RMR_LONG_ONLY_CONFIRMATION_BTC_1D": {
+      "name": "RMR_LONG_ONLY_CONFIRMATION_BTC_1D",
+      "verdict": "UNTESTABLE",
+      "oos_candle_count": 13,
+      "reason": "13 out-of-sample candles (2026-07-19 onward; train=9, test=4 raw candles) produced 0 trades in either half -- almost certainly below this strategy family's indicator warmup floor (sma20/bb needs 20 candles, adx14's double-smoothing needs ~28), since no pre-cutoff data was used for warmup (see select_out_of_sample_candles's own docstring). Reported as UNTESTABLE rather than letting classify_verdict silently read 0 trades as a negative (DIED) result.",
+      "train": {
+        "trades": 0,
+        "expectancy_r": 0.0,
+        "win_rate": 0.0,
+        "profit_factor": 0.0,
+        "max_drawdown": 0.0,
+        "below_min_sample": true,
+        "ci": null,
+        "baseline": null
+      },
+      "test": {
+        "trades": 0,
+        "expectancy_r": 0.0,
+        "win_rate": 0.0,
+        "profit_factor": 0.0,
+        "max_drawdown": 0.0,
+        "below_min_sample": true,
+        "ci": null,
+        "baseline": null
+      }
+    }
+  }
+}
