@@ -108,10 +108,18 @@ export function buildChartDescription(params: {
   statsRow: StrategyStats | null;
 }): ChartDescriptionData {
   const resolvedTrades = params.statsRow?.resolved_trades ?? 0;
+  const unverifiedTrades = params.statsRow?.unverified_trades ?? 0;
   const unverifiedOpenEntries = params.statsRow?.unverified_open_entries ?? 0;
 
   let statusLine: string;
-  if (resolvedTrades <= 0 && unverifiedOpenEntries > 0) {
+  if (resolvedTrades <= 0 && unverifiedTrades > 0) {
+    // Phase 2 Fix I (docs/investigations/phase2_pending_cleanup_report.md):
+    // GOOGL's real shape -- a resolved ENTRY+EXIT round trip excluded from
+    // confirmed-clean stats solely by an unrecorded data_source. Mirrors
+    // lib/statLine.ts's own "pending source verification" wording (checked
+    // before the open-entry case below, same precedence statLine.ts uses).
+    statusLine = `${pluralTrades(unverifiedTrades)} pending source verification — strategy is live and monitoring for setups.`;
+  } else if (resolvedTrades <= 0 && unverifiedOpenEntries > 0) {
     // Phase 1 Fix A (docs/investigations/phase_a_pead_ledger_anomaly.md): an
     // entry fired but its source can't be confirmed yet -- distinct from
     // "nothing has happened," same honesty pattern as lib/statLine.ts's

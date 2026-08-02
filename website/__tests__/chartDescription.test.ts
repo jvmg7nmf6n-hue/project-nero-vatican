@@ -137,6 +137,35 @@ describe("buildChartDescription", () => {
     expect(data.openPositionEntryTimestamp).toBeNull();
   });
 
+  // Phase 2 Fix I (docs/investigations/phase2_pending_cleanup_report.md):
+  // GOOGL's actual real state -- a fully-resolved ENTRY+EXIT round trip
+  // excluded from confirmed-clean stats solely by exclude_unrecorded_source.
+  // statLine.ts already renders "N trades pending source verification" for
+  // this exact case; chartDescription.ts's statusLine did not (it said "No
+  // completed trades yet", which is wrong -- a real round trip happened).
+  it("shows a pending-verification status line for a resolved-but-unverified trade (GOOGL's real shape)", () => {
+    const data = buildChartDescription({
+      asset: "GOOGL",
+      timeframe: "1day",
+      candleCount: 199,
+      periodsPerYear: 252,
+      statsRow: stats({ resolved_trades: 0, unverified_trades: 1 }),
+    });
+    expect(data.statusLine).toBe("1 trade pending source verification — strategy is live and monitoring for setups.");
+    expect(data.markerLegendLine).toBeNull();
+  });
+
+  it("prefers the unverified-trades message over the open-entry one when both are present", () => {
+    const data = buildChartDescription({
+      asset: "GOLD",
+      timeframe: "1week",
+      candleCount: 199,
+      periodsPerYear: 52,
+      statsRow: stats({ resolved_trades: 0, unverified_trades: 1, unverified_open_entries: 1 }),
+    });
+    expect(data.statusLine).toBe("1 trade pending source verification — strategy is live and monitoring for setups.");
+  });
+
   it("shows the trade-count status line and marker legend when resolved_trades > 0", () => {
     const data = buildChartDescription({
       asset: "GOLD",

@@ -436,6 +436,18 @@ def _is_legitimate_direction_mirror(long_rule: StructuredRule, short_rule: Struc
             return False
         if short_c == long_c:
             continue
+        # Phase 2 Fix J (docs/investigations/phase2_pending_cleanup_report.md):
+        # a SELF-mirroring op (only "eq" today, per rule_dsl._OP_MIRROR) never
+        # genuinely flips -- mirror_condition(long_c).op equals long_c.op in
+        # this case, so the check below alone can't tell "op was left
+        # unchanged" (which requires full condition equality, per this
+        # function's own docstring) from "op was genuinely flipped to
+        # something new" (where a value/compare_to_field change is
+        # legitimate). Reject explicitly rather than let a value change hide
+        # behind an op that never actually changed. Generic over any future
+        # self-mirroring op, not special-cased to the string "eq".
+        if mirror_condition(long_c).op == long_c.op:
+            return False
         if short_c.op != mirror_condition(long_c).op:
             return False
     return True
