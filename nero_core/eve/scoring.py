@@ -1,0 +1,342 @@
+"""Phase 3 -- scoring: measurement, NEVER gating (spec's own words). Every
+Eve hypothesis gets a testability classification and, when testable, an
+in-sample and out-of-sample verdict from Adam's own unmodified statistical
+harness -- nothing here ever prevents a hypothesis from being recorded or
+reported, no matter how it scores.
+
+***** THE ONE DOCUMENTED EXCEPTION TO THIS BRANCH'S ISOLATION RULE *****
+Every OTHER module under nero_core/eve/ imports nothing from
+nero_core.research_agent (confirmed by test_eve_no_auto_wire.py). THIS
+module is the sole, narrow exception, and it is deliberate: spec 3.1 ("Every
+machine-checkable Eve hypothesis runs through the exact same auto_tester.py
+/ classify_verdict / bootstrap_mean_r_ci path Adam's go through, reused
+UNMODIFIED") cannot be satisfied any other way that doesn't undermine the
+guarantee it exists for. Reinlining auto_tester.py's ~750-line backtest
+engine (the way every OTHER Eve module reinlines a small private helper)
+would GUARANTEE eventual drift from Adam's real harness as it evolves,
+which is exactly the property "same harness, reused unmodified" is meant to
+rule out -- a stale copy would make the whole Eve-vs-Adam comparison
+meaningless in exactly the way a live import cannot. So this module imports:
+  - nero_core.research_agent.rule_dsl (parse_bidirectional_entry_rules,
+    parse_exit_plan, RuleAmbiguousError) -- to decide testability, the SAME
+    parser frequency_gate.py/auto_tester.py already use.
+  - nero_core.research_agent.auto_tester.test_hypothesis -- to actually run
+    a TESTABLE hypothesis through the real backtest/frequency-gate harness.
+  - tools.backtest_statistics (classify_verdict) -- NOT under
+    nero_core/research_agent/ at all, so no isolation concern there in the
+    first place.
+This module imports NOTHING else from nero_core.research_agent -- no
+eligibility gate, no modification whitelist, no single-proposal rule, no
+live_scheduler/default_registry reference (confirmed by
+test_eve_no_auto_wire.py's own scoring-module-specific check, which asserts
+the import set is exactly this named list and nothing more).
+
+TESTABILITY vs VERDICT (spec 3.2): testability is a property of the
+hypothesis's SHAPE (can rule_dsl parse it at all), never a statistical
+outcome. verdict_is/verdict_oos are populated ONLY when testability ==
+TESTABLE.
+
+IS/OOS SPLIT (spec 3.3 -- flagged design decision, see closing report):
+auto_tester.test_hypothesis's own returned `verdict` already REQUIRES both
+halves (chronological 70/30 train/test split) to look good together --
+useful as a reference (`verdict_combined` below) but not itself a clean
+"in-sample" or "out-of-sample" verdict. This module derives verdict_is/
+verdict_oos by calling classify_verdict SEPARATELY on the train half
+against ITSELF and the test half against ITSELF -- reusing the exact same
+function, unmodified, twice, rather than needing a second harness path.
+Zero-trade halves are labeled INSUFFICIENT_SAMPLE directly (never DIED --
+"never fired" is not evidence of a losing edge); a positive-expectancy half
+below MIN_SAMPLE_SIZE is also relabeled INSUFFICIENT_SAMPLE, splitting
+Adam's single PROMISING-WATCHLIST bucket into Eve's two distinct SURVIVED/
+DIED/PROMISING_WATCHLIST/INSUFFICIENT_SAMPLE outcomes using ONLY inputs
+classify_verdict itself already examines (trades, expectancy_r, ci) --
+never re-deriving its DIED/SURVIVED branch logic.
+
+P-VALUE APPROXIMATION (spec 3.4 -- flagged design decision): bootstrap_
+mean_r_ci returns only the percentile [2.5, 97.5] CI, not the raw resampled-
+means distribution (computed internally, then discarded) or a p-value.
+normal_approx_p_value below derives an APPROXIMATE two-sided p-value from
+the CI's own bounds (SE ~= CI width / (2*1.96), z = mean_r/SE, p from the
+standard normal CDF) -- explicitly an approximation, not an exact bootstrap
+p-value, since the harness itself is never modified to expose the raw
+distribution.
+"""
+from __future__ import annotations
+
+import math
+import re
+from collections import Counter
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Callable
+
+from nero_core.research_agent.auto_tester import test_hypothesis as adam_test_hypothesis
+from nero_core.research_agent.rule_dsl import RuleAmbiguousError, parse_bidirectional_entry_rules, parse_exit_plan
+from tools.backtest_statistics import MIN_SAMPLE_SIZE, VERDICT_DIED, VERDICT_SURVIVED, classify_verdict
+
+TESTABILITY_TESTABLE = "TESTABLE"
+TESTABILITY_UNTESTABLE_BY_DSL = "UNTESTABLE_BY_DSL"
+
+VERDICT_EVE_SURVIVED = "SURVIVED"
+VERDICT_EVE_DIED = "DIED"
+VERDICT_EVE_PROMISING_WATCHLIST = "PROMISING_WATCHLIST"
+VERDICT_EVE_INSUFFICIENT_SAMPLE = "INSUFFICIENT_SAMPLE"
+
+DERIVATIVE_SIMILARITY_THRESHOLD = 0.6
+DEFAULT_FDR_ALPHA = 0.05
+
+
+def classify_testability(raw_hypothesis: dict) -> tuple[str, str]:
+    """TESTABLE iff BOTH structured_entry_rule and structured_exit_plan
+    parse without RuleAmbiguousError via rule_dsl -- the ONE place this is
+    decided, reused unmodified. Never crashes on a malformed raw_hypothesis
+    (e.g. not even a dict, or missing the relevant keys entirely) -- that is
+    just as much "not machine-checkable" as an explicit RuleAmbiguousError."""
+    try:
+        parse_bidirectional_entry_rules(raw_hypothesis)
+        parse_exit_plan(raw_hypothesis.get("structured_exit_plan"))
+    except RuleAmbiguousError as exc:
+        return TESTABILITY_UNTESTABLE_BY_DSL, str(exc)
+    except (AttributeError, TypeError, KeyError) as exc:
+        return TESTABILITY_UNTESTABLE_BY_DSL, f"{exc.__class__.__name__}: {exc}"
+    return TESTABILITY_TESTABLE, "structured_entry_rule and structured_exit_plan both parse via rule_dsl"
+
+
+def _map_half_verdict(stats) -> str | None:
+    """`stats` is a nero_core.research_agent.auto_tester.HalfStats or None
+    (None means test_hypothesis never reached the backtest at all -- gate
+    rejection or parse failure upstream; distinct from a half that WAS
+    backtested but produced zero trades, which IS an INSUFFICIENT_SAMPLE
+    verdict, not a null one)."""
+    if stats is None:
+        return None
+    if stats.trades == 0:
+        return VERDICT_EVE_INSUFFICIENT_SAMPLE
+    stats_dict = {"expectancy_r": stats.expectancy_r, "trades": stats.trades, "ci": stats.ci}
+    adam_verdict = classify_verdict(stats_dict, stats_dict, min_sample_size=MIN_SAMPLE_SIZE)
+    if adam_verdict == VERDICT_DIED:
+        return VERDICT_EVE_DIED
+    if adam_verdict == VERDICT_SURVIVED:
+        return VERDICT_EVE_SURVIVED
+    # PROMISING-WATCHLIST from a self-compared half: positive expectancy,
+    # but not (adequate sample AND CI clears zero). Split using `trades`
+    # alone (already one of classify_verdict's own inputs).
+    if stats.trades < MIN_SAMPLE_SIZE:
+        return VERDICT_EVE_INSUFFICIENT_SAMPLE
+    return VERDICT_EVE_PROMISING_WATCHLIST
+
+
+def _standard_normal_cdf(x: float) -> float:
+    return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+
+
+def normal_approx_p_value(ci) -> float | None:
+    """See module docstring's P-VALUE APPROXIMATION section. None if `ci`
+    is None (nothing to approximate from)."""
+    if ci is None:
+        return None
+    se = (ci.upper_97_5 - ci.lower_2_5) / (2 * 1.959964)
+    if se <= 0:
+        return 0.0 if ci.mean_r != 0 else 1.0
+    z = ci.mean_r / se
+    return 2.0 * (1.0 - _standard_normal_cdf(abs(z)))
+
+
+def benjamini_hochberg(p_values: list[float], alpha: float = DEFAULT_FDR_ALPHA) -> list[bool]:
+    """Standard BH step-up FDR procedure, pure stdlib (no scipy in
+    requirements.txt). Returns one bool per input p-value, same order,
+    True iff that hypothesis survives FDR correction at `alpha` across the
+    whole family passed in."""
+    n = len(p_values)
+    if n == 0:
+        return []
+    order = sorted(range(n), key=lambda i: p_values[i])
+    sorted_p = [p_values[i] for i in order]
+    thresholds = [(rank + 1) / n * alpha for rank in range(n)]
+    largest_k = -1
+    for k in range(n):
+        if sorted_p[k] <= thresholds[k]:
+            largest_k = k
+    survives = [False] * n
+    for rank in range(largest_k + 1):
+        survives[order[rank]] = True
+    return survives
+
+
+def score_hypothesis(record: dict, candles_provider: Callable[[str, str], object], now: datetime | None = None) -> dict:
+    """Scores ONE hypothesis record (nero_core.eve.hypothesis_shapes's own
+    shape). Returns a NEW dict -- never mutates `record`. `candles_provider`
+    matches nero_core.research_agent.pipeline's own (asset, timeframe) ->
+    DataFrame|None convention."""
+    now = now or datetime.now(timezone.utc)
+    raw = record.get("raw_hypothesis") if isinstance(record.get("raw_hypothesis"), dict) else {}
+    testability, testability_reason = classify_testability(raw)
+
+    updated = dict(record)
+    updated["testability"] = testability
+    updated["testability_reason"] = testability_reason
+    updated["verdict_is"] = None
+    updated["verdict_oos"] = None
+    updated["verdict_combined"] = None
+    updated["p_value_is"] = None
+    updated["p_value_oos"] = None
+    updated["frequency_classification"] = None
+    updated["measured_trades_per_year"] = None
+
+    if testability != TESTABILITY_TESTABLE:
+        return updated
+
+    asset = raw.get("asset")
+    timeframe = raw.get("timeframe")
+    candles = candles_provider(asset, timeframe) if asset and timeframe else None
+    if candles is None or len(candles) == 0:
+        updated["testability_reason"] += " (no candle data available for this asset/timeframe -- verdict cannot be computed)"
+        return updated
+
+    result = adam_test_hypothesis(raw, candles, now=now)
+    updated["verdict_combined"] = result.verdict
+    updated["frequency_classification"] = result.frequency_classification
+    updated["measured_trades_per_year"] = result.measured_trades_per_year
+    updated["verdict_is"] = _map_half_verdict(result.train)
+    updated["verdict_oos"] = _map_half_verdict(result.test)
+    updated["p_value_is"] = normal_approx_p_value(result.train.ci) if result.train and result.train.ci else None
+    updated["p_value_oos"] = normal_approx_p_value(result.test.ci) if result.test and result.test.ci else None
+    return updated
+
+
+def score_all(records: list[dict], candles_provider: Callable[[str, str], object], now: datetime | None = None) -> list[dict]:
+    return [score_hypothesis(r, candles_provider, now=now) for r in records]
+
+
+def apply_fdr_correction(scored_records: list[dict], alpha: float = DEFAULT_FDR_ALPHA, field: str = "p_value_oos") -> list[dict]:
+    """Spec 3.3: 'Report both everywhere. Never report verdict_is alone.'
+    -- but the FDR-corrected HEADLINE number (spec 3.4) is the
+    out-of-sample one by default (field='p_value_oos'); callers that also
+    want an FDR pass over p_value_is can call this again with
+    field='p_value_is'. Records with no usable p-value in `field` get
+    fdr_survives_{is,oos}=None, never a fabricated True/False."""
+    result_field = "fdr_survives_oos" if field == "p_value_oos" else "fdr_survives_is"
+    indices_with_p = [i for i, r in enumerate(scored_records) if r.get(field) is not None]
+    p_values = [scored_records[i][field] for i in indices_with_p]
+    survives = benjamini_hochberg(p_values, alpha=alpha)
+
+    updated = [dict(r) for r in scored_records]
+    for r in updated:
+        r.setdefault(result_field, None)
+    for pos, idx in enumerate(indices_with_p):
+        updated[idx][result_field] = survives[pos]
+    return updated
+
+
+# --- Contamination tags (spec 3.5) -- informational only, NEVER gating ------
+
+_STOPWORDS = frozenset({
+    "this", "that", "these", "those", "with", "from", "into", "than", "then",
+    "each", "both", "near", "real", "only", "over", "such", "less", "more",
+    "will", "have", "been", "were", "when", "what", "which", "while", "does",
+})
+
+
+def _tokenize(text: str) -> list[str]:
+    return [w for w in re.findall(r"[a-z0-9]+", text.lower()) if w not in _STOPWORDS]
+
+
+def _term_frequency_cosine_similarity(text_a: str, text_b: str) -> float:
+    """Lexical term-frequency cosine similarity -- NOT a full TF-IDF (no
+    corpus to derive IDF weights from at N=1 comparisons) and NOT an
+    embedding-based similarity (see module docstring / closing report:
+    deliberately avoided to keep this a $0, dependency-free check --
+    requirements.txt has no embedding client, and adding a paid embedding
+    call would be a second, unbudgeted cost surface the spec never
+    mentions). A reasonable lexical-overlap proxy, not a semantic one --
+    flagged as a starting point for human calibration."""
+    a_tokens, b_tokens = _tokenize(text_a), _tokenize(text_b)
+    if not a_tokens or not b_tokens:
+        return 0.0
+    a_counts, b_counts = Counter(a_tokens), Counter(b_tokens)
+    shared = set(a_counts) & set(b_counts)
+    dot = sum(a_counts[t] * b_counts[t] for t in shared)
+    norm_a = math.sqrt(sum(v * v for v in a_counts.values()))
+    norm_b = math.sqrt(sum(v * v for v in b_counts.values()))
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+def tag_derivative(raw_hypothesis: dict, adam_history: list[dict], threshold: float = DERIVATIVE_SIMILARITY_THRESHOLD) -> list[dict]:
+    """Informational only, never gating (spec 3.5): flags similarity to any
+    prior Adam hypothesis TEXT (verdicts were never supplied to Eve in the
+    first place -- see nero_core.eve.context -- so this measures
+    CONVERGENCE, not copying-of-a-known-winner)."""
+    text = f"{raw_hypothesis.get('hypothesis_name', '')} {raw_hypothesis.get('mechanism', '')}"
+    flags = []
+    for prior in adam_history:
+        prior_text = f"{prior.get('hypothesis_name', '')} {prior.get('mechanism', '')}"
+        similarity = _term_frequency_cosine_similarity(text, prior_text)
+        if similarity >= threshold:
+            flags.append({
+                "tag": "DERIVATIVE",
+                "matched_hypothesis_name": prior.get("hypothesis_name"),
+                "similarity": round(similarity, 4),
+                "method": "term-frequency cosine similarity (lexical, not semantic)",
+            })
+    return flags
+
+
+def apply_derivative_tags(scored_records: list[dict], adam_history: list[dict]) -> list[dict]:
+    updated = []
+    for r in scored_records:
+        raw = r.get("raw_hypothesis") if isinstance(r.get("raw_hypothesis"), dict) else {}
+        tags = list(r.get("contamination_tags") or [])
+        tags.extend(tag_derivative(raw, adam_history))
+        updated.append({**r, "contamination_tags": tags})
+    return updated
+
+
+def _parse_loose_date(raw: object) -> datetime | None:
+    if not isinstance(raw, str):
+        return None
+    for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S%z"):
+        try:
+            parsed = datetime.strptime(raw, fmt)
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    return None
+
+
+def tag_lookahead_risk(session_record: dict, backtest_window_start: datetime) -> list[dict]:
+    """SESSION-LEVEL (flagged design decision, see closing report): scans
+    every web_search_tool_result block across the whole session's turns for
+    a publication date that does not pre-date `backtest_window_start`.
+    Scoped to the session rather than to an individual hypothesis because
+    this branch's session log does not itself link a specific search result
+    to a specific later propose_hypothesis call -- a per-hypothesis
+    attribution would require inferring that link, which this module
+    declines to guess at. FLAG, NEVER DISCARD (spec 3.5's own words) -- this
+    returns tags for a human to review, never removes or downgrades
+    anything."""
+    flags = []
+    for turn in session_record.get("turns", []):
+        raw_response = turn.get("raw_response") or {}
+        for block in raw_response.get("content", []) or []:
+            if not isinstance(block, dict) or block.get("type") != "web_search_tool_result":
+                continue
+            for result in block.get("content", []) or []:
+                if not isinstance(result, dict):
+                    continue
+                page_age = result.get("page_age")
+                pub_date = _parse_loose_date(page_age)
+                if pub_date is not None and pub_date >= backtest_window_start:
+                    flags.append({
+                        "tag": "LOOKAHEAD_RISK",
+                        "turn_index": turn.get("turn_index"),
+                        "url": result.get("url"),
+                        "publication_date": page_age,
+                        "reason": (
+                            f"source dated {page_age!r} does not pre-date the backtest window start "
+                            f"({backtest_window_start.date().isoformat()}) -- Eve searching after the "
+                            f"window may have found a writeup describing what already happened in it"
+                        ),
+                    })
+    return flags
