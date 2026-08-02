@@ -92,8 +92,36 @@ DEFAULT_WEB_MAX_CALLS_PER_RUN = 3
 # input / $10.00 output per MTok for claude-sonnet-5. Reverts to the standard
 # $3.00/$15.00 per MTok after that date -- update these two constants then.
 # Source: the Claude API pricing reference, cached 2026-06-24.
+# Phase 2 Fix F (docs/investigations/phase2_pending_cleanup_report.md):
+# _pricing_staleness_warning below fires a non-fatal, ledger-visible warning
+# if INTRODUCTORY_RATE_EXPIRY passes and these two are still un-updated.
 INPUT_COST_PER_MTOK = 2.00
 OUTPUT_COST_PER_MTOK = 10.00
+
+INTRODUCTORY_RATE_EXPIRY = datetime(2026, 8, 31, tzinfo=timezone.utc)
+
+
+def _pricing_staleness_warning(now: datetime) -> str | None:
+    """Non-fatal, ledger-visible warning if the introductory rate has expired
+    but INPUT_COST_PER_MTOK/OUTPUT_COST_PER_MTOK were never updated to the
+    reverted standard rate -- follows the SAME "surface without halting"
+    convention validate_api_key's own non-401 preflight note already uses
+    (see that function's docstring): appended to `errors` as one more entry,
+    never raised, since a wrong per-MTok constant doesn't invalidate any
+    single call the way a rejected key does -- it just means every cost
+    recorded from here on quietly understates real spend, which is exactly
+    the kind of silent drift this project's own discipline treats as a bug
+    worth a permanent, queryable trace rather than a crash."""
+    if now < INTRODUCTORY_RATE_EXPIRY:
+        return None
+    if INPUT_COST_PER_MTOK != 2.00 or OUTPUT_COST_PER_MTOK != 10.00:
+        return None
+    return (
+        f"INTRODUCTORY_RATE_EXPIRY ({INTRODUCTORY_RATE_EXPIRY.date().isoformat()}) has passed but "
+        f"INPUT_COST_PER_MTOK/OUTPUT_COST_PER_MTOK still hold the introductory rate "
+        f"(${INPUT_COST_PER_MTOK:.2f}/${OUTPUT_COST_PER_MTOK:.2f}) -- update to the standard "
+        f"$3.00/$15.00 rate; every cost recorded since expiry has under-reported real spend."
+    )
 
 # Anthropic's server-side web_search tool: $10 per 1,000 searches ($0.01/search),
 # billed ON TOP OF normal token costs for the search results injected into
@@ -620,6 +648,10 @@ def generate_hypotheses(
     total_cost = 0.0
     cost_limit_hit = False
 
+    pricing_warning = _pricing_staleness_warning(now)
+    if pricing_warning:
+        errors.append({"scan_finding": "(pricing staleness check)", "message": pricing_warning})
+
     # Preflight: one cheap call to confirm the key is accepted BEFORE spending
     # the real per-finding call budget -- skip entirely if there's nothing that
     # would actually need a call anyway (empty key, or every finding already a
@@ -943,22 +975,26 @@ def generate_web_hypotheses(
     total_cost = 0.0
     cost_limit_hit = False
 
+    pricing_warning = _pricing_staleness_warning(now)
+    if pricing_warning:
+        errors.append({"scan_finding": "(pricing staleness check)", "message": pricing_warning})
+
     if not api_key.strip():
         return GenerationRunResult(
             hypotheses, [], 0, 0.0, False,
-            [{"scan_finding": "(web search)", "message": "no Claude API key configured -- no call made"}],
+            errors + [{"scan_finding": "(web search)", "message": "no Claude API key configured -- no call made"}],
         )
     if not tracked_pairs:
         return GenerationRunResult(
             hypotheses, [], 0, 0.0, False,
-            [{"scan_finding": "(web search)", "message": "no tracked (asset, timeframe) pairs available -- "
+            errors + [{"scan_finding": "(web search)", "message": "no tracked (asset, timeframe) pairs available -- "
                                                            "no call made (nothing to test a hypothesis against)"}],
         )
 
     try:
         preflight_note = validate_api_key(api_key, params)
     except ApiKeyRejectedError as exc:
-        return GenerationRunResult(hypotheses, [], 1, 0.0, False, [{"scan_finding": "(preflight key validation)", "message": str(exc)}])
+        return GenerationRunResult(hypotheses, [], 1, 0.0, False, errors + [{"scan_finding": "(preflight key validation)", "message": str(exc)}])
     if preflight_note:
         errors.append({"scan_finding": "(preflight key validation)", "message": preflight_note})
 

@@ -4,12 +4,15 @@ import json
 import shutil
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
 from nero_core.research_agent.hypothesis_gen import (
     DEFAULT_PARAMETERS,
+    INPUT_COST_PER_MTOK,
+    INTRODUCTORY_RATE_EXPIRY,
+    OUTPUT_COST_PER_MTOK,
     ApiKeyRejectedError,
     check_duplicate,
     generate_hypotheses,
@@ -398,6 +401,50 @@ class ValidateApiKeyDirectTest(unittest.TestCase):
             with self.assertRaises(ApiKeyRejectedError) as ctx:
                 validate_api_key(secret)
         self.assertNotIn(secret, str(ctx.exception))
+
+
+class PricingStalenessGuardTest(unittest.TestCase):
+    """Phase F (docs/investigations/phase2_pending_cleanup_report.md):
+    INPUT_COST_PER_MTOK/OUTPUT_COST_PER_MTOK are an introductory rate
+    documented as expiring at INTRODUCTORY_RATE_EXPIRY, reverting to the
+    standard $3.00/$15.00. Nothing previously checked whether that date had
+    passed -- a missed manual update would silently under-report real LLM
+    spend forever, with no error and no trace. Uses empty scan_findings and
+    an empty api_key so no LLM call is ever attempted (mock_post.assert_not_
+    called confirms this), isolating the check itself from the rest of the
+    function."""
+
+    def test_fires_when_today_is_past_expiry_and_rates_are_still_introductory(self) -> None:
+        past_expiry = INTRODUCTORY_RATE_EXPIRY + timedelta(days=1)
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post") as mock_post:
+            result = generate_hypotheses([], [], "", now=past_expiry)
+
+        mock_post.assert_not_called()
+        staleness_errors = [e for e in result.errors if e["scan_finding"] == "(pricing staleness check)"]
+        self.assertEqual(len(staleness_errors), 1)
+        self.assertIn(str(INPUT_COST_PER_MTOK), staleness_errors[0]["message"])
+        self.assertIn(str(OUTPUT_COST_PER_MTOK), staleness_errors[0]["message"])
+
+    def test_does_not_fire_before_expiry(self) -> None:
+        before_expiry = INTRODUCTORY_RATE_EXPIRY - timedelta(days=1)
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post") as mock_post:
+            result = generate_hypotheses([], [], "", now=before_expiry)
+
+        mock_post.assert_not_called()
+        staleness_errors = [e for e in result.errors if e["scan_finding"] == "(pricing staleness check)"]
+        self.assertEqual(staleness_errors, [])
+
+    def test_web_hypotheses_generator_also_checks(self) -> None:
+        # generate_web_hypotheses has its own early-return paths (no api_key,
+        # no tracked_pairs) that must still surface the staleness warning,
+        # not lose it by constructing a fresh errors list.
+        from nero_core.research_agent.hypothesis_gen import generate_web_hypotheses
+
+        past_expiry = INTRODUCTORY_RATE_EXPIRY + timedelta(days=1)
+        result = generate_web_hypotheses([], [], "", [], now=past_expiry)
+
+        staleness_errors = [e for e in result.errors if e["scan_finding"] == "(pricing staleness check)"]
+        self.assertEqual(len(staleness_errors), 1)
 
 
 class PreflightIntegrationTest(unittest.TestCase):
