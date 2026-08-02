@@ -36,16 +36,29 @@ REPO_ROOT = storage.REPO_ROOT
 DEFAULT_CANDLES_DIR = REPO_ROOT / "docs" / "site_data" / "candles"
 # Full-history research export (nero_core.execution.export_candle_data.
 # export_research_candle_data) -- a SEPARATE, larger export than the
-# website's own 200-row display export above. Checked FIRST: scoring needs
-# real backtest history, not a chart-sized slice (see
-# docs/investigations/eve_engine_v1_report.md's own finding that 200 candles
-# left ma200 NaN everywhere but the last row, and zero of 200 random
+# website's own 200-row display export above. THE ONLY candle source
+# default_candles_provider will ever use (see APPROVED_RESEARCH_UNIVERSE
+# below) -- scoring needs real backtest history, not a chart-sized slice
+# (see docs/investigations/eve_engine_v1_report.md's own finding that 200
+# candles left ma200 NaN everywhere but the last row, and zero of 200 random
 # baseline hypotheses ever reached MIN_SAMPLE_SIZE out-of-sample trades).
-# NOT every (asset, timeframe) pair has a research export yet (BTC/4h only,
-# "to start") -- falls back to DEFAULT_CANDLES_DIR below for any pair
-# without one, so a missing research file never silently produces
-# no-candle-data where the site export would have worked.
 DEFAULT_RESEARCH_CANDLES_DIR = REPO_ROOT / "docs" / "research_data" / "candles"
+
+# STANDING RULE (added after a silent-fallback failure mode was identified:
+# the research export above covers BTC/4h only, so scoring ANY other pair
+# -- GOLD, EURUSD, AAPL, ... -- used to fall through to the 200-row site
+# export with no error, no warning, indistinguishable from a real result).
+# No (asset, timeframe) pair enters this set until it has BOTH (i) its own
+# full-history research export, AND (ii) its own random-hypothesis baseline
+# (nero_core.eve.random_baseline) computed AGAINST THAT SAME EXPORT -- a
+# baseline computed on one asset's candles does not transfer to another
+# (different volatility, trend character, cost structure). BTC/4h is the
+# only pair with both today. SOL and PAXG are the natural next two (also
+# Binance-backed, can reach the same 2+ year research window) but are
+# DELIBERATELY NOT added here yet -- extending this set is a human decision
+# made after running a fresh export + baseline for that specific pair, never
+# inferred from which export files happen to already exist on disk.
+APPROVED_RESEARCH_UNIVERSE: frozenset[tuple[str, str]] = frozenset({("BTC", "4h")})
 
 CandlesProvider = Callable[[str, str], "pd.DataFrame | None"]
 
@@ -74,17 +87,41 @@ def default_candles_provider(
     candles_dir: Path = DEFAULT_CANDLES_DIR,
     research_candles_dir: Path = DEFAULT_RESEARCH_CANDLES_DIR,
 ) -> "pd.DataFrame | None":
-    """Research export FIRST (full history, where one exists), falling back
-    to the website's own 200-row display export otherwise -- see the
-    DEFAULT_RESEARCH_CANDLES_DIR comment above for why. This is Eve's own
-    default provider only; nero_core.research_agent.pipeline's own
-    default_candles_provider is UNCHANGED (still reads only the 200-row
-    site export) -- deliberately not touched here, flagged for separate
-    confirmation before Adam's own production data source is changed."""
+    """REFUSES (raises scoring.DataSourceRefusedError) rather than degrades:
+    an (asset, timeframe) pair outside APPROVED_RESEARCH_UNIVERSE, or one
+    inside it whose research export file is missing on disk, never falls
+    back to `candles_dir` (the website's 200-row display export) -- that
+    silent substitution is exactly the failure mode this function used to
+    have (see APPROVED_RESEARCH_UNIVERSE's own comment). `candles_dir` is
+    kept as a parameter (unused in the success path) only so existing
+    callers/tests that pass it explicitly don't need a signature change.
+
+    This is Eve's own default provider only; nero_core.research_agent.
+    pipeline's own default_candles_provider is UNCHANGED (still reads only
+    the 200-row site export) -- deliberately not touched here, flagged for
+    separate confirmation before Adam's own production data source is
+    changed.
+
+    On success, the returned frame is tagged (`.attrs["data_source"]` /
+    `.attrs["row_count"]`) so score_hypothesis can record what was actually
+    used on every scored record, not just infer it."""
+    if (asset, timeframe) not in APPROVED_RESEARCH_UNIVERSE:
+        raise scoring.DataSourceRefusedError(
+            f"{asset}/{timeframe} is not in Eve's APPROVED_RESEARCH_UNIVERSE "
+            f"{sorted(APPROVED_RESEARCH_UNIVERSE)} -- refusing to silently fall back to the "
+            f"{candles_dir.name if hasattr(candles_dir, 'name') else candles_dir} site display export "
+            f"(200 rows, no random baseline ever computed for this pair)."
+        )
     research_frame = _read_candles_file(research_candles_dir / candle_filename(asset, timeframe))
-    if research_frame is not None:
-        return research_frame
-    return _read_candles_file(candles_dir / candle_filename(asset, timeframe))
+    if research_frame is None:
+        raise scoring.DataSourceRefusedError(
+            f"{asset}/{timeframe} is in APPROVED_RESEARCH_UNIVERSE but its research export file is "
+            f"missing at {research_candles_dir / candle_filename(asset, timeframe)} -- refusing to "
+            f"silently fall back to the site display export."
+        )
+    research_frame.attrs["data_source"] = "research_export"
+    research_frame.attrs["row_count"] = len(research_frame)
+    return research_frame
 
 
 def _compute_backtest_window_start(scored_hypotheses: list[dict], candles_provider: CandlesProvider) -> datetime | None:
@@ -101,7 +138,13 @@ def _compute_backtest_window_start(scored_hypotheses: list[dict], candles_provid
         if not asset or not timeframe or (asset, timeframe) in seen_pairs:
             continue
         seen_pairs.add((asset, timeframe))
-        candles = candles_provider(asset, timeframe)
+        try:
+            candles = candles_provider(asset, timeframe)
+        except scoring.DataSourceRefusedError:
+            # Same refusal score_hypothesis already recorded on this pair's
+            # own scored record -- this is a best-effort secondary check
+            # (the lookahead window start), not a second place to report it.
+            continue
         if candles is None or len(candles) == 0:
             continue
         first_close_time_ms = int(candles["close_time"].min())

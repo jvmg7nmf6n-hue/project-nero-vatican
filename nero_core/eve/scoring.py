@@ -101,6 +101,25 @@ from nero_core.research_agent.auto_tester import test_hypothesis as adam_test_hy
 from nero_core.research_agent.rule_dsl import RuleAmbiguousError, parse_bidirectional_entry_rules, parse_exit_plan
 from tools.backtest_statistics import MIN_SAMPLE_SIZE, VERDICT_DIED, VERDICT_SURVIVED, classify_verdict
 
+class DataSourceRefusedError(Exception):
+    """Raised by a scoring-context candles_provider (see
+    nero_core.eve.pipeline.default_candles_provider) when asked for an
+    (asset, timeframe) pair it refuses to silently degrade for -- e.g. no
+    full-history research export exists, only the website's 200-row display
+    export. Before this existed, that situation returned the 200-row frame
+    with no signal it wasn't real backtest history: a scored verdict on
+    GOLD or EURUSD looked identical to one on BTC/4h (the only pair that has
+    ever had a random-hypothesis baseline computed against it) even though
+    the two ran on completely different amounts of history. score_hypothesis
+    catches this specific exception and records an explicit,
+    grep-able refusal (candle_data_source="refused") instead of either a
+    silent substitution or a null verdict indistinguishable from "no candle
+    data was available anywhere for this pair." Never caught anywhere else
+    in this module -- a caller that wants degraded data on purpose must say
+    so explicitly by passing a different candles_provider, not rely on this
+    being swallowed."""
+
+
 TESTABILITY_TESTABLE = "TESTABLE"
 TESTABILITY_UNTESTABLE_BY_DSL = "UNTESTABLE_BY_DSL"
 
@@ -234,16 +253,35 @@ def score_hypothesis(record: dict, candles_provider: Callable[[str, str], object
     updated["p_value_oos"] = None
     updated["frequency_classification"] = None
     updated["measured_trades_per_year"] = None
+    # Tagged on every scored record, success or refusal -- see
+    # DataSourceRefusedError's own docstring: a null verdict must never be
+    # ambiguous between "no data anywhere" and "data existed but was refused
+    # as an unapproved substitute."
+    updated["candle_data_source"] = None
+    updated["candle_row_count"] = None
 
     if testability != TESTABILITY_TESTABLE:
         return updated
 
     asset = raw.get("asset")
     timeframe = raw.get("timeframe")
-    candles = candles_provider(asset, timeframe) if asset and timeframe else None
+    if not asset or not timeframe:
+        updated["testability_reason"] += " (missing asset/timeframe -- verdict cannot be computed)"
+        return updated
+
+    try:
+        candles = candles_provider(asset, timeframe)
+    except DataSourceRefusedError as exc:
+        updated["candle_data_source"] = "refused"
+        updated["testability_reason"] += f" (candle data source refused rather than substituted: {exc})"
+        return updated
+
     if candles is None or len(candles) == 0:
         updated["testability_reason"] += " (no candle data available for this asset/timeframe -- verdict cannot be computed)"
         return updated
+
+    updated["candle_data_source"] = getattr(candles, "attrs", {}).get("data_source", "unknown")
+    updated["candle_row_count"] = len(candles)
 
     result = adam_test_hypothesis(raw, candles, now=now)
     updated["verdict_combined"] = result.verdict
