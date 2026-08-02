@@ -34,15 +34,23 @@ from nero_core.eve.config import is_enabled
 
 REPO_ROOT = storage.REPO_ROOT
 DEFAULT_CANDLES_DIR = REPO_ROOT / "docs" / "site_data" / "candles"
+# Full-history research export (nero_core.execution.export_candle_data.
+# export_research_candle_data) -- a SEPARATE, larger export than the
+# website's own 200-row display export above. Checked FIRST: scoring needs
+# real backtest history, not a chart-sized slice (see
+# docs/investigations/eve_engine_v1_report.md's own finding that 200 candles
+# left ma200 NaN everywhere but the last row, and zero of 200 random
+# baseline hypotheses ever reached MIN_SAMPLE_SIZE out-of-sample trades).
+# NOT every (asset, timeframe) pair has a research export yet (BTC/4h only,
+# "to start") -- falls back to DEFAULT_CANDLES_DIR below for any pair
+# without one, so a missing research file never silently produces
+# no-candle-data where the site export would have worked.
+DEFAULT_RESEARCH_CANDLES_DIR = REPO_ROOT / "docs" / "research_data" / "candles"
 
 CandlesProvider = Callable[[str, str], "pd.DataFrame | None"]
 
 
-def default_candles_provider(asset: str, timeframe: str, candles_dir: Path = DEFAULT_CANDLES_DIR) -> "pd.DataFrame | None":
-    """Same export file, same shape as
-    nero_core.research_agent.pipeline.default_candles_provider -- reinlined,
-    not imported, per this branch's isolation rule."""
-    path = candles_dir / candle_filename(asset, timeframe)
+def _read_candles_file(path: Path) -> "pd.DataFrame | None":
     if not path.exists():
         return None
     try:
@@ -58,6 +66,25 @@ def default_candles_provider(asset: str, timeframe: str, candles_dir: Path = DEF
     except (json.JSONDecodeError, KeyError, ValueError) as exc:
         print(f"ERROR: {path} is malformed ({exc.__class__.__name__}: {exc}) -- treating as no candle data available.", file=sys.stderr)
         return None
+
+
+def default_candles_provider(
+    asset: str,
+    timeframe: str,
+    candles_dir: Path = DEFAULT_CANDLES_DIR,
+    research_candles_dir: Path = DEFAULT_RESEARCH_CANDLES_DIR,
+) -> "pd.DataFrame | None":
+    """Research export FIRST (full history, where one exists), falling back
+    to the website's own 200-row display export otherwise -- see the
+    DEFAULT_RESEARCH_CANDLES_DIR comment above for why. This is Eve's own
+    default provider only; nero_core.research_agent.pipeline's own
+    default_candles_provider is UNCHANGED (still reads only the 200-row
+    site export) -- deliberately not touched here, flagged for separate
+    confirmation before Adam's own production data source is changed."""
+    research_frame = _read_candles_file(research_candles_dir / candle_filename(asset, timeframe))
+    if research_frame is not None:
+        return research_frame
+    return _read_candles_file(candles_dir / candle_filename(asset, timeframe))
 
 
 def _compute_backtest_window_start(scored_hypotheses: list[dict], candles_provider: CandlesProvider) -> datetime | None:

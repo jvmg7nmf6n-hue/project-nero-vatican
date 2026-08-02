@@ -342,5 +342,96 @@ class ExportCandleDataTest(unittest.TestCase):
         self.assertTrue(any(e["asset"] == "BTC" for e in result.errors))
 
 
+class ExportResearchCandleDataTest(unittest.TestCase):
+    """The full-history research export (export_research_candle_data) --
+    added alongside, never replacing, the 200-row display export above.
+    export_candle_data()/CANDLE_COUNT/DEFAULT_OUTPUT_DIR are untouched by
+    any of this."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.output_dir = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+
+    def test_research_export_keeps_more_than_candle_count_display_rows(self) -> None:
+        from nero_core.execution.export_candle_data import RESEARCH_CANDLE_COUNT, CandlePair, export_research_candle_data
+
+        big_frame = _make_candles(n=RESEARCH_CANDLE_COUNT + 500)
+        with patch.object(export_candle_data, "fetch_timeframe_candles", return_value=(big_frame, "NATIVE: test")):
+            result = export_research_candle_data((CandlePair("BTC", "4h", "4h", "crypto_metals"),), now=NOW_24H_DUE, output_dir=self.output_dir)
+
+        self.assertEqual(result.exported, ["BTC_4h.json"])
+        payload = json.loads((self.output_dir / "BTC_4h.json").read_text())
+        self.assertEqual(len(payload["candles"]), RESEARCH_CANDLE_COUNT)
+        self.assertGreater(len(payload["candles"]), export_candle_data.CANDLE_COUNT)
+        # Kept the NEWEST RESEARCH_CANDLE_COUNT, not the oldest.
+        self.assertEqual(payload["candles"][-1]["time"], int(big_frame["open_time"].max()) // 1000)
+
+    def test_research_export_has_no_cadence_gating_always_fetches(self) -> None:
+        from nero_core.execution.export_candle_data import CandlePair, export_research_candle_data
+
+        frame = _make_candles(n=10)
+        # NOW_NOTHING_DUE would skip every pair in the SCHEDULED export
+        # (test_nothing_is_due_outside_any_cadence_window above) -- the
+        # research export has no such gate at all.
+        with patch.object(export_candle_data, "fetch_timeframe_candles", return_value=(frame, "NATIVE: test")) as mock_fetch:
+            result = export_research_candle_data((CandlePair("BTC", "4h", "4h", "crypto_metals"),), now=NOW_NOTHING_DUE, output_dir=self.output_dir)
+
+        mock_fetch.assert_called_once()
+        self.assertEqual(result.exported, ["BTC_4h.json"])
+
+    def test_research_export_writes_to_a_different_directory_than_the_display_export(self) -> None:
+        from nero_core.execution.export_candle_data import DEFAULT_OUTPUT_DIR, DEFAULT_RESEARCH_OUTPUT_DIR
+
+        self.assertNotEqual(DEFAULT_RESEARCH_OUTPUT_DIR, DEFAULT_OUTPUT_DIR)
+        self.assertNotIn("site_data", str(DEFAULT_RESEARCH_OUTPUT_DIR))
+
+    def test_custom_candle_count_is_respected(self) -> None:
+        from nero_core.execution.export_candle_data import CandlePair, export_research_candle_data
+
+        frame = _make_candles(n=100)
+        with patch.object(export_candle_data, "fetch_timeframe_candles", return_value=(frame, "NATIVE: test")):
+            export_research_candle_data(
+                (CandlePair("BTC", "4h", "4h", "crypto_metals"),), now=NOW_24H_DUE, output_dir=self.output_dir, candle_count=30
+            )
+
+        payload = json.loads((self.output_dir / "BTC_4h.json").read_text())
+        self.assertEqual(len(payload["candles"]), 30)
+
+    def test_one_pair_failing_does_not_block_others(self) -> None:
+        from nero_core.execution.export_candle_data import CandlePair, export_research_candle_data
+
+        with patch.object(export_candle_data, "fetch_timeframe_candles", side_effect=Exception("boom")):
+            result = export_research_candle_data((CandlePair("BTC", "4h", "4h", "crypto_metals"),), now=NOW_24H_DUE, output_dir=self.output_dir)
+
+        self.assertEqual(result.exported, [])
+        self.assertTrue(any(e["asset"] == "BTC" for e in result.errors))
+
+
+class RealResearchExportRegressionTest(unittest.TestCase):
+    """Regression guard (per explicit instruction): the REAL, committed
+    docs/research_data/candles/BTC_4h.json must never silently shrink back
+    down to a chart-sized row count. This reads the actual committed file,
+    not a mock -- if this test ever fails, the real research export
+    regressed, not just a unit test's synthetic fixture."""
+
+    def test_committed_btc_4h_research_export_exceeds_minimum_row_count(self) -> None:
+        from nero_core.execution.export_candle_data import DEFAULT_RESEARCH_OUTPUT_DIR
+
+        path = DEFAULT_RESEARCH_OUTPUT_DIR / "BTC_4h.json"
+        self.assertTrue(path.exists(), f"{path} is missing -- the BTC/4h research export must exist")
+        payload = json.loads(path.read_text())
+        # A hard floor well above the old 200-row display cap and well below
+        # the ~4400 target, so this only fails on a real regression, not a
+        # future legitimate re-export with a slightly different row count.
+        MIN_RESEARCH_ROWS = 2000
+        self.assertGreater(
+            len(payload["candles"]), MIN_RESEARCH_ROWS,
+            f"BTC/4h research export has only {len(payload['candles'])} rows -- expected > {MIN_RESEARCH_ROWS} "
+            f"(2+ years of 4h candles). If this legitimately shrank, update MIN_RESEARCH_ROWS deliberately; "
+            f"if not, the export was silently regenerated with too small a candle_count.",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

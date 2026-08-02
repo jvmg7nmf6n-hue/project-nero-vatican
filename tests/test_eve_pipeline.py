@@ -102,6 +102,54 @@ class EnabledStubPipelineTest(_IsolatedStorageTestCase):
         self.assertEqual(result.lookahead_risk_flags, [])
 
 
+class DefaultCandlesProviderResearchFallbackTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        tmp_root = Path(self._tmpdir.name)
+        self.site_dir = tmp_root / "site"
+        self.research_dir = tmp_root / "research"
+        self.site_dir.mkdir()
+        self.research_dir.mkdir()
+
+    def tearDown(self) -> None:
+        self._tmpdir.cleanup()
+
+    def _write(self, directory: Path, filename: str, n_candles: int) -> None:
+        import json
+
+        candles = [{"time": 1_700_000_000 + i * 14400, "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.5, "volume": 1.0} for i in range(n_candles)]
+        payload = {"schema_version": 1, "asset": "BTC", "timeframe": "4h", "last_updated": "2026-08-01T00:00:00+00:00", "candles": candles}
+        (directory / filename).write_text(json.dumps(payload))
+
+    def test_prefers_research_export_when_present(self) -> None:
+        self._write(self.research_dir, "BTC_4h.json", n_candles=4400)
+        self._write(self.site_dir, "BTC_4h.json", n_candles=200)
+
+        frame = pipeline.default_candles_provider("BTC", "4h", candles_dir=self.site_dir, research_candles_dir=self.research_dir)
+        self.assertEqual(len(frame), 4400)
+
+    def test_falls_back_to_site_export_when_research_export_absent(self) -> None:
+        self._write(self.site_dir, "BTC_4h.json", n_candles=200)
+
+        frame = pipeline.default_candles_provider("BTC", "4h", candles_dir=self.site_dir, research_candles_dir=self.research_dir)
+        self.assertEqual(len(frame), 200)
+
+    def test_returns_none_when_neither_export_exists(self) -> None:
+        frame = pipeline.default_candles_provider("BTC", "4h", candles_dir=self.site_dir, research_candles_dir=self.research_dir)
+        self.assertIsNone(frame)
+
+    def test_adams_own_pipeline_default_provider_is_unchanged(self) -> None:
+        # Explicit confirmation this change was scoped to Eve only -- Adam's
+        # own research_agent.pipeline.default_candles_provider still reads
+        # ONLY the 200-row site export, no research-export awareness at all.
+        import inspect
+
+        from nero_core.research_agent.pipeline import default_candles_provider as adam_provider
+
+        source = inspect.getsource(adam_provider)
+        self.assertNotIn("research", source.lower())
+
+
 class SecretHandlingTest(unittest.TestCase):
     def test_main_never_prints_the_api_key(self) -> None:
         # AST-based check (mirrors test_research_agent_secret_handling.py's
