@@ -353,10 +353,25 @@ export interface AgentPerformanceCumulative {
   survival_rate: number | null;
 }
 
+// STATUS_DISABLED / STATUS_ERROR / STATUS_CLEAN in
+// nero_core.research_agent.pipeline -- "error" means at least one entry in
+// `errors` below (scan or hypothesis-generation failure); it does NOT mean
+// the whole run aborted -- a run can be status="error" and still have
+// nonzero hypotheses_generated/llm_calls_made if only some sources failed.
+export type AgentRunStatus = "disabled" | "error" | "clean";
+
+export interface AgentPerformanceRunError {
+  phase: string;
+  context: string;
+  message: string;
+}
+
 export interface AgentPerformanceRun {
   run_at: string;
   enabled: boolean;
   reason: string;
+  status: AgentRunStatus;
+  errors: AgentPerformanceRunError[];
   hypotheses_generated: number;
   duplicates_skipped: number;
   too_slow_rejected: number;
