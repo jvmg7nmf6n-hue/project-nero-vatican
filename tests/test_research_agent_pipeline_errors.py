@@ -9,6 +9,7 @@ from nero_core.research_agent.hypothesis_gen import GenerationRunResult
 from nero_core.research_agent.pipeline import (
     STATUS_CLEAN,
     STATUS_ERROR,
+    default_candles_provider,
     main,
     run_pipeline,
 )
@@ -214,6 +215,40 @@ class WebSearchChannelMergeTest(unittest.TestCase):
         self.assertEqual(result.web_llm_calls_made, 1)
         self.assertAlmostEqual(result.total_llm_cost_usd, 0.07, places=8)
         self.assertAlmostEqual(result.web_total_llm_cost_usd, 0.05, places=8)
+
+
+class RealDefaultCandlesProviderRefusalTest(unittest.TestCase):
+    """End-to-end (not just a unit check on default_candles_provider in
+    isolation): a real pipeline run using the REAL default_candles_provider
+    -- not a test double -- must refuse a hypothesis outside
+    APPROVED_RESEARCH_UNIVERSE rather than silently scoring it against the
+    200-row site export. Mirrors nero_core.eve's own
+    ScoringRunCannotConsumeSiteExportTest exactly."""
+
+    def test_gold_hypothesis_is_refused_not_scored_against_the_site_export(self) -> None:
+        gold_hyp = {
+            "hypothesis_name": "GOLD_ONE", "asset": "GOLD", "timeframe": "4h",
+            "generated_at": "2026-07-31T00:00:00+00:00",
+            "structured_entry_rule": {"conditions": [{"field": "ret_1", "op": "gt", "value": -1.0}]},
+            "structured_exit_plan": {"stop_atr_multiple": 1.5, "target_r_multiple": 2.0, "max_holding_hours": 24.0},
+        }
+        generation = GenerationRunResult(hypotheses=[gold_hyp], llm_calls_made=1, total_cost_usd=0.02)
+
+        with patch("nero_core.research_agent.pipeline.is_enabled", return_value=True), \
+             patch("nero_core.research_agent.pipeline.scanner.run_scan", return_value=EMPTY_SCAN), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.load_existing_hypotheses", return_value=[]), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.generate_hypotheses", return_value=generation), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.generate_web_hypotheses", return_value=GenerationRunResult()), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.persist_hypotheses"), \
+             patch("nero_core.research_agent.pipeline.auto_tester.persist_test_results"), \
+             patch("nero_core.research_agent.pipeline.performance.record_run"):
+            # deliberately NOT passing candles_provider -- exercises the REAL
+            # default_candles_provider, same as a real run would.
+            result = run_pipeline(api_key="fake-key")
+
+        self.assertEqual(result.data_source_refused, 1)
+        self.assertEqual(result.no_candles_available, 0)
+        self.assertEqual(len(result.test_results), 0)
 
 
 if __name__ == "__main__":

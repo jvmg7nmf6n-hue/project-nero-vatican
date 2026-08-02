@@ -27,6 +27,7 @@ from typing import Callable
 
 import pandas as pd
 
+from nero_core.asset_universe import APPROVED_EVALUATION_UNIVERSE, APPROVED_RESEARCH_UNIVERSE
 from nero_core.execution.export_candle_data import candle_filename
 from nero_core.eve import context as eve_context
 from nero_core.eve import scoring, session, storage
@@ -44,21 +45,13 @@ DEFAULT_CANDLES_DIR = REPO_ROOT / "docs" / "site_data" / "candles"
 # baseline hypotheses ever reached MIN_SAMPLE_SIZE out-of-sample trades).
 DEFAULT_RESEARCH_CANDLES_DIR = REPO_ROOT / "docs" / "research_data" / "candles"
 
-# STANDING RULE (added after a silent-fallback failure mode was identified:
-# the research export above covers BTC/4h only, so scoring ANY other pair
-# -- GOLD, EURUSD, AAPL, ... -- used to fall through to the 200-row site
-# export with no error, no warning, indistinguishable from a real result).
-# No (asset, timeframe) pair enters this set until it has BOTH (i) its own
-# full-history research export, AND (ii) its own random-hypothesis baseline
-# (nero_core.eve.random_baseline) computed AGAINST THAT SAME EXPORT -- a
-# baseline computed on one asset's candles does not transfer to another
-# (different volatility, trend character, cost structure). BTC/4h is the
-# only pair with both today. SOL and PAXG are the natural next two (also
-# Binance-backed, can reach the same 2+ year research window) but are
-# DELIBERATELY NOT added here yet -- extending this set is a human decision
-# made after running a fresh export + baseline for that specific pair, never
-# inferred from which export files happen to already exist on disk.
-APPROVED_RESEARCH_UNIVERSE: frozenset[tuple[str, str]] = frozenset({("BTC", "4h")})
+# APPROVED_RESEARCH_UNIVERSE / APPROVED_EVALUATION_UNIVERSE now live in
+# nero_core.asset_universe (shared with Adam's own research_agent/pipeline.py
+# -- see that module's own default_candles_provider) -- re-exported here
+# under their original names so every existing import of
+# `nero_core.eve.pipeline.APPROVED_RESEARCH_UNIVERSE` keeps working
+# unchanged. See that module's own docstring for the full standing-rule
+# reasoning and why the two universes are kept structurally distinct.
 
 CandlesProvider = Callable[[str, str], "pd.DataFrame | None"]
 
@@ -104,7 +97,21 @@ def default_candles_provider(
 
     On success, the returned frame is tagged (`.attrs["data_source"]` /
     `.attrs["row_count"]`) so score_hypothesis can record what was actually
-    used on every scored record, not just infer it."""
+    used on every scored record, not just infer it.
+
+    EVALUATION-UNIVERSE PAIRS ARE REJECTED EXPLICITLY, before the general
+    "not in the research universe" check below, with their own distinct
+    message -- see nero_core.asset_universe's own docstring on why an
+    evaluation-only pair (a pre-existing live strategy being backtested,
+    never a hypothesis-search candidate) must never reach Eve's scoring
+    path, structurally never just by omission from the research universe."""
+    if (asset, timeframe) in APPROVED_EVALUATION_UNIVERSE:
+        raise scoring.DataSourceRefusedError(
+            f"{asset}/{timeframe} is in APPROVED_EVALUATION_UNIVERSE, not APPROVED_RESEARCH_UNIVERSE -- "
+            f"evaluation-only pairs (pre-existing live strategies being backtested, never a hypothesis-"
+            f"search candidate) are never available for Eve's hypothesis scoring, by design. "
+            f"See nero_core.asset_universe."
+        )
     if (asset, timeframe) not in APPROVED_RESEARCH_UNIVERSE:
         raise scoring.DataSourceRefusedError(
             f"{asset}/{timeframe} is not in Eve's APPROVED_RESEARCH_UNIVERSE "

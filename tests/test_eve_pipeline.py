@@ -163,16 +163,19 @@ class DefaultCandlesProviderResearchFallbackTest(unittest.TestCase):
         with self.assertRaises(scoring.DataSourceRefusedError):
             pipeline.default_candles_provider("GOLD", "4h", candles_dir=self.site_dir, research_candles_dir=self.research_dir)
 
-    def test_adams_own_pipeline_default_provider_is_unchanged(self) -> None:
-        # Explicit confirmation this change was scoped to Eve only -- Adam's
-        # own research_agent.pipeline.default_candles_provider still reads
-        # ONLY the 200-row site export, no research-export awareness at all.
-        import inspect
+    def test_adams_own_pipeline_now_applies_the_identical_refusal_discipline(self) -> None:
+        # UPDATED (item 2, Eve engine v1 follow-up session): Adam's own
+        # research_agent.pipeline.default_candles_provider was originally
+        # left untouched deliberately (see the old version of this test,
+        # replaced here) -- it has since been pointed at the same research
+        # export with the same refuse-don't-degrade discipline Eve already
+        # had. Confirms parity directly: both raise the SAME way for the
+        # SAME out-of-universe pair, rather than trusting two independent
+        # implementations not to have quietly diverged.
+        import nero_core.research_agent.pipeline as adam_pipeline
 
-        from nero_core.research_agent.pipeline import default_candles_provider as adam_provider
-
-        source = inspect.getsource(adam_provider)
-        self.assertNotIn("research", source.lower())
+        with self.assertRaises(adam_pipeline.DataSourceRefusedError):
+            adam_pipeline.default_candles_provider("GOLD", "4h", candles_dir=self.site_dir, research_candles_dir=self.research_dir)
 
 
 class ScoringRunCannotConsumeSiteExportTest(unittest.TestCase):
