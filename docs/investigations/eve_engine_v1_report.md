@@ -703,3 +703,12 @@ hypothetically — are fixed one layer down in Eve's budget ledger before
 Phase 4 could hit the identical failure for real money. Phase 4 itself
 remains unauthorized and unexecuted; the pre-registered kill criterion
 (N=5 real sessions) still cannot be evaluated.
+
+**Second follow-up session:** see `docs/investigations/
+live_strategy_backtest_and_universe_expansion_report.md` for backtesting
+the two live BTC `RANGE_MEAN_REVERSION` variants against real multi-year
+history (both DIED in-sample), Adam being pointed at the research export
+with the same refusal discipline Eve has, the pre-registered expansion of
+`APPROVED_RESEARCH_UNIVERSE` to BTC/ETH/SOL/PAXG (each with its own export
+and K=200 baseline, 0/200 SURVIVED every time), and a full Phase 4
+readiness check. Phase 4 remains unauthorized and unexecuted.
