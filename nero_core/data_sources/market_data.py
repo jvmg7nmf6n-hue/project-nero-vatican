@@ -23,6 +23,13 @@ BINANCE_SYMBOLS = {
     "XRP": "XRPUSDT",
     "DOGE": "DOGEUSDT",
     "NEAR": "NEARUSDT",
+    # PAXG (PAX Gold, Binance-custodied, 1 token == 1 fine troy ounce of physical gold)
+    # -- added for the Eve asset-universe pre-registration (BTCUSDT, ETHUSDT, SOLUSDT,
+    # PAXGUSDT). Confirmed live via a direct klines request before adding here (this
+    # module's own convention -- see the CANDLE-DATA-GAPS batch note below): earliest
+    # available daily kline is 2020-08-28, comfortably more than the 2+ years any
+    # research export here needs.
+    "PAXG": "PAXGUSDT",
 }
 
 # Coinbase/Kraken fallbacks: only listed where that exchange genuinely trades the asset.
