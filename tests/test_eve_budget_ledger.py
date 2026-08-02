@@ -167,6 +167,61 @@ class OrphanedReservedEntryTest(unittest.TestCase):
         self.assertFalse(result.allowed)
 
 
+class ReleaseEntryTest(unittest.TestCase):
+    """A 401/403/429 is REJECTED before token processing -- confirmed $0
+    real cost, not an unknown outcome (see OrphanedReservedEntryTest above,
+    which is the genuinely-unknown-outcome case: those two must NOT be
+    treated the same way, or repeated auth failures would burn real budget
+    on calls that never ran)."""
+
+    def test_released_entry_counts_as_zero_not_projected_value(self) -> None:
+        now = datetime(2026, 8, 15, tzinfo=timezone.utc)
+        reserved = bl.reserve_entry(session_id="s1", turn_index=0, projected_cost_usd=1.20, now=now)
+        released = bl.release_entry(reserved, reason="HTTP 401: Unauthorized", now=now)
+
+        self.assertEqual(released["status"], bl.STATUS_RELEASED)
+        self.assertEqual(released["actual_cost_usd"], 0.0)
+        self.assertEqual(released["entry_id"], reserved["entry_id"])
+
+        entries = [released]
+        self.assertEqual(bl.month_spent_usd(entries, "2026-08"), 0.0)
+        self.assertEqual(bl.session_spent_usd(entries, "s1"), 0.0)
+
+    def test_released_entry_never_blocks_a_subsequent_call_the_way_a_reserved_one_would(self) -> None:
+        # Same projected cost, same session/month -- the ONLY difference is
+        # released vs reserved. A reserved entry this size correctly blocks
+        # a follow-up call (OrphanedReservedEntryTest proves that); a
+        # released one must not, since it is confirmed $0, not unknown.
+        now = datetime(2026, 8, 15, tzinfo=timezone.utc)
+        reserved = bl.reserve_entry(session_id="s1", turn_index=0, projected_cost_usd=1.0, now=now)
+        released = bl.release_entry(reserved, reason="HTTP 429: Too Many Requests", now=now)
+
+        result = bl.pre_call_check([released], session_id="s1", projected_cost_usd=0.4, session_budget=1.50, now=now)
+        self.assertTrue(result.allowed)
+
+    def test_release_does_not_mutate_the_original_entry(self) -> None:
+        reserved = bl.reserve_entry(session_id="s1", turn_index=0, projected_cost_usd=0.50)
+        bl.release_entry(reserved, reason="HTTP 403: Forbidden")
+        self.assertEqual(reserved["status"], bl.STATUS_RESERVED)  # unchanged
+
+    def test_release_reason_is_recorded(self) -> None:
+        reserved = bl.reserve_entry(session_id="s1", turn_index=0, projected_cost_usd=0.50)
+        released = bl.release_entry(reserved, reason="HTTP 401: Unauthorized")
+        self.assertIn("401", released["release_reason"])
+
+    def test_repeated_auth_failures_never_accumulate_spend(self) -> None:
+        # The exact scenario this fix exists to prevent: N released entries
+        # from N repeated 401s must never sum to nonzero spend, unlike N
+        # orphaned reserved entries (which correctly WOULD sum, conservatively).
+        now = datetime(2026, 8, 15, tzinfo=timezone.utc)
+        released_entries = [
+            bl.release_entry(bl.reserve_entry(session_id="s1", turn_index=i, projected_cost_usd=1.0, now=now), reason="HTTP 401", now=now)
+            for i in range(5)
+        ]
+        self.assertEqual(bl.month_spent_usd(released_entries, "2026-08"), 0.0)
+        self.assertEqual(bl.session_spent_usd(released_entries, "s1"), 0.0)
+
+
 class SessionBudgetEnvVarTest(unittest.TestCase):
     def test_defaults_when_unset(self) -> None:
         self.assertEqual(bl.session_budget_usd(env={}), bl.DEFAULT_SESSION_BUDGET_USD)

@@ -28,6 +28,27 @@ UNDER-COUNTING IS THE ONE DIRECTION THIS MUST NEVER DRIFT (1.2): every cost
 figure here routes through nero_core.eve.cost.call_cost_usd_with_tools, which
 sums all four usage fields (input, cache_creation at 1.25x, cache_read at
 0.1x, output) plus real per-search fees -- never just input+output.
+
+RELEASE, THE THIRD OUTCOME (added after a real 401 incident -- Adam hit the
+identical failure once already, see commit 4189f6b): "reserved" was
+originally a binary state that only ever resolved to "actual" (reconcile_
+entry, a real usage block existed) or stayed "reserved" forever (crash,
+outcome genuinely unknown, correctly counted conservatively at its
+projected value -- see RESERVE-THEN-RECONCILE above). A 401 Unauthorized /
+403 Forbidden / 429 Too Many Requests response is a THIRD, distinct case:
+the call was rejected by an auth/rate-limit layer before the model ever
+processed a single token, so the real cost is $0 -- not unknown, not
+conservatively estimated, KNOWN to be zero. Treating it like an orphaned
+crash (counting the full projected cost forever) would let repeated auth
+failures burn through real budget on calls that never ran, potentially
+blocking a legitimate future session or month even though nothing was
+actually spent. release_entry() (called only for
+llm_client.RejectedBeforeTokenProcessingError -- never for a generic
+exception, network error, or 5xx, all of which stay in the conservative
+"unknown outcome" bucket) flips a reservation straight to a new status,
+"released", counted as exactly $0.0 by _entry_cost_usd -- distinct from
+both "reserved" (counts at projected value) and "actual" (counts at real
+reconciled value).
 """
 from __future__ import annotations
 
@@ -66,6 +87,7 @@ REASON_SESSION_EXHAUSTED = "budget-exhausted-for-session"
 
 STATUS_RESERVED = "reserved"
 STATUS_ACTUAL = "actual"
+STATUS_RELEASED = "released"
 
 
 def session_budget_usd(env: "os._Environ | dict[str, str] | None" = None) -> float:
@@ -91,9 +113,17 @@ def current_utc_month(now: datetime | None = None) -> str:
 
 def _entry_cost_usd(entry: dict) -> float:
     """A 'reserved' entry counts at its PROJECTED cost (conservative -- see
-    module docstring); an 'actual' entry counts at its real reconciled cost."""
-    if entry.get("status") == STATUS_ACTUAL:
+    module docstring); an 'actual' entry counts at its real reconciled cost;
+    a 'released' entry counts as exactly $0.0 -- confirmed, not estimated,
+    zero real cost (see RELEASE, THE THIRD OUTCOME above). Any other/unknown
+    status falls through to the same conservative projected-cost treatment
+    as 'reserved' -- the safe default when this function doesn't recognize
+    the status at all."""
+    status = entry.get("status")
+    if status == STATUS_ACTUAL:
         return float(entry.get("actual_cost_usd") or 0.0)
+    if status == STATUS_RELEASED:
+        return 0.0
     return float(entry.get("projected_cost_usd") or 0.0)
 
 
@@ -217,6 +247,25 @@ def reconcile_entry(entry: dict, usage: dict, now: datetime | None = None, param
         "actual_cost_usd": actual_cost,
         "usage": usage_breakdown,
         "reconciled_at": now.isoformat(),
+    }
+
+
+def release_entry(entry: dict, reason: str, now: datetime | None = None) -> dict:
+    """Returns a NEW entry dict (status="released") for a reservation whose
+    call was rejected BEFORE any token processing -- see RELEASE, THE THIRD
+    OUTCOME in the module docstring. Callers must only pass entries for a
+    llm_client.RejectedBeforeTokenProcessingError (401/403/429) -- never for
+    a generic failure, where the real outcome is genuinely unknown and must
+    stay conservatively counted as a still-"reserved" entry. Never mutates
+    `entry` in place, matching reconcile_entry's own convention."""
+    now = now or datetime.now(timezone.utc)
+    return {
+        **entry,
+        "status": STATUS_RELEASED,
+        "actual_cost_usd": 0.0,
+        "usage": None,
+        "reconciled_at": now.isoformat(),
+        "release_reason": reason,
     }
 
 

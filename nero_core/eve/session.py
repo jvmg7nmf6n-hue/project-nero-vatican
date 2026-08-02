@@ -57,6 +57,7 @@ MAX_SEARCHES_PER_TURN = WEB_SEARCH_TOOL["max_uses"]
 
 TERMINATION_END_SESSION = "end_session_called"
 TERMINATION_MAX_TURNS = "max_turns_safety_cap_reached"
+TERMINATION_REJECTED_BEFORE_TOKEN_PROCESSING = "rejected_before_token_processing"
 
 SYSTEM_PROMPT_TEMPLATE = """You are Eve, an open-ended trading-hypothesis research agent for Project
 Vatican, a paper-trading-only research platform (never real-money execution) for gold,
@@ -183,7 +184,30 @@ def run_session(
         reserved = bl.reserve_entry(session_id, turn_index, projected_cost, now=now)
         bl.append_entry(reserved)
 
-        result = llm_client.call_turn(messages, system_blocks, tools, api_key, llm_params, stub=stub, call_index=turn_index)
+        try:
+            result = llm_client.call_turn(messages, system_blocks, tools, api_key, llm_params, stub=stub, call_index=turn_index)
+        except llm_client.RejectedBeforeTokenProcessingError as exc:
+            # Confirmed $0 real cost (401/403/429 -- rejected before the
+            # model ever saw a token, see llm_client's own docstring) --
+            # RELEASE this reservation rather than leaving it "reserved"
+            # forever, which would otherwise permanently count a real-money
+            # projected cost against a call that spent nothing. Stop
+            # immediately rather than repeating the same doomed call on
+            # every remaining turn -- Adam hit this identical failure once
+            # already (commit 4189f6b: "3 doomed calls where 1 would have
+            # sufficed").
+            released = bl.release_entry(reserved, reason=f"HTTP {exc.status_code}: {exc}", now=now)
+            bl.update_entry(reserved["entry_id"], released)
+            terminated_because = TERMINATION_REJECTED_BEFORE_TOKEN_PROCESSING
+            turns_log.append({
+                "turn_index": turn_index,
+                "rejected_before_token_processing": True,
+                "status_code": exc.status_code,
+                "reason": str(exc),
+                "projected_cost_usd": projected_cost,
+                "reservation_released": True,
+            })
+            break
 
         reconciled = bl.reconcile_entry(reserved, result.usage, now=now)
         bl.update_entry(reserved["entry_id"], reconciled)

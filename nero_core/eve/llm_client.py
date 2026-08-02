@@ -45,6 +45,35 @@ from nero_core.eve.tools_defs import END_SESSION_TOOL_NAME, PROPOSE_HYPOTHESIS_T
 STUB_MODE_ENV_VAR = "EVE_STUB_MODE"
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 
+# Status codes that mean "rejected before any token was ever processed" --
+# Anthropic never bills these (confirmed real $0 cost, not an inference from
+# usage fields the response never carried). Deliberately narrow: a 500/502/503
+# or a network-level failure (timeout, connection error) is NOT included here
+# -- those genuinely could have reached the model before failing, so they must
+# stay in the conservative "outcome unknown, count the reservation" bucket
+# (see budget_ledger's own RESERVE-THEN-RECONCILE section). Widening this set
+# to any other status code is a deliberate, reviewed code change, not
+# something to infer from a new status code showing up.
+REJECTED_BEFORE_TOKEN_PROCESSING_STATUS_CODES = frozenset({401, 403, 429})
+
+
+class RejectedBeforeTokenProcessingError(Exception):
+    """Raised by call_turn instead of letting requests.HTTPError propagate,
+    ONLY for a response whose status code is in
+    REJECTED_BEFORE_TOKEN_PROCESSING_STATUS_CODES (401 Unauthorized, 403
+    Forbidden, 429 Too Many Requests) -- every one of these is rejected by
+    an auth/rate-limit layer before the model ever sees the request, so the
+    real cost is $0 by construction, never an estimate. nero_core.eve.session
+    catches this specifically to RELEASE (not reconcile-as-spent) the
+    pre-call budget reservation for this turn -- see budget_ledger.
+    release_entry. Any other HTTP error (5xx, a malformed 400, ...) is left
+    to propagate as the original requests.exceptions.HTTPError, since those
+    could plausibly have reached the model before failing."""
+
+    def __init__(self, status_code: int, message: str) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
 
 def is_stub_mode(env: "os._Environ | dict[str, str] | None" = None) -> bool:
     source = env if env is not None else os.environ
@@ -259,7 +288,12 @@ def call_turn(
         json=body,
         timeout=params.claude_timeout_seconds,
     )
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as exc:
+        if response.status_code in REJECTED_BEFORE_TOKEN_PROCESSING_STATUS_CODES:
+            raise RejectedBeforeTokenProcessingError(response.status_code, str(exc)) from exc
+        raise
     payload = response.json()
     return LlmTurnResult(
         content_blocks=payload.get("content") or [],

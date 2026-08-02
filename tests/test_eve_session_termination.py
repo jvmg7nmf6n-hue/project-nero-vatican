@@ -127,6 +127,66 @@ class BudgetRefusalTerminationTest(_IsolatedStorageTestCase):
         self.assertEqual(result.n_turns, 0)
 
 
+class RejectedBeforeTokenProcessingTerminationTest(_IsolatedStorageTestCase):
+    """A 401/403/429 on the real API call (Adam hit this exact failure once
+    already -- commit 4189f6b) must stop the session immediately (not retry
+    the same doomed call on every remaining turn) and must RELEASE the
+    turn's pre-call budget reservation rather than leaving it permanently
+    counted as spend -- see budget_ledger's own RELEASE, THE THIRD OUTCOME
+    section."""
+
+    def test_session_stops_immediately_and_releases_the_reservation(self) -> None:
+        now = datetime(2026, 8, 15, tzinfo=timezone.utc)
+        rejection = session.llm_client.RejectedBeforeTokenProcessingError(401, "401 Client Error: Unauthorized")
+
+        with patch("nero_core.eve.session.llm_client.call_turn", side_effect=rejection):
+            result = session.run_session(api_key="stale-key", stub=False, now=now)
+
+        self.assertEqual(result.terminated_because, session.TERMINATION_REJECTED_BEFORE_TOKEN_PROCESSING)
+        self.assertEqual(result.n_turns, 0, "a rejected call is not a completed turn")
+        self.assertEqual(result.n_proposed, 0)
+        self.assertEqual(result.session_spent_usd, 0.0, "a 401 costs $0 -- must not be counted as spend")
+
+        # The reservation this turn made must be released, not left
+        # "reserved" (which would count it as spend at its projected value
+        # forever) and not "actual" (there was no real usage to reconcile).
+        ledger_entries = bl.load_ledger(path=self.ledger_path)
+        self.assertEqual(len(ledger_entries), 1)
+        self.assertEqual(ledger_entries[0]["status"], bl.STATUS_RELEASED)
+        self.assertEqual(ledger_entries[0]["actual_cost_usd"], 0.0)
+
+        # And critically: this released entry must not block a subsequent
+        # real session's budget check.
+        check = bl.pre_call_check(ledger_entries, session_id="a-later-session", projected_cost_usd=0.5, now=now)
+        self.assertTrue(check.allowed)
+
+    def test_a_session_record_is_still_written_for_a_rejected_session(self) -> None:
+        now = datetime(2026, 8, 15, tzinfo=timezone.utc)
+        rejection = session.llm_client.RejectedBeforeTokenProcessingError(429, "429 Client Error: Too Many Requests")
+
+        with patch("nero_core.eve.session.llm_client.call_turn", side_effect=rejection):
+            result = session.run_session(api_key="fake-key", stub=False, now=now)
+
+        session_file = storage.session_record_path(result.session_id)
+        self.assertTrue(session_file.exists())
+        self.assertEqual(len(result.record["turns"]), 1)
+        self.assertTrue(result.record["turns"][0]["rejected_before_token_processing"])
+        self.assertEqual(result.record["turns"][0]["status_code"], 429)
+
+    def test_only_one_reservation_is_made_not_one_per_remaining_turn(self) -> None:
+        # Before this fix's own precedent (Adam's commit 4189f6b), a repeated
+        # 401 would have kept retrying once per remaining turn. Confirms
+        # exactly one ledger entry exists even though max_turns allows many.
+        now = datetime(2026, 8, 15, tzinfo=timezone.utc)
+        rejection = session.llm_client.RejectedBeforeTokenProcessingError(401, "401 Client Error: Unauthorized")
+
+        with patch("nero_core.eve.session.llm_client.call_turn", side_effect=rejection):
+            session.run_session(api_key="stale-key", stub=False, max_turns=40, now=now)
+
+        ledger_entries = bl.load_ledger(path=self.ledger_path)
+        self.assertEqual(len(ledger_entries), 1)
+
+
 class MaxTurnsCapTest(_IsolatedStorageTestCase):
     def test_session_stops_at_max_turns_before_end_session_is_reached(self) -> None:
         # The stub script naturally ends (via end_session) on call_index 2;

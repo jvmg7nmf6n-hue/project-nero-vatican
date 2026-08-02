@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from nero_core.eve import llm_client
 from nero_core.eve.tools_defs import (
@@ -120,6 +120,57 @@ class StubCallTurnTest(unittest.TestCase):
         with patch("nero_core.eve.llm_client.requests.post") as mock_post:
             llm_client.call_turn([], [], [], api_key="fake", stub=True, call_index=0)
         mock_post.assert_not_called()
+
+
+class RealCallHttpErrorHandlingTest(unittest.TestCase):
+    """401/403/429 must be translated into RejectedBeforeTokenProcessingError
+    (Eve's session loop catches this specifically to release, not reconcile-
+    as-spent, the pre-call budget reservation) -- every other status code
+    must still raise the original requests.exceptions.HTTPError unchanged,
+    since those could plausibly have reached the model before failing."""
+
+    def _mock_error_response(self, status_code: int):
+        import requests
+
+        response = MagicMock()
+        response.status_code = status_code
+        response.raise_for_status.side_effect = requests.exceptions.HTTPError(f"{status_code} Client Error")
+        return response
+
+    def test_401_raises_rejected_before_token_processing_error(self) -> None:
+        with patch("nero_core.eve.llm_client.requests.post", return_value=self._mock_error_response(401)):
+            with self.assertRaises(llm_client.RejectedBeforeTokenProcessingError) as ctx:
+                llm_client.call_turn([], [], [], api_key="fake", stub=False, call_index=0)
+        self.assertEqual(ctx.exception.status_code, 401)
+
+    def test_403_raises_rejected_before_token_processing_error(self) -> None:
+        with patch("nero_core.eve.llm_client.requests.post", return_value=self._mock_error_response(403)):
+            with self.assertRaises(llm_client.RejectedBeforeTokenProcessingError) as ctx:
+                llm_client.call_turn([], [], [], api_key="fake", stub=False, call_index=0)
+        self.assertEqual(ctx.exception.status_code, 403)
+
+    def test_429_raises_rejected_before_token_processing_error(self) -> None:
+        with patch("nero_core.eve.llm_client.requests.post", return_value=self._mock_error_response(429)):
+            with self.assertRaises(llm_client.RejectedBeforeTokenProcessingError) as ctx:
+                llm_client.call_turn([], [], [], api_key="fake", stub=False, call_index=0)
+        self.assertEqual(ctx.exception.status_code, 429)
+
+    def test_500_still_raises_the_original_http_error_not_the_new_type(self) -> None:
+        import requests
+
+        with patch("nero_core.eve.llm_client.requests.post", return_value=self._mock_error_response(500)):
+            with self.assertRaises(requests.exceptions.HTTPError):
+                llm_client.call_turn([], [], [], api_key="fake", stub=False, call_index=0)
+
+    def test_400_still_raises_the_original_http_error_not_the_new_type(self) -> None:
+        # A malformed request could plausibly still have been evaluated by
+        # the model before being rejected -- deliberately NOT in the
+        # rejected-before-token-processing set (see its own docstring).
+        import requests
+
+        with patch("nero_core.eve.llm_client.requests.post", return_value=self._mock_error_response(400)):
+            with self.assertRaises(requests.exceptions.HTTPError):
+                llm_client.call_turn([], [], [], api_key="fake", stub=False, call_index=0)
 
 
 class MessageBuildersTest(unittest.TestCase):
