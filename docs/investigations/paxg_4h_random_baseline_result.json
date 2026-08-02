@@ -1,0 +1,27 @@
+{
+  "asset": "PAXG",
+  "timeframe": "4h",
+  "k": 200,
+  "seed": 20260718,
+  "generated_at": "2026-08-02T00:00:00+00:00",
+  "verdict_counts": {
+    "SKIPPED": 129,
+    "DIED": 63,
+    "PROMISING-WATCHLIST": 8
+  },
+  "promising_watchlist_names": [
+    "RANDOM_BASELINE_0004",
+    "RANDOM_BASELINE_0028",
+    "RANDOM_BASELINE_0029",
+    "RANDOM_BASELINE_0036",
+    "RANDOM_BASELINE_0040",
+    "RANDOM_BASELINE_0129",
+    "RANDOM_BASELINE_0134",
+    "RANDOM_BASELINE_0199"
+  ],
+  "row_count": 4400,
+  "date_range": [
+    1722326400,
+    1785672000
+  ]
+}

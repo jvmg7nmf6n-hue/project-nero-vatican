@@ -46,11 +46,30 @@ misconfigured.
 """
 from __future__ import annotations
 
-# SEARCH universe -- see module docstring. BTC/4h is the only pair with both
-# a research export and a random-hypothesis baseline computed against it
-# today.
+# SEARCH universe -- see module docstring. PRE-REGISTERED (docs/
+# investigations/eve_engine_v1_report.md): BTCUSDT, ETHUSDT, SOLUSDT,
+# PAXGUSDT -- declared as a package before any of ETH/SOL/PAXG's own results
+# existed, and binding in both directions: every declared asset gets its own
+# export + baseline regardless of what an earlier one showed, and no asset
+# is added later just because earlier ones came up empty (that would be the
+# multiple-comparisons "garden of forking paths" this discipline exists to
+# prevent). NEAR (shorter Binance history, thinner liquidity) and DOGE
+# (meme/news-driven regime -- any backtest edge would be regime-specific by
+# nature, not a persistent structural one) were considered and deliberately
+# excluded, with reasons, at the same time this universe was declared.
+#
+# Each pair's own K=200 random-hypothesis baseline (0/200 SURVIVED in every
+# case; the PROMISING-WATCHLIST count differs meaningfully per asset --
+# BTC/4h: 17, BTC's own random-baseline investigation predates this file;
+# ETH/4h: 3; SOL/4h: 0; PAXG/4h: 8 -- see docs/investigations/
+# {eth,sol,paxg}_4h_random_baseline_result.json), confirming a baseline
+# genuinely does not transfer between assets even when none of them ever
+# reach SURVIVED.
 APPROVED_RESEARCH_UNIVERSE: frozenset[tuple[str, str]] = frozenset({
     ("BTC", "4h"),
+    ("ETH", "4h"),
+    ("SOL", "4h"),
+    ("PAXG", "4h"),
 })
 
 # EVALUATION universe -- see module docstring. BTC/24h backtests the two

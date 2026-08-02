@@ -14,6 +14,8 @@ from pathlib import Path
 
 from nero_core.asset_universe import APPROVED_EVALUATION_UNIVERSE, APPROVED_RESEARCH_UNIVERSE
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 
 class DisjointUniversesTest(unittest.TestCase):
     def test_research_and_evaluation_universes_are_disjoint(self) -> None:
@@ -28,9 +30,39 @@ class DisjointUniversesTest(unittest.TestCase):
     def test_btc_4h_is_the_research_universe(self) -> None:
         self.assertIn(("BTC", "4h"), APPROVED_RESEARCH_UNIVERSE)
 
+    def test_pre_registered_universe_is_exactly_the_four_declared_assets(self) -> None:
+        # BTCUSDT, ETHUSDT, SOLUSDT, PAXGUSDT -- pre-declared as a package
+        # (see nero_core.asset_universe's own docstring); NEAR/DOGE
+        # deliberately excluded. Exact-set check (not just assertIn) so an
+        # accidental future addition is caught here, not silently expanding
+        # Eve's search space.
+        self.assertEqual(APPROVED_RESEARCH_UNIVERSE, frozenset({
+            ("BTC", "4h"), ("ETH", "4h"), ("SOL", "4h"), ("PAXG", "4h"),
+        }))
+
     def test_btc_24h_is_the_evaluation_universe_not_the_research_universe(self) -> None:
         self.assertIn(("BTC", "24h"), APPROVED_EVALUATION_UNIVERSE)
         self.assertNotIn(("BTC", "24h"), APPROVED_RESEARCH_UNIVERSE)
+
+
+class ResearchUniversePairHasBothExportAndBaselineTest(unittest.TestCase):
+    """Every pair in APPROVED_RESEARCH_UNIVERSE must have BOTH (i) its own
+    research export and (ii) its own random-baseline result on disk --
+    proves the standing rule was actually honored for each addition, not
+    just asserted in a docstring."""
+
+    def test_every_research_pair_has_a_candle_export(self) -> None:
+        for asset, timeframe in APPROVED_RESEARCH_UNIVERSE:
+            path = REPO_ROOT / "docs" / "research_data" / "candles" / f"{asset}_{timeframe}.json"
+            self.assertTrue(path.exists(), f"missing research export for {asset}/{timeframe}: {path}")
+
+    def test_every_research_pair_has_a_random_baseline_result(self) -> None:
+        for asset, timeframe in APPROVED_RESEARCH_UNIVERSE:
+            path = REPO_ROOT / "docs" / "investigations" / f"{asset.lower()}_{timeframe}_random_baseline_result.json"
+            self.assertTrue(path.exists(), f"missing random-baseline result for {asset}/{timeframe}: {path}")
+            data = json.loads(path.read_text())
+            self.assertEqual(data["k"], 200)
+            self.assertEqual(data["verdict_counts"].get("SURVIVED", 0), 0)
 
 
 class EvaluationUniverseNeverScorableTest(unittest.TestCase):

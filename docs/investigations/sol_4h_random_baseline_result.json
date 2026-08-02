@@ -1,0 +1,17 @@
+{
+  "asset": "SOL",
+  "timeframe": "4h",
+  "k": 200,
+  "seed": 20260718,
+  "generated_at": "2026-08-02T00:00:00+00:00",
+  "verdict_counts": {
+    "SKIPPED": 130,
+    "DIED": 70
+  },
+  "promising_watchlist_names": [],
+  "row_count": 4400,
+  "date_range": [
+    1722326400,
+    1785672000
+  ]
+}
