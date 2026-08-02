@@ -220,15 +220,22 @@ def reconcile_entry(entry: dict, usage: dict, now: datetime | None = None, param
     }
 
 
-def load_ledger(path: Path = storage.DEFAULT_BUDGET_LEDGER_PATH) -> list[dict]:
+def load_ledger(path: Path | None = None) -> list[dict]:
+    # `path` resolves storage.DEFAULT_BUDGET_LEDGER_PATH at CALL time, not at
+    # function-definition time -- a `path: Path = storage.DEFAULT_...`
+    # default would bind that value once, permanently, at import, so a test
+    # patching storage.DEFAULT_BUDGET_LEDGER_PATH afterward would silently
+    # have no effect on this function's own default.
+    path = path if path is not None else storage.DEFAULT_BUDGET_LEDGER_PATH
     return storage.read_json_list(path)
 
 
-def append_entry(entry: dict, path: Path = storage.DEFAULT_BUDGET_LEDGER_PATH) -> None:
+def append_entry(entry: dict, path: Path | None = None) -> None:
+    path = path if path is not None else storage.DEFAULT_BUDGET_LEDGER_PATH
     storage.append_json_list(path, [entry])
 
 
-def update_entry(entry_id: str, updated_entry: dict, path: Path = storage.DEFAULT_BUDGET_LEDGER_PATH) -> None:
+def update_entry(entry_id: str, updated_entry: dict, path: Path | None = None) -> None:
     """Atomic full-list rewrite (via storage.atomic_write_json_list) that
     replaces exactly one entry by entry_id -- this is the one ledger
     operation that is NOT append-only (reconciliation genuinely changes an
@@ -236,6 +243,7 @@ def update_entry(entry_id: str, updated_entry: dict, path: Path = storage.DEFAUL
     atomic (temp file + rename), so a crash mid-write leaves the prior
     on-disk state (the "reserved" entry) intact, which 1.5's own
     conservative-counting behavior already handles correctly."""
+    path = path if path is not None else storage.DEFAULT_BUDGET_LEDGER_PATH
     entries = storage.read_json_list(path)
     new_entries = []
     replaced = False
