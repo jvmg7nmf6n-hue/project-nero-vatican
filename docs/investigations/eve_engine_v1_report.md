@@ -1,5 +1,13 @@
 # Eve Engine v1 — Closing Report (Phases 0–3; Phase 4 deferred)
 
+**Updated (follow-up session, harness validation and fixes):** see
+"Follow-up session" below for the real K=200 random-baseline run against
+BTC/4h, the p-value bug it exposed and fixed, the candle-cap root cause and
+research-export split, the positive control proving the harness can say
+SURVIVED, the silent-fallback trap closed, and Adam's 401
+observability/ledger gaps addressed. The Phases 0–3 content below this
+notice is unchanged from the original closing report.
+
 **Branch:** `feature/eve-engine-v1`, branched fresh from `origin/main`. **Not
 pushed, not merged** — awaiting human review per this session's own explicit
 instruction (the user chose "review code first" over running Phase 4 or
@@ -364,6 +372,247 @@ real cost spent vs. projected, Eve's actual research transcript, her
 verdicts, contamination tags actually raised) will be added in a follow-up
 once the user authorizes the real run.
 
+## Follow-up session — random baseline run, harness validation, and fixes
+
+Everything below happened in a later session, still on this same branch,
+still with `EVE_ENABLED` never set to a truthy value anywhere in committed
+code and still with zero real Anthropic API calls made from Eve. This work
+answers the question the closing report above explicitly left open: "has the
+random baseline actually been run against real candle data yet?"
+
+### 1. The 200-row display export was silently invalidating every backtest
+
+`nero_core.execution.export_candle_data.export_candle_data` truncates to
+`CANDLE_COUNT = 200` rows via `.tail(CANDLE_COUNT)` — correct and sufficient
+for the website's own chart display, the only thing it was ever built for.
+Every backtest in this project (Adam's `auto_tester.test_hypothesis`, and by
+extension Eve's `scoring.py`, which reuses it unmodified) was reading that
+same 200-row file, because no separate export existed. Two consequences,
+both real, both silent until measured directly:
+
+- **`ma200` was NaN everywhere except the very last row.** `ma200` needs 200
+  prior closes to produce even one value — at exactly 200 rows total, that
+  leaves exactly 1 non-NaN row out of 200 (0.5%). Any hypothesis whose entry
+  or exit condition touches `ma200` (or is gated by an ATR/RSI/z-score column
+  still inside its own warmup window on a 200-row frame) was structurally
+  unable to fire on almost the entire history it was being "tested" against.
+- **No IS/OOS split had enough real history to be meaningful.** 200 candles
+  split 70/30 chronologically (`tools.backtest_train_test_split.
+  split_chronological`) leaves ~140 training candles and ~60 test candles —
+  nowhere near enough for most hypotheses to ever reach `MIN_SAMPLE_SIZE =
+  20` trades on both halves, the bar `classify_verdict` requires for
+  `SURVIVED`.
+
+**Fix (commit `5dd51a0`):** a new, separate `export_research_candle_data`
+(`RESEARCH_CANDLE_COUNT = 4400`, "2+ years of 4h candles to start" —
+`365.25 * 2 * 6 ≈ 4383`) writes to `docs/research_data/candles/`, a directory
+structurally unreachable from the website's own hardcoded
+`docs/site_data`-based fetch path, so it can never bloat or be accidentally
+served by the site. The website's own 200-row export is completely
+untouched — same `CANDLE_COUNT`, same output directory, same cadence. A real
+export was run for BTC/4h: **4400 candles, 2024-07-30 to 2026-08-02 (2.01
+years), 748KB** versus the display export's 33KB for the same pair. Against
+this export, `ma200` is alive across **4201/4400 rows (95.5%)**, versus
+**1/200 (0.5%)** before.
+
+### 2. The p-value estimator was fabricating significance from single trades
+
+Running the K=200 random-hypothesis baseline (`nero_core.eve.random_
+baseline`, pure stdlib, zero LLM calls, zero budget-ledger writes) against
+the real BTC/4h research export exposed a live bug (commit `a0771c4`):
+`normal_approx_p_value`'s zero-standard-error fallback returned `p=0.0`
+(maximally "significant") for any single-trade half, because bootstrap
+resampling on `n=1` always redraws the same value, collapsing the CI to zero
+width. **28 of 40 OOS p-values in that run "survived" Benjamini-Hochberg FDR
+correction despite every one of them having a verdict of
+`INSUFFICIENT_SAMPLE`** — a fabricated signal, not a real one.
+
+Fixed with two independent, additive guards, both failing toward "no
+p-value" rather than toward significance — neither touches `classify_verdict`
+or `MIN_SAMPLE_SIZE`, and `verdict_is`/`verdict_oos`/`verdict_combined` are
+computed entirely independently of any p-value:
+
+1. `normal_approx_p_value` now returns `None` (never `0.0`/`1.0`) whenever
+   the CI's implied standard error is zero or numerically indistinguishable
+   from zero (epsilon `1e-9`), regardless of which half or how many trades
+   produced it.
+2. `score_hypothesis` additionally nulls `p_value_is`/`p_value_oos` outright
+   for any half below `MIN_SAMPLE_SIZE` trades — even a half with a
+   non-degenerate CI is still underpowered by this project's own sample-size
+   bar. This is what excludes an underpowered hypothesis from the FDR family
+   entirely.
+
+### 3. Byte-identical reproduction check
+
+Before trusting the baseline numbers below, the K=200 run was reproduced —
+same seed, same export, same unmodified harness — and the two runs' outputs
+compared byte-for-byte identical. This rules out measurement-script
+artifacts (a non-deterministic ordering, an uncontrolled random source, a
+stale cached file) as an explanation for the results; the numbers reported
+here are reproducible, not a one-off.
+
+### 4. Random-baseline result: a floor near zero, but never claimed as exactly zero
+
+**0 of 200 randomly-sampled DSL-expressible hypotheses reached `SURVIVED`**
+against the real BTC/4h research export, run through the completely
+unmodified harness (same `auto_tester.test_hypothesis`, same
+`classify_verdict`, same `MIN_SAMPLE_SIZE`, same frequency gate, same
+`split_chronological`). Stated precisely, per this project's own statistical
+discipline: the chance-survival rate is **below ~1.5% (95% upper bound, rule
+of three on 0 events in 200 trials)** — **never a flat 0%.** This distinction
+matters operationally: if a future real Eve session produces, say, 1
+`SURVIVED` out of 40 real proposals, that is 2.5% and is **not** clear of a
+1.5% ceiling — the pre-registered kill criterion (N=5 sessions, see above)
+must be evaluated against this actual bound, not against an unstated
+assumption of zero.
+
+**The single most important empirical result of this run, recorded
+prominently: all 17 in-sample `PROMISING_WATCHLIST` candidates died out of
+sample — 17/17.** Every one of the 17 randomly-sampled hypotheses that
+looked positive on the in-sample half failed to hold up out-of-sample. This
+independently validates this project's own standing rule that in-sample
+results are never evidence on their own — it is not a claim specific to
+Eve's future real hypotheses, it is a demonstration of the base rate for
+*any* DSL-expressible hypothesis in this same search space, random or not.
+
+Together, items 1–4 answer the open question the original closing report
+left unresolved: the random baseline's chance-survival rate has now been
+measured against real candle data, is reproducible, and rejects (does not
+`SURVIVED`) the overwhelming majority of random garbage — establishing
+**specificity**. It does not, on its own, establish that the harness can
+recognize a real edge when one exists — that gap is closed by item 5.
+
+### 5. Positive control: proving the harness can say SURVIVED, not just DIED
+
+A harness that returns `DIED` unconditionally for everything would score
+identically to the real harness on the random baseline above — 0/200 either
+way. To rule that out, this session added a permanent regression test
+(`tests/test_research_agent_positive_control.py`, commit `ed19cac`): a
+synthetic OHLCV series with a deliberately embedded, repeating, exploitable
+shock-down/rally-up pattern, run through the same completely unmodified
+harness. Result: **`SURVIVED`**, comfortably clearing every gate —
+
+| | trades | expectancy_r | CI crosses zero |
+|---|---|---|---|
+| in-sample | 93 | +1.77R | no |
+| out-of-sample | 39 | +1.76R | no |
+
+both trade counts well above `MIN_SAMPLE_SIZE = 20`, frequency classified
+`FAST`. This was a hard gate for the session: had it failed, every `DIED`
+verdict the harness has ever produced — including the random baseline's
+0/200 above — would have been uninformative, and the plan was to stop and
+report rather than adjust any threshold to force a pass. It passed on the
+first constructed pattern; no threshold, `classify_verdict`, `MIN_SAMPLE_
+SIZE`, or the frequency gate was touched to make it do so.
+
+### 6. Closing the silent-fallback trap: the asset-universe rule
+
+The research export above covers **BTC/4h only** — every other tracked pair
+(GOLD, EURUSD, AAPL, and 28 others) still has only a 200-row site export.
+Eve's own `default_candles_provider` (`nero_core/eve/pipeline.py`) checked
+the research export first but **silently fell back** to the 200-row site
+export for any pair without one — no error, no warning, indistinguishable
+from a real result. Scoring GOLD or EURUSD would have produced a confident-
+looking verdict on exactly the data items 1–2 above just proved is
+meaningless for this purpose — the same failure class as the 401
+observability gap in item 7.
+
+**Fixed (commit `4ea1263`):** `default_candles_provider` now raises
+`scoring.DataSourceRefusedError` — refuses, never silently substitutes — for
+any `(asset, timeframe)` pair outside a new, explicit
+`APPROVED_RESEARCH_UNIVERSE` (currently `{("BTC", "4h")}`), or one inside it
+whose research export file is missing on disk. `score_hypothesis` catches
+the refusal and tags the record `candle_data_source="refused"` instead of a
+null verdict indistinguishable from "no data existed anywhere"; on success,
+every scored record now carries `candle_data_source`/`candle_row_count` so
+what was actually used is auditable per-record.
+
+**Standing rule, documented at `APPROVED_RESEARCH_UNIVERSE`:** no `(asset,
+timeframe)` pair enters Eve's universe until it has **both** (i) its own
+full-history research export, **and** (ii) its own random-hypothesis
+baseline computed against that same export — a baseline from one asset does
+not transfer to another (different volatility, trend character, cost
+structure). BTC/4h is the only pair with both today. SOL and PAXG are the
+natural next two (also Binance-backed, can reach the same 2+ year research
+window) but are **deliberately not added** — extending this set is a human
+decision made after running a fresh export + baseline for that specific
+pair, never inferred from which export files happen to exist on disk. The
+other 29 pairs are lower priority and several are constrained by Yahoo's
+~730-day intraday limit. Every session going forward should record its
+asset count alongside `n_proposed` for multiplicity accounting — adding
+pairs multiplies the search space, and every added pair raises the chance of
+a lucky `SURVIVED` by chance alone.
+
+### 7. Adam's 401 observability and budget-ledger gaps
+
+Two related gaps, addressed together:
+
+- **Website observability (commit `4a6c4cf`):** `nero_core.research_agent.
+  performance` already writes `status` (`disabled`/`error`/`clean`) and
+  `errors` (phase/context/message) to every run entry (commit `8204f9e`,
+  pre-dating this session), but the website never read either field —
+  `AgentPerformanceRun` didn't declare them, and `ResearchAgentPanel` never
+  rendered `runs[]` at all. A run with `llm_calls_made=3` and no failure
+  indicator looked identical to a clean one — worse than a blank panel,
+  since it asserts something untrue. Fixed: the panel now has a "Recent
+  runs" section with a status badge per run, and an `error` run gets a
+  visibly distinct red-bordered card listing every error's phase/context/
+  message.
+- **Historical record correction (commit `fdae2b5`):** `docs/site_data/
+  agent_performance.json`'s two 2026-07-29 run entries pre-date `status`/
+  `errors` entirely (added in `8204f9e`, after both of these runs).
+  **Neither entry was edited** — editing an audit record after the fact is
+  exactly the failure this correction mechanism exists to prevent. Instead,
+  a `corrections[]` array was appended, citing the actual commits that
+  document what happened: `runs[0]` (all-zero) per commit `b3361b4`,
+  `api_key=""` was passed deliberately that session (a prior key-exposure
+  incident, since rotated) — `inferred_status=clean`. `runs[1]`
+  (`llm_calls_made=3`, `total_llm_cost_usd=0.0`) per commit `4189f6b`,
+  "failed with 401 Unauthorized on all 3 calls" — `inferred_status=error`,
+  exactly the dangerous shape this whole exercise is about: 3 calls made,
+  $0 spent, nothing flagging the failure.
+- **Eve's budget ledger, the same failure class one layer down (commit
+  `a9a4c96`):** before this fix, `session.run_session` appended a
+  `"reserved"` ledger entry before every LLM call, then called `llm_client.
+  call_turn`, which did `response.raise_for_status()` with no `try`/`except`
+  anywhere above it — any non-2xx response, including a 401, raised
+  uncaught and crashed the session with that turn's reservation stuck at
+  `status="reserved"` forever. Per the ledger's own conservative-by-design
+  read path, a still-`"reserved"` entry counts as spend at its *projected*
+  value on every subsequent read, indefinitely — correct for a genuine crash
+  mid-call (outcome truly unknown), wrong for a 401/403/429, which Anthropic
+  never bills (confirmed $0, not estimated) and which never reached the
+  model at all. Repeated auth failures would each leave one phantom
+  reserved-forever entry, burning real budget ceiling on calls that spent
+  nothing. **Fix:** `llm_client.call_turn` now raises a distinct
+  `RejectedBeforeTokenProcessingError` for exactly 401/403/429 (every other
+  status code is untouched, staying in the conservative "unknown outcome"
+  bucket); `session.run_session` catches it, calls `budget_ledger.
+  release_entry` (a new third status, `"released"`, counted as exactly
+  `$0.0`, distinct from both `"reserved"` and `"actual"`), and terminates
+  the session immediately rather than repeating the same doomed call on
+  every remaining turn — mirroring the precedent Adam already set for
+  itself in commit `4189f6b`.
+
+### 8. What remains explicitly unverified
+
+- **Adam has never scored a hypothesis.** Every real Adam run so far (`docs/
+  research_agent_closing_report.md`, `docs/research_agent_real_run_
+  followup.md`) either made zero LLM calls (`api_key=""`, deliberate) or hit
+  401 on all 3 calls — no hypothesis has ever reached `auto_tester.test_
+  hypothesis` from a real Adam session.
+- **Adam's own `research_agent/pipeline.py` `default_candles_provider` still
+  reads only the 200-row site export** — deliberately left unchanged this
+  session (flagged for separate confirmation, per Phase 3's own design
+  note). It must be pointed at a research export before its first real run,
+  for the exact reason item 1 above documents — otherwise its debut results
+  would be as meaningless as scoring GOLD against the site export was, and
+  any future Adam-vs-Eve comparison would silently be reading two different
+  datasets.
+- The pre-registered kill criterion (N=5 real Eve sessions) still cannot be
+  evaluated — 0 of the planned 5 have run; Phase 4 itself remains
+  unauthorized and unexecuted.
+
 ## Full test suite
 
 - **New**: 154 Eve-specific tests, all passing (`test_eve_*.py`, 16 files).
@@ -382,17 +631,33 @@ once the user authorizes the real run.
   failure injection and expected-non-fatal external-service errors) —
   none originate from or relate to this branch's changes.
 
+**Follow-up session update:** full repository suite (`python -m unittest
+discover -s tests -p "test_*.py"`) now stands at **2240 tests, 0 failures, 0
+errors** (`Ran 2240 tests in 382.112s` / `OK`) — up from the 2187 recorded
+above, +53 net new tests this session (positive control, silent-fallback
+refusal, website status/errors, the correction-record regression test, and
+the 401/403/429 budget-ledger fix). Unlike Phases 0–3, this follow-up *did*
+modify existing test files where the fix it was proving lived in existing
+code (`tests/test_eve_pipeline.py`, `tests/test_eve_budget_ledger.py`,
+`tests/test_eve_llm_client.py`, `tests/test_eve_session_termination.py`) —
+each modification is a same-commit companion to the source change it tests,
+per the rails this follow-up session ran under (every fix needs a test
+before it is considered done). Two entirely new test files were added:
+`tests/test_research_agent_positive_control.py` and `tests/test_agent_
+performance_correction_record.py`.
+
 ## Untracked-file accounting
 
 All pre-date this session (present in `git status` before any Eve work
 began) and are unrelated to this branch — left alone, not investigated
-further, not part of this branch's diff:
+further, not part of this branch's diff. Reconfirmed unchanged at the end of
+the follow-up session (identical `git status` output before and after):
 
 | Path | Verdict |
 |---|---|
-| `check_news.py`, `check_news2.py`, `check_ns.py`, `check_pead*.py`, `check_results.py`, `daily_check.bat` | Pre-existing scratch scripts at repo root — leave alone |
+| `check_news.py`, `check_news2.py`, `check_ns.py`, `check_pead.py`, `check_pead2.py`, `check_pead3.py`, `check_pead4.py`, `check_pead_logs.py`, `check_pead_status.py`, `check_results.py`, `daily_check.bat` | Pre-existing scratch scripts at repo root — leave alone |
 | `data/backups/`, `data/funding_cache/`, `data/macro_cache/` | Pre-existing data directories — leave alone |
-| `tests/fixtures/frozen_candles/backward_compat_baseline_after.json`, `.../baseline_before_run.log.err` | Pre-existing fixture/log artifacts — leave alone |
+| `tests/fixtures/frozen_candles/backward_compat_baseline_after.json`, `.../baseline_before_run.log.err` | Pre-existing fixture/log artifacts (Adam's own Task 3 backward-compat regression fixture, commit `50d3b09`) — leave alone |
 
 ## Commit list (independently revertable)
 
@@ -402,6 +667,20 @@ further, not part of this branch's diff:
    hypothesis capture (Phases 0+2)
 3. `aa5fa1c` — Eve engine: scoring against Adam's unmodified harness, random
    baseline, CLI pipeline (Phase 3)
+4. `a0771c4` — Fix p-value estimator: never fabricate significance from
+   degenerate/underpowered samples
+5. `5dd51a0` — Add full-history research candle export, split from the
+   website's 200-row display export
+6. `ed19cac` — Add positive control: prove the harness can say SURVIVED,
+   not just DIED
+7. `4ea1263` — Close the silent-fallback trap: refuse, don't degrade,
+   outside BTC/4h
+8. `4a6c4cf` — Surface run status/errors on the website's
+   ResearchAgentPanel
+9. `fdae2b5` — Append correction records for the two pre-instrumentation
+   2026-07-29 runs
+10. `a9a4c96` — Eve budget ledger: release (not reserve-forever) a
+    401/403/429 rejection
 
 ## Status
 
@@ -409,3 +688,18 @@ Not pushed, not merged. Awaiting human review of
 `git diff origin/main..feature/eve-engine-v1` before any push, and awaiting
 explicit authorization before Phase 4 (real API spend) is attempted in a
 follow-up.
+
+**Follow-up session status (unchanged in kind, more evidence behind it):**
+still not pushed, not merged, `EVE_ENABLED` still never set to a truthy
+value anywhere in committed code, zero real Anthropic API calls made from
+Eve. What changed this session is confidence in the harness itself: the
+random baseline has now been run against real candle data and is
+reproducible (below ~1.5% chance-survival, 17/17 in-sample
+`PROMISING_WATCHLIST` candidates died OOS), the harness has been proven able
+to say `SURVIVED` and not just `DIED` (the positive control), the silent
+200-row-fallback failure mode is closed for every pair outside BTC/4h, and
+Adam's own 401/observability gaps — found via real incidents, not
+hypothetically — are fixed one layer down in Eve's budget ledger before
+Phase 4 could hit the identical failure for real money. Phase 4 itself
+remains unauthorized and unexecuted; the pre-registered kill criterion
+(N=5 real sessions) still cannot be evaluated.
