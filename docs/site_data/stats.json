@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-01T23:58:45.940418+00:00",
+  "last_updated": "2026-08-02T02:52:31.164762+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -17,7 +17,8 @@
         "WATCH": 0,
         "NO_TRADE": 1
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "TREND_PULLBACK",
@@ -34,7 +35,8 @@
         "WATCH": 0,
         "NO_TRADE": 9
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -49,9 +51,10 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 9
+        "NO_TRADE": 10
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "TREND_PULLBACK",
@@ -66,9 +69,10 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 9
+        "NO_TRADE": 10
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "VOLATILITY_SQUEEZE",
@@ -83,9 +87,10 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 9
+        "NO_TRADE": 10
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "VOLATILITY_SQUEEZE",
@@ -100,9 +105,10 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 9
+        "NO_TRADE": 10
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "VOLATILITY_SQUEEZE",
@@ -117,9 +123,10 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 9
+        "NO_TRADE": 10
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "RANGE_MEAN_REVERSION",
@@ -136,7 +143,8 @@
         "WATCH": 0,
         "NO_TRADE": 1
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "RANGE_MEAN_REVERSION",
@@ -153,7 +161,8 @@
         "WATCH": 0,
         "NO_TRADE": 1
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "RANGE_MEAN_REVERSION",
@@ -168,9 +177,10 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 11
+        "NO_TRADE": 12
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "RANGE_MEAN_REVERSION",
@@ -185,9 +195,10 @@
         "ENTRY": 1,
         "EXIT": 1,
         "WATCH": 0,
-        "NO_TRADE": 10
+        "NO_TRADE": 11
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "DONCHIAN_TREND",
@@ -204,7 +215,8 @@
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "COINTEGRATION_PAIRS",
@@ -221,7 +233,8 @@
         "WATCH": 0,
         "NO_TRADE": 9
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "ORDERFLOW_IMBALANCE",
@@ -238,7 +251,8 @@
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "ORDERFLOW_IMBALANCE",
@@ -255,7 +269,8 @@
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "GOLD_SILVER_RATIO_MR",
@@ -270,30 +285,28 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 3
+        "NO_TRADE": 4
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "PEAD",
       "strategy_version": "pead-v1.0.0-surprise3pct-hold10",
       "asset": "AAPL",
-      "resolved_trades": 0,
+      "resolved_trades": 1,
       "unverified_trades": 0,
-      "win_rate": null,
-      "expectancy_r": null,
-      "avg_return_pct": null,
+      "win_rate": 0.0,
+      "expectancy_r": -1.044,
+      "avg_return_pct": -4.8784604613463,
       "signal_counts": {
         "ENTRY": 1,
-        "EXIT": 0,
+        "EXIT": 1,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": {
-        "entry_price": 333.16662610473634,
-        "entry_timestamp": "2026-08-01T00:08:17.682257+00:00",
-        "candle_timestamp": "2026-07-31T04:00:00+00:00"
-      }
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "PEAD",
@@ -310,7 +323,8 @@
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 1
     },
     {
       "strategy": "PEAD",
@@ -327,7 +341,8 @@
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "PEAD",
@@ -344,7 +359,8 @@
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 1
     },
     {
       "strategy": "PEAD",
@@ -365,7 +381,8 @@
         "entry_price": 233.39667610473631,
         "entry_timestamp": "2026-08-01T00:08:17.682257+00:00",
         "candle_timestamp": "2026-07-31T04:00:00+00:00"
-      }
+      },
+      "unverified_open_entries": 0
     },
     {
       "strategy": "PEAD",
@@ -382,7 +399,8 @@
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "PEAD",
@@ -399,7 +417,8 @@
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 1
     },
     {
       "strategy": "PEAD",
@@ -416,7 +435,8 @@
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "PEAD",
@@ -433,7 +453,8 @@
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 1
     },
     {
       "strategy": "PEAD",
@@ -450,7 +471,8 @@
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "PEAD",
@@ -467,7 +489,8 @@
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 1
     },
     {
       "strategy": "PEAD",
@@ -488,7 +511,8 @@
         "entry_price": 233.39667610473631,
         "entry_timestamp": "2026-08-01T00:08:17.682257+00:00",
         "candle_timestamp": "2026-07-31T04:00:00+00:00"
-      }
+      },
+      "unverified_open_entries": 0
     },
     {
       "strategy": "PEAD",
@@ -505,7 +529,8 @@
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "PEAD",
@@ -522,7 +547,8 @@
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 1
     },
     {
       "strategy": "DONCHIAN_TREND",
@@ -539,7 +565,8 @@
         "WATCH": 0,
         "NO_TRADE": 1
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "DONCHIAN_TREND",
@@ -556,7 +583,8 @@
         "WATCH": 0,
         "NO_TRADE": 1
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     },
     {
       "strategy": "DONCHIAN_TREND",
@@ -573,7 +601,8 @@
         "WATCH": 0,
         "NO_TRADE": 1
       },
-      "open_position": null
+      "open_position": null,
+      "unverified_open_entries": 0
     }
   ]
 }
