@@ -83,17 +83,19 @@ TIMEFRAME_PERIODS_PER_YEAR: dict[tuple[str, str], int] = {
     (CRYPTO, "4h"): 2190,   # NEW (previously excluded entirely): 6 candles/day x 365
 
     # FOREX (EUR/USD, GBP/USD, USD/JPY).
-    # "1day": 252 -- UNCHANGED VALUE, deliberately kept as-is (feature/timeframe-
-    # periods-asset-aware, 2026-08-01 review): this project's own EURUSD_1day.json/
-    # USDJPY_1day.json measure ~366.8 implied candles/year (Twelve Data serves a
-    # "1day" candle on every calendar day, weekends included, non-flat) -- 252
-    # (a trading-days-only convention) does NOT match that empirically, and is
-    # very likely wrong for what's actually live today. NOT fixed here: this
-    # value is already live on the site (EURUSD_1day/USDJPY_1day Sharpe/vol),
-    # and changing it needs its own dedicated investigation + before/after impact
-    # review, not a side effect of adding "4h". See docs/timeframe_periods_asset_
-    # aware_investigation.md's backlog section.
-    (FOREX, "1day"): 252,
+    # "1day": 365 -- CORRECTED FROM 252 (Phase 1 Fix B, docs/investigations/
+    # phase_b_forex_annualization.md, 2026-08-02). The feature/timeframe-
+    # periods-asset-aware branch's own backlog flagged 252 as likely wrong and
+    # deferred the fix as its own dedicated investigation; that investigation
+    # confirmed it empirically: EURUSD_1day.json/USDJPY_1day.json measure
+    # ~366.8 implied candles/year (Twelve Data serves a "1day" candle on every
+    # calendar day, weekends included, real non-flat O/H/L/C movement on
+    # Saturday/Sunday, weekday distribution statistically uniform Mon-Sun) --
+    # a continuous 7-day/week quoting pattern, not a 252-trading-day calendar.
+    # 365 (not the noisier raw 366.83 sample figure) is used for consistency
+    # with the CRYPTO/COMMODITY_SPOT 24h convention already established in
+    # this same table for continuously-quoted asset classes.
+    (FOREX, "1day"): 365,
     (FOREX, "1week"): 52,
     # "4h": NEW. Deliberately NOT the conventional 24/5-trading-week formula
     # (120h/week / 4h x 52 = 1560) -- this project's own EURUSD_4h.json/

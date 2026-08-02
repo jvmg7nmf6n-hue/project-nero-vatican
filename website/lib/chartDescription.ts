@@ -108,9 +108,17 @@ export function buildChartDescription(params: {
   statsRow: StrategyStats | null;
 }): ChartDescriptionData {
   const resolvedTrades = params.statsRow?.resolved_trades ?? 0;
+  const unverifiedOpenEntries = params.statsRow?.unverified_open_entries ?? 0;
 
   let statusLine: string;
-  if (resolvedTrades <= 0) {
+  if (resolvedTrades <= 0 && unverifiedOpenEntries > 0) {
+    // Phase 1 Fix A (docs/investigations/phase_a_pead_ledger_anomaly.md): an
+    // entry fired but its source can't be confirmed yet -- distinct from
+    // "nothing has happened," same honesty pattern as lib/statLine.ts's
+    // resolved-but-quarantined message.
+    const entryWord = unverifiedOpenEntries === 1 ? "entry" : "entries";
+    statusLine = `${unverifiedOpenEntries} ${entryWord} pending source verification — strategy is live and monitoring for setups.`;
+  } else if (resolvedTrades <= 0) {
     statusLine = "No completed trades yet — strategy is live and monitoring for setups.";
   } else {
     const { wins, losses } = deriveWinLossCounts(resolvedTrades, params.statsRow?.win_rate ?? null);

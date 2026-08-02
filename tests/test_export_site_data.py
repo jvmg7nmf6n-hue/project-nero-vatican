@@ -327,6 +327,41 @@ class QuarantineAwareStatsTest(unittest.TestCase):
 
         self.assertIsNone(bnb_stats["open_position"])
 
+    def test_trailing_unpaired_entry_with_unrecorded_source_is_flagged_as_unverified_open_entry(self) -> None:
+        # Phase 1 Fix A (docs/investigations/phase_a_pead_ledger_anomaly.md):
+        # this is the exact MSFT/TSLA/META PEAD shape -- a lone ENTRY with
+        # data_source=None, no EXIT. open_position stays honestly None (no
+        # confirmed-clean open position exists), but unverified_open_entries
+        # must now surface the same "we can't verify this yet" signal
+        # unverified_trades already gives the resolved-round-trip case, not a
+        # silent, unexplained absence.
+        rows = [
+            _row(1, "r1", BNB_STRATEGY, BNB_VERSION, "BNB", "ENTRY", candle_timestamp=1000,
+                 entry_price=500.0, data_source=None),
+        ]
+        export = build_stats_export(rows, now=NOW)
+        bnb_stats = next(s for s in export["strategies"] if s["strategy"] == BNB_STRATEGY)
+
+        self.assertIsNone(bnb_stats["open_position"])
+        self.assertEqual(bnb_stats["unverified_open_entries"], 1)
+
+    def test_a_confirmed_clean_open_entry_reports_zero_unverified_open_entries(self) -> None:
+        # Sanity check the other direction: a genuinely clean open position
+        # (AAPL/AMZN's real shape) must not be flagged as unverified.
+        rows = [
+            _row(1, "r1", BNB_STRATEGY, BNB_VERSION, "BNB", "ENTRY", candle_timestamp=1000, entry_price=500.0),
+        ]
+        export = build_stats_export(rows, now=NOW)
+        bnb_stats = next(s for s in export["strategies"] if s["strategy"] == BNB_STRATEGY)
+
+        self.assertIsNotNone(bnb_stats["open_position"])
+        self.assertEqual(bnb_stats["unverified_open_entries"], 0)
+
+    def test_unverified_open_entries_is_zero_when_nothing_was_ever_logged(self) -> None:
+        export = build_stats_export([], now=NOW)
+        for s in export["strategies"]:
+            self.assertEqual(s["unverified_open_entries"], 0)
+
     def test_unverified_trades_is_zero_when_nothing_was_ever_logged(self) -> None:
         # Distinguishes "truly awaiting first signal" (0/0) from "has unverified
         # trades pending" (0 resolved, >0 unverified) -- the website needs both

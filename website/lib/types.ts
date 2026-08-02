@@ -70,6 +70,12 @@ export interface StrategyStats {
   avg_return_pct: number | null;
   signal_counts: Record<string, number>;
   open_position: OpenPosition | null;
+  // Phase 1 Fix A (docs/investigations/phase_a_pead_ledger_anomaly.md): the
+  // open-position counterpart to unverified_trades -- 1 when a trailing
+  // ENTRY exists in the raw ledger but couldn't be confirmed as a clean open
+  // position (unrecorded data_source), 0 otherwise. Optional because older
+  // cached exports predate this field. See lib/statLine.ts.
+  unverified_open_entries?: number;
 }
 
 export interface StatsExport {

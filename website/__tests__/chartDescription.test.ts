@@ -117,6 +117,26 @@ describe("buildChartDescription", () => {
     expect(data.openPositionEntryTimestamp).toBeNull();
   });
 
+  // Phase 1 Fix A (docs/investigations/phase_a_pead_ledger_anomaly.md): the
+  // MSFT/TSLA/META PEAD shape -- an ENTRY fired but its source can't be
+  // confirmed. Without this fix the chart page said "No completed trades
+  // yet — strategy is live and monitoring for setups", which is actively
+  // wrong (a real signal did fire); openPositionEntryTimestamp stays null
+  // either way (no confirmed-clean open position exists), but statusLine
+  // must now distinguish "nothing has happened" from "something happened,
+  // pending verification."
+  it("shows a pending-verification status line for an unverified open entry, not the plain no-trades-yet line", () => {
+    const data = buildChartDescription({
+      asset: "AAPL",
+      timeframe: "1day",
+      candleCount: 199,
+      periodsPerYear: 252,
+      statsRow: stats({ resolved_trades: 0, unverified_open_entries: 1 }),
+    });
+    expect(data.statusLine).toBe("1 entry pending source verification — strategy is live and monitoring for setups.");
+    expect(data.openPositionEntryTimestamp).toBeNull();
+  });
+
   it("shows the trade-count status line and marker legend when resolved_trades > 0", () => {
     const data = buildChartDescription({
       asset: "GOLD",
