@@ -123,6 +123,27 @@ def evaluate_forward_tick(
     strategy_key = _strategy_key(attempt_id)
     run_id = f"repair-lab-forward-{now.date().isoformat()}"
 
+    # Idempotency, EXIT side (Phase 2 Fix J, docs/investigations/
+    # phase2_pending_cleanup_report.md): re-evaluating the IDENTICAL exit
+    # tick must be a no-op, matching the ENTRY-side guarantee this
+    # function's own docstring already claims. Cannot be caught by
+    # insert_execution_log_row's UNIQUE constraint the way a repeat ENTRY
+    # is: once an EXIT is logged, _reconstruct_open_trade's "last row is an
+    # ENTRY?" check reports no open position, so a repeat call never
+    # re-enters the `if open_trade is not None` branch below at all -- it
+    # falls through to entry evaluation and can log a brand-new, phantom
+    # ENTRY at the SAME candle_timestamp (a different signal_type, so the
+    # UNIQUE constraint never sees it as a duplicate). Keying idempotency on
+    # "has THIS attempt logged ANY row for this candle_timestamp already"
+    # (not "was the last row specifically an ENTRY") closes that gap for
+    # both directions at once, before either branch below ever runs.
+    already_logged = any(
+        r.candle_timestamp == candle_time
+        for r in list_execution_log(db_path=db_path, strategy=strategy_key)
+    )
+    if already_logged:
+        return ForwardTickResult("NO_TRADE")
+
     exit_plan = parse_exit_plan(hypothesis.get("structured_exit_plan"))
     open_trade = _reconstruct_open_trade(attempt_id, db_path)
     state = MeanReversionState(equity=params.initial_equity, open_trade=open_trade)
