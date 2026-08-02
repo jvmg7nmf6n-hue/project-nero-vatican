@@ -1,6 +1,23 @@
 import { render, screen } from "@testing-library/react";
 import StrategyCard from "@/components/StrategyCard";
-import type { LedgerRow, StrategyRosterEntry, StrategyStats } from "@/lib/types";
+import type { BacktestEvaluation, LedgerRow, StrategyRosterEntry, StrategyStats } from "@/lib/types";
+
+function makeBacktestEvaluation(overrides: Partial<BacktestEvaluation> = {}): BacktestEvaluation {
+  return {
+    verdict_is: null,
+    verdict_oos: null,
+    is_trades: null,
+    oos_trades: null,
+    is_expectancy_r: null,
+    oos_expectancy_r: null,
+    evaluated_at: null,
+    data_source: null,
+    method: null,
+    untestable_reason: null,
+    note: "Not yet evaluated with this structured format.",
+    ...overrides,
+  };
+}
 
 function makeEntry(overrides: Partial<StrategyRosterEntry> = {}): StrategyRosterEntry {
   return {
@@ -10,6 +27,7 @@ function makeEntry(overrides: Partial<StrategyRosterEntry> = {}): StrategyRoster
     timeframe: "1week",
     verification_status: "triple-verified",
     source_report: "docs/statistical_harness_upgrade.md",
+    backtest_evaluation: makeBacktestEvaluation(),
     ...overrides,
   };
 }
@@ -146,6 +164,45 @@ describe("StrategyCard current-signal color per state", () => {
       unmount();
     });
     expect(seenClasses.size).toBe(4);
+  });
+});
+
+describe("StrategyCard backtest evaluation indicator", () => {
+  it("shows no evaluation indicator when nothing has been structurally evaluated", () => {
+    render(<StrategyCard entry={makeEntry()} recentRows={[]} stats={[]} />);
+    expect(screen.queryByTestId("card-backtest-verdict")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("card-backtest-untestable")).not.toBeInTheDocument();
+  });
+
+  it("shows the DIED/INSUFFICIENT_SAMPLE verdict on the card, not just the tier badge", () => {
+    render(
+      <StrategyCard
+        entry={makeEntry({
+          backtest_evaluation: makeBacktestEvaluation({ verdict_is: "DIED", verdict_oos: "INSUFFICIENT_SAMPLE" }),
+        })}
+        recentRows={[]}
+        stats={[]}
+      />
+    );
+    const verdict = screen.getByTestId("card-backtest-verdict");
+    expect(verdict).toHaveTextContent("DIED");
+    expect(verdict).toHaveTextContent("INSUFFICIENT_SAMPLE");
+  });
+
+  it("shows an untestable-by-standard-harness badge, never blank, for a two-asset strategy", () => {
+    render(
+      <StrategyCard
+        entry={makeEntry({
+          backtest_evaluation: makeBacktestEvaluation({
+            untestable_reason: "Not compatible with the single-asset rule_dsl/auto_tester harness.",
+            is_trades: 61,
+          }),
+        })}
+        recentRows={[]}
+        stats={[]}
+      />
+    );
+    expect(screen.getByTestId("card-backtest-untestable")).toHaveTextContent("Untestable by standard harness");
   });
 });
 

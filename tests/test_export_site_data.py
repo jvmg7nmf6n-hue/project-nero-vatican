@@ -467,6 +467,33 @@ class BuildStrategiesExportTest(unittest.TestCase):
         for entry in news_entries:
             self.assertIsNone(entry["source_report"])
 
+    def test_roster_includes_backtest_evaluation_from_the_mapping(self) -> None:
+        # RANGE_MEAN_REVERSION BTC/24h (added this session): the roster export
+        # must actually carry the structured DIED/INSUFFICIENT_SAMPLE verdict,
+        # not just the free-text verification_status summary.
+        export = build_strategies_export(now=NOW)
+        long_only = next(
+            e for e in export["strategies"]
+            if e["name"] == "RANGE_MEAN_REVERSION" and e["version"] == "range-mean-reversion-v1.1.0-long-only"
+        )
+        self.assertEqual(long_only["backtest_evaluation"]["verdict_is"], "DIED")
+        self.assertEqual(long_only["backtest_evaluation"]["verdict_oos"], "INSUFFICIENT_SAMPLE")
+
+    def test_cointegration_pairs_roster_entry_carries_untestable_reason_and_real_evidence(self) -> None:
+        export = build_strategies_export(now=NOW)
+        pairs_entry = next(e for e in export["strategies"] if e["name"] == PAIRS_STRATEGY)
+        evaluation = pairs_entry["backtest_evaluation"]
+        self.assertIsNotNone(evaluation["untestable_reason"])
+        self.assertEqual(evaluation["is_trades"], 61)
+        self.assertEqual(evaluation["oos_trades"], 22)
+
+    def test_configs_with_no_structured_evaluation_export_the_default(self) -> None:
+        export = build_strategies_export(now=NOW)
+        news_entries = [e for e in export["strategies"] if e["name"] == "NEWS_SENTIMENT"]
+        for entry in news_entries:
+            self.assertIsNone(entry["backtest_evaluation"]["verdict_is"])
+            self.assertIsNotNone(entry["backtest_evaluation"]["note"])
+
 
 class WriteSiteDataTest(unittest.TestCase):
     def setUp(self) -> None:

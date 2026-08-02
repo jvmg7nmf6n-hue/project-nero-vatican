@@ -26,6 +26,20 @@ const mockFetchQuantCrossAsset = jest.mocked(data.fetchQuantCrossAsset);
 
 const STRATEGY_ID = "breakout-momentum--gold--breakout-momentum-v1-2-0-gold-calibrated-1week";
 
+const DEFAULT_BACKTEST_EVALUATION = {
+  verdict_is: null,
+  verdict_oos: null,
+  is_trades: null,
+  oos_trades: null,
+  is_expectancy_r: null,
+  oos_expectancy_r: null,
+  evaluated_at: null,
+  data_source: null,
+  method: null,
+  untestable_reason: null,
+  note: "Not yet evaluated with this structured format.",
+};
+
 const ROSTER_ENTRY = {
   name: "BREAKOUT_MOMENTUM",
   version: "breakout-momentum-v1.2.0-gold-calibrated-1week",
@@ -33,6 +47,7 @@ const ROSTER_ENTRY = {
   timeframe: "1week",
   verification_status: "triple-verified",
   source_report: "docs/statistical_harness_upgrade.md",
+  backtest_evaluation: DEFAULT_BACKTEST_EVALUATION,
 };
 
 const EMPTY_STATS_EXPORT: StatsExport = { schema_version: 1, last_updated: "x", strategies: [] };
@@ -219,6 +234,89 @@ describe("StrategyDetailPage", () => {
     expect(screen.getByTestId("no-source-report")).toBeInTheDocument();
   });
 
+  it("shows the not-yet-evaluated note when no structured backtest evaluation exists", async () => {
+    setupMocks();
+
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    expect(screen.getByTestId("backtest-evaluation-not-yet")).toBeInTheDocument();
+    expect(screen.queryByTestId("backtest-evaluation-stats")).not.toBeInTheDocument();
+  });
+
+  it("shows the DIED/INSUFFICIENT_SAMPLE verdict, trade counts, and data source for a real evaluation", async () => {
+    setupMocks({
+      strategies: {
+        schema_version: 1,
+        last_updated: "x",
+        strategies: [
+          {
+            ...ROSTER_ENTRY,
+            backtest_evaluation: {
+              ...DEFAULT_BACKTEST_EVALUATION,
+              verdict_is: "DIED",
+              verdict_oos: "INSUFFICIENT_SAMPLE",
+              is_trades: 10,
+              oos_trades: 5,
+              is_expectancy_r: -0.28,
+              oos_expectancy_r: 0.744,
+              evaluated_at: "2026-08-02",
+              data_source: "docs/research_data/evaluation_candles/BTC_24h.json",
+              method: "split_chronological + bootstrap_mean_r_ci + classify_verdict",
+              note: null,
+            },
+          },
+        ],
+      },
+    });
+
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    expect(screen.queryByTestId("backtest-evaluation-not-yet")).not.toBeInTheDocument();
+    expect(screen.getByTestId("verdict-is")).toHaveTextContent("DIED");
+    expect(screen.getByTestId("verdict-oos")).toHaveTextContent("INSUFFICIENT_SAMPLE");
+    expect(screen.getByTestId("trade-counts")).toHaveTextContent("10 / 5");
+    expect(screen.getByTestId("backtest-evaluation-meta")).toHaveTextContent("2026-08-02");
+    expect(screen.getByTestId("backtest-evaluation-meta")).toHaveTextContent("BTC_24h.json");
+  });
+
+  it("shows the untestable-by-standard-harness note alongside its own real evidence, never blank", async () => {
+    setupMocks({
+      strategies: {
+        schema_version: 1,
+        last_updated: "x",
+        strategies: [
+          {
+            name: "COINTEGRATION_PAIRS",
+            version: "cointegration-pairs-v1.0.0",
+            asset: "BTC-ETH",
+            timeframe: "12h",
+            verification_status: "verified — weakest, live-proving",
+            source_report: null,
+            backtest_evaluation: {
+              ...DEFAULT_BACKTEST_EVALUATION,
+              is_trades: 61,
+              oos_trades: 22,
+              is_expectancy_r: 0.047,
+              oos_expectancy_r: 0.003,
+              untestable_reason: "Not compatible with the single-asset rule_dsl/auto_tester harness.",
+              note: null,
+            },
+          },
+        ],
+      },
+    });
+
+    const jsx = await StrategyDetailPage({ params: { id: "cointegration-pairs--btc-eth--cointegration-pairs-v1-0-0" } });
+    render(jsx);
+
+    expect(screen.getByTestId("backtest-evaluation-untestable")).toHaveTextContent(
+      "Not compatible with the single-asset rule_dsl/auto_tester harness."
+    );
+    expect(screen.getByTestId("trade-counts")).toHaveTextContent("61 / 22");
+  });
+
   it("throws (triggering the 404 boundary) for an id matching no roster entry", async () => {
     setupMocks();
 
@@ -317,6 +415,7 @@ describe("StrategyDetailPage candlestick chart (Day 2)", () => {
             timeframe: "12h",
             verification_status: "verified — weakest, live-proving",
             source_report: null,
+            backtest_evaluation: DEFAULT_BACKTEST_EVALUATION,
           },
         ],
       },
@@ -559,6 +658,7 @@ describe("StrategyDetailPage Live Market Status Widget (Day 7)", () => {
             timeframe: "12h",
             verification_status: "verified — weakest, live-proving",
             source_report: null,
+            backtest_evaluation: DEFAULT_BACKTEST_EVALUATION,
           },
         ],
       },
@@ -619,6 +719,7 @@ describe("StrategyDetailPage Chart Description (Day 7)", () => {
             timeframe: "12h",
             verification_status: "verified — weakest, live-proving",
             source_report: null,
+            backtest_evaluation: DEFAULT_BACKTEST_EVALUATION,
           },
         ],
       },
@@ -695,6 +796,7 @@ describe("StrategyDetailPage ChatBot (Day 7)", () => {
             timeframe: "12h",
             verification_status: "verified — weakest, live-proving",
             source_report: null,
+            backtest_evaluation: DEFAULT_BACKTEST_EVALUATION,
           },
         ],
       },

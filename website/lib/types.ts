@@ -22,6 +22,28 @@ export interface LedgerExport {
   rows: LedgerRow[];
 }
 
+// nero_core.execution.backtest_evaluation -- structured backtest evidence,
+// distinct from verification_status's free-text summary above. verdict_is/
+// verdict_oos are null both when a config hasn't been evaluated with this
+// structured format yet (see `note`) AND when it structurally cannot run
+// through the standard classify_verdict harness (see `untestable_reason`)
+// -- these are different claims, never conflated: read is_trades/oos_trades/
+// is_expectancy_r/oos_expectancy_r alongside `untestable_reason` before
+// assuming null means "no evidence."
+export interface BacktestEvaluation {
+  verdict_is: string | null;
+  verdict_oos: string | null;
+  is_trades: number | null;
+  oos_trades: number | null;
+  is_expectancy_r: number | null;
+  oos_expectancy_r: number | null;
+  evaluated_at: string | null;
+  data_source: string | null;
+  method: string | null;
+  untestable_reason: string | null;
+  note: string | null;
+}
+
 export interface StrategyRosterEntry {
   name: string;
   version: string;
@@ -29,6 +51,7 @@ export interface StrategyRosterEntry {
   timeframe: string;
   verification_status: string;
   source_report: string | null;
+  backtest_evaluation: BacktestEvaluation;
 }
 
 // Manually-curated docs/site_data/strategy_descriptions.json -- keyed by strategy_id

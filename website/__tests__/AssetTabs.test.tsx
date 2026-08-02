@@ -10,6 +10,19 @@ function makeEntry(overrides: Partial<StrategyRosterEntry>): StrategyRosterEntry
     timeframe: "1week",
     verification_status: "verified",
     source_report: null,
+    backtest_evaluation: {
+      verdict_is: null,
+      verdict_oos: null,
+      is_trades: null,
+      oos_trades: null,
+      is_expectancy_r: null,
+      oos_expectancy_r: null,
+      evaluated_at: null,
+      data_source: null,
+      method: null,
+      untestable_reason: null,
+      note: "Not yet evaluated with this structured format.",
+    },
     ...overrides,
   };
 }

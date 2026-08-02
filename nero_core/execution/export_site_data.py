@@ -91,6 +91,7 @@ from nero_core.execution.quarantine import (
     exclude_unrecorded_source,
     is_quarantined,
 )
+from nero_core.execution.backtest_evaluation import backtest_evaluation_for
 from nero_core.execution.source_reports import source_report_for
 from nero_core.execution.verification_status import verification_status_for
 from nero_core.strategies.news_sentiment import STRATEGY_VERSION as NEWS_SENTIMENT_VERSION
@@ -325,6 +326,7 @@ def _roster_entries() -> list[dict[str, object]]:
             "timeframe": config.timeframe,
             "verification_status": verification_status_for(config.strategy_id, config.strategy_version, config.asset),
             "source_report": source_report_for(config.strategy_id, config.strategy_version, config.asset),
+            "backtest_evaluation": backtest_evaluation_for(config.strategy_id, config.strategy_version, config.asset),
         }
         for config in SINGLE_ASSET_CONFIGS
     ]
@@ -337,6 +339,7 @@ def _roster_entries() -> list[dict[str, object]]:
             "timeframe": PAIRS_TIMEFRAME,
             "verification_status": verification_status_for(COINTEGRATION_PAIRS_ID, COINTEGRATION_PAIRS_VERSION, pairs_label),
             "source_report": source_report_for(COINTEGRATION_PAIRS_ID, COINTEGRATION_PAIRS_VERSION, pairs_label),
+            "backtest_evaluation": backtest_evaluation_for(COINTEGRATION_PAIRS_ID, COINTEGRATION_PAIRS_VERSION, pairs_label),
         }
     )
     for asset in NEWS_SENTIMENT_ASSETS:
@@ -348,6 +351,7 @@ def _roster_entries() -> list[dict[str, object]]:
                 "timeframe": "daily",
                 "verification_status": verification_status_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_VERSION, asset),
                 "source_report": source_report_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_VERSION, asset),
+                "backtest_evaluation": backtest_evaluation_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_VERSION, asset),
             }
         )
     # news-sentiment-v2.0.0-llm-claude wired 2026-07-28 IN PARALLEL with v1.0.0 above
@@ -363,6 +367,7 @@ def _roster_entries() -> list[dict[str, object]]:
                 "timeframe": "daily",
                 "verification_status": verification_status_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_LLM_VERSION, asset),
                 "source_report": source_report_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_LLM_VERSION, asset),
+                "backtest_evaluation": backtest_evaluation_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_LLM_VERSION, asset),
             }
         )
     for asset in ORDERFLOW_BINANCE_SYMBOLS:
@@ -374,6 +379,7 @@ def _roster_entries() -> list[dict[str, object]]:
                 "timeframe": "snapshot",
                 "verification_status": verification_status_for(ORDERFLOW_ID, ORDERFLOW_VERSION, asset),
                 "source_report": source_report_for(ORDERFLOW_ID, ORDERFLOW_VERSION, asset),
+                "backtest_evaluation": backtest_evaluation_for(ORDERFLOW_ID, ORDERFLOW_VERSION, asset),
             }
         )
     entries.append(
@@ -384,6 +390,7 @@ def _roster_entries() -> list[dict[str, object]]:
             "timeframe": GOLD_SILVER_RATIO_TIMEFRAME,
             "verification_status": verification_status_for(GOLD_SILVER_RATIO_ID, GOLD_SILVER_RATIO_VERSION, GOLD_SILVER_RATIO_LABEL),
             "source_report": source_report_for(GOLD_SILVER_RATIO_ID, GOLD_SILVER_RATIO_VERSION, GOLD_SILVER_RATIO_LABEL),
+            "backtest_evaluation": backtest_evaluation_for(GOLD_SILVER_RATIO_ID, GOLD_SILVER_RATIO_VERSION, GOLD_SILVER_RATIO_LABEL),
         }
     )
     for config in PEAD_CONFIGS:
@@ -395,6 +402,7 @@ def _roster_entries() -> list[dict[str, object]]:
                 "timeframe": "1day",
                 "verification_status": verification_status_for(PEAD_ID, config.strategy_version, config.ticker),
                 "source_report": source_report_for(PEAD_ID, config.strategy_version, config.ticker),
+                "backtest_evaluation": backtest_evaluation_for(PEAD_ID, config.strategy_version, config.ticker),
             }
         )
     for config in DONCHIAN_FOREX_CONFIGS:
@@ -406,6 +414,7 @@ def _roster_entries() -> list[dict[str, object]]:
                 "timeframe": DONCHIAN_FOREX_TIMEFRAME,
                 "verification_status": verification_status_for(DONCHIAN_TREND_ID, config.strategy_version, config.pair),
                 "source_report": source_report_for(DONCHIAN_TREND_ID, config.strategy_version, config.pair),
+                "backtest_evaluation": backtest_evaluation_for(DONCHIAN_TREND_ID, config.strategy_version, config.pair),
             }
         )
     return entries

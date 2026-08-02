@@ -74,6 +74,22 @@ export default function StrategyCard({ entry, recentRows, stats }: StrategyCardP
         <div className="mt-1">
           <TierBadge tier={tier} />
         </div>
+        {/* Structured backtest evaluation (verdict_is/verdict_oos/untestable_reason)
+            -- only shown when this session's own structured harness actually produced
+            one; a strategy with no entry here still has its tier badge above (derived
+            from verification_status), so this is additive detail, not the only signal.
+            Never omitted when it exists -- the whole point is that a card must not look
+            identical whether a strategy DIED in-sample or was never tested at all. */}
+        {entry.backtest_evaluation.untestable_reason ? (
+          <p data-testid="card-backtest-untestable" className="mt-1 text-[11px] text-gold">
+            Untestable by standard harness
+          </p>
+        ) : entry.backtest_evaluation.verdict_is || entry.backtest_evaluation.verdict_oos ? (
+          <p data-testid="card-backtest-verdict" className="mt-1 text-[11px] text-muted">
+            Backtest: {entry.backtest_evaluation.verdict_is ?? "n/a"} (IS) /{" "}
+            {entry.backtest_evaluation.verdict_oos ?? "n/a"} (OOS)
+          </p>
+        ) : null}
       </div>
 
       {/* CURRENT SIGNAL -- "what is it doing right now?" Dynamic, ledger-derived.

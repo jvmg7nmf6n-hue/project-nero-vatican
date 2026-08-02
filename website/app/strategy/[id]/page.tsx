@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import BacktestEvaluationPanel from "@/components/BacktestEvaluationPanel";
 import ChartDescription from "@/components/ChartDescription";
 import ChartTabs from "@/components/ChartTabs";
 import ChatBot from "@/components/ChatBot";
@@ -300,6 +301,9 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
 
       <section>
         <h2 className="font-serif text-xl text-parchment mb-2">Backtest evidence</h2>
+        <div className="mb-3">
+          <BacktestEvaluationPanel evaluation={entry.backtest_evaluation} />
+        </div>
         {entry.source_report ? (
           <a
             href={`${REPO_BLOB_BASE}/${entry.source_report}`}
