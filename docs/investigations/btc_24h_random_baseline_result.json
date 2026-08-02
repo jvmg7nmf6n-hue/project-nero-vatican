@@ -1,0 +1,17 @@
+{
+  "asset": "BTC",
+  "timeframe": "24h",
+  "k": 200,
+  "seed": 20260718,
+  "generated_at": "2026-08-02T00:00:00+00:00",
+  "verdict_counts": {
+    "SKIPPED": 136,
+    "DIED": 64
+  },
+  "promising_watchlist_names": [],
+  "row_count": 1800,
+  "date_range": [
+    1630108800,
+    1785542400
+  ]
+}
