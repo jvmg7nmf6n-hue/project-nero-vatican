@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-02T18:04:14.433386+00:00",
+  "last_updated": "2026-08-02T19:45:53.897665+00:00",
   "metrics": [
     {
       "asset": "AAPL",
@@ -13,7 +13,7 @@
       "realized_vol_annualized": 25.635385163430303,
       "sharpe": 0.9278807232746097,
       "sortino": 1.311387648331457,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -27,7 +27,7 @@
       "realized_vol_annualized": 28.546387679189202,
       "sharpe": 0.707889162446537,
       "sortino": 0.9205126325104046,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -41,7 +41,7 @@
       "realized_vol_annualized": 35.310176871626034,
       "sharpe": 0.687275234992361,
       "sortino": 1.1227440595741924,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -50,12 +50,12 @@
       "periods_per_year": 252,
       "window_used": 199,
       "rf_annual": 0.045,
-      "log_return_annualized": 0.2711203419583591,
+      "log_return_annualized": 0.27112034195835905,
       "zscore_current": 2.705895076672297,
       "realized_vol_annualized": 36.917339230522316,
-      "sharpe": 0.6125044401125436,
-      "sortino": 0.9751717873243292,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "sharpe": 0.6125044401125435,
+      "sortino": 0.9751717873243289,
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -69,7 +69,7 @@
       "realized_vol_annualized": 36.28257755129964,
       "sharpe": -1.0225371336557376,
       "sortino": -1.4645565423003355,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -83,7 +83,7 @@
       "realized_vol_annualized": 47.24383006038494,
       "sharpe": -2.037411893349353,
       "sortino": -2.604150490274553,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -92,12 +92,12 @@
       "periods_per_year": 2190,
       "window_used": 199,
       "rf_annual": 0.045,
-      "log_return_annualized": 0.7483589892498518,
+      "log_return_annualized": 0.7483589892498517,
       "zscore_current": 0.026875164577862706,
       "realized_vol_annualized": 29.682695097535188,
-      "sharpe": 2.369592743983203,
-      "sortino": 3.7445040691183773,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "sharpe": 2.3695927439832025,
+      "sortino": 3.744504069118377,
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -111,7 +111,7 @@
       "realized_vol_annualized": 32.89963906140837,
       "sharpe": -2.4317372736910863,
       "sortino": -3.138456861662422,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -125,7 +125,7 @@
       "realized_vol_annualized": 47.77127901564748,
       "sharpe": -1.760083248121423,
       "sortino": -2.2815887578085077,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -139,7 +139,7 @@
       "realized_vol_annualized": 32.31494019430722,
       "sharpe": 2.042594471744005,
       "sortino": 3.188143560603308,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -148,12 +148,12 @@
       "periods_per_year": 365,
       "window_used": 199,
       "rf_annual": 0.045,
-      "log_return_annualized": -0.012821268372789189,
+      "log_return_annualized": -0.0128212683727892,
       "zscore_current": 1.709148534196547,
       "realized_vol_annualized": 6.057143365049861,
-      "sharpe": -0.9545963317695586,
-      "sortino": -1.3405028786588196,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "sharpe": -0.9545963317695588,
+      "sortino": -1.34050287865882,
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -167,7 +167,7 @@
       "realized_vol_annualized": 7.015479345305027,
       "sharpe": -0.040899750646524576,
       "sortino": -0.0638148534986609,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -181,7 +181,7 @@
       "realized_vol_annualized": 5.239859469054302,
       "sharpe": 1.8053007405638177,
       "sortino": 3.1280567013736404,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -195,7 +195,7 @@
       "realized_vol_annualized": 7.427850455246501,
       "sharpe": 0.04963664074642154,
       "sortino": 0.0754422220165786,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -209,7 +209,7 @@
       "realized_vol_annualized": 17.165229207753992,
       "sharpe": 1.0654936276577098,
       "sortino": 1.6619999663509875,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -223,7 +223,7 @@
       "realized_vol_annualized": 29.853119289970444,
       "sharpe": -0.9648263762901751,
       "sortino": -1.2546053941456994,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -237,7 +237,7 @@
       "realized_vol_annualized": 21.048979565638803,
       "sharpe": 0.531560135116478,
       "sortino": 0.7742910869412442,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -251,7 +251,7 @@
       "realized_vol_annualized": 32.565512724848,
       "sharpe": 1.316752777521142,
       "sortino": 2.1086367563443917,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -260,12 +260,12 @@
       "periods_per_year": 252,
       "window_used": 199,
       "rf_annual": 0.045,
-      "log_return_annualized": 0.5011238774808968,
+      "log_return_annualized": 0.5011238774808969,
       "zscore_current": 0.3191767879759011,
       "realized_vol_annualized": 33.43561291114596,
-      "sharpe": 1.3641857820672556,
-      "sortino": 2.1543522801682222,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "sharpe": 1.364185782067256,
+      "sortino": 2.1543522801682227,
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -279,7 +279,7 @@
       "realized_vol_annualized": 41.287568825080434,
       "sharpe": -0.8411695266054429,
       "sortino": -1.1247012255105087,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -293,7 +293,7 @@
       "realized_vol_annualized": 42.49369154295902,
       "sharpe": -0.8795130809220392,
       "sortino": -1.211203123826285,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -302,12 +302,12 @@
       "periods_per_year": 252,
       "window_used": 199,
       "rf_annual": 0.045,
-      "log_return_annualized": -0.1185766382867467,
+      "log_return_annualized": -0.11857663828674672,
       "zscore_current": 3.1098911082214116,
       "realized_vol_annualized": 34.28846263963211,
-      "sharpe": -0.477060287029835,
-      "sortino": -0.6991325540808623,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "sharpe": -0.4770602870298351,
+      "sortino": -0.6991325540808625,
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -321,7 +321,7 @@
       "realized_vol_annualized": 35.681261373788836,
       "sharpe": -0.49593277022203763,
       "sortino": -0.7067720520191523,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -335,7 +335,7 @@
       "realized_vol_annualized": 37.65879248729991,
       "sharpe": 0.25110812021945583,
       "sortino": 0.36080230659837603,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -344,12 +344,12 @@
       "periods_per_year": 252,
       "window_used": 199,
       "rf_annual": 0.045,
-      "log_return_annualized": 0.07255162538319797,
+      "log_return_annualized": 0.07255162538319793,
       "zscore_current": -0.6553098607931924,
       "realized_vol_annualized": 36.73904420979978,
-      "sharpe": 0.07499276580485685,
-      "sortino": 0.10493856348474487,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "sharpe": 0.07499276580485673,
+      "sortino": 0.1049385634847447,
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -363,7 +363,7 @@
       "realized_vol_annualized": null,
       "sharpe": null,
       "sortino": null,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -377,7 +377,7 @@
       "realized_vol_annualized": null,
       "sharpe": null,
       "sortino": null,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -391,7 +391,7 @@
       "realized_vol_annualized": null,
       "sharpe": null,
       "sortino": null,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -405,7 +405,7 @@
       "realized_vol_annualized": 46.587295390748146,
       "sharpe": -0.9706224964430854,
       "sortino": -1.254122423156421,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -419,7 +419,7 @@
       "realized_vol_annualized": 46.14231367515378,
       "sharpe": -0.9236521963421791,
       "sortino": -1.178918966031642,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -433,7 +433,7 @@
       "realized_vol_annualized": 8.26368270091074,
       "sharpe": -0.6696769629309473,
       "sortino": -0.78314552907379,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -447,7 +447,7 @@
       "realized_vol_annualized": 9.981554033797831,
       "sharpe": -0.19991528275692658,
       "sortino": -0.2544451925408396,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     },
     {
@@ -461,7 +461,7 @@
       "realized_vol_annualized": 11.277435852922713,
       "sharpe": -3.1764583982464187,
       "sortino": -3.5433797026147262,
-      "computed_at": "2026-08-02T18:04:14.433386+00:00",
+      "computed_at": "2026-08-02T19:45:53.897665+00:00",
       "rf_source": "fallback_constant"
     }
   ]
