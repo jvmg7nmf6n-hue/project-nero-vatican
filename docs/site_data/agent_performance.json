@@ -53,5 +53,25 @@
       "total_llm_cost_usd": 0.0,
       "cost_limit_hit": false
     }
+  ],
+  "corrections": [
+    {
+      "correction_id": "correction-2026-08-02-run0-status",
+      "applies_to_run_at": "2026-07-29T16:45:14.151752+00:00",
+      "corrected_at": "2026-08-02T14:52:22.526701+00:00",
+      "reason_field_absent": "The 'status' and 'errors' fields were added to nero_core.research_agent.performance._run_entry in commit 8204f9e ('pipeline: surface ScanResult.scan_errors and GenerationRunResult.errors'), which post-dates this run. This run predates that instrumentation entirely, so neither field was ever recorded for it -- this is not a data-loss bug, the field simply did not exist yet.",
+      "inferred_status": "clean",
+      "inferred_status_basis": "Commit b3361b4 ('research_agent: real scan run + closing report'), whose diff includes this exact run entry, documents it directly: api_key=\"\" was passed deliberately (a prior key-exposure incident that session; the key was rotated), so zero live API calls were attempted on purpose. The scan itself ran and found 3 extreme z-score conditions; llm_calls_made=0 and all-zero downstream counts reflect that no hypothesis generation was ever attempted, not a failure. Matches STATUS_CLEAN (no scan_errors, no generation errors) under today's status/errors scheme -- this is a documented historical fact from the commit that produced this entry, not a guess from the numbers alone.",
+      "note": "The original run entry above (runs[0]) is left byte-identical -- this is an appended annotation, never a mutation of an audit record."
+    },
+    {
+      "correction_id": "correction-2026-08-02-run1-status",
+      "applies_to_run_at": "2026-07-29T17:17:03.810695+00:00",
+      "corrected_at": "2026-08-02T14:52:22.526701+00:00",
+      "reason_field_absent": "The 'status' and 'errors' fields were added to nero_core.research_agent.performance._run_entry in commit 8204f9e ('pipeline: surface ScanResult.scan_errors and GenerationRunResult.errors'), which post-dates this run. This run predates that instrumentation entirely, so neither field was ever recorded for it -- this is not a data-loss bug, the field simply did not exist yet.",
+      "inferred_status": "error",
+      "inferred_status_basis": "Commit 4189f6b ('research_agent: preflight API key validation + real run follow-up') documents this run directly: 'A real end-to-end run against the actual Claude API failed with 401 Unauthorized on all 3 calls -- the run correctly recorded 3 failed attempts and $0 cost.' That is exactly this entry's own shape (llm_calls_made=3, total_llm_cost_usd=0.0, hypotheses_generated=0) -- llm_calls_made=3 with no failure indicator is worse than a blank panel, because it asserts something untrue; this correction exists so a reader of the raw data alone (not just the commit history) can see the failure. Matches STATUS_ERROR under today's status/errors scheme. This is a documented historical fact from the commit that produced this entry, not a guess from the numbers alone.",
+      "note": "The original run entry above (runs[1]) is left byte-identical -- this is an appended annotation, never a mutation of an audit record."
+    }
   ]
 }

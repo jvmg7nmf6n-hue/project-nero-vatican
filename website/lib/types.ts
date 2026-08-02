@@ -387,9 +387,26 @@ export interface AgentPerformanceRun {
   cost_limit_hit: boolean;
 }
 
+// A correction record NEVER edits the run entry it applies to (see
+// docs/site_data/agent_performance.json's own two 2026-07-29 entries, which
+// predate `status`/`errors` existing at all) -- it is an appended,
+// independently-dated annotation inferring what that field would have said,
+// with its evidentiary basis stated explicitly. Optional: only present once
+// at least one correction has ever been recorded.
+export interface AgentPerformanceCorrection {
+  correction_id: string;
+  applies_to_run_at: string;
+  corrected_at: string;
+  reason_field_absent: string;
+  inferred_status: AgentRunStatus;
+  inferred_status_basis: string;
+  note: string;
+}
+
 export interface AgentPerformanceExport {
   schema_version: number;
   last_updated: string | null;
   cumulative: AgentPerformanceCumulative;
   runs: AgentPerformanceRun[];
+  corrections?: AgentPerformanceCorrection[];
 }
