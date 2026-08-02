@@ -60,6 +60,33 @@ the CI's own bounds (SE ~= CI width / (2*1.96), z = mean_r/SE, p from the
 standard normal CDF) -- explicitly an approximation, not an exact bootstrap
 p-value, since the harness itself is never modified to expose the raw
 distribution.
+
+P-VALUE RELIABILITY GATE (added after a real K=200 random-baseline run
+exposed a live bug -- see docs/investigations/eve_engine_v1_report.md):
+bootstrap resampling on a half with very few trades (most commonly exactly
+1) always resamples the SAME single value, collapsing lower_2_5==upper_97_5
+to a zero-width CI. The original version of normal_approx_p_value treated
+that degenerate SE as "p=0.0" (maximally significant) whenever mean_r != 0
+-- fabricating a significant-looking p-value from a single data point. Two
+independent guards now exist, and BOTH fail toward "no p-value," never
+toward significance:
+  1. normal_approx_p_value itself returns None (not 0.0/1.0) whenever the
+     CI's own implied standard error is zero or numerically indistinguishable
+     from zero (see _MIN_RELIABLE_SE below) -- a degenerate CI is not
+     evidence of anything, regardless of which half or how many trades
+     produced it.
+  2. score_hypothesis additionally nulls p_value_is/p_value_oos outright
+     whenever that half's own trade count is below MIN_SAMPLE_SIZE (tools.
+     backtest_statistics's own constant, reused unmodified) -- even a half
+     with, say, 15 trades and a non-degenerate CI is still underpowered by
+     this project's own sample-size bar, and its p-value/FDR-family
+     membership should not imply otherwise.
+Neither guard touches verdict_is/verdict_oos/verdict_combined in any way --
+those are computed entirely independently by _map_half_verdict, which
+already has its own, separate INSUFFICIENT_SAMPLE handling. A hypothesis's
+verdict is unaffected by whether its p-value happens to be null --
+test_eve_scoring_fdr.py has a dedicated regression test proving exactly
+this (VerdictUnaffectedByPValueGateTest).
 """
 from __future__ import annotations
 
@@ -130,14 +157,26 @@ def _standard_normal_cdf(x: float) -> float:
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
 
 
+# Below this, the CI's implied standard error is treated as degenerate --
+# not just exactly zero (the common case: a single-trade half, where
+# resampling with replacement always draws that one value, so
+# lower_2_5 == upper_97_5 exactly) but anything numerically indistinguishable
+# from it, guarding against floating-point noise producing a tiny nonzero SE
+# from an otherwise-degenerate resample.
+_MIN_RELIABLE_SE = 1e-9
+
+
 def normal_approx_p_value(ci) -> float | None:
-    """See module docstring's P-VALUE APPROXIMATION section. None if `ci`
-    is None (nothing to approximate from)."""
+    """See module docstring's P-VALUE APPROXIMATION and P-VALUE RELIABILITY
+    GATE sections. Returns None (never a fabricated number) if `ci` is None,
+    or if the CI's own implied standard error is zero/near-zero -- a
+    degenerate CI is not evidence of anything, and this function must NEVER
+    fail toward significance on ambiguous input."""
     if ci is None:
         return None
     se = (ci.upper_97_5 - ci.lower_2_5) / (2 * 1.959964)
-    if se <= 0:
-        return 0.0 if ci.mean_r != 0 else 1.0
+    if se <= _MIN_RELIABLE_SE:
+        return None
     z = ci.mean_r / se
     return 2.0 * (1.0 - _standard_normal_cdf(abs(z)))
 
@@ -161,6 +200,19 @@ def benjamini_hochberg(p_values: list[float], alpha: float = DEFAULT_FDR_ALPHA) 
     for rank in range(largest_k + 1):
         survives[order[rank]] = True
     return survives
+
+
+def _p_value_for_half(stats) -> float | None:
+    """None (never a fabricated number) if `stats` is None, if its trade
+    count is below MIN_SAMPLE_SIZE (see the module docstring's P-VALUE
+    RELIABILITY GATE), or if normal_approx_p_value itself declines (a
+    degenerate CI). This is what keeps an underpowered half OUT of the FDR
+    family entirely (apply_fdr_correction already skips any record whose
+    p-value is None) -- it does NOT touch verdict_is/verdict_oos, which are
+    computed independently by _map_half_verdict."""
+    if stats is None or stats.trades < MIN_SAMPLE_SIZE:
+        return None
+    return normal_approx_p_value(stats.ci)
 
 
 def score_hypothesis(record: dict, candles_provider: Callable[[str, str], object], now: datetime | None = None) -> dict:
@@ -199,8 +251,8 @@ def score_hypothesis(record: dict, candles_provider: Callable[[str, str], object
     updated["measured_trades_per_year"] = result.measured_trades_per_year
     updated["verdict_is"] = _map_half_verdict(result.train)
     updated["verdict_oos"] = _map_half_verdict(result.test)
-    updated["p_value_is"] = normal_approx_p_value(result.train.ci) if result.train and result.train.ci else None
-    updated["p_value_oos"] = normal_approx_p_value(result.test.ci) if result.test and result.test.ci else None
+    updated["p_value_is"] = _p_value_for_half(result.train)
+    updated["p_value_oos"] = _p_value_for_half(result.test)
     return updated
 
 
