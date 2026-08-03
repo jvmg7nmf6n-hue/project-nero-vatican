@@ -1,0 +1,255 @@
+[
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260803T095520Z-394385c7",
+    "turn_index": 0,
+    "tool_use_id": "toolu_014Z3WNDGSrKeKuNLv54EnAg",
+    "proposed_at": "2026-08-03T09:55:20.349103+00:00",
+    "raw_hypothesis": {
+      "name": "ADX_GATED_RSI_MEAN_REVERSION_WEEKLY_METALS",
+      "mechanism": "In low-trend regimes (ADX14 < 25), RSI14 extreme oversold readings on weekly gold/silver bars mark genuine overshoot points that revert toward the 20-period moving average, because a trend-strength gate removes the cases where an oscillator extreme reflects continuation rather than exhaustion. Weekly bars aggregate enough price information that noise-driven false extremes are rarer than on intraday timeframes.",
+      "rationale_vs_graveyard": "Distinct from the graveyard's MEAN_REVERSION variants (failure_pattern=grid-shift-artifact): those failed because entry signals were anchored to fixed candle-count lookbacks that don't survive wall-clock grid shifts. Weekly bars have only one plausible convention (calendar week close), which removes most of that grid-alignment ambiguity by construction rather than requiring a re-derivation. Distinct from the graveyard's RANGE_MEAN_REVERSION (failure_pattern=sample-too-thin): that project's own diagnosis found real, mechanistically-corroborated value in a confirmation-style filter but tested it on the thinnest config (BTC/1d, 7-19 trades) instead of its own best, least-thin results (GOLD/1week and SILVER/1week). This hypothesis targets exactly those already-flagged-as-less-thin weekly metals series directly, using a simple ADX-gate + RSI-extreme trigger (no range/support-resistance definition that would starve the sample further), and avoids adding any ranking/selection layer on top (the mistake diagnosed in CARRY_MOMENTUM).",
+      "asset_timeframe_candidates": [
+        "GOLD/1week",
+        "SILVER/1week"
+      ],
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "adx14",
+            "op": "lt",
+            "value": 25
+          },
+          {
+            "field": "rsi14",
+            "op": "lt",
+            "value": 30
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "take_profit_condition": {
+          "field": "close",
+          "op": "cross_above",
+          "compare_field": "ma20"
+        },
+        "stop_loss": {
+          "type": "atr_multiple",
+          "atr_field": "atr14",
+          "multiple": 2.0
+        },
+        "max_holding_period_bars": 12
+      },
+      "direction": "long_only",
+      "companion_variant_note": "A symmetric short setup (adx14 lt 25 AND rsi14 gt 70, exit on close cross_below ma20) could be tested as a mirror case for completeness.",
+      "evaluation_focus": "Compare against random-entry baseline on the same ADX<25 filtered candle set to isolate whether the RSI extreme trigger itself adds timing value beyond just being in a low-trend regime."
+    },
+    "testability": "UNTESTABLE_BY_DSL",
+    "verdict_is": null,
+    "verdict_oos": null,
+    "verdict_combined": null,
+    "contamination_tags": [],
+    "testability_reason": "structured_exit_plan must set exactly one of 'stop_atr_multiple'/'stop_pct_of_entry'",
+    "p_value_is": null,
+    "p_value_oos": null,
+    "frequency_classification": null,
+    "measured_trades_per_year": null,
+    "candle_data_source": null,
+    "candle_row_count": null,
+    "fdr_survives_oos": null,
+    "fdr_survives_is": null
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260803T095520Z-394385c7",
+    "turn_index": 1,
+    "tool_use_id": "toolu_01PBhyHApjGNz1wJ4dREcpYt",
+    "proposed_at": "2026-08-03T09:55:20.349103+00:00",
+    "raw_hypothesis": {
+      "name": "BB_SQUEEZE_ATR_EXPANSION_BREAKOUT",
+      "mechanism": "When ADX14 is low (non-trending / compressed market state) and price then crosses above the upper Bollinger Band, the breakout tends to continue for several bars because the preceding low-trend compression represents genuine accumulation rather than noise, and the ADX-low gate specifically targets the transition moment from compression to expansion rather than entries into an already-established trend.",
+      "rationale_vs_graveyard": "Distinct mechanism from the graveyard's BOS_CONTINUATION (failure_pattern=regime-filter-only): that mechanism used a swing-point structure-break trigger where the capped 3.0x ATR stop was diagnosed as dominating over the intended structural stop in 75-95% of trades, meaning it was really just generic trend-following with an ATR stop wearing a structural-break label. This hypothesis uses a volatility-band trigger (Bollinger upper band cross) with ATR sizing as the explicitly intended stop mechanism from the outset, not a fallback overriding a different intended stop, so it doesn't inherit that specific diagnosed dilution. Distinct from FVG_REVERSION (failure_pattern=edge-over-random-negative): this is a continuation/expansion play driven by volatility-compression state (ADX gate + band breakout), not a fair-value-gap reversion play, and uses a different information source entirely.",
+      "asset_timeframe_candidates": [
+        "BTC/4h",
+        "GOLD/4h",
+        "EUR/USD/4h"
+      ],
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "adx14",
+            "op": "lt",
+            "value": 20
+          },
+          {
+            "field": "close",
+            "op": "cross_above",
+            "compare_to": "bb_upper"
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_loss": {
+          "type": "atr_multiple",
+          "atr_field": "atr14",
+          "multiple": 1.5
+        },
+        "take_profit": {
+          "type": "atr_multiple",
+          "atr_field": "atr14",
+          "multiple": 3.0
+        },
+        "max_holding_period_bars": 20
+      },
+      "direction": "long_only",
+      "companion_variant_note": "A symmetric short variant (adx14 lt 20 AND close cross_below bb_lower, mirrored ATR stop/target) could be tested as a mirror case.",
+      "evaluation_focus": "Compare against a random-entry baseline restricted to the same ADX<20 compressed-regime candles, to isolate whether the band-breakout trigger itself adds timing value beyond simply being in a low-ADX regime (avoiding the 'regime-filter-only' failure pattern by testing the trigger's marginal contribution explicitly)."
+    },
+    "testability": "UNTESTABLE_BY_DSL",
+    "verdict_is": null,
+    "verdict_oos": null,
+    "verdict_combined": null,
+    "contamination_tags": [],
+    "testability_reason": "condition must set exactly one of 'value'/'compare_to_field': {'field': 'close', 'op': 'cross_above', 'compare_to': 'bb_upper'}",
+    "p_value_is": null,
+    "p_value_oos": null,
+    "frequency_classification": null,
+    "measured_trades_per_year": null,
+    "candle_data_source": null,
+    "candle_row_count": null,
+    "fdr_survives_oos": null,
+    "fdr_survives_is": null
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260803T095520Z-394385c7",
+    "turn_index": 2,
+    "tool_use_id": "toolu_01S714XHEoyWdsiYufwq3K8s",
+    "proposed_at": "2026-08-03T09:55:20.349103+00:00",
+    "raw_hypothesis": {
+      "name": "MA200_TREND_FILTER_PULLBACK_LONG_EQUITIES",
+      "mechanism": "Among large-cap tech/growth stocks on daily bars, when price is in a confirmed long-term uptrend (close above ma200) and pulls back to touch or dip slightly below the 20-period moving average without RSI collapsing into deeply oversold territory, that pullback offers a higher-probability continuation entry than either chasing new highs or trading with no trend filter at all. This exploits the well-documented tendency of price above a 200-day moving average to be associated with continued positive drift, combined with a shorter-term pullback entry for improved risk/reward versus breakout entries.",
+      "rationale_vs_graveyard": "Distinct from the graveyard's TREND_PULLBACK filter variants (FVG-overlap, BOS-recency; failure_pattern=edge-over-random-negative): those added FVG-overlap or BOS-recency filters on top of a pullback entry, and the BOS-recency filter was diagnosed as a functional no-op because breaks of structure occur too frequently within a 20-candle window to be selective. This hypothesis uses a completely different, much coarser and far less frequently-flipping filter -- the 200-period moving average trend gate -- and applies the pullback-in-uptrend mechanism to single large-cap US equities on daily bars (a different asset class than the crypto/FX pairs previously tested for TREND_PULLBACK), testing whether the mechanism transfers to trend-persistent large-cap equities where 200-day MA regime filtering has substantial documented support in trading literature. It is also distinct from MACRO_RISK_ON (failure_pattern=mechanism-doesn't-transfer) by staying entirely price-technical and asset-specific rather than relying on a macro regime signal.",
+      "asset_timeframe_candidates": [
+        "AAPL/1day",
+        "MSFT/1day",
+        "GOOGL/1day",
+        "AMZN/1day",
+        "NVDA/1day",
+        "META/1day"
+      ],
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "close",
+            "op": "gt",
+            "compare_to": "ma200"
+          },
+          {
+            "field": "close",
+            "op": "lt",
+            "compare_to": "ma20"
+          },
+          {
+            "field": "rsi14",
+            "op": "gt",
+            "value": 35
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_loss": {
+          "type": "atr_multiple",
+          "atr_field": "atr14",
+          "multiple": 2.0
+        },
+        "take_profit_condition": {
+          "field": "rsi14",
+          "op": "gt",
+          "value": 70
+        },
+        "max_holding_period_bars": 40
+      },
+      "direction": "long_only",
+      "notes": "The rsi14>35 condition on entry is meant to distinguish a healthy pullback from the early stage of a trend-breaking decline, avoiding entries into deteriorating momentum even though close is still nominally above ma200.",
+      "evaluation_focus": "Compare against a random-entry baseline restricted to the same close>ma200 uptrend-regime candles, to isolate whether the ma20 pullback + RSI>35 trigger adds real timing value beyond simply being long in an uptrend (avoiding the regime-filter-only failure pattern by testing the trigger's marginal contribution explicitly)."
+    },
+    "testability": "UNTESTABLE_BY_DSL",
+    "verdict_is": null,
+    "verdict_oos": null,
+    "verdict_combined": null,
+    "contamination_tags": [],
+    "testability_reason": "condition must set exactly one of 'value'/'compare_to_field': {'field': 'close', 'op': 'gt', 'compare_to': 'ma200'}",
+    "p_value_is": null,
+    "p_value_oos": null,
+    "frequency_classification": null,
+    "measured_trades_per_year": null,
+    "candle_data_source": null,
+    "candle_row_count": null,
+    "fdr_survives_oos": null,
+    "fdr_survives_is": null
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260803T095520Z-394385c7",
+    "turn_index": 3,
+    "tool_use_id": "toolu_01BbjacF5WEKjdVmxT7ezeC4",
+    "proposed_at": "2026-08-03T09:55:20.349103+00:00",
+    "raw_hypothesis": {
+      "name": "VOLUME_CONFIRMED_MA20_BREAKOUT",
+      "mechanism": "A breakout above the 20-period moving average accompanied by rising volume signals genuine participation behind the move rather than a low-conviction cross, and such volume-confirmed breakouts have higher continuation rates than breakouts on flat or declining volume. Applied to crypto (BTC, BNB) and liquid large-cap equities (AAPL, NVDA, TSLA) where traded volume is a meaningful signal, using a close cross_above ma20 trigger gated by volume exceeding the prior bar's volume as a simple rising-participation filter.",
+      "rationale_vs_graveyard": "This targets an information source -- traded volume -- that none of the listed graveyard mechanisms (FVG_REVERSION, BOS_CONTINUATION, FUNDING_EXTREME, EMA-trail exit, TREND_PULLBACK filter variants, LEADLAG_FOLLOW, MEAN_REVERSION variants, MACRO_RISK_ON, CARRY_MOMENTUM, RANGE_MEAN_REVERSION, Vol-Clustering position sizing, LIQUIDATION_PREDICTOR, REPAIR_BREAKOUT_QUALITY) used as a primary entry gate. It is mechanistically distinct from BOS_CONTINUATION (a price-structure break trigger) by using a simple moving-average cross gated on a liquidity/participation confirmation instead of a structural swing-point trigger, so it does not inherit the diagnosed capped-ATR-stop-dilution problem, since the ATR stop here is the explicitly intended risk control from the start.",
+      "asset_timeframe_candidates": [
+        "BTC/4h",
+        "BNB/4h",
+        "AAPL/4h",
+        "NVDA/4h",
+        "TSLA/4h"
+      ],
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "close",
+            "op": "cross_above",
+            "compare_to": "ma20"
+          },
+          {
+            "field": "volume",
+            "op": "gt",
+            "compare_to": "volume_prev_bar"
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_loss": {
+          "type": "atr_multiple",
+          "atr_field": "atr14",
+          "multiple": 2.0
+        },
+        "take_profit": {
+          "type": "atr_multiple",
+          "atr_field": "atr14",
+          "multiple": 3.0
+        },
+        "max_holding_period_bars": 15
+      },
+      "direction": "long_only",
+      "notes": "The DSL's listed volume field appears to be a single current-bar value; a strict 'above N-period average volume' condition may not be directly expressible without a volume moving-average field. This proposal frames the filter as volume greater than the previous bar's volume as the simplest DSL-expressible proxy for rising participation; if only a raw volume-vs-fixed-threshold comparison is supported, per-asset threshold calibration would need to happen outside this proposal.",
+      "evaluation_focus": "Compare against an MA20-cross-only baseline without the volume filter, and against a random-entry baseline on the same candle set, to isolate whether the volume-confirmation step itself adds real timing value versus just being a generic MA breakout (directly testing for the edge-over-random-negative failure pattern seen repeatedly in the graveyard)."
+    },
+    "testability": "UNTESTABLE_BY_DSL",
+    "verdict_is": null,
+    "verdict_oos": null,
+    "verdict_combined": null,
+    "contamination_tags": [],
+    "testability_reason": "condition must set exactly one of 'value'/'compare_to_field': {'field': 'close', 'op': 'cross_above', 'compare_to': 'ma20'}",
+    "p_value_is": null,
+    "p_value_oos": null,
+    "frequency_classification": null,
+    "measured_trades_per_year": null,
+    "candle_data_source": null,
+    "candle_row_count": null,
+    "fdr_survives_oos": null,
+    "fdr_survives_is": null
+  }
+]
