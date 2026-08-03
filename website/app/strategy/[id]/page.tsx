@@ -37,7 +37,7 @@ import { deriveSignalState, SIGNAL_STATE_LABELS } from "@/lib/signalState";
 import { findEntryByStrategyId } from "@/lib/strategyId";
 import { classifyTier } from "@/lib/tier";
 import { buildTradeHistory, type ResolvedTrade, type TradeResult } from "@/lib/tradeHistory";
-import type { StrategyChatContext } from "@/lib/types";
+import { DEFAULT_BACKTEST_EVALUATION, type StrategyChatContext } from "@/lib/types";
 
 export const revalidate = 300;
 
@@ -105,6 +105,10 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
 
   const tier = classifyTier(entry.verification_status);
   const provenanceLine = deriveProvenanceLine(entry, statsExport?.strategies ?? []);
+  // 2026-08-03 production incident: a currently-fetched export can genuinely
+  // lack backtest_evaluation entirely (see DEFAULT_BACKTEST_EVALUATION's own
+  // comment in lib/types.ts) -- never read entry.backtest_evaluation directly.
+  const backtestEvaluation = entry.backtest_evaluation ?? DEFAULT_BACKTEST_EVALUATION;
   const description = descriptions?.[entry.name] ?? null;
 
   const statsRow = (statsExport?.strategies ?? []).find(
@@ -307,7 +311,7 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
       <section>
         <h2 className="font-serif text-xl text-parchment mb-2">Backtest evidence</h2>
         <div className="mb-3">
-          <BacktestEvaluationPanel evaluation={entry.backtest_evaluation} />
+          <BacktestEvaluationPanel evaluation={backtestEvaluation} />
         </div>
         {entry.source_report ? (
           <a

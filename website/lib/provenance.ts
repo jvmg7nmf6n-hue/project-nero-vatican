@@ -1,5 +1,5 @@
 import { classifyTier, TIER_LABELS } from "./tier";
-import type { StrategyRosterEntry, StrategyStats } from "./types";
+import { DEFAULT_BACKTEST_EVALUATION, type StrategyRosterEntry, type StrategyStats } from "./types";
 
 // COINTEGRATION_PAIRS hand-authored override (docs/investigations/
 // pairs_short_leg_cost_scoping.md's follow-up): the generic priority logic
@@ -29,7 +29,7 @@ type ProvenanceEntry = Pick<
   "name" | "version" | "asset" | "verification_status" | "backtest_evaluation" | "source_report" | "source_report_written_at"
 >;
 
-function hasStructuredBacktestEvidence(evaluation: StrategyRosterEntry["backtest_evaluation"]): boolean {
+function hasStructuredBacktestEvidence(evaluation: NonNullable<StrategyRosterEntry["backtest_evaluation"]>): boolean {
   return (
     evaluation.verdict_is !== null ||
     evaluation.verdict_oos !== null ||
@@ -60,7 +60,10 @@ export function deriveProvenanceLine(entry: ProvenanceEntry, stats: StrategyStat
   }
 
   const tierLabel = TIER_LABELS[classifyTier(entry.verification_status)];
-  const evaluation = entry.backtest_evaluation;
+  // 2026-08-03 production incident: a currently-fetched export can genuinely
+  // lack backtest_evaluation entirely (see DEFAULT_BACKTEST_EVALUATION's own
+  // comment in lib/types.ts) -- never read entry.backtest_evaluation directly.
+  const evaluation = entry.backtest_evaluation ?? DEFAULT_BACKTEST_EVALUATION;
 
   if (evaluation.permanently_unbacktestable) {
     return "Unbacktestable — live evidence only (no historical data source).";

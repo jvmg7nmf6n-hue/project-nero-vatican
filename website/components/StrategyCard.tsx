@@ -7,7 +7,7 @@ import { deriveSignalState, SIGNAL_STATE_LABELS, type SignalState } from "@/lib/
 import { deriveStatLine } from "@/lib/statLine";
 import { buildStrategyId } from "@/lib/strategyId";
 import { classifyTier, type Tier } from "@/lib/tier";
-import type { LedgerRow, StrategyRosterEntry, StrategyStats } from "@/lib/types";
+import { DEFAULT_BACKTEST_EVALUATION, type LedgerRow, type StrategyRosterEntry, type StrategyStats } from "@/lib/types";
 
 const TIER_CARD_STYLES: Record<Tier, string> = {
   verified: "border-2 border-solid border-teal/70 bg-ink",
@@ -54,6 +54,10 @@ export default function StrategyCard({ entry, recentRows, stats }: StrategyCardP
   const statLine = deriveStatLine(entry, stats);
   const provenanceLine = deriveProvenanceLine(entry, stats);
   const signalStyle = SIGNAL_STATE_STYLES[signalState];
+  // 2026-08-03 production incident: a currently-fetched export can genuinely
+  // lack backtest_evaluation entirely (see DEFAULT_BACKTEST_EVALUATION's own
+  // comment in lib/types.ts) -- never read entry.backtest_evaluation directly.
+  const backtestEvaluation = entry.backtest_evaluation ?? DEFAULT_BACKTEST_EVALUATION;
 
   return (
     <Link
@@ -89,14 +93,14 @@ export default function StrategyCard({ entry, recentRows, stats }: StrategyCardP
             from verification_status), so this is additive detail, not the only signal.
             Never omitted when it exists -- the whole point is that a card must not look
             identical whether a strategy DIED in-sample or was never tested at all. */}
-        {entry.backtest_evaluation.untestable_reason ? (
+        {backtestEvaluation.untestable_reason ? (
           <p data-testid="card-backtest-untestable" className="mt-1 text-[11px] text-gold">
             Untestable by standard harness
           </p>
-        ) : entry.backtest_evaluation.verdict_is || entry.backtest_evaluation.verdict_oos ? (
+        ) : backtestEvaluation.verdict_is || backtestEvaluation.verdict_oos ? (
           <p data-testid="card-backtest-verdict" className="mt-1 text-[11px] text-muted">
-            Backtest: {entry.backtest_evaluation.verdict_is ?? "n/a"} (IS) /{" "}
-            {entry.backtest_evaluation.verdict_oos ?? "n/a"} (OOS)
+            Backtest: {backtestEvaluation.verdict_is ?? "n/a"} (IS) /{" "}
+            {backtestEvaluation.verdict_oos ?? "n/a"} (OOS)
           </p>
         ) : null}
       </div>

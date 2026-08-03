@@ -174,4 +174,17 @@ describe("deriveProvenanceLine", () => {
     delete (entry.backtest_evaluation as { permanently_unbacktestable?: boolean }).permanently_unbacktestable;
     expect(deriveProvenanceLine(entry, [])).not.toContain("Unbacktestable");
   });
+
+  it("2026-08-03 production incident regression: never crashes when backtest_evaluation is entirely absent", () => {
+    // Real incident: the live site's currently-fetched strategies.json had NO
+    // backtest_evaluation key on any entry at all (not just a missing
+    // sub-field) -- entry.backtest_evaluation.permanently_unbacktestable
+    // crashed with "Cannot read properties of undefined". Falls back to
+    // DEFAULT_BACKTEST_EVALUATION, same as "nothing evaluated yet".
+    const { backtest_evaluation: _omit, ...entryWithoutBacktestEvaluation } = makeEntry();
+    expect(() => deriveProvenanceLine(entryWithoutBacktestEvaluation as StrategyRosterEntry, [])).not.toThrow();
+    expect(deriveProvenanceLine(entryWithoutBacktestEvaluation as StrategyRosterEntry, [])).toBe(
+      "Verified — this status is a hand-written note only; no structured backtest or live-trade evidence is recorded yet."
+    );
+  });
 });
