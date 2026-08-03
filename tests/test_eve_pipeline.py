@@ -10,7 +10,8 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from nero_core.eve import pipeline, scoring, storage
+from nero_core.eve import notify as eve_notify
+from nero_core.eve import pipeline, preflight as eve_preflight, scoring, storage
 from nero_core.eve.config import _ENV_VAR as EVE_ENABLED_ENV_VAR
 
 
@@ -41,6 +42,13 @@ class _IsolatedStorageTestCase(unittest.TestCase):
             patch("nero_core.eve.context.DEFAULT_QUANT_METRICS_PATH", tmp_root / "quant_metrics.json"),
             patch("nero_core.eve.context.DEFAULT_FAILURE_PATTERNS_PATH", tmp_root / "failure_patterns.json"),
             patch("nero_core.eve.context.DEFAULT_ADAM_HYPOTHESES_PATH", tmp_root / "agent_hypotheses.json"),
+            # Every test here runs stub=True (no real API call), but run_pipeline
+            # unconditionally sends exactly one ntfy notification per invocation
+            # (see pipeline.py's own docstring) -- mocked here so the pipeline
+            # test suite never makes a real network call to ntfy.sh. The
+            # notification wiring itself is covered separately, by tests that
+            # patch this same target and assert on how it was called.
+            patch.object(eve_notify, "send_ntfy_notification", return_value=True),
         ]
         for p in self._patches:
             p.start()
@@ -254,6 +262,142 @@ class ScoringRunCannotConsumeSiteExportTest(unittest.TestCase):
 
         self.assertEqual(scored["candle_data_source"], "research_export")
         self.assertEqual(scored["candle_row_count"], 600)
+
+
+class PreflightGateTest(_IsolatedStorageTestCase):
+    """A stale/invalid key must be caught BEFORE session.run_session is ever
+    called -- zero real spend, zero partial session file, exactly one ntfy
+    failure notification. Mirrors the real Adam incident this exists to
+    prevent (a bad key going unnoticed for weeks)."""
+
+    def test_preflight_rejection_never_calls_run_session_and_writes_no_session_file(self) -> None:
+        with patch.object(eve_preflight, "check_api_key", return_value=eve_preflight.PreflightResult(False, "HTTP 401: key rejected before any token was processed")), \
+             patch("nero_core.eve.session.run_session") as mock_run_session, \
+             patch.dict("os.environ", {EVE_ENABLED_ENV_VAR: "true"}):
+            result = pipeline.run_pipeline(api_key="stale-key", stub=False)
+
+        mock_run_session.assert_not_called()
+        self.assertFalse(result.preflight_ok)
+        self.assertIsNone(result.session_result)
+        self.assertTrue(result.enabled)  # kill switch was on -- this is a preflight failure, not a disabled no-op
+        self.assertFalse(self.sessions_dir.exists() and any(self.sessions_dir.iterdir()))
+
+    def test_preflight_rejection_sends_exactly_one_failure_notification(self) -> None:
+        with patch.object(eve_preflight, "check_api_key", return_value=eve_preflight.PreflightResult(False, "HTTP 401: key rejected before any token was processed")), \
+             patch("nero_core.eve.session.run_session"), \
+             patch.dict("os.environ", {EVE_ENABLED_ENV_VAR: "true"}), \
+             patch.object(eve_notify, "send_ntfy_notification", return_value=True) as mock_notify:
+            pipeline.run_pipeline(api_key="stale-key", stub=False)
+
+        mock_notify.assert_called_once()
+        (message,), _ = mock_notify.call_args
+        self.assertIn("FAILED", message)
+        self.assertIn("401", message)
+        self.assertIn("$0.0000", message)
+
+    def test_preflight_passing_lets_the_session_actually_run(self) -> None:
+        candles = _make_candles()
+        with patch.object(eve_preflight, "check_api_key", return_value=eve_preflight.PreflightResult(True, "ok")), \
+             patch.dict("os.environ", {EVE_ENABLED_ENV_VAR: "true"}):
+            result = pipeline.run_pipeline(
+                api_key="fake", stub=True, candles_provider=lambda a, t: candles, now=datetime(2026, 8, 15, tzinfo=timezone.utc)
+            )
+
+        self.assertTrue(result.preflight_ok)
+        self.assertIsNotNone(result.session_result)
+
+    def test_stub_mode_skips_preflight_entirely(self) -> None:
+        candles = _make_candles()
+        with patch.object(eve_preflight, "check_api_key") as mock_check, \
+             patch.dict("os.environ", {EVE_ENABLED_ENV_VAR: "true"}):
+            pipeline.run_pipeline(api_key="fake", stub=True, candles_provider=lambda a, t: candles, now=datetime(2026, 8, 15, tzinfo=timezone.utc))
+
+        mock_check.assert_not_called()
+
+    def test_main_reports_a_preflight_rejection_cleanly_instead_of_crashing(self) -> None:
+        # Real incident (2026-08-03): the first real (non-stub) invocation of
+        # this module hit a genuine 401 (stale ANTHROPIC_API_KEY) -- preflight
+        # correctly caught it and spent $0, but main()'s own success-path
+        # print statement unconditionally assumed result.session_result was
+        # never None once result.enabled was True, crashing with
+        # AttributeError: 'NoneType' object has no attribute 'session_id' on
+        # exactly the case preflight exists to handle gracefully.
+        with patch.object(eve_preflight, "check_api_key", return_value=eve_preflight.PreflightResult(False, "HTTP 401: key rejected before any token was processed")), \
+             patch.dict("os.environ", {EVE_ENABLED_ENV_VAR: "true", "ANTHROPIC_API_KEY": "stale-key"}), \
+             patch.object(eve_notify, "send_ntfy_notification", return_value=True):
+            pipeline.main()  # must not raise
+
+
+class CrashNotifyTest(_IsolatedStorageTestCase):
+    """An unhandled exception anywhere in the session/scoring path must still
+    notify (best-effort) before the crash propagates loudly -- never a
+    silent, unnoticed failure."""
+
+    def test_a_crash_during_the_session_sends_a_failure_notification_and_still_raises(self) -> None:
+        with patch("nero_core.eve.session.run_session", side_effect=RuntimeError("boom")), \
+             patch.dict("os.environ", {EVE_ENABLED_ENV_VAR: "true"}), \
+             patch.object(eve_notify, "send_ntfy_notification", return_value=True) as mock_notify:
+            with self.assertRaises(RuntimeError):
+                pipeline.run_pipeline(api_key="fake", stub=True)
+
+        mock_notify.assert_called_once()
+        (message,), _ = mock_notify.call_args
+        self.assertIn("FAILED", message)
+        self.assertIn("RuntimeError", message)
+        self.assertIn("boom", message)
+
+
+class BudgetExhaustedAtZeroTurnsNotifyTest(_IsolatedStorageTestCase):
+    """A session that never got even one real turn (ledger already exhausted
+    before the first call) is reported through the failure path, not the
+    richer end-of-session summary -- there is nothing to summarize."""
+
+    def test_zero_real_turns_sends_a_failure_notification(self) -> None:
+        from nero_core.eve import budget_ledger as bl
+        from nero_core.eve.session import SessionResult
+
+        fake_result = SessionResult(
+            session_id="eve-fake-0turns",
+            terminated_because=bl.REASON_MONTH_EXHAUSTED,
+            n_turns=0,
+            n_searches=0,
+            n_proposed=0,
+            hypothesis_records=[],
+            session_spent_usd=0.0,
+            record={"session_id": "eve-fake-0turns", "turns": []},
+        )
+        with patch("nero_core.eve.session.run_session", return_value=fake_result), \
+             patch.dict("os.environ", {EVE_ENABLED_ENV_VAR: "true"}), \
+             patch.object(eve_notify, "send_ntfy_notification", return_value=True) as mock_notify:
+            result = pipeline.run_pipeline(api_key="fake", stub=True)
+
+        mock_notify.assert_called_once()
+        (message,), _ = mock_notify.call_args
+        self.assertIn("FAILED", message)
+        self.assertIn(bl.REASON_MONTH_EXHAUSTED, message)
+        self.assertEqual(result.session_result.n_turns, 0)
+
+
+class SuccessNotifySummaryTest(_IsolatedStorageTestCase):
+    """A session with at least one real turn gets the richer end-of-session
+    summary -- hypotheses proposed, testable count, OOS verdict counts, real
+    cost, and the transcript path -- never the bare failure message."""
+
+    def test_a_completed_stub_session_sends_the_rich_summary(self) -> None:
+        candles = _make_candles()
+        with patch.dict("os.environ", {EVE_ENABLED_ENV_VAR: "true"}), \
+             patch.object(eve_notify, "send_ntfy_notification", return_value=True) as mock_notify:
+            result = pipeline.run_pipeline(
+                api_key="fake", stub=True, candles_provider=lambda a, t: candles, now=datetime(2026, 8, 15, tzinfo=timezone.utc)
+            )
+
+        mock_notify.assert_called_once()
+        (message,), _ = mock_notify.call_args
+        session_id = result.session_result.session_id
+        self.assertNotIn("FAILED", message)
+        self.assertIn(session_id, message)
+        self.assertIn("Proposed 1 hypotheses", message)
+        self.assertIn(str(storage.session_record_path(session_id)), message)
 
 
 class SecretHandlingTest(unittest.TestCase):

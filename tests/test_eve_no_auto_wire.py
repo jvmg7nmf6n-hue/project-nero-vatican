@@ -135,6 +135,7 @@ class DynamicNoAutoWireTest(unittest.TestCase):
                  patch("nero_core.eve.context.DEFAULT_QUANT_METRICS_PATH", tmp_root / "quant_metrics.json"), \
                  patch("nero_core.eve.context.DEFAULT_FAILURE_PATTERNS_PATH", tmp_root / "failure_patterns.json"), \
                  patch("nero_core.eve.context.DEFAULT_ADAM_HYPOTHESES_PATH", tmp_root / "agent_hypotheses.json"), \
+                 patch("nero_core.eve.notify.send_ntfy_notification", return_value=True), \
                  patch.dict("os.environ", {"EVE_ENABLED": "true"}):
                 result = pipeline.run_pipeline(
                     api_key="fake", stub=True, candles_provider=lambda a, t: candles, now=datetime(2026, 8, 15, tzinfo=timezone.utc)

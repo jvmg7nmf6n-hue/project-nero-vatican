@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,7 +31,7 @@ import pandas as pd
 from nero_core.asset_universe import APPROVED_EVALUATION_UNIVERSE, APPROVED_RESEARCH_UNIVERSE
 from nero_core.execution.export_candle_data import candle_filename
 from nero_core.eve import context as eve_context
-from nero_core.eve import scoring, session, storage
+from nero_core.eve import llm_client, notify as eve_notify, preflight as eve_preflight, scoring, session, storage
 from nero_core.eve.config import is_enabled
 
 REPO_ROOT = storage.REPO_ROOT
@@ -189,6 +190,7 @@ class PipelineRunResult:
     session_result: "session.SessionResult | None" = None
     scored_hypotheses: list = field(default_factory=list)
     lookahead_risk_flags: list = field(default_factory=list)
+    preflight_ok: bool = True
 
 
 def run_pipeline(
@@ -200,22 +202,71 @@ def run_pipeline(
     """The ONE entrypoint every invocation of Eve should call. Kill-switch
     checked FIRST (nero_core.eve.config.is_enabled) -- disabled means no
     session, no LLM call, no candle fetch, no file write, anywhere, exactly
-    like Adam's own pipeline.run_pipeline."""
+    like Adam's own pipeline.run_pipeline.
+
+    PREFLIGHT SECOND (skipped only in stub mode, where there is no real key
+    or network call to validate): nero_core.eve.preflight.check_api_key runs
+    BEFORE session.run_session is ever called, so a stale/invalid key is
+    caught with zero real spend and zero partial session file written --
+    never session.run_session's own budget-exhaustion path, which only
+    protects against the CEILING, not a bad key. A preflight failure sends
+    exactly one ntfy failure notification and returns immediately.
+
+    EVERY OTHER FAILURE MODE also notifies exactly once: an unhandled
+    exception during the session/scoring path, or the ledger already being
+    exhausted before a single real turn ran (session.n_turns == 0) both
+    route through nero_core.eve.notify.send_failure. A session that
+    completed at least one real turn -- even if later truncated by its own
+    budget -- gets the richer end-of-session summary instead; a mid-session
+    budget stop is correct, expected behavior, not a failure to report as
+    one (see this branch's own closing report)."""
     if not is_enabled():
         return PipelineRunResult(enabled=False, reason="EVE_ENABLED is not set to a truthy value -- no-op")
 
-    result = session.run_session(api_key=api_key, stub=stub, now=now)
+    use_stub = llm_client.is_stub_mode() if stub is None else stub
+    if not use_stub:
+        preflight = eve_preflight.check_api_key(api_key)
+        if not preflight.ok:
+            reason = f"preflight_rejected: {preflight.reason}"
+            print(f"Eve preflight FAILED: {preflight.reason}", file=sys.stderr)
+            eve_notify.send_failure(reason=reason, cost_hint_usd=0.0)
+            return PipelineRunResult(enabled=True, reason=reason, preflight_ok=False)
 
-    adam_history = eve_context.load_adam_history_verdict_stripped()
-    scored = scoring.score_all(result.hypothesis_records, candles_provider=candles_provider, now=now)
-    scored = scoring.apply_fdr_correction(scored, field="p_value_oos")
-    scored = scoring.apply_fdr_correction(scored, field="p_value_is")
-    scored = scoring.apply_derivative_tags(scored, adam_history=adam_history)
-    _persist_scored_hypotheses(scored)
+    try:
+        result = session.run_session(api_key=api_key, stub=stub, now=now)
 
-    window_start = _compute_backtest_window_start(scored, candles_provider)
-    lookahead_flags = scoring.tag_lookahead_risk(result.record, window_start) if window_start is not None else []
-    _persist_lookahead_flags(result.record, lookahead_flags)
+        adam_history = eve_context.load_adam_history_verdict_stripped()
+        scored = scoring.score_all(result.hypothesis_records, candles_provider=candles_provider, now=now)
+        scored = scoring.apply_fdr_correction(scored, field="p_value_oos")
+        scored = scoring.apply_fdr_correction(scored, field="p_value_is")
+        scored = scoring.apply_derivative_tags(scored, adam_history=adam_history)
+        _persist_scored_hypotheses(scored)
+
+        window_start = _compute_backtest_window_start(scored, candles_provider)
+        lookahead_flags = scoring.tag_lookahead_risk(result.record, window_start) if window_start is not None else []
+        _persist_lookahead_flags(result.record, lookahead_flags)
+    except Exception as exc:
+        eve_notify.send_failure(reason=f"crash: {exc.__class__.__name__}: {exc}")
+        raise
+
+    if result.n_turns == 0:
+        eve_notify.send_failure(
+            reason=f"{result.terminated_because} (0 real turns completed)",
+            session_id=result.session_id,
+            cost_hint_usd=result.session_spent_usd,
+        )
+    else:
+        n_testable = sum(1 for r in scored if r.get("testability") == scoring.TESTABILITY_TESTABLE)
+        verdict_counts = dict(Counter(r["verdict_oos"] for r in scored if r.get("verdict_oos") is not None))
+        eve_notify.send_session_summary(
+            session_id=result.session_id,
+            terminated_because=result.terminated_because,
+            n_proposed=result.n_proposed,
+            n_testable=n_testable,
+            verdict_counts=verdict_counts,
+            real_cost_usd=result.session_spent_usd,
+            session_file_path=str(storage.session_record_path(result.session_id)),
+        )
 
     return PipelineRunResult(
         enabled=True, reason="ok", session_result=result, scored_hypotheses=scored, lookahead_risk_flags=lookahead_flags
@@ -229,7 +280,7 @@ def main() -> None:
     # check, mirroring test_research_agent_secret_handling.py's own).
     api_key = os.getenv("ANTHROPIC_API_KEY", "")
     result = run_pipeline(api_key=api_key)
-    if not result.enabled:
+    if not result.enabled or not result.preflight_ok or result.session_result is None:
         print(f"Eve pipeline: {result.reason}")
         return
     sr = result.session_result

@@ -92,6 +92,7 @@ class WritePathIsolationTest(unittest.TestCase):
                  patch("nero_core.eve.context.DEFAULT_FAILURE_PATTERNS_PATH", tmp_root / "failure_patterns.json"), \
                  patch("nero_core.eve.context.DEFAULT_ADAM_HYPOTHESES_PATH", tmp_root / "agent_hypotheses.json"), \
                  patch.dict("os.environ", {EVE_ENABLED_ENV_VAR: "true"}), \
+                 patch("nero_core.eve.notify.send_ntfy_notification", return_value=True), \
                  patch("os.replace", side_effect=_spy_replace), \
                  patch("builtins.open", side_effect=_spy_open), \
                  patch.object(Path, "write_text", _spy_write_text):
