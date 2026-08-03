@@ -348,6 +348,24 @@ outside this branch's own scope (this branch is "engine + one real
 proof-run only," and even that one real proof-run was not executed this
 session — see below).
 
+> **CORRECTION (2026-08-03), appended — original text above left
+> byte-identical, never mutated:** the **N = 5** value above is
+> **superseded by the 3 Aug 2026 pre-registration, which fixes N = 8**.
+> This is not a silent overwrite: the original reasoning above predates
+> that pre-registration and was based on the same $1.50/session budget
+> assumption, but Session 0's real spend came in at **$0.71**, roughly
+> half the $1.50 planning figure (prompt caching working as designed) —
+> at that real cost, roughly 28 sessions fit inside the $20/month ceiling,
+> not 13, so the original "small enough to fit the budget" constraint that
+> justified capping N at 5 no longer binds. 8 sessions still fits
+> comfortably and gives a firmer result than 5 (less exposure to one
+> unusually lucky or unlucky session deciding the outcome). This
+> reconciliation was made and recorded here **before any countable
+> session had run** under the corrected N = 8 bar — see the "Session 0"
+> section below for why Session 0 itself does not count as one of the 8,
+> and `docs/site_data/eve_session_registry.json` for the same correction
+> recorded machine-readably, cross-referenced to this note.
+
 ## The Phase 4 real proof-run — NOT executed this session
 
 Per this session's own explicit checkpoint, the user was asked whether to
@@ -741,17 +759,18 @@ Session 0's result were known to the user giving it:
 > Those numbers do not move. If a result lands below the bar it gets
 > reported as a miss.
 
-**A discrepancy against this same file's own earlier "Pre-registered kill
-criterion" section (above) must be flagged, not silently resolved:** that
-earlier section records **N = 5** sessions as the pre-registered count. The
-instruction above states **8** Eve sessions. This report does not decide
-which number is authoritative — it records both, in the order they were
-written, so the discrepancy is visible rather than quietly overwritten. The
-`5%` OOS-survival bar and the `<1.5%` chance-survival baseline are
-consistent between the two; only the session count differs. Machine-readable
-tracking (`docs/site_data/eve_session_registry.json`, added this session)
-uses the 8-session number per the newer, more specific instruction, but
-flags this same discrepancy in its own `pre_registration` field.
+**Reconciled (2026-08-03):** this same file's own earlier "Pre-registered
+kill criterion" section (above) recorded **N = 5** sessions; this
+instruction states **N = 8**. Confirmed authoritative: **N = 8**, per the 3
+Aug 2026 pre-registration, which post-dates and supersedes the original N =
+5 figure. See the correction note appended directly under the original N =
+5 text above (not deleted — the original reasoning is left byte-identical,
+per this project's own append-don't-overwrite discipline for audit
+records). The `5%` OOS-survival bar and the `<1.5%` chance-survival baseline
+were never in dispute — only the session count. `docs/site_data/
+eve_session_registry.json`'s `pre_registration` field is updated to N = 8
+with the same provenance note. This reconciliation was made, and recorded
+here, before any countable session had run.
 
 ### What happened in Session 0 (`eve-20260803T095520Z-394385c7`)
 

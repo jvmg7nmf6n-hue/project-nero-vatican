@@ -36,6 +36,17 @@ class RegistryShapeTest(unittest.TestCase):
         self.assertTrue(all(not e["counts_toward_pre_registered_8"] for e in self.registry["sessions"]))
         self.assertEqual(self.registry["next_countable_session_number"], 1)
 
+    def test_session_count_reconciliation_is_recorded_not_silently_changed(self) -> None:
+        # 2026-08-03: the pre-registered session count was reconciled from an
+        # earlier N=5 (docs/investigations/eve_engine_v1_report.md's original
+        # kill-criterion section, predating the 3 Aug pre-registration) to the
+        # authoritative N=8 -- this must be provenance-tracked, never a silent
+        # overwrite of a number that once said something else.
+        provenance = self.registry["pre_registration"]["session_count_provenance"]
+        self.assertEqual(provenance["authoritative_value"], 8)
+        self.assertEqual(provenance["superseded_prior_value"], 5)
+        self.assertTrue(provenance["reason"])
+
 
 class RegistryMatchesRealLedgerTest(unittest.TestCase):
     """Cross-checks the registry's session_ids against the real, actual

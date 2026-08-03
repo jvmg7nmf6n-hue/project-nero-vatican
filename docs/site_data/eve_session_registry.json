@@ -6,7 +6,14 @@
     "random_hypothesis_baseline_chance_survival": "<1.5%",
     "eve_must_clear": "5% OOS survival, FDR-corrected, across the full cross-asset family",
     "sessions_budgeted": "8 Eve sessions + 8 Adam runs (~$14)",
-    "kill_criterion": "if Eve does not clear 5% after 8 (countable) sessions, the open-ended agent approach is falsified and the branch is archived"
+    "kill_criterion": "if Eve does not clear 5% after 8 (countable) sessions, the open-ended agent approach is falsified and the branch is archived",
+    "session_count_provenance": {
+      "authoritative_value": 8,
+      "reconciled_at": "2026-08-03",
+      "superseded_prior_value": 5,
+      "superseded_prior_value_source": "docs/investigations/eve_engine_v1_report.md's original 'Pre-registered kill criterion' section, written before the 3 Aug 2026 pre-registration existed",
+      "reason": "The original N=5 was chosen under a ~$1.50/session budget planning figure ('small enough to fit comfortably inside a $20/month ceiling'). Session 0's real spend came in at $0.7129 -- roughly half that -- so at the real per-session cost, ~28 sessions fit inside the $20/month ceiling, not 13, and the original budget constraint that capped N at 5 no longer binds. N=8 fits comfortably and gives a firmer result than N=5 (less exposure to one unusually lucky or unlucky session deciding the outcome). This reconciliation was made and recorded here BEFORE any countable session had run under it -- see docs/investigations/eve_engine_v1_report.md's own appended correction note (original N=5 text left byte-identical, never deleted) for the full narrative."
+    }
   },
   "counting_rule": "A session counts toward the pre-registered 8 only once it produces at least one hypothesis that was actually eligible to be scored against real data (i.e. the session ran to completion and the DSL vocabulary / pre-submit validator fix, both landed 2026-08-03, were in place). A session that crashed before completion, or whose every hypothesis was UNTESTABLE_BY_DSL purely because of a since-fixed spec defect (the DSL vocabulary was withheld from Eve, not just strategy examples), produces no data point toward the 5% OOS bar -- an unscoreable hypothesis is not a survival rate of zero, it is an unknown. The 5%/8-session bar itself is UNCHANGED; only what qualifies as a countable session is defined here, before any survival data exists under the fixed system.",
   "sessions": [
