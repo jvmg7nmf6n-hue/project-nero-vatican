@@ -1056,3 +1056,131 @@ part of the N=5→N=8 reconciliation) and 3 in `tests/test_eve_llm_client.py`
 example_shows_asset_and_timeframe_as_separate_fields`, `test_asset_
 universe_framed_as_data_not_permission`). Website Jest suite unchanged
 (582/582 — no `website/` file touched this session).
+
+## Fifth follow-up session: fixing items 3, 4, 5, 7 all together, and the re-audit (2026-08-03)
+
+Per instruction, all four remaining findable gaps from the precondition
+audit were fixed in one pass — "I am not spending another session
+discovering the next one" — rather than one gap per session.
+
+### Item 3 — `generated_at`: made server-side, and the contradiction reconciled
+
+**Never Eve's problem now.** `nero_core.eve.hypothesis_shapes._inject_
+generated_at` stamps a real, correct ISO8601 `generated_at` onto every
+`raw_hypothesis` at the moment `hypothesis_shapes.build_hypothesis_record`
+finalizes it — the ONE place a fresh record is built, called from both a
+successful first attempt and a correction-exhausted finalize inside
+`session._process_proposed_hypotheses`. It **always overrides** anything
+Eve might supply herself (there's no legitimate reason for her to supply
+one, and trusting a self-reported value would reopen the exact
+lookahead-cutoff manipulation risk this field exists to prevent). Returns a
+new dict — the caller's own `raw_hypothesis` is never mutated in place.
+
+**Fails loudly, never silently**, per instruction: raises `TypeError`
+immediately if `raw_hypothesis` isn't a dict (defense-in-depth — every real
+caller already guards this, but the function doesn't trust that
+indirectly), and the injected value is asserted to round-trip through
+`datetime.fromisoformat` — the exact parser `auto_tester._parse_
+generated_at` uses — so a future refactor that breaks this crashes
+immediately rather than surfacing as a confusing downstream verdict. An
+uncaught exception here is not silent: `pipeline.run_pipeline`'s existing
+`except Exception` path already notifies and re-raises rather than
+swallowing.
+
+**The contradiction reconciled.** `scoring.score_hypothesis` now imports
+`VERDICT_UNTESTABLE` directly from `auto_tester` (reused, never re-typed as
+a magic string — `test_eve_no_auto_wire.py`'s `SCORING_ALLOWED_IMPORTS`
+updated to allow exactly this one additional named import) and, whenever
+`adam_test_hypothesis`'s own return has `verdict == VERDICT_UNTESTABLE`,
+downgrades `testability` from `"TESTABLE"` to a new, distinct
+`TESTABILITY_UNTESTABLE_BY_HARNESS`, carrying Adam's own human-readable
+`reason` forward as `testability_reason`. A record can now never assert
+`testability: "TESTABLE"` next to `verdict_combined: "UNTESTABLE"`. With
+`generated_at` now always present, this specific path is structurally
+unreachable via real inputs (`classify_testability` and `auto_tester.test_
+hypothesis` parse the exact same dict with the exact same functions, so
+they can never disagree on DSL shape) — the reconciliation is a hard
+invariant guarding against that always being true, not a fix conditioned on
+it, and is tested by mocking the harness call directly
+(`TestabilityVerdictReconciliationTest`) since no real scenario can trigger
+it anymore.
+
+### Items 4, 5, 7 — told to Eve, same framing as the DSL vocabulary
+
+A new `FREQUENCY_AND_VERDICT_BLOCK` in `session.py`'s system prompt, appended
+after the asset-universe block:
+
+- **Item 4 (frequency gate):** the exact thresholds — reinlined from
+  `frequency_gate.FAST_MAX_MONTHS`/`VIABLE_MAX_MONTHS`/`TARGET_RESOLVED_
+  TRADES` with a byte-identity drift test (`FrequencyGateReuseTest`, same
+  pattern as the DSL fields/ops) — **~30 trades/year to reach the harness at
+  all, ~60/year to be tested comfortably**, stated as a measured property of
+  the platform, not an instruction. Includes the user-supplied finding that
+  this platform's own LLM-authored hypotheses have overestimated their own
+  trigger frequency by roughly 5x on average (claimed 24-32/year, measured
+  2.5-15/year, all rejected `TOO_SLOW`) — **note on provenance**: this exact
+  figure was not independently locatable in any file in this repo (`docs/
+  research_agent_real_run_followup.md`, the closest candidate, explicitly
+  states "Did the LLM follow the 20-30 trades/year instruction? UNVERIFIED
+  — cannot be answered this run" because zero real Adam LLM calls had
+  succeeded at that point); included verbatim per explicit instruction from
+  the user as the domain-authoritative source, flagged here rather than
+  silently presented as independently re-verified.
+- **Item 5 (SURVIVED bar):** `MIN_SAMPLE_SIZE` (live import from `tools.
+  backtest_statistics` — not under `nero_core.research_agent`, no drift risk
+  by construction) — ≥20 resolved trades per half, positive expectancy on
+  both, bootstrap CI clearing zero on both, for `SURVIVED`; a softer
+  `PROMISING-WATCHLIST` otherwise, never a rejection.
+- **Item 7 (ATR warmup):** one line — a `stop_atr_multiple` plan can only
+  open a trade when `atr14` is a valid reading on the entry candle;
+  `stop_pct_of_entry` is not subject to this.
+
+### Re-audited precondition table
+
+Every row from the original audit, re-checked against the code as it now
+stands:
+
+| # | Precondition | Told to Eve, or handled server-side? |
+|---|---|---|
+| 1 | DSL syntax parses | **Told** — `DSL_VOCABULARY_BLOCK`, confirmed working (Session 0-B: 6/6 first-attempt parses) |
+| 2 | `(asset, timeframe)` in `APPROVED_RESEARCH_UNIVERSE` | **Told** — `APPROVED_RESEARCH_UNIVERSE_BLOCK`, not yet exercised by a real session |
+| 3 | `generated_at` present & ISO8601 | **Handled server-side** — always injected by `hypothesis_shapes._inject_generated_at`, fails loudly if it ever can't be; Eve never needs to know this field exists |
+| 3b | (reporting correctness, not itself a precondition) `testability` must never contradict `verdict_combined` | **Fixed** — `scoring.score_hypothesis` reconciles via `TESTABILITY_UNTESTABLE_BY_HARNESS` |
+| 4 | Frequency ≥~30/year (VIABLE), ≥~60/year (FAST) | **Told** — `FREQUENCY_AND_VERDICT_BLOCK`, with the LLM overestimation-bias context |
+| 5 | ≥20 trades/half + positive expectancy + CI clears zero, for SURVIVED | **Told** — same block |
+| 6 | Research export file exists on disk | **N/A for Eve** — confirmed still true: all 4 approved pairs' exports present |
+| 7 | Valid `atr14` at entry for an ATR-based stop | **Told** — one line, same block |
+
+**Every row is now either (a) told to Eve, or (b) handled entirely
+server-side so she never needs to know.** No open gap remains in this
+table as of this commit.
+
+### Tests added this session
+
+- `tests/test_eve_hypothesis_shapes.py` (extended): generated_at injection
+  overrides Eve's own value, never mutates the input dict, and fails loudly
+  (`TypeError`) on a non-dict input; the old "verbatim" test updated to
+  exempt exactly the one injected field.
+- `tests/test_eve_scoring_testability_split.py` (extended):
+  `TestabilityVerdictReconciliationTest` — the harness-returns-UNTESTABLE
+  case downgrades `testability` and never leaves it at `TESTABLE`; a real
+  SURVIVED/DIED verdict never triggers the downgrade.
+- `tests/test_eve_dsl_validator.py` (updated): three raw_hypothesis
+  equality assertions now exempt the injected `generated_at` field via a
+  small local helper.
+- `tests/test_eve_llm_client.py` (extended): `FrequencyGateReuseTest`-style
+  drift guards for the reinlined frequency-gate constants and the live
+  `MIN_SAMPLE_SIZE` import, plus content assertions that the system prompt
+  states the frequency thresholds, the overestimation finding, the SURVIVED
+  bar, and the ATR warmup note.
+- `tests/test_eve_no_auto_wire.py` (updated): `SCORING_ALLOWED_IMPORTS`
+  extended by exactly one entry (`VERDICT_UNTESTABLE`).
+
+Full Python suite: **248/248** Eve-specific tests passing (`python -m
+unittest discover -s tests -p "test_eve_*.py"`). Full repository suite
+(`python -m unittest discover -s tests -p "test_*.py"`): **2349 tests, 0
+failures, 0 errors** (`Ran 2349 tests in 361.959s` / `OK`) — up from 2338
+by 11 new tests (3 in `tests/test_eve_hypothesis_shapes.py`, 2 in
+`tests/test_eve_scoring_testability_split.py`, 6 in `tests/test_eve_llm_
+client.py`). Website Jest suite unchanged (582/582 — no `website/` file
+touched this session).

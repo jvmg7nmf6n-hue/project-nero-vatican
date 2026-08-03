@@ -20,6 +20,14 @@ from unittest.mock import patch
 from nero_core.eve import llm_client, session, storage
 
 
+def _without_generated_at(raw_hypothesis: dict) -> dict:
+    """build_hypothesis_record now always stamps a server-side generated_at
+    (Session 0-B follow-up fix) -- strips it back off so a finalized
+    record's raw_hypothesis can still be compared against the original
+    fixture dict, which never included that field."""
+    return {k: v for k, v in raw_hypothesis.items() if k != "generated_at"}
+
+
 class _IsolatedStorageTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self._tmpdir = tempfile.TemporaryDirectory()
@@ -135,7 +143,8 @@ class ProcessProposedHypothesesUnitTest(unittest.TestCase):
             content, "s1", 2, retry_counts, correction_log, datetime(2026, 8, 15, tzinfo=timezone.utc)
         )
         self.assertEqual(len(finalized), 1, "retries exhausted must still record the hypothesis, never discard it")
-        self.assertEqual(finalized[0]["raw_hypothesis"], BROKEN_KEY_NAME_HYPOTHESIS)
+        self.assertEqual(_without_generated_at(finalized[0]["raw_hypothesis"]), BROKEN_KEY_NAME_HYPOTHESIS)
+        self.assertIn("generated_at", finalized[0]["raw_hypothesis"])
         self.assertIn("UNTESTABLE_BY_DSL", tool_result_text["toolu_1"])
         self.assertEqual(correction_log[0]["outcome"], "retries_exhausted")
 
@@ -197,7 +206,7 @@ class RetryLoopEndToEndTest(_IsolatedStorageTestCase):
             result = session.run_session(api_key="fake-key", stub=False, now=now)
 
         self.assertEqual(result.n_proposed, 1, "one retry + one success is ONE hypothesis, not two")
-        self.assertEqual(result.hypothesis_records[0]["raw_hypothesis"], CORRECTED_HYPOTHESIS)
+        self.assertEqual(_without_generated_at(result.hypothesis_records[0]["raw_hypothesis"]), CORRECTED_HYPOTHESIS)
 
         # The message sent right after the broken first attempt must carry
         # the parser's own error back to Eve, not a generic ack.
@@ -228,7 +237,7 @@ class RetryLoopEndToEndTest(_IsolatedStorageTestCase):
             result = session.run_session(api_key="fake-key", stub=False, now=now)
 
         self.assertEqual(result.n_proposed, 1, "still exactly one hypothesis record, never discarded")
-        self.assertEqual(result.hypothesis_records[0]["raw_hypothesis"], BROKEN_KEY_NAME_HYPOTHESIS)
+        self.assertEqual(_without_generated_at(result.hypothesis_records[0]["raw_hypothesis"]), BROKEN_KEY_NAME_HYPOTHESIS)
         outcomes = [e["outcome"] for e in result.record["dsl_correction_log"]]
         self.assertEqual(outcomes, ["retry_offered", "retry_offered", "retries_exhausted"])
         self.assertEqual(result.record["ablation_metadata"]["n_hypotheses_dsl_retries_exhausted"], 1)

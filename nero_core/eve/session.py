@@ -56,6 +56,7 @@ from nero_core.eve import scoring
 from nero_core.eve import storage
 from nero_core.eve.cost import web_search_count
 from nero_core.eve.tools_defs import END_SESSION_TOOL_NAME, PROPOSE_HYPOTHESIS_TOOL_NAME, WEB_SEARCH_TOOL, default_tools
+from tools.backtest_statistics import MIN_SAMPLE_SIZE
 
 MAX_TURNS = 40
 
@@ -211,6 +212,64 @@ is for a pair not on this list, propose it anyway; that gap becoming visible is 
 useful information about what data this platform should acquire next. But if you want a
 real chance at a scored verdict this session, aim at one of the pairs above on purpose."""
 
+# --- Frequency gate + verdict bar (spec items 4/5/7, added after Session
+# 0-B's own follow-up audit) --------------------------------------------
+# REINLINED from nero_core.research_agent.frequency_gate.{TARGET_RESOLVED_
+# TRADES,FAST_MAX_MONTHS,VIABLE_MAX_MONTHS} -- same reinline-plus-drift-test
+# pattern as DSL_ALLOWED_FIELDS/DSL_ALLOWED_OPS above (session.py may not
+# import nero_core.research_agent directly; test_eve_llm_client.py's
+# FrequencyGateReuseTest asserts these three numbers stay byte-identical to
+# frequency_gate.py's real constants). MIN_SAMPLE_SIZE, by contrast, is a
+# live import (tools.backtest_statistics is not under nero_core.research_
+# agent -- same no-drift-risk category as APPROVED_RESEARCH_UNIVERSE above).
+#
+# WHY THIS EXISTS: even a hypothesis that parses AND targets a scorable pair
+# still never reaches a real backtest unless its entry condition fires often
+# enough -- frequency_gate.py's own words, "HARD RULE: must never reach the
+# harness, no matter how strong the mechanism looks." Nothing told Eve this
+# gate existed, or gave her any numeric sense of the threshold. Separately:
+# this platform has directly measured its own LLM-authored hypotheses
+# overestimating their own trigger frequency by roughly 5x on average (one
+# real run: claimed 24-32 trades/year, measured 2.5-15/year, all rejected
+# TOO_SLOW) -- stated here as measured history, not invented to scare her
+# into a particular answer.
+_FREQ_TARGET_TRADES = 30
+_FREQ_FAST_MAX_MONTHS = 6.0
+_FREQ_VIABLE_MAX_MONTHS = 12.0
+# Trades/year needed to clear each bar: TARGET_RESOLVED_TRADES / (max_months / 12).
+_FREQ_VIABLE_MIN_PER_YEAR = _FREQ_TARGET_TRADES / (_FREQ_VIABLE_MAX_MONTHS / 12.0)
+_FREQ_FAST_MIN_PER_YEAR = _FREQ_TARGET_TRADES / (_FREQ_FAST_MAX_MONTHS / 12.0)
+
+FREQUENCY_AND_VERDICT_BLOCK = """
+
+Two more measured properties of this platform's testing harness -- stated as facts about
+what happens after a hypothesis parses and targets a scorable pair, not instructions about
+what to propose.
+
+FREQUENCY GATE: your entry condition must fire often enough in real history to even reach a
+backtest -- at least ~{viable_min:.0f} times per year to be tested at all, ~{fast_min:.0f}/year or more
+to be tested comfortably (this platform targets {target_trades:.0f} resolved trades within
+{viable_months:.0f} months). A condition that fires less often than that is recorded honestly as
+TOO_SLOW and never reaches the backtest, no matter how sound the mechanism looks -- this is a
+hard rule, not a quality judgment. Measured fact from this platform's own history:
+LLM-authored hypotheses here have overestimated their own trigger frequency by roughly 5x on
+average (one real run: claimed 24-32 trades/year, measured 2.5-15/year, all rejected
+TOO_SLOW) -- assume your own frequency intuition runs high, and lean toward conditions that
+trigger MORE often than feels necessary. You may still propose a rule you expect to be rare;
+it will be recorded and scored honestly as TOO_SLOW, which is itself real information, not a
+failure.
+
+VERDICT BAR: a real backtest reports SURVIVED only when BOTH halves (in-sample and
+out-of-sample) show positive expectancy, AND both halves have at least {min_sample_size} resolved
+trades, AND the bootstrap confidence interval on each half's own mean R-multiple clears zero.
+Fewer trades or a CI that crosses zero still produces a real, honestly-reported verdict
+(PROMISING-WATCHLIST) -- a lower bar than SURVIVED, never a rejection.
+
+One mechanical note: a stop sized as a multiple of ATR (stop_atr_multiple) can only open a
+trade when atr14 has a valid (non-NaN, positive) reading on the entry candle -- during
+indicator warmup, a rule can trigger without producing a trade. A stop_pct_of_entry plan is
+not subject to this."""
+
 SYSTEM_PROMPT_TEMPLATE = """You are Eve, an open-ended trading-hypothesis research agent for Project
 Vatican, a paper-trading-only research platform (never real-money execution) for gold,
 crypto, forex, and stocks.
@@ -241,6 +300,10 @@ end_session with a short summary. You may take as many turns as your budget allo
     max_retries=MAX_DSL_RETRIES, fields=", ".join(DSL_ALLOWED_FIELDS), ops=", ".join(DSL_ALLOWED_OPS)
 ) + APPROVED_RESEARCH_UNIVERSE_BLOCK.format(
     universe_pairs="\n".join(f'  - asset="{asset}", timeframe="{timeframe}"' for asset, timeframe in sorted(APPROVED_RESEARCH_UNIVERSE))
+) + FREQUENCY_AND_VERDICT_BLOCK.format(
+    viable_min=_FREQ_VIABLE_MIN_PER_YEAR, fast_min=_FREQ_FAST_MIN_PER_YEAR,
+    target_trades=_FREQ_TARGET_TRADES, viable_months=_FREQ_VIABLE_MAX_MONTHS,
+    min_sample_size=MIN_SAMPLE_SIZE,
 )
 
 

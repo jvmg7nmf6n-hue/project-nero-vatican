@@ -44,6 +44,11 @@ SCORING_ALLOWED_IMPORTS = {
     ("nero_core.research_agent.rule_dsl", "parse_bidirectional_entry_rules"),
     ("nero_core.research_agent.rule_dsl", "parse_exit_plan"),
     ("nero_core.research_agent.auto_tester", "test_hypothesis"),
+    # Added for the testability/verdict_combined reconciliation (Session
+    # 0-B follow-up): scoring.py must compare against Adam's own literal
+    # VERDICT_UNTESTABLE string, reused directly rather than re-typed as a
+    # magic "UNTESTABLE" literal that could silently drift from it.
+    ("nero_core.research_agent.auto_tester", "VERDICT_UNTESTABLE"),
 }
 
 

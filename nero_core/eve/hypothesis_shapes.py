@@ -1,6 +1,9 @@
 """Eve's free-form hypothesis record shape (spec 2.7): whatever JSON shape
 Eve proposes via the propose_hypothesis tool (nero_core.eve.tools_defs) is
-recorded AS-IS under `raw_hypothesis`, never forced into Adam's schema.
+recorded AS-IS under `raw_hypothesis`, never forced into Adam's schema --
+with exactly ONE deliberate, narrow exception: `generated_at` is always
+stamped/overridden server-side (see _inject_generated_at below), never left
+to Eve to supply.
 
 Testability classification and scoring happen in nero_core.eve.scoring
 (Phase 3) -- deliberately NOT here. That module is this branch's one
@@ -25,6 +28,47 @@ from nero_core.eve.tools_defs import PROPOSE_HYPOTHESIS_TOOL_NAME
 TESTABILITY_UNSCORED = "UNSCORED"
 
 
+def _inject_generated_at(raw_hypothesis: dict, now: datetime) -> dict:
+    """Added after Session 0-B's own follow-up finding (docs/investigations/
+    eve_engine_v1_report.md): Eve has no reason to know an internal
+    `generated_at` field exists at all -- nero_core.research_agent.
+    auto_tester._parse_generated_at requires it (it's the frequency gate's
+    own no-lookahead cutoff, see frequency_gate.py's docstring), and before
+    this fix nothing ever supplied it for a real Eve hypothesis, so a
+    hypothesis that cleared both the DSL check and the asset-universe check
+    would still silently fail one level deeper with no way for Eve to have
+    prevented it (auto_tester.test_hypothesis returns VERDICT_UNTESTABLE --
+    see scoring.py's own reconciliation of that against `testability`).
+
+    ALWAYS overrides any `generated_at` Eve might happen to include herself
+    -- there is no legitimate reason for her to supply one, and trusting a
+    self-reported value here would reopen exactly the lookahead-cutoff
+    manipulation risk auto_tester.py's own no-lookahead guarantee exists to
+    close (a hypothesis "generated" earlier than it really was would widen
+    the pool of pre-cutoff candles a search result could have leaked
+    information from). The platform's own real proposal-time clock (`now`,
+    threaded through from nero_core.eve.session's turn loop) is the only
+    trustworthy source for "when was this hypothesis generated." Returns a
+    NEW dict -- never mutates `raw_hypothesis` in place.
+
+    FAILS LOUDLY, NEVER SILENTLY (explicit design requirement): raises
+    TypeError immediately if `raw_hypothesis` isn't actually a dict, rather
+    than silently building a broken record (every real caller already
+    guards this before calling build_hypothesis_record, but this function
+    does not trust that indirectly). The injected value is asserted to
+    round-trip through datetime.fromisoformat -- the exact parser auto_
+    tester._parse_generated_at uses -- so a future refactor that breaks this
+    can never again surface as a silent, confusing downstream UNTESTABLE
+    verdict; it crashes here instead, which nero_core.eve.pipeline.
+    run_pipeline's own except-Exception path already notifies and
+    re-raises rather than swallowing (see that module's own docstring)."""
+    if not isinstance(raw_hypothesis, dict):
+        raise TypeError(f"generated_at injection requires a dict, got {type(raw_hypothesis).__name__}")
+    generated_at_iso = now.isoformat()
+    datetime.fromisoformat(generated_at_iso)  # must round-trip; raises ValueError otherwise -- see docstring
+    return {**raw_hypothesis, "generated_at": generated_at_iso}
+
+
 def build_hypothesis_record(raw_hypothesis: dict, session_id: str, turn_index: int, tool_use_id: str, now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     return {
@@ -33,7 +77,7 @@ def build_hypothesis_record(raw_hypothesis: dict, session_id: str, turn_index: i
         "turn_index": turn_index,
         "tool_use_id": tool_use_id,
         "proposed_at": now.isoformat(),
-        "raw_hypothesis": raw_hypothesis,
+        "raw_hypothesis": _inject_generated_at(raw_hypothesis, now),
         "testability": TESTABILITY_UNSCORED,
         "verdict_is": None,
         "verdict_oos": None,

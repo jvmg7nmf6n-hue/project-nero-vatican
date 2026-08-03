@@ -83,6 +83,53 @@ class DslVocabularyReuseTest(unittest.TestCase):
         self.assertIn("still fully welcome and still recorded", SYSTEM_PROMPT_TEMPLATE)
         self.assertIn("refused", SYSTEM_PROMPT_TEMPLATE)
 
+    def test_frequency_gate_numbers_match_frequency_gate_py_exactly(self) -> None:
+        # Session 0-B follow-up audit (item 4): reinlined from
+        # frequency_gate.py -- must stay byte-identical, same drift-guard
+        # pattern as the DSL fields/ops above.
+        from nero_core.eve.session import _FREQ_FAST_MAX_MONTHS, _FREQ_TARGET_TRADES, _FREQ_VIABLE_MAX_MONTHS
+        from nero_core.research_agent.frequency_gate import FAST_MAX_MONTHS, TARGET_RESOLVED_TRADES, VIABLE_MAX_MONTHS
+
+        self.assertEqual(_FREQ_TARGET_TRADES, TARGET_RESOLVED_TRADES)
+        self.assertEqual(_FREQ_FAST_MAX_MONTHS, FAST_MAX_MONTHS)
+        self.assertEqual(_FREQ_VIABLE_MAX_MONTHS, VIABLE_MAX_MONTHS)
+
+    def test_min_sample_size_matches_tools_backtest_statistics_exactly(self) -> None:
+        # Live import (tools.backtest_statistics is not under research_agent),
+        # so this can never drift by construction -- test documents that fact
+        # rather than guards against a real risk.
+        from nero_core.eve.session import MIN_SAMPLE_SIZE as SESSION_MIN_SAMPLE_SIZE
+        from tools.backtest_statistics import MIN_SAMPLE_SIZE
+
+        self.assertEqual(SESSION_MIN_SAMPLE_SIZE, MIN_SAMPLE_SIZE)
+
+    def test_system_prompt_states_the_frequency_gate_thresholds(self) -> None:
+        from nero_core.eve.session import SYSTEM_PROMPT_TEMPLATE
+
+        self.assertIn("~30 times per year", SYSTEM_PROMPT_TEMPLATE)
+        self.assertIn("~60/year", SYSTEM_PROMPT_TEMPLATE)
+        self.assertIn("TOO_SLOW", SYSTEM_PROMPT_TEMPLATE)
+
+    def test_system_prompt_states_the_llm_frequency_overestimation_finding(self) -> None:
+        from nero_core.eve.session import SYSTEM_PROMPT_TEMPLATE
+
+        self.assertIn("overestimated their own trigger frequency", SYSTEM_PROMPT_TEMPLATE)
+        self.assertIn("24-32 trades/year", SYSTEM_PROMPT_TEMPLATE)
+        self.assertIn("2.5-15/year", SYSTEM_PROMPT_TEMPLATE)
+
+    def test_system_prompt_states_the_survived_bar(self) -> None:
+        from nero_core.eve.session import SYSTEM_PROMPT_TEMPLATE
+
+        self.assertIn("at least 20 resolved", SYSTEM_PROMPT_TEMPLATE)
+        self.assertIn("SURVIVED", SYSTEM_PROMPT_TEMPLATE)
+        self.assertIn("PROMISING-WATCHLIST", SYSTEM_PROMPT_TEMPLATE)
+
+    def test_system_prompt_states_the_atr_warmup_note(self) -> None:
+        from nero_core.eve.session import SYSTEM_PROMPT_TEMPLATE
+
+        self.assertIn("atr14", SYSTEM_PROMPT_TEMPLATE)
+        self.assertIn("stop_pct_of_entry", SYSTEM_PROMPT_TEMPLATE)
+
     def test_system_prompt_worked_example_is_actually_valid_dsl(self) -> None:
         # The vocabulary block's own worked example must itself parse -- an
         # example that doesn't practice what it preaches would be worse than

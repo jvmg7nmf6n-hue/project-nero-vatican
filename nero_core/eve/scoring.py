@@ -97,6 +97,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable
 
+from nero_core.research_agent.auto_tester import VERDICT_UNTESTABLE as ADAM_VERDICT_UNTESTABLE
 from nero_core.research_agent.auto_tester import test_hypothesis as adam_test_hypothesis
 from nero_core.research_agent.rule_dsl import RuleAmbiguousError, parse_bidirectional_entry_rules, parse_exit_plan
 from tools.backtest_statistics import MIN_SAMPLE_SIZE, VERDICT_DIED, VERDICT_SURVIVED, classify_verdict
@@ -122,6 +123,21 @@ class DataSourceRefusedError(Exception):
 
 TESTABILITY_TESTABLE = "TESTABLE"
 TESTABILITY_UNTESTABLE_BY_DSL = "UNTESTABLE_BY_DSL"
+# Added after Session 0-B's own follow-up finding: classify_testability's
+# rule_dsl-parseability check and auto_tester.test_hypothesis's own,
+# DEEPER "can I actually test this" check (missing/unparseable
+# generated_at -- structurally supposed to be unreachable now that
+# hypothesis_shapes._inject_generated_at always stamps a real one server
+# -side, but this reconciliation is a hard invariant, not conditioned on
+# that fix holding forever) are two DIFFERENT questions. Before this
+# constant existed, a hypothesis that failed the second, deeper check
+# still carried `testability: "TESTABLE"` (set earlier by classify_
+# testability and never revisited) sitting next to `verdict_combined:
+# "UNTESTABLE"` (Adam's own literal harness string) -- a record that
+# asserted testable and untestable about the same hypothesis at once.
+# score_hypothesis below downgrades `testability` to this value whenever
+# that happens, so the two fields can never again disagree.
+TESTABILITY_UNTESTABLE_BY_HARNESS = "UNTESTABLE_BY_HARNESS"
 
 VERDICT_EVE_SURVIVED = "SURVIVED"
 VERDICT_EVE_DIED = "DIED"
@@ -285,6 +301,15 @@ def score_hypothesis(record: dict, candles_provider: Callable[[str, str], object
 
     result = adam_test_hypothesis(raw, candles, now=now)
     updated["verdict_combined"] = result.verdict
+    if result.verdict == ADAM_VERDICT_UNTESTABLE:
+        # Reconcile rather than let `testability: "TESTABLE"` sit next to
+        # `verdict_combined: "UNTESTABLE"` -- see TESTABILITY_UNTESTABLE_BY_
+        # HARNESS's own module-level comment. `result.reason` already
+        # carries auto_tester's own human-readable explanation (e.g. a
+        # missing/unparseable generated_at, or its own internal re-parse
+        # failure) -- reused verbatim, not re-derived.
+        updated["testability"] = TESTABILITY_UNTESTABLE_BY_HARNESS
+        updated["testability_reason"] = result.reason
     updated["frequency_classification"] = result.frequency_classification
     updated["measured_trades_per_year"] = result.measured_trades_per_year
     updated["verdict_is"] = _map_half_verdict(result.train)

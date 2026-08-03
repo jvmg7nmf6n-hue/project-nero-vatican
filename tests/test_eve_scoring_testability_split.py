@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 import unittest
 from datetime import datetime, timezone
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -147,6 +148,49 @@ class ScoreHypothesisRealBacktestTest(unittest.TestCase):
             scored["verdict_combined"],
             (VERDICT_DIED, VERDICT_PROMISING_WATCHLIST, VERDICT_SURVIVED, "UNTESTABLE", "SKIPPED"),
         )
+
+
+class TestabilityVerdictReconciliationTest(unittest.TestCase):
+    """A hypothesis record must never assert both testability="TESTABLE"
+    and verdict_combined="UNTESTABLE" at once (Session 0-B follow-up fix).
+    Now that hypothesis_shapes._inject_generated_at always stamps a real
+    generated_at server-side, auto_tester.test_hypothesis returning its own
+    VERDICT_UNTESTABLE for a hypothesis classify_testability already said
+    TESTABLE is structurally unreachable via real inputs -- both call the
+    exact same rule_dsl parse functions on the same dict. This test proves
+    the RECONCILIATION LOGIC itself works as a hard invariant regardless,
+    by mocking adam_test_hypothesis's return value directly rather than
+    trying to construct a real scenario that can no longer occur."""
+
+    def _mock_untestable_result(self, reason: str):
+        from nero_core.research_agent.auto_tester import TestResult
+
+        return TestResult(
+            hypothesis_name="X", asset="BTC", timeframe="4h",
+            verdict="UNTESTABLE", review_status="untestable", frequency_classification="UNMEASURABLE",
+            measured_trades_per_year=None, expected_time_to_30_trades_months=None,
+            reason=reason, train=None, test=None, tested_at="2026-08-01T00:00:00+00:00",
+        )
+
+    def test_testability_is_downgraded_when_harness_returns_untestable(self) -> None:
+        candles = _make_candles(n=600, seed=5)
+        record = _record(ALWAYS_FIRES_RAW)
+        with patch("nero_core.eve.scoring.adam_test_hypothesis", return_value=self._mock_untestable_result("generated_at missing or unparseable")):
+            scored = scoring.score_hypothesis(record, candles_provider=lambda a, t: candles, now=datetime(2026, 8, 1, tzinfo=timezone.utc))
+
+        self.assertEqual(scored["verdict_combined"], "UNTESTABLE")
+        self.assertNotEqual(scored["testability"], scoring.TESTABILITY_TESTABLE, "must never assert TESTABLE next to verdict_combined=UNTESTABLE")
+        self.assertEqual(scored["testability"], scoring.TESTABILITY_UNTESTABLE_BY_HARNESS)
+        self.assertEqual(scored["testability_reason"], "generated_at missing or unparseable")
+
+    def test_a_real_survived_or_died_verdict_never_triggers_the_downgrade(self) -> None:
+        # Regression guard: the reconciliation must only fire for Adam's
+        # OWN literal "UNTESTABLE" string, never for a real verdict.
+        candles = _make_candles(n=600, seed=6)
+        record = _record(ALWAYS_FIRES_RAW)
+        scored = scoring.score_hypothesis(record, candles_provider=lambda a, t: candles, now=datetime(2026, 8, 1, tzinfo=timezone.utc))
+        self.assertEqual(scored["testability"], scoring.TESTABILITY_TESTABLE)
+        self.assertNotEqual(scored["verdict_combined"], "UNTESTABLE")
 
 
 class ScoreAllTest(unittest.TestCase):
