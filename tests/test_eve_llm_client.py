@@ -53,6 +53,36 @@ class DslVocabularyReuseTest(unittest.TestCase):
         for key_name in ("compare_to_field", "stop_atr_multiple", "target_r_multiple", "max_holding_hours"):
             self.assertIn(key_name, SYSTEM_PROMPT_TEMPLATE)
 
+    def test_system_prompt_states_the_approved_research_universe(self) -> None:
+        # Session 0-B (eve-20260803T142519Z-718833c9): 6/6 hypotheses parsed
+        # cleanly but all 6 targeted a pair with no real backtest data, and
+        # were refused. Every approved pair must be named explicitly, in the
+        # correct asset/timeframe-as-separate-fields shape.
+        from nero_core.asset_universe import APPROVED_RESEARCH_UNIVERSE
+        from nero_core.eve.session import SYSTEM_PROMPT_TEMPLATE
+
+        for asset, timeframe in APPROVED_RESEARCH_UNIVERSE:
+            self.assertIn(f'asset="{asset}", timeframe="{timeframe}"', SYSTEM_PROMPT_TEMPLATE)
+
+    def test_worked_example_shows_asset_and_timeframe_as_separate_fields(self) -> None:
+        # Session 0-B's own BTC/4h hypothesis mangled asset+timeframe into
+        # one string ("asset": "BTC/4h") -- the worked example must model
+        # the correct separated shape, not a placeholder that never shows it.
+        from nero_core.eve.session import SYSTEM_PROMPT_TEMPLATE
+
+        self.assertIn('"asset": "BTC"', SYSTEM_PROMPT_TEMPLATE)
+        self.assertIn('"timeframe": "4h"', SYSTEM_PROMPT_TEMPLATE)
+        self.assertNotIn('"asset": "BTC/4h"', SYSTEM_PROMPT_TEMPLATE)
+
+    def test_asset_universe_framed_as_data_not_permission(self) -> None:
+        # Same framing discipline as the DSL vocabulary block: she may still
+        # propose on any pair; only what happens to it (recorded vs scored)
+        # differs.
+        from nero_core.eve.session import SYSTEM_PROMPT_TEMPLATE
+
+        self.assertIn("still fully welcome and still recorded", SYSTEM_PROMPT_TEMPLATE)
+        self.assertIn("refused", SYSTEM_PROMPT_TEMPLATE)
+
     def test_system_prompt_worked_example_is_actually_valid_dsl(self) -> None:
         # The vocabulary block's own worked example must itself parse -- an
         # example that doesn't practice what it preaches would be worse than

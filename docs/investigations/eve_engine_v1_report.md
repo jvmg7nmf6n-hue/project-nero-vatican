@@ -945,3 +945,114 @@ broken one in the same turn.
   confirming no existing test was silently dropped.
 - Full website Jest suite: **582 passed, 582 total** — unchanged before and
   after (no `website/` file was touched this session).
+
+## Fourth follow-up session: Session 0-B, the asset universe, and a full precondition audit (2026-08-03)
+
+### Session 0-B (`eve-20260803T142519Z-718833c9`) — the asset universe gap
+
+The very next real session after the DSL vocabulary fix landed confirmed
+that fix worked completely: **6/6 hypotheses parsed on their first
+attempt** (0 `UNTESTABLE_BY_DSL`, 0 pre-submit-validator correction
+attempts needed — `n_dsl_correction_attempts: 0`,
+`n_hypotheses_recovered_by_dsl_correction: 0`). Terminated via
+`end_session_called` (not a budget stop): 6 turns, 3 web searches, $0.4834
+real spend against the $1.50 budget.
+
+But **0/6 hypotheses were actually scored.** Every one targeted an (asset,
+timeframe) pair outside `nero_core.asset_universe.APPROVED_RESEARCH_
+UNIVERSE` — `GOLD/1week`, `SILVER/1week`, `MSFT/1day`, `USD/JPY/1day`, and
+a malformed `"asset": "BTC/4h"` value (asset and timeframe mashed into one
+field) — and every one was refused real backtest data
+(`candle_data_source: "refused"`) before ever reaching `auto_tester.
+test_hypothesis`.
+
+Same reasoning as Session 0: an unscoreable hypothesis is an unknown, not
+a survival rate of zero, and the cause was outside Eve's control — she was
+never told which pairs this platform can actually backtest. She *was*
+given a list of "tracked (asset, timeframe) pairs" in her context (drawn
+from `quant_metrics.json`, a much wider set — every pair the platform has
+*any* quant/site data for), and reasonably reached for economically
+plausible pairs from it. That list was never wrong information; it was
+incomplete without also stating which of those pairs can actually be
+scored.
+
+Recorded as **"Session 0-B — asset universe gap"** in `docs/site_data/
+eve_session_registry.json` and directly on the session's own file (same
+`session_label` / `counts_toward_pre_registered_8` / `excluded_from_pre_
+registration_reason` pattern as Session 0). Produces no data point toward
+the 5% OOS bar. **The pre-registered 8 still has not started.**
+
+### Fix: the approved research universe, same framing as the DSL vocabulary
+
+`nero_core/eve/session.py` now imports `APPROVED_RESEARCH_UNIVERSE`
+directly from `nero_core.asset_universe` — a shared, neutral module under
+neither `nero_core.eve` nor `nero_core.research_agent` that Eve and Adam
+already both import, so this is a live import, not a reinlined-and-tested
+copy (no drift risk to guard against the way `DSL_ALLOWED_FIELDS`/`DSL_
+ALLOWED_OPS` need to be). A new `APPROVED_RESEARCH_UNIVERSE_BLOCK` states
+the exact four pairs — `asset="BTC", timeframe="4h"` /
+`asset="ETH", timeframe="4h"` / `asset="PAXG", timeframe="4h"` /
+`asset="SOL", timeframe="4h"` — explicitly as **available data, not
+permitted ideas**: Eve may still propose on any pair at all, and one
+outside the list is still recorded and scored honestly as refused, never
+silently dropped or auto-redirected — whether her reasoning keeps reaching
+for pairs this platform lacks is itself useful signal about what data to
+acquire next. The DSL vocabulary block's own worked example was also fixed
+to model the correct `"asset": "BTC", "timeframe": "4h"` separated-field
+shape (it previously used placeholder text that never demonstrated this,
+which is plausibly part of why the real `"BTC/4h"` mangling happened in
+the first place).
+
+### The full precondition audit — requested BEFORE running a third session
+
+Two sessions in a row have now produced zero scoreable output because of
+something Eve was never told: first the DSL key names, then the asset
+universe. Rather than find a third gap the same expensive way, every
+precondition a hypothesis must satisfy to get a real, scored verdict was
+audited end-to-end against the actual pipeline code (`nero_core/eve/
+scoring.py`, `nero_core/research_agent/auto_tester.py`, `nero_core/
+research_agent/frequency_gate.py`, `nero_core/asset_universe.py`, `tools/
+backtest_statistics.py`) — not inferred from behavior, read directly.
+
+| # | Precondition | Where enforced | What happens if unmet | Is Eve currently told? |
+|---|---|---|---|---|
+| 1 | `structured_entry_rule`/`structured_exit_plan` parse via the rule DSL (exact field names, op names, key names) | `scoring.classify_testability` (pre-submit validator + final scoring, same call) | Recorded `UNTESTABLE_BY_DSL`, up to 2 correction retries first | **YES** — fixed this branch (`DSL_VOCABULARY_BLOCK`), confirmed working: 0/6 failures in Session 0-B |
+| 2 | `(asset, timeframe)` is in `APPROVED_RESEARCH_UNIVERSE` (`(BTC,4h)`/`(ETH,4h)`/`(SOL,4h)`/`(PAXG,4h)` only) | `pipeline.default_candles_provider`, raises `DataSourceRefusedError` | Recorded `candle_data_source: "refused"`, no verdict at all | **YES** — fixed this session (`APPROVED_RESEARCH_UNIVERSE_BLOCK`), not yet exercised by a real session |
+| 3 | `generated_at` present and ISO8601-parseable in the raw hypothesis object | `auto_tester._parse_generated_at`, checked FIRST inside `test_hypothesis`, before the frequency gate or any backtest | `verdict_combined="UNTESTABLE"`, `frequency_classification="UNMEASURABLE"`, `verdict_is`/`verdict_oos` both null — **but `testability` stays `"TESTABLE"`** (that field is set earlier, by `classify_testability`, and never revisited), so a scored record can read `testability: TESTABLE` next to `verdict_combined: UNTESTABLE` — confusing, and a real trap for the next session unless flagged now | **NO.** Never mentioned anywhere in `SYSTEM_PROMPT_TEMPLATE`, `DSL_VOCABULARY_BLOCK`, `APPROVED_RESEARCH_UNIVERSE_BLOCK`, or `PROPOSE_HYPOTHESIS_TOOL`'s description. Nothing auto-injects it into a real Eve hypothesis either — `hypothesis_shapes.build_hypothesis_record` only stamps session/turn/tool-call metadata around `raw_hypothesis`, never adds a field inside it. (The only place `generated_at` IS auto-populated is `nero_core/eve/random_baseline.py`, a completely separate synthetic-baseline generator Eve's own hypotheses never touch.) **This is very likely the next gap to bite, now that DSL syntax and asset universe are both fixed.** |
+| 4 | Entry-rule trigger frequency clears `TOO_SLOW`/`UNMEASURABLE` — needs ≥30 triggers/year to clear `VIABLE`, ≥60/year to clear `FAST` (`TARGET_RESOLVED_TRADES=30` resolved trades within `VIABLE_MAX_MONTHS=12`/`FAST_MAX_MONTHS=6` months), and ≥60 eligible candles before `generated_at` to even attempt a measurement | `frequency_gate.measure_entry_frequency`, called by `auto_tester.test_hypothesis` as its own first real step (after the `generated_at` check) | `verdict_combined="SKIPPED"` — **never reaches the backtest at all**, "HARD RULE: must never reach the harness, no matter how strong the mechanism looks" (`frequency_gate.py`'s own words) | **NO.** Not mentioned anywhere Eve can read. This is the user's own flagged concern, confirmed directly in code: Adam's 9 hypotheses were all rejected `TOO_SLOW` under this exact gate. Eve currently has zero numeric sense of how selective an entry condition can be before it's rejected as too rare — nothing tells her the ~30/year (VIABLE) or ~60/year (FAST) thresholds, or that a threshold like `zscore20 <= -3` on a 4h chart might simply never fire often enough regardless of whether the mechanism is sound. |
+| 5 | ≥`MIN_SAMPLE_SIZE` (20) trades on BOTH halves, positive expectancy on both, AND bootstrap CI clears zero on both, to reach `SURVIVED` rather than the softer `PROMISING-WATCHLIST` | `tools.backtest_statistics.classify_verdict`, called inside `test_hypothesis` after a real backtest runs | Still gets a real verdict (never `SKIPPED`/`UNTESTABLE`) — capped at `PROMISING-WATCHLIST` at best, and `scoring._p_value_for_half` nulls the p-value (so it's excluded from FDR correction) below this threshold | **NO**, but lower severity than #3/#4 — this doesn't block a verdict outright, only caps which verdict is reachable and whether the p-value counts toward the FDR family. Worth telling her eventually so she understands *why* a real, working hypothesis with too few trades can't be reported as `SURVIVED`, but not a blocker to running a session. |
+| 6 | Research export file physically exists on disk for the approved pair | `pipeline.default_candles_provider` reads `docs/research_data/candles/<pair>.json` | Recorded `candle_data_source: "refused"` (same as #2) | **N/A for Eve** — not a hypothesis property she can reason about, purely a data-availability fact. Confirmed **not currently a live risk**: all 4 approved pairs' export files exist on disk today (`BTC_4h.json`, `ETH_4h.json`, `PAXG_4h.json`, `SOL_4h.json`, all present). |
+| 7 | ATR-based stop (`stop_atr_multiple`) requires a valid (non-NaN, positive) `atr14` reading on the entry candle to actually open a trade | `auto_tester._size_entry_for_hypothesis` | No hard rejection — the trigger still counts toward the frequency gate, but a triggering candle during ATR warmup silently produces no trade (fewer realized trades than the raw trigger count would suggest) | **NO**, lowest severity of the group — a natural, minor consequence of indicator warmup the DSL vocabulary block already establishes the general principle for (warmup = does not fire), not a distinct gate that rejects a hypothesis outright. A `stop_pct_of_entry` plan avoids this entirely. Flagged for completeness, not urgent. |
+
+**Summary for the decision this audit exists to support:** items 1 and 2 are
+now fixed and confirmed/pending-confirmation respectively. **Item 3
+(`generated_at`) is assessed as the single highest-probability next
+failure** — structurally identical to items 1 and 2 (a silent, total
+precondition Eve has no way to know about), and specifically because
+`testability` and `verdict_combined` can disagree if it's missing, it's
+also the one most likely to *look* like a different kind of confusing bug
+if hit blind, rather than reading immediately as "another undocumented
+precondition." **Item 4 (frequency gate)** is the user's own named
+example and is real, but partially self-solving for a very selective
+condition on a 4h chart (Eve can reason qualitatively about
+"fires rarely" even without the exact numbers) — supplying the exact
+≥30/≥60-per-year thresholds would let her reason quantitatively instead.
+Items 5–7 are lower severity and do not block a session from producing a
+real verdict on their own.
+
+No code changes were made for items 3–7 in this pass — reported per
+instruction, not fixed, pending review before Session 1 (the first
+countable one) is run.
+
+### Test counts, this fourth follow-up session
+
+Full Python suite (`python -m unittest discover -s tests -p
+"test_*.py"`): **2338 tests, 0 failures, 0 errors** (`Ran 2338 tests in
+718.501s` / `OK`) — up from 2334 (the count at the end of the third
+follow-up session) by 4 new tests: 1 in `tests/test_eve_session_registry.
+py` (`test_session_count_reconciliation_is_recorded_not_silently_changed`,
+part of the N=5→N=8 reconciliation) and 3 in `tests/test_eve_llm_client.py`
+(`test_system_prompt_states_the_approved_research_universe`, `test_worked_
+example_shows_asset_and_timeframe_as_separate_fields`, `test_asset_
+universe_framed_as_data_not_permission`). Website Jest suite unchanged
+(582/582 — no `website/` file touched this session).
