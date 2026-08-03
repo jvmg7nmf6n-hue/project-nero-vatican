@@ -245,6 +245,220 @@ def run_pairs_backtest(
     return closed_trades, state
 
 
+@dataclass
+class TwoLegOpenTrade:
+    """Same trade OpenTrade describes, plus the short leg's own accounting --
+    kept as a SEPARATE dataclass (not an extension of OpenTrade) so the live-trading
+    run_pairs_backtest above is never touched by this research-only addition."""
+    long_asset: str
+    entry_side: int
+    long_entry_price: float
+    long_quantity: float
+    long_notional: float
+    long_entry_fee: float
+    short_asset: str
+    short_entry_price: float
+    short_quantity: float
+    short_notional: float
+    short_entry_fee: float
+    open_close_time: int
+    entry_zscore: float
+
+
+@dataclass(frozen=True)
+class TwoLegExitEvent:
+    """Combined long+short exit, funding-costed. `net_pnl`/`r_multiple`/`equity_after`
+    are the COMBINED two-leg numbers (same field names as ExitEvent so
+    tools.backtest_compare.compute_metrics -- which only reads .net_pnl/.r_multiple/
+    .equity_after by duck typing -- works unchanged); everything else is additive detail
+    for transparency, not consumed by compute_metrics."""
+    exit_reason: str
+    long_asset: str
+    short_asset: str
+    long_gross_pnl: float
+    long_fees: float
+    short_gross_pnl: float
+    short_fees: float
+    funding_pnl: float  # short leg only -- see run_pairs_backtest_two_leg's docstring
+    funding_settlements_count: int
+    net_pnl: float  # long_net_pnl + short_net_pnl (short_net_pnl includes funding_pnl)
+    r_multiple: float  # net_pnl / (long_notional + short_notional) -- see module docstring
+    long_notional: float
+    short_notional: float
+    exit_zscore: float
+    equity_after: float
+    exit_close_time: int = 0
+
+
+def _funding_pnl_for_short(
+    funding_settlements: pd.DataFrame | None, short_notional: float, open_close_time: int, exit_close_time: int
+) -> tuple[float, int]:
+    """Sums funding_rate * short_notional over every settlement in
+    [open_close_time, exit_close_time) -- half-open so a settlement landing exactly at
+    the exit candle's close isn't double-counted against the next trade. Binance
+    convention: a POSITIVE funding_rate means longs pay shorts, so a short position's
+    funding PnL is +rate * notional per settlement (sign is already correct, never
+    inverted) -- getting this backwards would turn a real cost into a fabricated
+    tailwind. Returns (0.0, 0) -- never a fabricated number -- if no funding data was
+    supplied or no settlement falls in the window (e.g. a trade shorter than one 8h
+    funding interval)."""
+    if funding_settlements is None or funding_settlements.empty:
+        return 0.0, 0
+    window = funding_settlements[
+        (funding_settlements["settlement_time"] >= open_close_time)
+        & (funding_settlements["settlement_time"] < exit_close_time)
+    ]
+    if window.empty:
+        return 0.0, 0
+    return float(window["funding_rate"].sum()) * short_notional, len(window)
+
+
+def run_pairs_backtest_two_leg(
+    aligned: pd.DataFrame,
+    params: CointegrationPairsParameters = DEFAULT_PARAMETERS,
+    x_name: str = PAIR[0],
+    y_name: str = PAIR[1],
+    funding_by_asset: dict[str, pd.DataFrame] | None = None,
+) -> tuple[list[TwoLegExitEvent], PairsState]:
+    """RESEARCH-ONLY two-leg extension of run_pairs_backtest -- scoped in
+    docs/investigations/pairs_short_leg_cost_scoping.md, never wired into
+    nero_core.execution.live_scheduler.process_pairs (which still calls the original,
+    unmodified run_pairs_backtest above; this function does not exist on that path at
+    all). Models the short leg run_pairs_backtest's own docstring says is missing:
+
+    EXECUTION MODEL (decided, not this function's own choice): PERP-SHORT -- the short
+    leg is a USDT-perp short, costed with real historical Binance funding settlements
+    (nero_core.data_sources.funding_data.load_funding_history), not a spot-margin-borrow
+    estimate (no historical borrow-rate series exists in this codebase -- see the
+    scoping doc's Section 3).
+
+    SIZING MODEL (decided, not this function's own choice): HEDGE-RATIO-WEIGHTED --
+    short_notional = long_notional * hedge_ratio at the entry candle (the same
+    hedge_ratio column add_indicators already computes and the z-score/spread signal
+    itself is built from), not dollar-neutral. `aligned` MUST already carry a
+    `hedge_ratio` column (i.e. be the output of add_indicators, not align_pair_candles
+    alone) -- unlike the single-leg run_pairs_backtest, which only needs `zscore`.
+
+    `funding_by_asset` is an explicit, INJECTED dict (e.g. {"ETH":
+    load_funding_history("ETH").settlements}), never fetched internally -- keeps this
+    function pure/offline-testable and never silently makes a network call mid-backtest.
+    A missing or empty entry for the asset actually shorted in a given trade means that
+    trade's funding_pnl is 0.0 (see _funding_pnl_for_short), not a fabricated cost.
+    """
+    frame = aligned.dropna(subset=["zscore", "hedge_ratio"]).reset_index(drop=True)
+    state = PairsState(equity=params.initial_equity)
+    closed_trades: list[TwoLegExitEvent] = []
+    funding_by_asset = funding_by_asset or {}
+
+    for i in range(len(frame)):
+        row = frame.iloc[i]
+        z = float(row["zscore"])
+
+        if state.open_trade is not None:
+            trade = state.open_trade
+            long_price_now = float(row[f"{trade.long_asset}_close"])
+            short_price_now = float(row[f"{trade.short_asset}_close"])
+            exit_reason = determine_exit_reason(trade.entry_side, z, params.exit_z, params.stop_z)
+
+            if exit_reason is not None:
+                long_exit_price = apply_slippage(long_price_now, params.slippage_bps, "sell")
+                long_gross_pnl = (long_exit_price - trade.long_entry_price) * trade.long_quantity
+                long_exit_fee = long_exit_price * trade.long_quantity * params.fee_bps / 10000.0
+                long_fees = trade.long_entry_fee + long_exit_fee
+                long_net_pnl = long_gross_pnl - long_fees
+
+                # Closing a short = buying back -> "buy" side (worse/higher fill), the
+                # mirror of the long leg's entry. Short profits when price FALLS.
+                short_exit_price = apply_slippage(short_price_now, params.slippage_bps, "buy")
+                short_gross_pnl = (trade.short_entry_price - short_exit_price) * trade.short_quantity
+                short_exit_fee = short_exit_price * trade.short_quantity * params.fee_bps / 10000.0
+                short_fees = trade.short_entry_fee + short_exit_fee
+
+                exit_close_time = int(row["close_time"])
+                funding_pnl, funding_count = _funding_pnl_for_short(
+                    funding_by_asset.get(trade.short_asset), trade.short_notional,
+                    trade.open_close_time, exit_close_time,
+                )
+                short_net_pnl = short_gross_pnl - short_fees + funding_pnl
+
+                net_pnl = long_net_pnl + short_net_pnl
+                combined_notional = trade.long_notional + trade.short_notional
+                equity_after = state.equity + net_pnl
+                state.equity = equity_after
+                state.open_trade = None
+                closed_trades.append(
+                    TwoLegExitEvent(
+                        exit_reason=exit_reason,
+                        long_asset=trade.long_asset,
+                        short_asset=trade.short_asset,
+                        long_gross_pnl=long_gross_pnl,
+                        long_fees=long_fees,
+                        short_gross_pnl=short_gross_pnl,
+                        short_fees=short_fees,
+                        funding_pnl=funding_pnl,
+                        funding_settlements_count=funding_count,
+                        net_pnl=net_pnl,
+                        r_multiple=net_pnl / max(combined_notional, 1e-9),
+                        long_notional=trade.long_notional,
+                        short_notional=trade.short_notional,
+                        exit_zscore=z,
+                        equity_after=equity_after,
+                        exit_close_time=exit_close_time,
+                    )
+                )
+
+        if state.open_trade is None:
+            side = determine_entry_side(z, params.entry_z)
+            long_asset = x_name if side == 1 else y_name if side == -1 else None
+            short_asset = y_name if side == 1 else x_name if side == -1 else None
+
+            if side != 0:
+                window_start = max(0, i - params.window + 1)
+                window_slice = frame.iloc[window_start : i + 1]
+                result = engle_granger_cointegration(
+                    window_slice[f"{x_name}_close"], window_slice[f"{y_name}_close"]
+                )
+                pvalue = result.get("adf_pvalue")
+                confirmed = bool(result.get("cointegrated_at_5pct")) or (
+                    pvalue is not None and pvalue < params.adf_significance
+                )
+                if confirmed:
+                    raw_long_entry = float(row[f"{long_asset}_close"])
+                    long_entry_price = apply_slippage(raw_long_entry, params.slippage_bps, "buy")
+                    long_notional = min(
+                        state.equity * params.notional_fraction,
+                        state.equity * params.max_notional_pct,
+                    )
+                    long_quantity = long_notional / long_entry_price
+                    long_entry_fee = long_notional * params.fee_bps / 10000.0
+
+                    hedge_ratio = abs(float(row["hedge_ratio"]))
+                    short_notional = long_notional * hedge_ratio
+                    raw_short_entry = float(row[f"{short_asset}_close"])
+                    # Opening a short = selling to open -> "sell" side (worse/lower fill).
+                    short_entry_price = apply_slippage(raw_short_entry, params.slippage_bps, "sell")
+                    short_quantity = short_notional / short_entry_price
+                    short_entry_fee = short_notional * params.fee_bps / 10000.0
+
+                    state.open_trade = TwoLegOpenTrade(
+                        long_asset=long_asset,
+                        entry_side=side,
+                        long_entry_price=long_entry_price,
+                        long_quantity=long_quantity,
+                        long_notional=long_notional,
+                        long_entry_fee=long_entry_fee,
+                        short_asset=short_asset,
+                        short_entry_price=short_entry_price,
+                        short_quantity=short_quantity,
+                        short_notional=short_notional,
+                        short_entry_fee=short_entry_fee,
+                        open_close_time=int(row["close_time"]),
+                        entry_zscore=z,
+                    )
+
+    return closed_trades, state
+
+
 def register_default_variant(registry: StrategyRegistry = default_registry) -> StrategyVariant:
     """Register the Cointegration Pairs strategy's first version. Raises
     StrategyAlreadyRegisteredError if called twice on the same registry."""

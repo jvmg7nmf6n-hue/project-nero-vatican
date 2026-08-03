@@ -9,6 +9,7 @@ import pandas as pd
 import requests
 
 from nero_core.data_sources.market_data import (
+    BINANCE_SYMBOLS,
     CANDLE_COLUMNS,
     MarketDataClient,
     MarketDataUnavailableError,
@@ -74,6 +75,26 @@ def _twelve_data_values(count: int, end: datetime = NOW - timedelta(hours=2)) ->
             }
         )
     return values
+
+
+class PaxgSymbolMappingTest(unittest.TestCase):
+    """PAXG was added for the Eve asset-universe pre-registration (BTCUSDT,
+    ETHUSDT, SOLUSDT, PAXGUSDT) -- confirmed live via a direct klines probe
+    before being added (earliest daily kline: 2020-08-28). The client's own
+    fetch mechanics are already asset-agnostic and covered by every other
+    test in this file using BTC as the example; this test only needs to
+    confirm the symbol mapping itself, not re-derive the cascading/pagination
+    behavior for a fourth asset."""
+
+    def test_paxg_maps_to_paxgusdt(self) -> None:
+        self.assertEqual(BINANCE_SYMBOLS["PAXG"], "PAXGUSDT")
+
+    def test_paxg_fetches_via_the_same_binance_path_as_every_other_symbol(self) -> None:
+        client = MarketDataClient()
+        with patch("nero_core.data_sources.market_data.requests.get", return_value=_mock_response(_binance_klines(40))):
+            result = client.load_daily("PAXG", days=40)
+        self.assertIn("PAXGUSDT", result.source)
+        self.assertGreater(len(result.prices), 0)
 
 
 class MarketDataDailyTest(unittest.TestCase):

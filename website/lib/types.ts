@@ -22,6 +22,35 @@ export interface LedgerExport {
   rows: LedgerRow[];
 }
 
+// nero_core.execution.backtest_evaluation -- structured backtest evidence,
+// distinct from verification_status's free-text summary above. verdict_is/
+// verdict_oos are null both when a config hasn't been evaluated with this
+// structured format yet (see `note`) AND when it structurally cannot run
+// through the standard classify_verdict harness (see `untestable_reason`)
+// -- these are different claims, never conflated: read is_trades/oos_trades/
+// is_expectancy_r/oos_expectancy_r alongside `untestable_reason` before
+// assuming null means "no evidence."
+export interface BacktestEvaluation {
+  verdict_is: string | null;
+  verdict_oos: string | null;
+  is_trades: number | null;
+  oos_trades: number | null;
+  is_expectancy_r: number | null;
+  oos_expectancy_r: number | null;
+  evaluated_at: string | null;
+  data_source: string | null;
+  method: string | null;
+  untestable_reason: string | null;
+  note: string | null;
+  // Badge-provenance work: distinguishes "wrong harness, but a real dedicated
+  // backtest engine produced real evidence" (e.g. COINTEGRATION_PAIRS, false)
+  // from "no historical data source will ever exist for this strategy" (e.g.
+  // ORDERFLOW_IMBALANCE, NEWS_SENTIMENT, true) -- see lib/provenance.ts.
+  // Optional because older cached exports predate this field; treat a
+  // missing value as false (not permanently unbacktestable), never as true.
+  permanently_unbacktestable?: boolean;
+}
+
 export interface StrategyRosterEntry {
   name: string;
   version: string;
@@ -29,6 +58,13 @@ export interface StrategyRosterEntry {
   timeframe: string;
   verification_status: string;
   source_report: string | null;
+  backtest_evaluation: BacktestEvaluation;
+  // Badge-provenance work: the real first-commit date of the doc at
+  // source_report (git-derived, hand-recorded -- see
+  // nero_core.execution.source_reports.SOURCE_REPORT_WRITTEN_AT), null when
+  // source_report itself is null or its date hasn't been recorded yet.
+  // Optional because older cached exports predate this field.
+  source_report_written_at?: string | null;
 }
 
 // Manually-curated docs/site_data/strategy_descriptions.json -- keyed by strategy_id
@@ -353,10 +389,25 @@ export interface AgentPerformanceCumulative {
   survival_rate: number | null;
 }
 
+// STATUS_DISABLED / STATUS_ERROR / STATUS_CLEAN in
+// nero_core.research_agent.pipeline -- "error" means at least one entry in
+// `errors` below (scan or hypothesis-generation failure); it does NOT mean
+// the whole run aborted -- a run can be status="error" and still have
+// nonzero hypotheses_generated/llm_calls_made if only some sources failed.
+export type AgentRunStatus = "disabled" | "error" | "clean";
+
+export interface AgentPerformanceRunError {
+  phase: string;
+  context: string;
+  message: string;
+}
+
 export interface AgentPerformanceRun {
   run_at: string;
   enabled: boolean;
   reason: string;
+  status: AgentRunStatus;
+  errors: AgentPerformanceRunError[];
   hypotheses_generated: number;
   duplicates_skipped: number;
   too_slow_rejected: number;
@@ -372,9 +423,26 @@ export interface AgentPerformanceRun {
   cost_limit_hit: boolean;
 }
 
+// A correction record NEVER edits the run entry it applies to (see
+// docs/site_data/agent_performance.json's own two 2026-07-29 entries, which
+// predate `status`/`errors` existing at all) -- it is an appended,
+// independently-dated annotation inferring what that field would have said,
+// with its evidentiary basis stated explicitly. Optional: only present once
+// at least one correction has ever been recorded.
+export interface AgentPerformanceCorrection {
+  correction_id: string;
+  applies_to_run_at: string;
+  corrected_at: string;
+  reason_field_absent: string;
+  inferred_status: AgentRunStatus;
+  inferred_status_basis: string;
+  note: string;
+}
+
 export interface AgentPerformanceExport {
   schema_version: number;
   last_updated: string | null;
   cumulative: AgentPerformanceCumulative;
   runs: AgentPerformanceRun[];
+  corrections?: AgentPerformanceCorrection[];
 }

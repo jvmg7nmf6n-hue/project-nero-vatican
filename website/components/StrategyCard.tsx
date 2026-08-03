@@ -1,6 +1,7 @@
 import Link from "next/link";
 import TierBadge from "./TierBadge";
 import { formatTimestamp } from "./LedgerTable";
+import { deriveProvenanceLine } from "@/lib/provenance";
 import { deriveSignalDetail } from "@/lib/signalDetail";
 import { deriveSignalState, SIGNAL_STATE_LABELS, type SignalState } from "@/lib/signalState";
 import { deriveStatLine } from "@/lib/statLine";
@@ -51,6 +52,7 @@ export default function StrategyCard({ entry, recentRows, stats }: StrategyCardP
       ? "no_signal_yet"
       : rawSignalState;
   const statLine = deriveStatLine(entry, stats);
+  const provenanceLine = deriveProvenanceLine(entry, stats);
   const signalStyle = SIGNAL_STATE_STYLES[signalState];
 
   return (
@@ -74,6 +76,29 @@ export default function StrategyCard({ entry, recentRows, stats }: StrategyCardP
         <div className="mt-1">
           <TierBadge tier={tier} />
         </div>
+        {/* Badge provenance -- what the tier badge above actually rests on
+            and when, so "Verified" never reads as one uniform claim whether
+            it's backed by a multi-year backtest, live paper-trading data
+            only, or nothing but this hand-written status string. */}
+        <p data-testid="provenance-line" className="mt-1 text-[11px] text-muted">
+          {provenanceLine}
+        </p>
+        {/* Structured backtest evaluation (verdict_is/verdict_oos/untestable_reason)
+            -- only shown when this session's own structured harness actually produced
+            one; a strategy with no entry here still has its tier badge above (derived
+            from verification_status), so this is additive detail, not the only signal.
+            Never omitted when it exists -- the whole point is that a card must not look
+            identical whether a strategy DIED in-sample or was never tested at all. */}
+        {entry.backtest_evaluation.untestable_reason ? (
+          <p data-testid="card-backtest-untestable" className="mt-1 text-[11px] text-gold">
+            Untestable by standard harness
+          </p>
+        ) : entry.backtest_evaluation.verdict_is || entry.backtest_evaluation.verdict_oos ? (
+          <p data-testid="card-backtest-verdict" className="mt-1 text-[11px] text-muted">
+            Backtest: {entry.backtest_evaluation.verdict_is ?? "n/a"} (IS) /{" "}
+            {entry.backtest_evaluation.verdict_oos ?? "n/a"} (OOS)
+          </p>
+        ) : null}
       </div>
 
       {/* CURRENT SIGNAL -- "what is it doing right now?" Dynamic, ledger-derived.

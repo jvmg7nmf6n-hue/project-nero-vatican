@@ -216,3 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Truth Ledger backup snapshots (data/backups/truth_ledger.<label>.<timestamp>.db) --
+# full historical copies of data/truth_ledger.db taken before migrations/reconciles.
+# Filenames don't obviously read as "database backup," so this is explicit rather
+# than relying on someone noticing before a commit -- these must never be committed
+# by accident.
+data/backups/

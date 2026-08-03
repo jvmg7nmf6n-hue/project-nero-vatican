@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import ResearchAgentPanel from "@/components/ResearchAgentPanel";
-import type { AgentHypothesis, AgentPerformanceExport, AgentTestResult } from "@/lib/types";
+import type { AgentHypothesis, AgentPerformanceExport, AgentPerformanceRun, AgentTestResult } from "@/lib/types";
 
 function hypothesis(overrides: Partial<AgentHypothesis> = {}): AgentHypothesis {
   return {
@@ -38,6 +38,30 @@ function testResult(overrides: Partial<AgentTestResult> = {}): AgentTestResult {
     train: { trades: 40, expectancy_r: 0.219, bootstrap_ci: null, random_baseline: null },
     test: { trades: 18, expectancy_r: 0.12, bootstrap_ci: null, random_baseline: null },
     tested_at: "2026-07-29T01:00:00+00:00",
+    ...overrides,
+  };
+}
+
+function run(overrides: Partial<AgentPerformanceRun> = {}): AgentPerformanceRun {
+  return {
+    run_at: "2026-07-29T01:00:00+00:00",
+    enabled: true,
+    reason: "ok",
+    status: "clean",
+    errors: [],
+    hypotheses_generated: 3,
+    duplicates_skipped: 0,
+    too_slow_rejected: 0,
+    unmeasurable_rejected: 0,
+    tested: 3,
+    survived: 0,
+    promising_watchlist: 1,
+    died: 2,
+    untestable: 0,
+    no_candles_available: 0,
+    llm_calls_made: 3,
+    total_llm_cost_usd: 0.045,
+    cost_limit_hit: false,
     ...overrides,
   };
 }
@@ -121,6 +145,46 @@ describe("ResearchAgentPanel", () => {
     const row = screen.getByTestId("agent-too-slow-row");
     expect(row).toHaveTextContent("RARE_EVENT_HYPOTHESIS");
     expect(row).toHaveTextContent("196.7 months");
+  });
+
+  it("shows an empty state when there are no recorded runs", () => {
+    render(<ResearchAgentPanel hypotheses={[]} testResults={[]} performance={performance({ runs: [] })} />);
+    expect(screen.getByTestId("agent-runs-empty")).toBeInTheDocument();
+  });
+
+  it("renders a clean run without error styling", () => {
+    render(<ResearchAgentPanel hypotheses={[]} testResults={[]} performance={performance({ runs: [run()] })} />);
+
+    const row = screen.getByTestId("agent-run-row");
+    expect(row).toHaveAttribute("data-status", "clean");
+    expect(screen.getByTestId("agent-run-status-badge")).toHaveTextContent("Clean");
+    expect(screen.queryByTestId("agent-run-error")).not.toBeInTheDocument();
+  });
+
+  it("makes an errored run visibly distinct and surfaces its error messages -- llm_calls_made alone must never look like success", () => {
+    const erroredRun = run({
+      status: "error",
+      llm_calls_made: 3,
+      errors: [{ phase: "scan", context: "BTC/1h", message: "HTTP 401 from data source" }],
+    });
+    render(<ResearchAgentPanel hypotheses={[]} testResults={[]} performance={performance({ runs: [erroredRun] })} />);
+
+    const row = screen.getByTestId("agent-run-row");
+    expect(row).toHaveAttribute("data-status", "error");
+    expect(screen.getByTestId("agent-run-status-badge")).toHaveTextContent("Error");
+    expect(screen.getByTestId("agent-run-error")).toHaveTextContent("[scan] BTC/1h: HTTP 401 from data source");
+  });
+
+  it("shows the most recent run first when multiple runs are recorded", () => {
+    const runs = [
+      run({ run_at: "2026-07-28T00:00:00+00:00", status: "clean" }),
+      run({ run_at: "2026-07-29T00:00:00+00:00", status: "error", errors: [{ phase: "scan", context: "x", message: "boom" }] }),
+    ];
+    render(<ResearchAgentPanel hypotheses={[]} testResults={[]} performance={performance({ runs })} />);
+
+    const rows = screen.getAllByTestId("agent-run-row");
+    expect(rows[0]).toHaveAttribute("data-status", "error");
+    expect(rows[1]).toHaveAttribute("data-status", "clean");
   });
 
   it("does not render any approval button anywhere -- read-only per spec", () => {

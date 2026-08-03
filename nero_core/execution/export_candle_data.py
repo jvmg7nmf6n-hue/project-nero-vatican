@@ -79,6 +79,25 @@ SCHEMA_VERSION = 1
 CANDLE_COUNT = 200
 DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parents[2] / "docs" / "site_data" / "candles"
 
+# RESEARCH EXPORT (added after a K=200 random-hypothesis-baseline investigation found
+# ZERO of 200 sampled hypotheses ever reached MIN_SAMPLE_SIZE out-of-sample trades
+# against this module's own 200-row CANDLE_COUNT display export -- see
+# docs/investigations/eve_engine_v1_report.md): a SEPARATE, larger, full-history export
+# for backtesting/scoring, deliberately NOT under docs/site_data/ (the display export's
+# own directory, which website/lib/data.ts fetches by a hardcoded base URL
+# ".../docs/site_data" -- a file under docs/research_data/ is structurally unreachable
+# from that fixed path, so this can never bloat what ships with the website or get
+# fetched by it by accident). CANDLE_COUNT/DEFAULT_OUTPUT_DIR above are COMPLETELY
+# UNCHANGED -- the scheduled site export (export_candle_data(), called from
+# .github/workflows/live_scheduler.yml) still writes exactly 200 rows to exactly the
+# same place it always has.
+#
+# RESEARCH_CANDLE_COUNT = 4400 is "2+ years of 4h candles to start" (365.25*2*6 = 4383,
+# rounded up with a small margin) -- see this module's own export_research_candle_data
+# docstring for why this is a manual, deliberate, uncadenced export, not a scheduled one.
+RESEARCH_CANDLE_COUNT = 4400
+DEFAULT_RESEARCH_OUTPUT_DIR = Path(__file__).resolve().parents[2] / "docs" / "research_data" / "candles"
+
 # See the "VOLUME HONESTY" module docstring section above.
 _NO_REAL_VOLUME_ASSETS = {"GOLD", "EUR/USD", "GBP/USD", "USD/JPY"}
 
@@ -306,6 +325,77 @@ def export_candle_data(
         exported.append(filename)
 
     return CandleExportResult(exported=exported, skipped_not_due=skipped_not_due, skipped_fresh=skipped_fresh, errors=errors)
+
+
+def export_research_candle_data(
+    pairs: tuple[CandlePair, ...],
+    now: datetime | None = None,
+    output_dir: Path = DEFAULT_RESEARCH_OUTPUT_DIR,
+    client: MarketDataClient | None = None,
+    candle_count: int = RESEARCH_CANDLE_COUNT,
+) -> CandleExportResult:
+    """Full-history research export for backtesting/scoring -- a SEPARATE
+    file, SEPARATE directory, from export_candle_data()'s own 200-row
+    display export above (that function is completely unmodified by this
+    one's existence). Reuses `_fetch_candles` UNCHANGED (the same
+    provider-cascading fetch every pair above already uses -- BTC/4h via
+    Binance already requests up to 50,000 candles per
+    tools.timeframe_data.NATIVE_INTERVAL_CANDLES, so no fetch-side change
+    was needed at all, only a bigger `.tail()` here instead of
+    export_candle_data's CANDLE_COUNT=200) -- only the final truncation
+    width differs.
+
+    No cadence/freshness gating (`candle_boundary_due`/`_already_fresh`) --
+    this is a MANUAL, deliberate research fetch a human runs when they want
+    a fresh/larger research window, not a 30-minute scheduled cron tick, so
+    those two checks (built for exactly that repeated-tick scenario) don't
+    apply here.
+
+    KNOWN EXTERNAL CONSTRAINT: yfinance-backed intraday assets (stocks,
+    SILVER/PLATINUM's 4h resampled from 1h) are capped by Yahoo Finance's
+    OWN documented ~730-day intraday lookback -- not something this function
+    (or anything in this codebase) can fetch around. BTC/crypto pairs via
+    Binance are unaffected (Binance's own klines history goes back to each
+    symbol's listing date with no such short-window restriction)."""
+    now = now or datetime.now(timezone.utc)
+    client = client or MarketDataClient()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    exported: list[str] = []
+    errors: list[dict[str, str]] = []
+
+    for pair in pairs:
+        filename = candle_filename(pair.asset, pair.timeframe)
+        path = output_dir / filename
+
+        try:
+            candles = _fetch_candles(pair, client)
+        except (MarketDataUnavailableError, ForexDataUnavailableError, StockDataUnavailableError) as exc:
+            errors.append({"asset": pair.asset, "timeframe": pair.timeframe, "message": f"{exc.__class__.__name__}: {exc}"})
+            continue
+        except Exception as exc:  # noqa: BLE001 - one pair's unexpected failure must never abort the others
+            errors.append({"asset": pair.asset, "timeframe": pair.timeframe, "message": f"{exc.__class__.__name__}: {exc}"})
+            continue
+
+        if candles.empty:
+            errors.append({"asset": pair.asset, "timeframe": pair.timeframe, "message": "no candles returned"})
+            continue
+
+        ordered = candles.sort_values("open_time").tail(candle_count).reset_index(drop=True)
+        rows = [_row_to_candle(row, pair.asset) for _, row in ordered.iterrows()]
+
+        payload = {
+            "schema_version": SCHEMA_VERSION,
+            "asset": pair.asset,
+            "timeframe": pair.timeframe,
+            "last_updated": now.isoformat(),
+            "candle_count_requested": candle_count,
+            "candles": rows,
+        }
+        path.write_text(json.dumps(payload, indent=2) + "\n")
+        exported.append(filename)
+
+    return CandleExportResult(exported=exported, skipped_not_due=[], skipped_fresh=[], errors=errors)
 
 
 def main() -> None:

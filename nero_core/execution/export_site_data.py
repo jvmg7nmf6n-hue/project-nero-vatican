@@ -85,13 +85,23 @@ from nero_core.execution.live_scheduler import (
     PEAD_ID,
     SINGLE_ASSET_CONFIGS,
 )
+# Reused, not re-derived (this module's own established convention) --
+# the SAME regex live_scheduler.py's own _reconstruct_open_position uses to
+# recover ORDERFLOW_IMBALANCE's direction/stop_loss from ENTRY reasoning
+# text, needed here for the R-multiple reconstruction fallback below (see
+# _extract_or_reconstruct_r_multiple's own docstring).
+from nero_core.execution.live_scheduler import (
+    _ORDERFLOW_DIRECTION_PATTERN,
+    _ORDERFLOW_STOP_LOSS_PATTERN,
+)
 from nero_core.execution.quarantine import (
     exclude_mismatched_sources,
     exclude_quarantined,
     exclude_unrecorded_source,
     is_quarantined,
 )
-from nero_core.execution.source_reports import source_report_for
+from nero_core.execution.backtest_evaluation import backtest_evaluation_for
+from nero_core.execution.source_reports import source_report_for, source_report_written_at
 from nero_core.execution.verification_status import verification_status_for
 from nero_core.strategies.news_sentiment import STRATEGY_VERSION as NEWS_SENTIMENT_VERSION
 from nero_core.strategies.news_sentiment_llm import STRATEGY_VERSION as NEWS_SENTIMENT_LLM_VERSION
@@ -170,6 +180,61 @@ def _pair_round_trips(rows_chronological: list[ExecutionLogRow]) -> tuple[list[_
 def _extract_r_multiple(reasoning: str) -> float | None:
     match = _R_MULTIPLE_PATTERN.search(reasoning)
     return float(match.group(1)) if match else None
+
+
+def _reconstruct_r_multiple(round_trip: "_RoundTrip") -> float | None:
+    """Fallback for a strategy whose own EXIT reasoning never embeds
+    r_multiple= at all (found this session: ORDERFLOW_IMBALANCE -- its
+    reasoning is `f"{exit_reason} exit, imbalance_ratio={...}"`, a real
+    pipeline gap, not a property of the strategy -- win rate alone was
+    already shown to be misleading by omission for it: 61.5% wins at
+    +0.012R). Reconstructs R the same way live_scheduler.py's own
+    _reconstruct_open_position recovers direction/stop_loss for exit
+    evaluation -- entry_price is already a native ExecutionLogRow column
+    (never text-embedded), so only direction/stop_loss need parsing from
+    the ENTRY row's reasoning text.
+
+    Deliberately generic (not name-checked to ORDERFLOW_IMBALANCE): applies
+    to ANY strategy whose ENTRY reasoning happens to embed direction=/
+    stop_loss= but whose EXIT reasoning has no r_multiple= -- scopes itself
+    to exactly the right rows by construction, not by a strategy-id branch
+    that could drift out of sync with which strategies actually need this.
+
+    Returns None (never a fabricated number) if entry_price/exit_price is
+    missing, the ENTRY reasoning doesn't match the expected shape, or the
+    implied risk (|entry_price - stop_loss|) is zero -- exactly the same
+    "fail toward no number" discipline _extract_r_multiple already has."""
+    entry_price = round_trip.entry_row.entry_price
+    exit_price = round_trip.exit_row.exit_price
+    if entry_price is None or exit_price is None:
+        return None
+
+    direction_match = _ORDERFLOW_DIRECTION_PATTERN.search(round_trip.entry_row.reasoning)
+    stop_match = _ORDERFLOW_STOP_LOSS_PATTERN.search(round_trip.entry_row.reasoning)
+    if direction_match is None or stop_match is None:
+        return None
+
+    stop_loss = float(stop_match.group(1))
+    risk_per_unit = abs(entry_price - stop_loss)
+    if risk_per_unit <= 0:
+        return None
+
+    if direction_match.group(1) == "LONG":
+        return (exit_price - entry_price) / risk_per_unit
+    return (entry_price - exit_price) / risk_per_unit
+
+
+def _extract_or_reconstruct_r_multiple(round_trip: "_RoundTrip") -> float | None:
+    """Tries the standard embedded-in-EXIT-reasoning extraction first (every
+    strategy that already logs r_multiple= directly -- unchanged behavior);
+    falls back to reconstruction ONLY when that fails. A strategy that
+    already logs r_multiple= directly is never affected by this fallback
+    even if its reasoning also happened to contain a direction=/stop_loss=
+    substring, since the primary extraction already succeeded."""
+    direct = _extract_r_multiple(round_trip.exit_row.reasoning)
+    if direct is not None:
+        return direct
+    return _reconstruct_r_multiple(round_trip)
 
 
 def _round_trip_return_pct(round_trip: _RoundTrip) -> float | None:
@@ -258,7 +323,7 @@ def _strategy_stats(strategy_id: str, strategy_version: str, asset: str, group_r
             win_rate = sum(1 for r in valid_returns if r > 0) / len(valid_returns)
             avg_return_pct = sum(valid_returns) / len(valid_returns)
 
-        r_multiples = [_extract_r_multiple(rt.exit_row.reasoning) for rt in round_trips]
+        r_multiples = [_extract_or_reconstruct_r_multiple(rt) for rt in round_trips]
         if r_multiples and all(r is not None for r in r_multiples):
             expectancy_r = sum(r_multiples) / len(r_multiples)
 
@@ -325,6 +390,8 @@ def _roster_entries() -> list[dict[str, object]]:
             "timeframe": config.timeframe,
             "verification_status": verification_status_for(config.strategy_id, config.strategy_version, config.asset),
             "source_report": source_report_for(config.strategy_id, config.strategy_version, config.asset),
+            "source_report_written_at": source_report_written_at(source_report_for(config.strategy_id, config.strategy_version, config.asset)),
+            "backtest_evaluation": backtest_evaluation_for(config.strategy_id, config.strategy_version, config.asset),
         }
         for config in SINGLE_ASSET_CONFIGS
     ]
@@ -337,6 +404,8 @@ def _roster_entries() -> list[dict[str, object]]:
             "timeframe": PAIRS_TIMEFRAME,
             "verification_status": verification_status_for(COINTEGRATION_PAIRS_ID, COINTEGRATION_PAIRS_VERSION, pairs_label),
             "source_report": source_report_for(COINTEGRATION_PAIRS_ID, COINTEGRATION_PAIRS_VERSION, pairs_label),
+            "source_report_written_at": source_report_written_at(source_report_for(COINTEGRATION_PAIRS_ID, COINTEGRATION_PAIRS_VERSION, pairs_label)),
+            "backtest_evaluation": backtest_evaluation_for(COINTEGRATION_PAIRS_ID, COINTEGRATION_PAIRS_VERSION, pairs_label),
         }
     )
     for asset in NEWS_SENTIMENT_ASSETS:
@@ -348,6 +417,8 @@ def _roster_entries() -> list[dict[str, object]]:
                 "timeframe": "daily",
                 "verification_status": verification_status_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_VERSION, asset),
                 "source_report": source_report_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_VERSION, asset),
+                "source_report_written_at": source_report_written_at(source_report_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_VERSION, asset)),
+                "backtest_evaluation": backtest_evaluation_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_VERSION, asset),
             }
         )
     # news-sentiment-v2.0.0-llm-claude wired 2026-07-28 IN PARALLEL with v1.0.0 above
@@ -363,6 +434,8 @@ def _roster_entries() -> list[dict[str, object]]:
                 "timeframe": "daily",
                 "verification_status": verification_status_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_LLM_VERSION, asset),
                 "source_report": source_report_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_LLM_VERSION, asset),
+                "source_report_written_at": source_report_written_at(source_report_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_LLM_VERSION, asset)),
+                "backtest_evaluation": backtest_evaluation_for(NEWS_SENTIMENT_ID, NEWS_SENTIMENT_LLM_VERSION, asset),
             }
         )
     for asset in ORDERFLOW_BINANCE_SYMBOLS:
@@ -374,6 +447,8 @@ def _roster_entries() -> list[dict[str, object]]:
                 "timeframe": "snapshot",
                 "verification_status": verification_status_for(ORDERFLOW_ID, ORDERFLOW_VERSION, asset),
                 "source_report": source_report_for(ORDERFLOW_ID, ORDERFLOW_VERSION, asset),
+                "source_report_written_at": source_report_written_at(source_report_for(ORDERFLOW_ID, ORDERFLOW_VERSION, asset)),
+                "backtest_evaluation": backtest_evaluation_for(ORDERFLOW_ID, ORDERFLOW_VERSION, asset),
             }
         )
     entries.append(
@@ -384,6 +459,8 @@ def _roster_entries() -> list[dict[str, object]]:
             "timeframe": GOLD_SILVER_RATIO_TIMEFRAME,
             "verification_status": verification_status_for(GOLD_SILVER_RATIO_ID, GOLD_SILVER_RATIO_VERSION, GOLD_SILVER_RATIO_LABEL),
             "source_report": source_report_for(GOLD_SILVER_RATIO_ID, GOLD_SILVER_RATIO_VERSION, GOLD_SILVER_RATIO_LABEL),
+            "source_report_written_at": source_report_written_at(source_report_for(GOLD_SILVER_RATIO_ID, GOLD_SILVER_RATIO_VERSION, GOLD_SILVER_RATIO_LABEL)),
+            "backtest_evaluation": backtest_evaluation_for(GOLD_SILVER_RATIO_ID, GOLD_SILVER_RATIO_VERSION, GOLD_SILVER_RATIO_LABEL),
         }
     )
     for config in PEAD_CONFIGS:
@@ -395,6 +472,8 @@ def _roster_entries() -> list[dict[str, object]]:
                 "timeframe": "1day",
                 "verification_status": verification_status_for(PEAD_ID, config.strategy_version, config.ticker),
                 "source_report": source_report_for(PEAD_ID, config.strategy_version, config.ticker),
+                "source_report_written_at": source_report_written_at(source_report_for(PEAD_ID, config.strategy_version, config.ticker)),
+                "backtest_evaluation": backtest_evaluation_for(PEAD_ID, config.strategy_version, config.ticker),
             }
         )
     for config in DONCHIAN_FOREX_CONFIGS:
@@ -406,6 +485,8 @@ def _roster_entries() -> list[dict[str, object]]:
                 "timeframe": DONCHIAN_FOREX_TIMEFRAME,
                 "verification_status": verification_status_for(DONCHIAN_TREND_ID, config.strategy_version, config.pair),
                 "source_report": source_report_for(DONCHIAN_TREND_ID, config.strategy_version, config.pair),
+                "source_report_written_at": source_report_written_at(source_report_for(DONCHIAN_TREND_ID, config.strategy_version, config.pair)),
+                "backtest_evaluation": backtest_evaluation_for(DONCHIAN_TREND_ID, config.strategy_version, config.pair),
             }
         )
     return entries

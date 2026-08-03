@@ -1,6 +1,24 @@
 import { render, screen } from "@testing-library/react";
 import StrategyCard from "@/components/StrategyCard";
-import type { LedgerRow, StrategyRosterEntry, StrategyStats } from "@/lib/types";
+import type { BacktestEvaluation, LedgerRow, StrategyRosterEntry, StrategyStats } from "@/lib/types";
+
+function makeBacktestEvaluation(overrides: Partial<BacktestEvaluation> = {}): BacktestEvaluation {
+  return {
+    verdict_is: null,
+    verdict_oos: null,
+    is_trades: null,
+    oos_trades: null,
+    is_expectancy_r: null,
+    oos_expectancy_r: null,
+    evaluated_at: null,
+    data_source: null,
+    method: null,
+    untestable_reason: null,
+    note: "Not yet evaluated with this structured format.",
+    permanently_unbacktestable: false,
+    ...overrides,
+  };
+}
 
 function makeEntry(overrides: Partial<StrategyRosterEntry> = {}): StrategyRosterEntry {
   return {
@@ -10,6 +28,8 @@ function makeEntry(overrides: Partial<StrategyRosterEntry> = {}): StrategyRoster
     timeframe: "1week",
     verification_status: "triple-verified",
     source_report: "docs/statistical_harness_upgrade.md",
+    source_report_written_at: "2026-07-18",
+    backtest_evaluation: makeBacktestEvaluation(),
     ...overrides,
   };
 }
@@ -146,6 +166,85 @@ describe("StrategyCard current-signal color per state", () => {
       unmount();
     });
     expect(seenClasses.size).toBe(4);
+  });
+});
+
+describe("StrategyCard backtest evaluation indicator", () => {
+  it("shows no evaluation indicator when nothing has been structurally evaluated", () => {
+    render(<StrategyCard entry={makeEntry()} recentRows={[]} stats={[]} />);
+    expect(screen.queryByTestId("card-backtest-verdict")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("card-backtest-untestable")).not.toBeInTheDocument();
+  });
+
+  it("shows the DIED/INSUFFICIENT_SAMPLE verdict on the card, not just the tier badge", () => {
+    render(
+      <StrategyCard
+        entry={makeEntry({
+          backtest_evaluation: makeBacktestEvaluation({ verdict_is: "DIED", verdict_oos: "INSUFFICIENT_SAMPLE" }),
+        })}
+        recentRows={[]}
+        stats={[]}
+      />
+    );
+    const verdict = screen.getByTestId("card-backtest-verdict");
+    expect(verdict).toHaveTextContent("DIED");
+    expect(verdict).toHaveTextContent("INSUFFICIENT_SAMPLE");
+  });
+
+  it("shows an untestable-by-standard-harness badge, never blank, for a two-asset strategy", () => {
+    render(
+      <StrategyCard
+        entry={makeEntry({
+          backtest_evaluation: makeBacktestEvaluation({
+            untestable_reason: "Not compatible with the single-asset rule_dsl/auto_tester harness.",
+            is_trades: 61,
+          }),
+        })}
+        recentRows={[]}
+        stats={[]}
+      />
+    );
+    expect(screen.getByTestId("card-backtest-untestable")).toHaveTextContent("Untestable by standard harness");
+  });
+});
+
+describe("StrategyCard badge provenance", () => {
+  it("shows the backtest-evidence provenance line under the tier badge, written date included", () => {
+    render(<StrategyCard entry={makeEntry()} recentRows={[]} stats={[]} />);
+    expect(screen.getByTestId("provenance-line")).toHaveTextContent(
+      "Verified — backtest evidence, written 2026-07-18, not re-evaluated since."
+    );
+  });
+
+  it("shows the unbacktestable provenance line verbatim for a permanently-unbacktestable strategy", () => {
+    render(
+      <StrategyCard
+        entry={makeEntry({
+          verification_status: "experimental — snapshot-based, forward-testing only, no backtest exists",
+          source_report: null,
+          source_report_written_at: null,
+          backtest_evaluation: makeBacktestEvaluation({ permanently_unbacktestable: true }),
+        })}
+        recentRows={[]}
+        stats={[]}
+      />
+    );
+    expect(screen.getByTestId("provenance-line")).toHaveTextContent(
+      "Unbacktestable — live evidence only (no historical data source)."
+    );
+  });
+
+  it("shows the live-resolved-trades provenance line when there is no backtest evidence at all", () => {
+    render(
+      <StrategyCard
+        entry={makeEntry({ source_report: null, source_report_written_at: null })}
+        recentRows={[]}
+        stats={[makeStats({ resolved_trades: 14, win_rate: 0.5 })]}
+      />
+    );
+    expect(screen.getByTestId("provenance-line")).toHaveTextContent(
+      "Verified — 14 live resolved trades, updated automatically."
+    );
   });
 });
 

@@ -1,0 +1,18 @@
+{
+  "asset": "BTC",
+  "timeframe": "4h",
+  "k": 200,
+  "seed": 20260718,
+  "generated_at": "2026-08-02T00:00:00+00:00",
+  "verdict_counts": {
+    "SKIPPED": 131,
+    "DIED": 69
+  },
+  "promising_watchlist_names": [],
+  "row_count": 4400,
+  "date_range": [
+    1722312000,
+    1785657600
+  ],
+  "note": "Re-run this session with the same combined-verdict (auto_tester.test_hypothesis) methodology used for the ETH/SOL/PAXG baselines, for a consistent on-disk record across all four APPROVED_RESEARCH_UNIVERSE pairs. The original BTC/4h baseline (prior session, docs/investigations/eve_engine_v1_report.md) used Eve's own scoring.py IS/OOS split (verdict_is/verdict_oos) and reported 0/200 SURVIVED (out-of-sample) with 17/200 PROMISING_WATCHLIST in-sample, all 17 of which died out-of-sample -- a different, stricter split than this run's single combined verdict, so the PROMISING-WATCHLIST count here is not expected to equal 17 exactly."
+}

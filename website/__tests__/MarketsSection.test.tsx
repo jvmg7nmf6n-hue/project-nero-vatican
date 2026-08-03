@@ -3,6 +3,20 @@ import MarketsSection from "@/components/MarketsSection";
 import type { MarketTile } from "@/lib/marketsOverview";
 import type { StrategyRosterEntry } from "@/lib/types";
 
+const DEFAULT_BACKTEST_EVALUATION = {
+  verdict_is: null,
+  verdict_oos: null,
+  is_trades: null,
+  oos_trades: null,
+  is_expectancy_r: null,
+  oos_expectancy_r: null,
+  evaluated_at: null,
+  data_source: null,
+  method: null,
+  untestable_reason: null,
+  note: "Not yet evaluated with this structured format.",
+};
+
 const ROSTER: StrategyRosterEntry[] = [
   {
     name: "BREAKOUT_MOMENTUM",
@@ -11,6 +25,7 @@ const ROSTER: StrategyRosterEntry[] = [
     timeframe: "1week",
     verification_status: "triple-verified",
     source_report: null,
+    backtest_evaluation: DEFAULT_BACKTEST_EVALUATION,
   },
   {
     name: "MEAN_REVERSION",
@@ -19,6 +34,7 @@ const ROSTER: StrategyRosterEntry[] = [
     timeframe: "24h",
     verification_status: "verified",
     source_report: null,
+    backtest_evaluation: DEFAULT_BACKTEST_EVALUATION,
   },
 ];
 

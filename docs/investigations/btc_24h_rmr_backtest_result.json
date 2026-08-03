@@ -1,0 +1,46 @@
+{
+  "range_mean_reversion_long_only_btc_1d": {
+    "train": {
+      "trades": 10,
+      "expectancy_r": -0.2805,
+      "ci_crosses_zero": true
+    },
+    "test": {
+      "trades": 5,
+      "expectancy_r": 0.744,
+      "ci_crosses_zero": false
+    },
+    "verdict_is": "DIED",
+    "verdict_oos": "INSUFFICIENT_SAMPLE",
+    "verdict_combined": "DIED",
+    "observed_trades_per_year": 3.05,
+    "months_to_30_trades": 118.2,
+    "frequency_classification": "TOO_SLOW",
+    "total_trades": 15,
+    "span_days": 1799.0,
+    "data_source": "research_data/evaluation_candles/BTC_24h.json",
+    "row_count": 1800
+  },
+  "range_mean_reversion_confirmation_btc_1d": {
+    "train": {
+      "trades": 9,
+      "expectancy_r": -0.1012,
+      "ci_crosses_zero": true
+    },
+    "test": {
+      "trades": 7,
+      "expectancy_r": 0.4334,
+      "ci_crosses_zero": false
+    },
+    "verdict_is": "DIED",
+    "verdict_oos": "INSUFFICIENT_SAMPLE",
+    "verdict_combined": "DIED",
+    "observed_trades_per_year": 3.25,
+    "months_to_30_trades": 110.8,
+    "frequency_classification": "TOO_SLOW",
+    "total_trades": 16,
+    "span_days": 1799.0,
+    "data_source": "research_data/evaluation_candles/BTC_24h.json",
+    "row_count": 1800
+  }
+}

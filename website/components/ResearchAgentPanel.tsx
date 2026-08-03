@@ -1,4 +1,4 @@
-import type { AgentHypothesis, AgentPerformanceExport, AgentTestResult } from "@/lib/types";
+import type { AgentHypothesis, AgentPerformanceExport, AgentPerformanceRun, AgentTestResult } from "@/lib/types";
 
 // Read-only, per the Research Agent branch's own spec: no approval button
 // anywhere on this panel. SURVIVED/PROMISING-WATCHLIST hypotheses show
@@ -32,6 +32,55 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+const RUN_STATUS_LABELS: Record<string, string> = {
+  clean: "Clean",
+  error: "Error",
+  disabled: "Disabled",
+};
+
+// A run with status="error" but no visibly distinct treatment is worse than
+// no panel at all: llm_calls_made=3 with nothing flagging the failure
+// asserts the run went fine when it didn't. This badge (and the red-bordered
+// card below) exist so an errored run can never look identical to a clean
+// one at a glance.
+function RunRow({ run }: { run: AgentPerformanceRun }) {
+  const isError = run.status === "error";
+  return (
+    <li
+      data-testid="agent-run-row"
+      data-status={run.status}
+      className={`rounded-lg border p-3 text-xs ${
+        isError ? "border-red-500 bg-red-950/30" : "border-gold/30 bg-ink"
+      }`}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <span
+          data-testid="agent-run-status-badge"
+          className={`rounded px-2 py-0.5 text-[10px] uppercase tracking-wide ${
+            isError ? "bg-red-500 text-ink font-bold" : "bg-gold/20 text-parchment"
+          }`}
+        >
+          {RUN_STATUS_LABELS[run.status] ?? run.status}
+        </span>
+        <span className="text-muted">{run.run_at}</span>
+        <span className="text-parchment">
+          {run.hypotheses_generated} generated / {run.llm_calls_made} LLM calls / $
+          {run.total_llm_cost_usd.toFixed(4)}
+        </span>
+      </div>
+      {isError && run.errors.length > 0 && (
+        <ul className="mt-2 flex flex-col gap-1">
+          {run.errors.map((err, i) => (
+            <li key={i} data-testid="agent-run-error" className="text-red-300">
+              [{err.phase}] {err.context}: {err.message}
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
 export default function ResearchAgentPanel({ hypotheses, testResults, performance }: ResearchAgentPanelProps) {
   const cumulative = performance?.cumulative ?? null;
   const tooSlowRejections = testResults.filter((r) => r.frequency_classification === "TOO_SLOW");
@@ -59,6 +108,24 @@ export default function ResearchAgentPanel({ hypotheses, testResults, performanc
           <p data-testid="agent-performance-empty" className="text-muted">
             No agent runs recorded yet.
           </p>
+        )}
+      </div>
+
+      <div>
+        <h3 className="font-serif text-lg text-parchment mb-2">Recent runs</h3>
+        {!performance || performance.runs.length === 0 ? (
+          <p data-testid="agent-runs-empty" className="text-muted">
+            No runs recorded yet.
+          </p>
+        ) : (
+          <ul data-testid="agent-runs-list" className="flex flex-col gap-2">
+            {[...performance.runs]
+              .slice(-10)
+              .reverse()
+              .map((run, i) => (
+                <RunRow key={`${run.run_at}-${i}`} run={run} />
+              ))}
+          </ul>
         )}
       </div>
 

@@ -43,6 +43,7 @@ from typing import Callable
 
 import pandas as pd
 
+from nero_core.asset_universe import APPROVED_EVALUATION_UNIVERSE, APPROVED_RESEARCH_UNIVERSE
 from nero_core.execution.export_candle_data import candle_filename
 from nero_core.research_agent import auto_tester, frequency_gate, hypothesis_gen, performance, scanner
 from nero_core.research_agent.config import is_enabled
@@ -50,9 +51,33 @@ from nero_core.research_agent.scanner import ScanFinding, ScanResult
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CANDLES_DIR = REPO_ROOT / "docs" / "site_data" / "candles"
+# Full-history research export -- see nero_core.eve.pipeline's own identical
+# constant/docstring (this module's default_candles_provider now applies the
+# SAME refuse-don't-degrade discipline Eve's already had since
+# docs/investigations/eve_engine_v1_report.md's silent-fallback-trap fix).
+# Adam's own scanner.py (candle-freshness/regime-baseline reads) is
+# UNTOUCHED by this constant -- only default_candles_provider, the function
+# auto_tester.test_hypothesis's real backtest calls actually use, changes.
+DEFAULT_RESEARCH_CANDLES_DIR = REPO_ROOT / "docs" / "research_data" / "candles"
 DEFAULT_FAILURE_PATTERNS_PATH = REPO_ROOT / "docs" / "site_data" / "failure_patterns.json"
 
 CandlesProvider = Callable[[str, str], "pd.DataFrame | None"]
+
+
+class DataSourceRefusedError(Exception):
+    """Raised by default_candles_provider when asked for an (asset,
+    timeframe) pair it refuses to silently degrade for -- mirrors
+    nero_core.eve.scoring.DataSourceRefusedError exactly (same reasoning,
+    independently defined here rather than imported, so Adam and Eve stay
+    two fully independent systems with no cross-import between them). Before
+    this existed, Adam's default_candles_provider read ONLY the 200-row site
+    display export -- the exact data source docs/investigations/
+    eve_engine_v1_report.md already showed leaves ma200 NaN everywhere but
+    the last row and never reaches MIN_SAMPLE_SIZE out-of-sample trades.
+    run_pipeline catches this specific exception per-hypothesis and records
+    an explicit, grep-able refusal (data_source_refused) instead of either a
+    silent substitution or a null result indistinguishable from "no candle
+    data was available anywhere for this pair."."""
 
 
 def _load_failure_patterns(path: Path) -> list[dict]:
@@ -74,20 +99,9 @@ def _load_failure_patterns(path: Path) -> list[dict]:
     return data if isinstance(data, list) else []
 
 
-def default_candles_provider(asset: str, timeframe: str, candles_dir: Path = DEFAULT_CANDLES_DIR) -> "pd.DataFrame | None":
-    """Loads the already-exported docs/site_data/candles/ file for
-    (asset, timeframe) -- the same export scanner.py already reads, using
-    export_candle_data's own filename convention (never re-derived). Returns
-    None (never fabricated data) if no file exists for this exact pair; the
-    pipeline records that hypothesis as `no_candles_available` rather than
-    guessing at a price history. A file that EXISTS but is malformed is a
-    different, worse problem than one that simply hasn't been generated yet --
-    both still count toward no_candles_available (this function's contract is
-    unchanged), but only the malformed case prints an ERROR, so the two are
-    distinguishable in the log rather than silently identical."""
-    path = candles_dir / candle_filename(asset, timeframe)
+def _read_candles_file(path: Path) -> "pd.DataFrame | None":
     if not path.exists():
-        return None  # benign: this (asset, timeframe) pair just hasn't been exported yet
+        return None
     try:
         data = json.loads(path.read_text())
         rows = data["candles"]
@@ -103,11 +117,59 @@ def default_candles_provider(asset: str, timeframe: str, candles_dir: Path = DEF
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
         print(
             f"ERROR: {path} EXISTS but is malformed ({exc.__class__.__name__}: {exc}) -- "
-            f"treating as no_candles_available, same as a missing file, but this is a different "
-            f"problem (a broken export, not an unexported asset) and should be investigated.",
+            f"treating as no candle data available. This is a different, worse problem than a "
+            f"missing file (a broken export, not an unexported asset) and should be investigated.",
             file=sys.stderr,
         )
         return None
+
+
+def default_candles_provider(
+    asset: str,
+    timeframe: str,
+    candles_dir: Path = DEFAULT_CANDLES_DIR,
+    research_candles_dir: Path = DEFAULT_RESEARCH_CANDLES_DIR,
+) -> "pd.DataFrame | None":
+    """REFUSES (raises DataSourceRefusedError) rather than degrades -- mirrors
+    nero_core.eve.pipeline.default_candles_provider exactly. An (asset,
+    timeframe) pair in APPROVED_EVALUATION_UNIVERSE (a pre-existing live
+    strategy being backtested, never a hypothesis-search candidate -- see
+    nero_core.asset_universe) or outside APPROVED_RESEARCH_UNIVERSE entirely,
+    or one inside it whose research export file is missing on disk, never
+    falls back to `candles_dir` (the website's 200-row display export) --
+    that silent substitution was this function's ORIGINAL behavior, and is
+    exactly the failure mode this branch's own random-baseline investigation
+    found (see docs/investigations/eve_engine_v1_report.md). `candles_dir`
+    is kept as a parameter (unused in the success path) only so existing
+    callers/tests that pass it explicitly don't need a signature change.
+
+    On success, the returned frame is tagged (`.attrs["data_source"]` /
+    `.attrs["row_count"]`), matching Eve's own convention, so a caller can
+    record what was actually used per hypothesis, not just infer it."""
+    if (asset, timeframe) in APPROVED_EVALUATION_UNIVERSE:
+        raise DataSourceRefusedError(
+            f"{asset}/{timeframe} is in APPROVED_EVALUATION_UNIVERSE, not APPROVED_RESEARCH_UNIVERSE -- "
+            f"evaluation-only pairs (pre-existing live strategies being backtested, never a hypothesis-"
+            f"search candidate) are never available for Adam's hypothesis scoring, by design. "
+            f"See nero_core.asset_universe."
+        )
+    if (asset, timeframe) not in APPROVED_RESEARCH_UNIVERSE:
+        raise DataSourceRefusedError(
+            f"{asset}/{timeframe} is not in Adam's APPROVED_RESEARCH_UNIVERSE "
+            f"{sorted(APPROVED_RESEARCH_UNIVERSE)} -- refusing to silently fall back to the "
+            f"{candles_dir.name if hasattr(candles_dir, 'name') else candles_dir} site display export "
+            f"(200 rows, no random baseline ever computed for this pair)."
+        )
+    research_frame = _read_candles_file(research_candles_dir / candle_filename(asset, timeframe))
+    if research_frame is None:
+        raise DataSourceRefusedError(
+            f"{asset}/{timeframe} is in APPROVED_RESEARCH_UNIVERSE but its research export file is "
+            f"missing at {research_candles_dir / candle_filename(asset, timeframe)} -- refusing to "
+            f"silently fall back to the site display export."
+        )
+    research_frame.attrs["data_source"] = "research_export"
+    research_frame.attrs["row_count"] = len(research_frame)
+    return research_frame
 
 
 # status distinguishes "ran fine" from "something failed" -- the exact
@@ -138,6 +200,12 @@ class PipelineRunResult:
     died: int = 0
     untestable: int = 0
     no_candles_available: int = 0
+    # Distinct from no_candles_available (this asset/timeframe simply has no
+    # export yet) -- a hypothesis whose candles_provider call REFUSED
+    # (DataSourceRefusedError: outside APPROVED_RESEARCH_UNIVERSE, or an
+    # APPROVED_EVALUATION_UNIVERSE pair) rather than silently degrading to a
+    # smaller/different data source. See default_candles_provider.
+    data_source_refused: int = 0
     test_results: list = field(default_factory=list)
     # Web-sourced discovery channel breakdown (added alongside the scanner
     # path, not replacing it -- hypotheses_generated/llm_calls_made/
@@ -225,10 +293,19 @@ def run_pipeline(
     # for the direct gate/harness-level proof this loop's uniformity implies.
     all_hypotheses = generation.hypotheses + web_generation.hypotheses
 
-    too_slow = unmeasurable = survived = watchlist = died = untestable = no_candles = 0
+    too_slow = unmeasurable = survived = watchlist = died = untestable = no_candles = data_source_refused = 0
     test_results: list[auto_tester.TestResult] = []
     for record in all_hypotheses:
-        candles = candles_provider(record["asset"], record["timeframe"])
+        try:
+            candles = candles_provider(record["asset"], record["timeframe"])
+        except DataSourceRefusedError:
+            # Distinct from no_candles_available: this pair was REFUSED
+            # (outside the approved research universe, or an approved pair
+            # whose export is missing) -- never silently degraded to the
+            # 200-row site export. See default_candles_provider's own
+            # docstring and DataSourceRefusedError's.
+            data_source_refused += 1
+            continue
         if candles is None or candles.empty:
             no_candles += 1
             continue
@@ -269,6 +346,7 @@ def run_pipeline(
         died=died,
         untestable=untestable,
         no_candles_available=no_candles,
+        data_source_refused=data_source_refused,
         test_results=test_results,
         web_hypotheses_generated=len(web_generation.hypotheses),
         web_llm_calls_made=web_generation.llm_calls_made,
@@ -300,7 +378,7 @@ def main() -> None:
           f"web_cost_limit_hit={result.web_cost_limit_hit}")
     print(f"too_slow_rejected={result.too_slow_rejected} unmeasurable_rejected={result.unmeasurable_rejected}")
     print(f"survived={result.survived} promising_watchlist={result.promising_watchlist} died={result.died} untestable={result.untestable}")
-    print(f"no_candles_available={result.no_candles_available}")
+    print(f"no_candles_available={result.no_candles_available} data_source_refused={result.data_source_refused}")
     # Errors printed as prominently as every summary line above -- status code
     # or exception class name only, NEVER the api_key value (every message
     # here comes from ScanResult.scan_errors / GenerationRunResult.errors,
