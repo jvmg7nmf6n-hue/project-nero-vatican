@@ -42,6 +42,13 @@ export interface BacktestEvaluation {
   method: string | null;
   untestable_reason: string | null;
   note: string | null;
+  // Badge-provenance work: distinguishes "wrong harness, but a real dedicated
+  // backtest engine produced real evidence" (e.g. COINTEGRATION_PAIRS, false)
+  // from "no historical data source will ever exist for this strategy" (e.g.
+  // ORDERFLOW_IMBALANCE, NEWS_SENTIMENT, true) -- see lib/provenance.ts.
+  // Optional because older cached exports predate this field; treat a
+  // missing value as false (not permanently unbacktestable), never as true.
+  permanently_unbacktestable?: boolean;
 }
 
 export interface StrategyRosterEntry {
@@ -52,6 +59,12 @@ export interface StrategyRosterEntry {
   verification_status: string;
   source_report: string | null;
   backtest_evaluation: BacktestEvaluation;
+  // Badge-provenance work: the real first-commit date of the doc at
+  // source_report (git-derived, hand-recorded -- see
+  // nero_core.execution.source_reports.SOURCE_REPORT_WRITTEN_AT), null when
+  // source_report itself is null or its date hasn't been recorded yet.
+  // Optional because older cached exports predate this field.
+  source_report_written_at?: string | null;
 }
 
 // Manually-curated docs/site_data/strategy_descriptions.json -- keyed by strategy_id

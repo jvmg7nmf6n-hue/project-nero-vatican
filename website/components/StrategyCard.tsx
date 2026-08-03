@@ -1,6 +1,7 @@
 import Link from "next/link";
 import TierBadge from "./TierBadge";
 import { formatTimestamp } from "./LedgerTable";
+import { deriveProvenanceLine } from "@/lib/provenance";
 import { deriveSignalDetail } from "@/lib/signalDetail";
 import { deriveSignalState, SIGNAL_STATE_LABELS, type SignalState } from "@/lib/signalState";
 import { deriveStatLine } from "@/lib/statLine";
@@ -51,6 +52,7 @@ export default function StrategyCard({ entry, recentRows, stats }: StrategyCardP
       ? "no_signal_yet"
       : rawSignalState;
   const statLine = deriveStatLine(entry, stats);
+  const provenanceLine = deriveProvenanceLine(entry, stats);
   const signalStyle = SIGNAL_STATE_STYLES[signalState];
 
   return (
@@ -74,6 +76,13 @@ export default function StrategyCard({ entry, recentRows, stats }: StrategyCardP
         <div className="mt-1">
           <TierBadge tier={tier} />
         </div>
+        {/* Badge provenance -- what the tier badge above actually rests on
+            and when, so "Verified" never reads as one uniform claim whether
+            it's backed by a multi-year backtest, live paper-trading data
+            only, or nothing but this hand-written status string. */}
+        <p data-testid="provenance-line" className="mt-1 text-[11px] text-muted">
+          {provenanceLine}
+        </p>
         {/* Structured backtest evaluation (verdict_is/verdict_oos/untestable_reason)
             -- only shown when this session's own structured harness actually produced
             one; a strategy with no entry here still has its tier badge above (derived

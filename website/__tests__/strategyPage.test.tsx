@@ -38,6 +38,7 @@ const DEFAULT_BACKTEST_EVALUATION = {
   method: null,
   untestable_reason: null,
   note: "Not yet evaluated with this structured format.",
+  permanently_unbacktestable: false,
 };
 
 const ROSTER_ENTRY = {
@@ -47,6 +48,7 @@ const ROSTER_ENTRY = {
   timeframe: "1week",
   verification_status: "triple-verified",
   source_report: "docs/statistical_harness_upgrade.md",
+  source_report_written_at: "2026-07-18",
   backtest_evaluation: DEFAULT_BACKTEST_EVALUATION,
 };
 
@@ -224,7 +226,7 @@ describe("StrategyDetailPage", () => {
       strategies: {
         schema_version: 1,
         last_updated: "x",
-        strategies: [{ ...ROSTER_ENTRY, source_report: null }],
+        strategies: [{ ...ROSTER_ENTRY, source_report: null, source_report_written_at: null }],
       },
     });
 
@@ -232,6 +234,53 @@ describe("StrategyDetailPage", () => {
     render(jsx);
 
     expect(screen.getByTestId("no-source-report")).toBeInTheDocument();
+  });
+
+  it("shows the badge-provenance line next to the tier badge, citing the source report's written date", async () => {
+    setupMocks();
+
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    expect(screen.getByTestId("provenance-line")).toHaveTextContent(
+      "Verified — backtest evidence, written 2026-07-18, not re-evaluated since."
+    );
+  });
+
+  it("shows the two-leg conservative provenance framing for COINTEGRATION_PAIRS", async () => {
+    setupMocks({
+      strategies: {
+        schema_version: 1,
+        last_updated: "x",
+        strategies: [
+          {
+            name: "COINTEGRATION_PAIRS",
+            version: "cointegration-pairs-v1.0.0",
+            asset: "BTC-ETH",
+            timeframe: "12h",
+            verification_status: "verified — weakest, live-proving",
+            source_report: null,
+            source_report_written_at: null,
+            backtest_evaluation: {
+              ...DEFAULT_BACKTEST_EVALUATION,
+              is_trades: 61,
+              oos_trades: 22,
+              evaluated_at: "2026-07-17",
+              untestable_reason: "Not compatible with the single-asset rule_dsl/auto_tester harness.",
+            },
+          },
+        ],
+      },
+    });
+
+    const jsx = await StrategyDetailPage({ params: { id: "cointegration-pairs--btc-eth--cointegration-pairs-v1-0-0" } });
+    render(jsx);
+
+    const provenance = screen.getByTestId("provenance-line");
+    expect(provenance).toHaveTextContent("Verified — two-leg funding-costed backtest, edge survives but basis/liquidation risk still unmodeled.");
+    expect(provenance).toHaveTextContent("OOS expectancy (+0.0025R) is thin enough");
+    expect(provenance).toHaveTextContent("net_pnl/notional");
+    expect(provenance).toHaveTextContent("not comparable to other strategies' R on this page");
   });
 
   it("shows the not-yet-evaluated note when no structured backtest evaluation exists", async () => {

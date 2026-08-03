@@ -15,6 +15,7 @@ function makeBacktestEvaluation(overrides: Partial<BacktestEvaluation> = {}): Ba
     method: null,
     untestable_reason: null,
     note: "Not yet evaluated with this structured format.",
+    permanently_unbacktestable: false,
     ...overrides,
   };
 }
@@ -27,6 +28,7 @@ function makeEntry(overrides: Partial<StrategyRosterEntry> = {}): StrategyRoster
     timeframe: "1week",
     verification_status: "triple-verified",
     source_report: "docs/statistical_harness_upgrade.md",
+    source_report_written_at: "2026-07-18",
     backtest_evaluation: makeBacktestEvaluation(),
     ...overrides,
   };
@@ -203,6 +205,46 @@ describe("StrategyCard backtest evaluation indicator", () => {
       />
     );
     expect(screen.getByTestId("card-backtest-untestable")).toHaveTextContent("Untestable by standard harness");
+  });
+});
+
+describe("StrategyCard badge provenance", () => {
+  it("shows the backtest-evidence provenance line under the tier badge, written date included", () => {
+    render(<StrategyCard entry={makeEntry()} recentRows={[]} stats={[]} />);
+    expect(screen.getByTestId("provenance-line")).toHaveTextContent(
+      "Verified — backtest evidence, written 2026-07-18, not re-evaluated since."
+    );
+  });
+
+  it("shows the unbacktestable provenance line verbatim for a permanently-unbacktestable strategy", () => {
+    render(
+      <StrategyCard
+        entry={makeEntry({
+          verification_status: "experimental — snapshot-based, forward-testing only, no backtest exists",
+          source_report: null,
+          source_report_written_at: null,
+          backtest_evaluation: makeBacktestEvaluation({ permanently_unbacktestable: true }),
+        })}
+        recentRows={[]}
+        stats={[]}
+      />
+    );
+    expect(screen.getByTestId("provenance-line")).toHaveTextContent(
+      "Unbacktestable — live evidence only (no historical data source)."
+    );
+  });
+
+  it("shows the live-resolved-trades provenance line when there is no backtest evidence at all", () => {
+    render(
+      <StrategyCard
+        entry={makeEntry({ source_report: null, source_report_written_at: null })}
+        recentRows={[]}
+        stats={[makeStats({ resolved_trades: 14, win_rate: 0.5 })]}
+      />
+    );
+    expect(screen.getByTestId("provenance-line")).toHaveTextContent(
+      "Verified — 14 live resolved trades, updated automatically."
+    );
   });
 });
 

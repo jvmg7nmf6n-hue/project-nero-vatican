@@ -46,10 +46,17 @@ export function deriveStatLine(
     match.resolved_trades === 1 ? "" : "s"
   }`;
 
-  if (match.win_rate === null) {
-    return trades;
-  }
+  const winRateClause =
+    match.win_rate === null ? null : `${Math.round(match.win_rate * 1000) / 10}% win rate`;
+  // "Every signal. Every loss." -- a win rate alone hides the size of wins vs
+  // losses (e.g. ORDERFLOW ETH: 61.5% wins at only +0.012R expectancy). R is
+  // shown next to win rate everywhere a win rate is shown, never in isolation,
+  // so a high win rate can never read as a strong edge it doesn't have.
+  const rClause =
+    match.expectancy_r === null
+      ? null
+      : `${match.expectancy_r >= 0 ? "+" : ""}${match.expectancy_r.toFixed(3)}R`;
 
-  const winRatePct = Math.round(match.win_rate * 1000) / 10;
-  return `${trades} · ${winRatePct}% win rate`;
+  const clauses = [trades, winRateClause, rClause].filter((clause): clause is string => clause !== null);
+  return clauses.join(" · ");
 }

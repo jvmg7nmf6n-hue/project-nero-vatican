@@ -99,4 +99,33 @@ describe("deriveStatLine", () => {
     const stats = [makeStats({ resolved_trades: 0, unverified_trades: 1, unverified_open_entries: 1 })];
     expect(deriveStatLine(makeEntry(), stats)).toBe("1 trade pending source verification");
   });
+
+  // "Every signal. Every loss." -- win rate alone hides expectancy (e.g. ORDERFLOW
+  // ETH: 61.5% wins at only +0.012R). R must show alongside win rate everywhere.
+  describe("R multiple alongside win rate", () => {
+    it("appends a positive R with an explicit + sign", () => {
+      const stats = [makeStats({ resolved_trades: 12, win_rate: 0.5833, expectancy_r: 0.091 })];
+      expect(deriveStatLine(makeEntry(), stats)).toBe("12 resolved trades · 58.3% win rate · +0.091R");
+    });
+
+    it("appends a negative R with its own minus sign, no double negative", () => {
+      const stats = [makeStats({ resolved_trades: 12, win_rate: 0.4167, expectancy_r: -0.228 })];
+      expect(deriveStatLine(makeEntry(), stats)).toBe("12 resolved trades · 41.7% win rate · -0.228R");
+    });
+
+    it("shows R even when win_rate is null", () => {
+      const stats = [makeStats({ resolved_trades: 5, win_rate: null, expectancy_r: 0.012 })];
+      expect(deriveStatLine(makeEntry(), stats)).toBe("5 resolved trades · +0.012R");
+    });
+
+    it("omits the R clause entirely when expectancy_r is null", () => {
+      const stats = [makeStats({ resolved_trades: 5, win_rate: 0.6, expectancy_r: null })];
+      expect(deriveStatLine(makeEntry(), stats)).toBe("5 resolved trades · 60% win rate");
+    });
+
+    it("shows a zero expectancy explicitly as +0.000R, never omitted", () => {
+      const stats = [makeStats({ resolved_trades: 8, win_rate: 0.5, expectancy_r: 0 })];
+      expect(deriveStatLine(makeEntry(), stats)).toBe("8 resolved trades · 50% win rate · +0.000R");
+    });
+  });
 });

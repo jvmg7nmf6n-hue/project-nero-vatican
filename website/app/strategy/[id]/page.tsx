@@ -30,6 +30,7 @@ import {
   mapSignalStateToMarketStatus,
   priceChangePercent,
 } from "@/lib/marketStatus";
+import { deriveProvenanceLine } from "@/lib/provenance";
 import { findVolatilityRegime } from "@/lib/quantCrossAsset";
 import { findQuantMetricsForAsset } from "@/lib/quantPanel";
 import { deriveSignalState, SIGNAL_STATE_LABELS } from "@/lib/signalState";
@@ -103,6 +104,7 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
   }
 
   const tier = classifyTier(entry.verification_status);
+  const provenanceLine = deriveProvenanceLine(entry, statsExport?.strategies ?? []);
   const description = descriptions?.[entry.name] ?? null;
 
   const statsRow = (statsExport?.strategies ?? []).find(
@@ -194,6 +196,9 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
         <div className="mt-3">
           <TierBadge tier={tier} />
         </div>
+        <p data-testid="provenance-line" className="mt-1 text-xs text-muted">
+          {provenanceLine}
+        </p>
         {description ? (
           <div data-testid="strategy-description" className="mt-4 max-w-2xl">
             <p className="text-parchment">{description.mechanism}</p>
