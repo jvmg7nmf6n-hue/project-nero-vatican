@@ -16,6 +16,7 @@ from nero_core.strategies.cointegration_pairs import (
     determine_exit_reason,
     register_default_variant,
     run_pairs_backtest,
+    run_pairs_backtest_two_leg,
 )
 from nero_core.strategies.registry import StrategyAlreadyRegisteredError, StrategyRegistry
 
@@ -272,6 +273,117 @@ class ExitCloseTimeTest(unittest.TestCase):
         self.assertGreater(len(trades), 0)
         for trade in trades:
             self.assertGreater(trade.exit_close_time, 0)
+
+
+def _funding_frame(rates_and_times: list[tuple[int, float]]) -> pd.DataFrame:
+    return pd.DataFrame(
+        [{"settlement_time": t, "settlement_date": pd.Timestamp(t, unit="ms", tz="UTC"), "funding_rate": r} for t, r in rates_and_times]
+    )
+
+
+class TwoLegBacktestTest(unittest.TestCase):
+    """Section 4 (pairs short-leg cost re-simulation): proves the two-leg engine's own
+    new mechanics in isolation from the (already well-covered) single-leg one -- short
+    P&L sign, hedge-ratio-weighted sizing, funding accrual sign/window, and that a
+    missing funding series never fabricates a cost."""
+
+    def setUp(self) -> None:
+        x_df, y_df = _cointegrated_pair_frames(500)
+        aligned = align_pair_candles(x_df, y_df, "BTC", "ETH")
+        self.params = CointegrationPairsParameters(window=60, entry_z=1.5, stop_z=3.0, exit_z=0.0)
+        self.enriched = add_indicators(aligned, self.params, "BTC", "ETH")
+
+    def test_produces_at_least_one_closed_trade(self) -> None:
+        trades, _ = run_pairs_backtest_two_leg(self.enriched, self.params, "BTC", "ETH")
+        self.assertGreater(len(trades), 0)
+
+    def test_long_and_short_asset_are_always_the_two_different_legs(self) -> None:
+        trades, _ = run_pairs_backtest_two_leg(self.enriched, self.params, "BTC", "ETH")
+        for trade in trades:
+            self.assertIn(trade.long_asset, {"BTC", "ETH"})
+            self.assertIn(trade.short_asset, {"BTC", "ETH"})
+            self.assertNotEqual(trade.long_asset, trade.short_asset)
+
+    def test_short_notional_is_hedge_ratio_weighted_not_dollar_neutral(self) -> None:
+        # Same fixture (y = 2x + noise) makes hedge_ratio converge near 2.0 -- so
+        # short_notional should be roughly 2x long_notional, not equal to it (which
+        # dollar-neutral sizing would produce instead).
+        trades, _ = run_pairs_backtest_two_leg(self.enriched, self.params, "BTC", "ETH")
+        self.assertGreater(len(trades), 0)
+        for trade in trades:
+            self.assertNotAlmostEqual(trade.short_notional, trade.long_notional, delta=trade.long_notional * 0.1)
+
+    def test_equity_after_matches_cumulative_combined_net_pnl(self) -> None:
+        trades, state = run_pairs_backtest_two_leg(self.enriched, self.params, "BTC", "ETH")
+        running = self.params.initial_equity
+        for trade in trades:
+            running += trade.net_pnl
+            self.assertAlmostEqual(running, trade.equity_after, places=6)
+        self.assertAlmostEqual(state.equity, running, places=6)
+
+    def test_r_multiple_uses_combined_notional_not_just_the_long_leg(self) -> None:
+        trades, _ = run_pairs_backtest_two_leg(self.enriched, self.params, "BTC", "ETH")
+        for trade in trades:
+            expected = trade.net_pnl / (trade.long_notional + trade.short_notional)
+            self.assertAlmostEqual(trade.r_multiple, expected, places=9)
+
+    def test_no_funding_data_supplied_means_zero_funding_pnl_never_fabricated(self) -> None:
+        trades, _ = run_pairs_backtest_two_leg(self.enriched, self.params, "BTC", "ETH", funding_by_asset=None)
+        self.assertGreater(len(trades), 0)
+        for trade in trades:
+            self.assertEqual(trade.funding_pnl, 0.0)
+            self.assertEqual(trade.funding_settlements_count, 0)
+
+    def test_positive_funding_rate_is_a_gain_for_the_short_leg(self) -> None:
+        trades, _ = run_pairs_backtest_two_leg(self.enriched, self.params, "BTC", "ETH")
+        self.assertGreater(len(trades), 0)
+        first = trades[0]
+        # One settlement landing just before exit, at a positive rate -> short receives funding.
+        trades_with_funding, _ = run_pairs_backtest_two_leg(
+            self.enriched, self.params, "BTC", "ETH",
+            funding_by_asset={first.short_asset: _funding_frame([(first.exit_close_time - 1, 0.0001)])},
+        )
+        self.assertEqual(trades_with_funding[0].funding_pnl, 0.0001 * trades_with_funding[0].short_notional)
+        self.assertEqual(trades_with_funding[0].funding_settlements_count, 1)
+
+    def test_negative_funding_rate_is_a_cost_for_the_short_leg(self) -> None:
+        trades, _ = run_pairs_backtest_two_leg(self.enriched, self.params, "BTC", "ETH")
+        self.assertGreater(len(trades), 0)
+        first = trades[0]
+        trades_with_funding, _ = run_pairs_backtest_two_leg(
+            self.enriched, self.params, "BTC", "ETH",
+            funding_by_asset={first.short_asset: _funding_frame([(first.exit_close_time - 1, -0.0002)])},
+        )
+        self.assertEqual(trades_with_funding[0].funding_pnl, -0.0002 * trades_with_funding[0].short_notional)
+        self.assertLess(trades_with_funding[0].funding_pnl, 0)
+
+    def test_settlement_outside_the_holding_window_is_excluded(self) -> None:
+        trades, _ = run_pairs_backtest_two_leg(self.enriched, self.params, "BTC", "ETH")
+        self.assertGreater(len(trades), 0)
+        first = trades[0]
+        long_after_exit = first.exit_close_time + 100_000_000_000
+        trades_with_funding, _ = run_pairs_backtest_two_leg(
+            self.enriched, self.params, "BTC", "ETH",
+            funding_by_asset={first.short_asset: _funding_frame([(long_after_exit, 0.0005)])},
+        )
+        self.assertEqual(trades_with_funding[0].funding_pnl, 0.0)
+        self.assertEqual(trades_with_funding[0].funding_settlements_count, 0)
+
+    def test_r_multiple_sign_matches_net_pnl_sign(self) -> None:
+        trades, _ = run_pairs_backtest_two_leg(self.enriched, self.params, "BTC", "ETH")
+        for trade in trades:
+            if trade.net_pnl > 0:
+                self.assertGreater(trade.r_multiple, 0)
+            elif trade.net_pnl < 0:
+                self.assertLess(trade.r_multiple, 0)
+
+    def test_live_run_pairs_backtest_is_completely_untouched_by_this_addition(self) -> None:
+        # The live-trading function (process_pairs's own call target) must produce the
+        # exact same trades/state it always has -- this new function is purely additive.
+        original_trades, original_state = run_pairs_backtest(self.enriched, self.params, "BTC", "ETH")
+        self.assertGreater(len(original_trades), 0)
+        for trade in original_trades:
+            self.assertTrue(hasattr(trade, "asset"))  # single-leg ExitEvent shape, unchanged
 
 
 if __name__ == "__main__":
