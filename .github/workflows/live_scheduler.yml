@@ -2,49 +2,81 @@ name: Live Scheduler
 
 on:
   schedule:
+    # DENSITY REDUCTION (2026-08-03 audit): halved from the previous density
+    # (114 runs/day -> ~57/day) after a direct challenge to it. READ THIS BEFORE
+    # CHANGING THE NUMBERS AGAIN -- both the original density and this reduction
+    # are deliberate, evidence-based decisions, not arbitrary tuning:
+    #
+    # (1) WHY IT WAS DENSE IN THE FIRST PLACE, NOT OVER-PROVISIONING: querying
+    #     this project's own execution_metadata directly showed GitHub Actions
+    #     DROPS most scheduled ticks outright under load, not just delays them --
+    #     only 11-18 of the nominal 48 daily "3,33 * * * *" runs actually fired
+    #     across 11 observed days (23-37%). A wide candle_boundary_due/
+    #     daily_time_due tolerance window (SINGLE_SHOT_TOLERANCE_MINUTES=240 /
+    #     MULTI_SHOT_TOLERANCE_MINUTES=150, see candle_schedule.py) is not the
+    #     same as a reliable chance to land inside it if most ticks never fire.
+    #     At an empirically observed ~63-77% per-tick drop rate, the probability
+    #     of missing an ENTIRE 240-minute window outright is q^N where q is the
+    #     drop rate and N is the tick count in that window -- at q=0.77, N=24
+    #     (the original density) gets miss-probability down to ~0.0002 (99.98%
+    #     reliable); N fewer than ~18 starts meaningfully risking a repeat of
+    #     the exact incident that motivated this density (see candle_schedule.
+    #     py's BUG FOUND note: GOLD/1week/BREAKOUT_MOMENTUM, this project's own
+    #     flagship survivor, went unevaluated for its entire observed history
+    #     under the old uniform-40-minute-tolerance, pre-windowing design).
+    #
+    # (2) WHY IT'S BEEN HALVED NOW: the "public repos get unlimited free Actions
+    #     minutes" reasoning that justified densifying without a cost concern
+    #     stops holding the moment this repo goes private (2,000 free minutes/
+    #     month on Private) -- and at 114 runs/day with an uncached
+    #     `pip install -r requirements.txt` (pandas/numpy/statsmodels/scipy)
+    #     every run, this workflow alone was on track to blow well past that
+    #     ceiling. The density was ALSO simply more than the reliability math
+    #     above requires: ~12 ticks per 240-minute single-shot window (not 24)
+    #     still keeps miss-probability under ~0.5% even at the worst observed
+    #     drop rate (0.77^12 ~= 0.032, and the true drop rate is likely somewhat
+    #     better than that historical worst-case now that runs are offset from
+    #     :00/:30 at all -- see below). Going BELOW today's ~57/day (e.g. to a
+    #     flat 12-24/day spread across all 3 windows, leaving only ~4-8 ticks
+    #     per window) was considered and rejected: that thins out ANY single
+    #     window enough to meaningfully risk the exact BUG FOUND failure mode
+    #     recurring, which is a materially worse outcome than a few hundred
+    #     extra Actions minutes/month.
+    #
+    # (3) ORDERFLOW_IMBALANCE HAS NO BOUNDARY GATE AT ALL (see
+    #     nero_core/execution/live_scheduler.py's own process_orderflow_
+    #     imbalance -- it is evaluated on EVERY run this workflow makes,
+    #     unconditionally, "an order-book snapshot is fresh every 30 minutes,
+    #     not tied to candle_boundary_due"). Cutting total daily run count is
+    #     therefore NOT a pure infrastructure optimization for this one
+    #     strategy -- it directly and proportionally cuts how often
+    #     ORDERFLOW_IMBALANCE actually gets evaluated (roughly hourly now,
+    #     was roughly every 20-30 minutes). This is a real strategy-behavior
+    #     change, not just a cost saving, and should be weighed as one if this
+    #     number gets revisited again.
+    #
     # Offset from :00/:30 deliberately -- GitHub's own scheduled-workflow docs warn
     # that `schedule` runs are delayed most at exactly the popular top-of-hour/
     # half-hour marks every default-configured cron job across GitHub converges on.
     # This project's own execution_metadata history confirmed the effect directly:
     # runs anchored at :00/:30 were landing 15-105+ minutes late, most days missing
     # the "24h"/"1week" candle_boundary_due window entirely (see
-    # nero_core/execution/candle_schedule.py's BUG FOUND note). Still every 30
-    # minutes, just off the busiest queueing slot. Steady-state coverage for every
-    # gate that isn't one of the fragile single/multi-shot ones below.
-    - cron: "3,33 * * * *"
+    # nero_core/execution/candle_schedule.py's BUG FOUND note). Hourly baseline
+    # (was every 30 minutes) -- this is also ORDERFLOW_IMBALANCE's real evaluation
+    # cadence outside the 3 windows below (see point 3 above).
+    - cron: "3 * * * *"
 
-    # REDUNDANT TRIGGER SAFETY NET (2026-07-29 infrastructure-resilience task):
-    # widening candle_boundary_due/daily_time_due's own tolerance (see
-    # candle_schedule.py) assumes SOME run lands inside the window -- but querying
-    # this project's own execution_metadata directly showed GitHub Actions actually
-    # DROPS most scheduled ticks outright under load, not just delays them: only
-    # 11-18 of the nominal 48 daily "3,33 * * * *" runs actually fired across 11
-    # observed days (23-37%), confirmed by counting real run timestamps against the
-    # nominal schedule. A wide tolerance window is not the same as a reliable chance
-    # to use it if most ticks in that window never fire at all.
-    #
-    # This project is a public repo, so GitHub Actions minutes are unlimited/free
-    # (confirmed via the repo's own visibility) -- there is no cost reason not to
-    # densify coverage specifically where it matters. These 3 extra entries add
-    # ticks every ~10 minutes, but ONLY during the exact UTC windows the fragile
-    # single-shot ("24h"/"1week", daily_time_due) and multi-shot ("12h") gates can
-    # actually fire in (see candle_schedule.py's SINGLE_SHOT_TOLERANCE_MINUTES=240 /
-    # MULTI_SHOT_TOLERANCE_MINUTES=150) -- every run outside its own gate's window
-    # still costs nothing beyond the free runner minute itself, since
-    # candle_boundary_due/daily_time_due correctly report NOT_DUE and no third-party
-    # fetch ever happens (see run_once's own per-config gate checks) -- so this adds
-    # real redundancy exactly where cron congestion has already been observed to
-    # cause total misses, without multiplying pressure on any rate-limited data
-    # source (Twelve Data, yfinance) outside those windows.
-    #
     #   00:00-03:59 UTC: covers "24h"/"1week"'s single-shot window (240min) AND
     #     "12h"'s AM window (150min, fully contained within the wider one).
-    - cron: "5,15,25,35,45,55 0-3 * * *"
-    #   12:00-14:29 UTC: covers "12h"'s PM window (150min).
-    - cron: "5,15,25,35,45,55 12-14 * * *"
+    #     Every 20 minutes (was every 10) -- 12 ticks in the 240min window.
+    - cron: "5,25,45 0-3 * * *"
+    #   12:00-14:59 UTC: covers "12h"'s PM window (150min). Every 20 minutes
+    #     (was every 10) -- 9 ticks across the range.
+    - cron: "5,25,45 12-14 * * *"
     #   19:00-22:59 UTC: covers NEWS_SENTIMENT's daily_time_due window
     #     (hour_utc=19, 240min single-shot tolerance -- see candle_schedule.py).
-    - cron: "5,15,25,35,45,55 19-22 * * *"
+    #     Every 20 minutes (was every 10) -- 12 ticks in the 240min window.
+    - cron: "5,25,45 19-22 * * *"
   workflow_dispatch:
 
 permissions:
