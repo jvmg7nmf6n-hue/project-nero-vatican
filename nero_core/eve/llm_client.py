@@ -144,7 +144,7 @@ def build_continue_user_message(text: str = "Continue your research, or call end
 
 def build_next_user_message(
     pending_tool_use_blocks: list[dict],
-    ack_text: str,
+    tool_result_text: "dict[str, str] | str",
     continue_text: str = "Continue your research, or call end_session when finished.",
 ) -> dict:
     """The message that must follow an assistant turn containing CLIENT-defined
@@ -160,9 +160,21 @@ def build_next_user_message(
     message -- server-executed tools (web_search) never need this (Anthropic
     resolves those within the same assistant turn), only client-defined ones.
     A single combined user message (tool_results first, then the continue
-    text) -- not two consecutive user messages, which the API does not expect."""
+    text) -- not two consecutive user messages, which the API does not expect.
+
+    `tool_result_text` is either ONE string applied to every pending block
+    (the original shape -- a plain acknowledgement, same text for all) or a
+    dict of tool_use_id -> text, for when different pending calls need
+    different replies. Added 2026-08-03 for nero_core.eve.session's DSL
+    pre-submit validator (see PROPOSE_HYPOTHESIS_ACK_TEXT / MAX_DSL_RETRIES):
+    a propose_hypothesis call that fails the rule-DSL parser must get the
+    parser's OWN error message back, not the generic "recorded" ack every
+    OTHER pending call in the same turn still gets."""
+    if isinstance(tool_result_text, str):
+        tool_result_text = {block["id"]: tool_result_text for block in pending_tool_use_blocks}
     content: list[dict] = [
-        {"type": "tool_result", "tool_use_id": block["id"], "content": ack_text} for block in pending_tool_use_blocks
+        {"type": "tool_result", "tool_use_id": block["id"], "content": tool_result_text[block["id"]]}
+        for block in pending_tool_use_blocks
     ]
     content.append({"type": "text", "text": continue_text})
     return {"role": "user", "content": content}

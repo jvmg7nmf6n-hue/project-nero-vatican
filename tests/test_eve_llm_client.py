@@ -23,6 +23,68 @@ class WebSearchToolReuseTest(unittest.TestCase):
         self.assertEqual(WEB_SEARCH_TOOL, ADAM_WEB_SEARCH_TOOL)
 
 
+class DslVocabularyReuseTest(unittest.TestCase):
+    """session.py reinlines rule_dsl's ALLOWED_FIELDS/ALLOWED_OPS (it may not
+    import nero_core.research_agent directly -- see test_eve_no_auto_wire.py)
+    so it can supply the exact DSL vocabulary in Eve's system prompt (added
+    post-Session-0, see session.py's own DSL_VOCABULARY_BLOCK docstring).
+    Mirrors WebSearchToolReuseTest's own precedent: the reinlined copy must
+    stay byte-identical to the real thing, or this test catches the drift
+    the moment rule_dsl adds/removes a field or op."""
+
+    def test_allowed_fields_match_rule_dsl_exactly(self) -> None:
+        from nero_core.eve.session import DSL_ALLOWED_FIELDS
+        from nero_core.research_agent.rule_dsl import ALLOWED_FIELDS
+
+        self.assertEqual(DSL_ALLOWED_FIELDS, ALLOWED_FIELDS)
+
+    def test_allowed_ops_match_rule_dsl_exactly(self) -> None:
+        from nero_core.eve.session import DSL_ALLOWED_OPS
+        from nero_core.research_agent.rule_dsl import ALLOWED_OPS
+
+        self.assertEqual(DSL_ALLOWED_OPS, ALLOWED_OPS)
+
+    def test_system_prompt_names_the_exact_exit_plan_keys(self) -> None:
+        # The literal root cause of Session 0's 4/4 UNTESTABLE_BY_DSL result:
+        # these exact key names were never spelled out anywhere Eve could
+        # read them. Regression-guards that they now are.
+        from nero_core.eve.session import SYSTEM_PROMPT_TEMPLATE
+
+        for key_name in ("compare_to_field", "stop_atr_multiple", "target_r_multiple", "max_holding_hours"):
+            self.assertIn(key_name, SYSTEM_PROMPT_TEMPLATE)
+
+    def test_system_prompt_worked_example_is_actually_valid_dsl(self) -> None:
+        # The vocabulary block's own worked example must itself parse -- an
+        # example that doesn't practice what it preaches would be worse than
+        # no example at all.
+        from nero_core.research_agent.rule_dsl import parse_bidirectional_entry_rules, parse_exit_plan
+
+        example_hypothesis = {
+            "structured_entry_rule": {"conditions": [{"field": "close", "op": "gt", "value": 0}]},
+            "structured_exit_plan": {"stop_atr_multiple": 1.0, "target_r_multiple": 1.0},
+        }
+        parse_bidirectional_entry_rules(example_hypothesis)  # must not raise
+        parse_exit_plan(example_hypothesis["structured_exit_plan"])  # must not raise
+
+
+class BuildNextUserMessagePerToolResultTest(unittest.TestCase):
+    def test_single_string_applies_to_every_pending_block(self) -> None:
+        blocks = [{"id": "toolu_a"}, {"id": "toolu_b"}]
+        message = llm_client.build_next_user_message(blocks, "same text for all")
+        tool_results = {b["tool_use_id"]: b["content"] for b in message["content"] if b["type"] == "tool_result"}
+        self.assertEqual(tool_results, {"toolu_a": "same text for all", "toolu_b": "same text for all"})
+
+    def test_dict_gives_each_pending_block_its_own_text(self) -> None:
+        blocks = [{"id": "toolu_a"}, {"id": "toolu_b"}]
+        message = llm_client.build_next_user_message(blocks, {"toolu_a": "ack", "toolu_b": "parser error: xyz"})
+        tool_results = {b["tool_use_id"]: b["content"] for b in message["content"] if b["type"] == "tool_result"}
+        self.assertEqual(tool_results, {"toolu_a": "ack", "toolu_b": "parser error: xyz"})
+
+    def test_trailing_continue_text_block_still_present(self) -> None:
+        message = llm_client.build_next_user_message([{"id": "toolu_a"}], {"toolu_a": "ack"})
+        self.assertEqual(message["content"][-1]["type"], "text")
+
+
 class ToolDefsTest(unittest.TestCase):
     def test_default_tools_includes_all_three(self) -> None:
         names = {t.get("name") or t.get("type") for t in default_tools()}

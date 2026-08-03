@@ -712,3 +712,217 @@ with the same refusal discipline Eve has, the pre-registered expansion of
 `APPROVED_RESEARCH_UNIVERSE` to BTC/ETH/SOL/PAXG (each with its own export
 and K=200 baseline, 0/200 SURVIVED every time), and a full Phase 4
 readiness check. Phase 4 remains unauthorized and unexecuted.
+
+## Third follow-up session: Session 0, and the DSL vocabulary spec defect (2026-08-03)
+
+Phase 4 (real API spend) was subsequently authorized. This section covers
+what happened on the first real (non-stub) multi-turn session that actually
+ran to completion, why its result does not count toward the pre-registered
+bar, and the fix that followed.
+
+### The pre-registration, verbatim
+
+The following is copied verbatim from the instruction that authorized this
+round of work, dated 2026-08-03, written *before* this section's own fix or
+Session 0's result were known to the user giving it:
+
+> Eve exists to answer one question: does an open-ended, multi-turn agent
+> generate better trading hypotheses than Adam's single-shot, constrained
+> approach? To keep that comparison honest, a pre-registration was written
+> and dated 3 Aug 2026, BEFORE any Eve result existed:
+>
+> - random-hypothesis baseline: chance survival <1.5%
+> - Eve must clear: 5% OOS survival, FDR-corrected, across the full
+>   cross-asset family
+> - 8 Eve sessions + 8 Adam runs (~$14)
+> - kill criterion: if Eve does not clear 5% after 8 sessions, the
+>   open-ended agent approach is falsified and the branch is archived
+>
+> Those numbers do not move. If a result lands below the bar it gets
+> reported as a miss.
+
+**A discrepancy against this same file's own earlier "Pre-registered kill
+criterion" section (above) must be flagged, not silently resolved:** that
+earlier section records **N = 5** sessions as the pre-registered count. The
+instruction above states **8** Eve sessions. This report does not decide
+which number is authoritative — it records both, in the order they were
+written, so the discrepancy is visible rather than quietly overwritten. The
+`5%` OOS-survival bar and the `<1.5%` chance-survival baseline are
+consistent between the two; only the session count differs. Machine-readable
+tracking (`docs/site_data/eve_session_registry.json`, added this session)
+uses the 8-session number per the newer, more specific instruction, but
+flags this same discrepancy in its own `pre_registration` field.
+
+### What happened in Session 0 (`eve-20260803T095520Z-394385c7`)
+
+Mechanically, everything worked: preflight passed, budget enforcement held,
+the loop ran 5 turns with 5 web searches, ntfy fired, and real spend came in
+at **$0.7129** against a $1.49 projection (prompt caching working as
+designed — roughly 28 sessions fit in the $20 month, not 13).
+
+Eve's own reasoning was genuine, not templated. She read the graveyard's 13
+failure patterns, searched real research, and justified each new idea
+against the specific prior failure it needed to avoid. She dropped one idea
+herself after concluding it was not DSL-expressible.
+
+But all 4 hypotheses came back `UNTESTABLE_BY_DSL` — and the cause was
+found, which is the important part:
+
+- 3 used `"compare_to"` where the parser requires `"compare_to_field"`.
+- 1 used a nested `{"stop_loss": {"type": "atr_multiple", ...}}` where the
+  parser requires a flat `stop_atr_multiple`.
+
+The DSL supported every mechanism she proposed. These failed on **key
+naming**, not on merit. She was actively trying to conform — her own words
+in turn 1: *"I should simplify this to fit the actual DSL fields cleanly...
+avoid inventing unsupported operators."*
+
+### Why this is a spec defect, not an Eve result
+
+The original spec deliberately withheld Adam's schema so Eve would think
+freely rather than fill in a form. That intent was correct. The execution
+was too strict: withholding the **vocabulary** is different from withholding
+the **constraints**. She needed a dictionary, not permission. That is an
+error in this project's own spec, not a finding about Eve's capability.
+
+### Decision 1 — Session 0 does not count toward the 8
+
+Recorded explicitly as **"Session 0 — proof run"**, producing no data point
+toward the 5% OOS bar. An unscoreable hypothesis is not a survival rate of
+zero; it is an unknown. The same applies to the 5 earlier crashed attempts
+(`eve-20260803T074058Z-df7df0f9`, `eve-20260803T075102Z-2b98a5f0`,
+`eve-20260803T080243Z-29f48c2e`, `eve-20260803T080720Z-12e60677`,
+`eve-20260803T081007Z-b7568699`) — those were machinery failures (2 read
+timeouts at the old 60s ceiling; 3 hits of a real HTTP 400 tool-result
+protocol bug, both since fixed — see "What was fixed" further above in this
+report), not Eve results either.
+
+The pre-registered session count starts counting from the first session
+where hypotheses are actually scoreable. The bar itself (5%, and whichever
+session count is ultimately confirmed as authoritative per the flagged
+discrepancy above) is unchanged — only what qualifies as a *countable*
+session is being defined, and it is being defined because of a defect on
+this project's side, before any survival data exists under the corrected
+system. This reasoning, plus the classification of every affected session,
+is also recorded machine-readably in `docs/site_data/eve_session_registry.
+json` and directly on Session 0's own session file (`session_label`,
+`counts_toward_pre_registered_8`, `excluded_from_pre_registration_reason`
+fields added to `docs/site_data/eve_sessions/eve-20260803T095520Z-394385c7.
+json`), not only in this prose report, so it cannot later look like moving
+the goalposts after the fact.
+
+### Decision 2 — Eve now gets the DSL vocabulary (grammar, not a menu)
+
+`nero_core/eve/session.py`'s `SYSTEM_PROMPT_TEMPLATE` now includes a
+`DSL_VOCABULARY_BLOCK` supplying:
+
+- the exact `ALLOWED_FIELDS` list (reinlined from `rule_dsl.ALLOWED_FIELDS`,
+  byte-identity enforced by a new test —
+  `DslVocabularyReuseTest.test_allowed_fields_match_rule_dsl_exactly`),
+- the exact `ALLOWED_OPS` list (same reinline/test pattern),
+- the exact key names the parser expects (`compare_to_field`,
+  `stop_atr_multiple`, `target_r_multiple`, `max_holding_hours`,
+  `stop_pct_of_entry`, `target_pct_of_entry`, `dynamic_target_condition`,
+  `regime_break_condition`, `regime_break_consecutive_bars`,
+  `structured_entry_rule`, `structured_entry_rule_short`,
+  `structured_exit_plan`),
+- ONE minimal worked example, deliberately mechanism-neutral
+  (`{"field": "close", "op": "gt", "value": 0}` / symmetric 1.0/1.0
+  stop-target) — syntax only, not a suggested strategy.
+
+This is framed explicitly as vocabulary, not permission: Eve may still
+propose anything at all, including mechanisms the DSL cannot express — those
+are still recorded honestly as `UNTESTABLE_BY_DSL`, because whether her
+creativity outruns the DSL is real capability data. No example of a
+specific strategy or mechanism was added anywhere in this block, per
+explicit instruction — field names and syntax only, so this narrows nothing
+about what Eve may propose.
+
+nero_core/eve/session.py itself still has zero direct
+`nero_core.research_agent` imports (`test_eve_no_auto_wire.py` unchanged and
+still green) — `DSL_ALLOWED_FIELDS`/`DSL_ALLOWED_OPS` are reinlined
+constants, the same pattern `WEB_SEARCH_TOOL` already used, guarded the same
+way.
+
+### Decision 3 — pre-submit DSL validator, up to 2 retries
+
+`nero_core/eve/session.py::_process_proposed_hypotheses` now runs every
+`propose_hypothesis` call through `scoring.classify_testability` (the exact
+same `rule_dsl` parser `scoring.py` uses for real scoring later — called via
+`nero_core.eve.scoring`, which remains the one documented, allowlisted
+exception through which this branch ever touches `nero_core.research_agent`)
+**before** finalizing it as a persisted record:
+
+- **Parses (`TESTABLE`)** → finalized immediately, normal acknowledgement.
+- **Fails to parse, retries remaining** (`MAX_DSL_RETRIES = 2`) → **not**
+  finalized yet. The parser's own error message is returned to Eve as that
+  call's `tool_result`, inviting a revise-and-resubmit; logged to this
+  session's own `dsl_correction_log` as `"retry_offered"`.
+- **Fails to parse, retries exhausted** → finalized **as-is**, honestly
+  `UNTESTABLE_BY_DSL` — this validator only rescues a good idea from a typo;
+  it never hides a hypothesis the DSL genuinely cannot express. Logged as
+  `"retries_exhausted"`.
+
+Every correction attempt (which hypothesis, what the parser said, the exact
+raw hypothesis object attempted) is logged to the session record's new
+`dsl_correction_log` field, and rolled up into `ablation_metadata` as
+`n_dsl_correction_attempts`, `n_hypotheses_needing_dsl_correction`,
+`n_hypotheses_recovered_by_dsl_correction`, and
+`n_hypotheses_dsl_retries_exhausted` — how often Eve needs a correction is
+itself capability data worth measuring across the 8 sessions, per
+instruction.
+
+Retries are grouped per hypothesis by its own `hypothesis_name` (the only
+stable identifier across a revise-and-resubmit, since each retry is a
+genuinely new `propose_hypothesis` tool-call id) — a hypothesis resubmitted
+under a *different* name is untraceable as a retry of the same idea and gets
+its own fresh 2-attempt budget; a known, documented limitation
+(`_hypothesis_retry_key`'s own docstring), not a safety hole, since
+`MAX_TURNS`/the session budget ceiling still bound total turns regardless.
+Every retry attempt is charged to the session's normal turn/budget
+accounting exactly like any other turn — a schema typo now costs one cheap
+correction turn, not an entire session, but it is never free.
+
+`llm_client.build_next_user_message` was extended to accept either one
+string (the original behavior, applied to every pending tool call) or a
+dict of `tool_use_id -> text` (new), so a turn with multiple pending
+`propose_hypothesis` calls can send each one a different reply — e.g. a
+plain acknowledgement to a valid proposal and the parser's own error to a
+broken one in the same turn.
+
+### Tests added this session
+
+- `tests/test_eve_dsl_validator.py` (new, 10 tests): direct unit coverage of
+  `_process_proposed_hypotheses`'s retry/finalize decision logic using the
+  exact real Session 0 failure shape (`compare_to` vs `compare_to_field`),
+  plus two full `run_session`-level end-to-end tests (retry-then-success,
+  and retries-exhausted-still-recorded) driven through a mocked `call_turn`.
+- `tests/test_eve_session_registry.py` (new, 5 tests): validates
+  `docs/site_data/eve_session_registry.json`'s shape and cross-checks it
+  directly against the real `eve_budget_ledger.json` and the real Session 0
+  session file, so the registry cannot silently drift from what actually
+  happened.
+- `tests/test_eve_llm_client.py` (extended): `DslVocabularyReuseTest` (4
+  tests, byte-identity against `rule_dsl.ALLOWED_FIELDS`/`ALLOWED_OPS`, the
+  exact key names present in the system prompt, and the worked example
+  itself actually parsing) and `BuildNextUserMessagePerToolResultTest` (3
+  tests, for the new dict-shaped `tool_result_text` parameter).
+
+### Housekeeping confirmations
+
+- `EVE_ENABLED` remains `False` by default in every committed reference —
+  `nero_core/eve/config.py::is_enabled` only returns `True` for an explicit
+  truthy value, and the one committed reference to the variable
+  (`.env.example:15`, `EVE_ENABLED=`) is empty. The real, gitignored local
+  `.env` is not committed and its value is never printed here.
+- Working tree confirmed clean before commit; every untracked file
+  pre-dates this session and is unrelated to this branch's diff (see the
+  "Untracked-file accounting" table above — unchanged).
+- Full Python suite (`python -m unittest discover -s tests -p
+  "test_*.py"`): **2334 tests, 0 failures, 0 errors** (`Ran 2334 tests in
+  733.562s` / `OK`) — up from 2312 before this session's 22 new tests (10 in
+  `tests/test_eve_dsl_validator.py`, 5 in `tests/test_eve_session_registry.
+  py`, 7 added to `tests/test_eve_llm_client.py`); 2312 + 22 = 2334 exactly,
+  confirming no existing test was silently dropped.
+- Full website Jest suite: **582 passed, 582 total** — unchanged before and
+  after (no `website/` file was touched this session).

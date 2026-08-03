@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "purpose": "Explicit, machine-readable record of which Eve sessions count toward the pre-registered 8-session bar, and why -- so this can never later look like moving the goalposts. See docs/eve_engine_v1_session0_closing_report.md for the full narrative.",
+  "pre_registration": {
+    "dated": "2026-08-03",
+    "random_hypothesis_baseline_chance_survival": "<1.5%",
+    "eve_must_clear": "5% OOS survival, FDR-corrected, across the full cross-asset family",
+    "sessions_budgeted": "8 Eve sessions + 8 Adam runs (~$14)",
+    "kill_criterion": "if Eve does not clear 5% after 8 (countable) sessions, the open-ended agent approach is falsified and the branch is archived"
+  },
+  "counting_rule": "A session counts toward the pre-registered 8 only once it produces at least one hypothesis that was actually eligible to be scored against real data (i.e. the session ran to completion and the DSL vocabulary / pre-submit validator fix, both landed 2026-08-03, were in place). A session that crashed before completion, or whose every hypothesis was UNTESTABLE_BY_DSL purely because of a since-fixed spec defect (the DSL vocabulary was withheld from Eve, not just strategy examples), produces no data point toward the 5% OOS bar -- an unscoreable hypothesis is not a survival rate of zero, it is an unknown. The 5%/8-session bar itself is UNCHANGED; only what qualifies as a countable session is defined here, before any survival data exists under the fixed system.",
+  "sessions": [
+    {
+      "session_id": "eve-20260803T074058Z-df7df0f9",
+      "counts_toward_pre_registered_8": false,
+      "classification": "crashed_before_completion",
+      "reason": "No session record file was ever written -- the run crashed (ReadTimeout at the old 60s claude_timeout_seconds ceiling, see llm_client.py's LlmParameters docstring) before session.run_session reached its own end-of-function write. Only a single 'reserved' budget-ledger entry exists for it (see docs/site_data/eve_budget_ledger.json), never reconciled to an 'actual' outcome. Machinery failure, not an Eve result."
+    },
+    {
+      "session_id": "eve-20260803T075102Z-2b98a5f0",
+      "counts_toward_pre_registered_8": false,
+      "classification": "crashed_before_completion",
+      "reason": "Same ReadTimeout failure mode as eve-20260803T074058Z-df7df0f9 -- no session record file written, one orphaned 'reserved' ledger entry only."
+    },
+    {
+      "session_id": "eve-20260803T080243Z-29f48c2e",
+      "counts_toward_pre_registered_8": false,
+      "classification": "crashed_before_completion",
+      "reason": "Crashed on the real HTTP 400 'tool_use ids were found without tool_result blocks immediately after' protocol bug (session.py did not yet send a tool_result for a pending propose_hypothesis call before the next turn) -- fixed the same day via llm_client.build_next_user_message. No session record file was written; a completed first turn (turn_index=0, 'actual' status) plus one orphaned 'reserved' turn_index=1 entry exist in the ledger only."
+    },
+    {
+      "session_id": "eve-20260803T080720Z-12e60677",
+      "counts_toward_pre_registered_8": false,
+      "classification": "crashed_before_completion",
+      "reason": "Same tool_result-protocol-bug crash as eve-20260803T080243Z-29f48c2e."
+    },
+    {
+      "session_id": "eve-20260803T081007Z-b7568699",
+      "counts_toward_pre_registered_8": false,
+      "classification": "crashed_before_completion",
+      "reason": "Same tool_result-protocol-bug crash as eve-20260803T080243Z-29f48c2e -- the third and last attempt before that fix landed."
+    },
+    {
+      "session_id": "eve-20260803T095520Z-394385c7",
+      "counts_toward_pre_registered_8": false,
+      "classification": "session_0_proof_run",
+      "reason": "Ran to completion (5 turns, 5 web searches, 4 hypotheses proposed, real spend $0.7129) with the tool_result-protocol bug already fixed -- mechanically, everything worked, and Eve's own reasoning was genuine (she read the graveyard's 13 failure patterns, searched real research, justified each idea against a specific prior failure, and dropped one idea herself as not DSL-expressible). But all 4 hypotheses came back UNTESTABLE_BY_DSL, and the cause was purely KEY-NAME mismatches the DSL itself supported (3 used 'compare_to' where the parser requires 'compare_to_field'; 1 used a nested {\"stop_loss\": {...}} where the parser requires the flat stop_atr_multiple). The original spec deliberately withheld Adam's schema so Eve would think freely rather than fill in a form -- correct intent, wrong scope: withholding the VOCABULARY is different from withholding the CONSTRAINTS. She needed a dictionary, not permission. That is a spec defect on this project's side, not a finding about Eve's capability -- so this session produces no data point toward the 5% OOS bar. Fixed same-day: nero_core.eve.session now supplies the exact DSL vocabulary (ALLOWED_FIELDS, ALLOWED_OPS, exact key names, one worked example) in the system prompt, plus a pre-submit validator that returns the parser's own error and offers up to 2 correction retries before finalizing a hypothesis as UNTESTABLE_BY_DSL. This same amendment is recorded directly on the session's own file at docs/site_data/eve_sessions/eve-20260803T095520Z-394385c7.json (session_label / counts_toward_pre_registered_8 / excluded_from_pre_registration_reason fields, added 2026-08-03)."
+    }
+  ],
+  "next_countable_session_number": 1,
+  "note": "next_countable_session_number is 1: no session run under the fixed system (DSL vocabulary + pre-submit validator, both landed 2026-08-03) has happened yet. The next Eve session run after this commit is Session 1 of the pre-registered 8."
+}

@@ -73,10 +73,14 @@ PROPOSE_HYPOTHESIS_TOOL: dict = {
         "fields shaped like this project's existing rule DSL (fields: close, ma20, ma50, ma200, "
         "zscore20, atr14, rsi14, adx14, bb_lower, bb_upper, ret_1, volume; ops: gt, gte, lt, lte, "
         "eq, cross_above, cross_below; conditions are ANDed together), it will be backtested "
-        "directly against real historical data. If it doesn't fit that DSL, it is still recorded "
-        "and scored honestly as untestable-by-DSL -- that is useful information about what this "
-        "platform's current tooling can and can't check, not a penalty -- so describe whatever "
-        "shape actually captures your idea rather than forcing it into the DSL."
+        "directly against real historical data -- see your system prompt's DSL vocabulary section "
+        "for the exact key names required (compare_to_field, stop_atr_multiple, target_r_multiple, "
+        "max_holding_hours, and others) and a worked example; a good idea recorded under the wrong "
+        "key name (e.g. 'compare_to' instead of 'compare_to_field') will get you back a parser error "
+        "with up to 2 chances to correct it before it's scored. If it doesn't fit that DSL at all, it "
+        "is still recorded and scored honestly as untestable-by-DSL -- that is useful information "
+        "about what this platform's current tooling can and can't check, not a penalty -- so describe "
+        "whatever shape actually captures your idea rather than forcing it into the DSL."
     ),
     "input_schema": {
         "type": "object",
