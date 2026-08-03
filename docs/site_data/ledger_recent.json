@@ -1,7 +1,29 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-03T10:50:54.171291+00:00",
+  "last_updated": "2026-08-03T13:46:55.415829+00:00",
   "rows": [
+    {
+      "timestamp": "2026-08-03T13:46:35.310829+00:00",
+      "strategy": "COINTEGRATION_PAIRS",
+      "strategy_version": "cointegration-pairs-v1.0.0",
+      "asset": "BTC-ETH",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "|z|=0.43 below entry threshold 2.0",
+      "candle_timestamp": "2026-08-03T11:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-08-03T13:46:35.310829+00:00",
+      "strategy": "TREND_PULLBACK",
+      "strategy_version": "trend-pullback-v1.0.0",
+      "asset": "BNB",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NOT_IN_ESTABLISHED_UPTREND, NO_RECENT_PULLBACK_TO_MA50",
+      "candle_timestamp": "2026-08-03T11:59:59.999000+00:00"
+    },
     {
       "timestamp": "2026-08-03T08:03:48.047450+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
@@ -34,6 +56,28 @@
       "exit_price": null,
       "reasoning": "direction=SHORT stop_loss=63665.38571429 imbalance_ratio=0.0764",
       "candle_timestamp": "2026-08-03T01:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-08-03T13:46:35.310829+00:00",
+      "strategy": "COINTEGRATION_PAIRS",
+      "strategy_version": "cointegration-pairs-v1.0.0",
+      "asset": "BTC-ETH",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "|z|=0.45 below entry threshold 2.0",
+      "candle_timestamp": "2026-08-02T23:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-08-03T13:46:35.310829+00:00",
+      "strategy": "TREND_PULLBACK",
+      "strategy_version": "trend-pullback-v1.0.0",
+      "asset": "BNB",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NOT_IN_ESTABLISHED_UPTREND",
+      "candle_timestamp": "2026-08-02T23:59:59.999000+00:00"
     },
     {
       "timestamp": "2026-08-03T02:55:54.983435+00:00",
