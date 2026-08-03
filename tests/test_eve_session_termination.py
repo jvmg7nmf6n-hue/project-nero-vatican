@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from nero_core.eve import budget_ledger as bl
-from nero_core.eve import session, storage
+from nero_core.eve import llm_client, session, storage
 
 
 class _IsolatedStorageTestCase(unittest.TestCase):
@@ -185,6 +185,136 @@ class RejectedBeforeTokenProcessingTerminationTest(_IsolatedStorageTestCase):
 
         ledger_entries = bl.load_ledger(path=self.ledger_path)
         self.assertEqual(len(ledger_entries), 1)
+
+
+class ToolResultProtocolTest(_IsolatedStorageTestCase):
+    """Real incident, 2026-08-03: this project's first-ever real (non-stub)
+    multi-turn session crashed with a real HTTP 400 from Anthropic --
+    "tool_use ids were found without tool_result blocks immediately after"
+    -- because the loop unconditionally appended a plain continue-text
+    message after ANY turn, never checking whether that turn's assistant
+    message left a client-defined tool_use (propose_hypothesis) call
+    without a reply. Stub mode never caught this: the stub script's own
+    propose_hypothesis turn is immediately followed by its end_session
+    turn (which breaks the loop before another message is ever sent), so
+    the missing-tool_result path was never actually exercised until a real,
+    unscripted multi-turn conversation hit it."""
+
+    def _propose_only_result(self, tool_use_id: str) -> llm_client.LlmTurnResult:
+        content = [
+            {"type": "text", "text": "Proposing one hypothesis, more research to come."},
+            {
+                "type": "tool_use",
+                "id": tool_use_id,
+                "name": "propose_hypothesis",
+                "input": {"hypothesis": {"hypothesis_name": "TEST_HYPOTHESIS", "asset": "BTC", "timeframe": "4h"}},
+            },
+        ]
+        return llm_client.LlmTurnResult(
+            content_blocks=content,
+            usage={"input_tokens": 1000, "output_tokens": 100},
+            stop_reason="tool_use",
+            raw_response={"content": content},
+        )
+
+    def _end_session_result(self) -> llm_client.LlmTurnResult:
+        content = [
+            {"type": "tool_use", "id": "toolu_end_1", "name": "end_session", "input": {"summary": "done", "n_hypotheses_proposed": 1}},
+        ]
+        return llm_client.LlmTurnResult(
+            content_blocks=content,
+            usage={"input_tokens": 1100, "output_tokens": 50},
+            stop_reason="tool_use",
+            raw_response={"content": content},
+        )
+
+    def _mock_call_turn_capturing_messages(self, results: list, captured: list) -> "callable":
+        # `messages` is one list object the real loop mutates and re-appends to
+        # in place across the whole session -- inspecting it AFTER run_session
+        # returns would only ever show its FINAL state, not what was actually
+        # sent on each individual call. Snapshots a deep copy at the exact
+        # moment of each call instead, so each entry in `captured` reflects
+        # exactly what that specific call_turn invocation received.
+        import copy
+
+        call_index = {"n": 0}
+
+        def _side_effect(messages, *args, **kwargs):
+            captured.append(copy.deepcopy(messages))
+            result = results[call_index["n"]]
+            call_index["n"] += 1
+            return result
+
+        return _side_effect
+
+    def test_a_tool_result_block_is_sent_for_a_pending_propose_hypothesis_call(self) -> None:
+        now = datetime(2026, 8, 15, tzinfo=timezone.utc)
+        propose_result = self._propose_only_result("toolu_propose_1")
+        end_result = self._end_session_result()
+        captured: list = []
+
+        with patch(
+            "nero_core.eve.session.llm_client.call_turn",
+            side_effect=self._mock_call_turn_capturing_messages([propose_result, end_result], captured),
+        ) as mock_call:
+            result = session.run_session(api_key="fake-key", stub=False, now=now)
+
+        self.assertEqual(result.terminated_because, session.TERMINATION_END_SESSION)
+        self.assertEqual(mock_call.call_count, 2)
+
+        # captured[1] is exactly what the SECOND call_turn invocation received
+        # -- it must contain a tool_result for toolu_propose_1, never a bare
+        # continue-text message with the tool_use left dangling.
+        second_call_messages = captured[1]
+        last_message = second_call_messages[-1]
+        self.assertEqual(last_message["role"], "user")
+        tool_result_blocks = [b for b in last_message["content"] if b.get("type") == "tool_result"]
+        self.assertEqual(len(tool_result_blocks), 1)
+        self.assertEqual(tool_result_blocks[0]["tool_use_id"], "toolu_propose_1")
+
+    def test_no_tool_result_block_when_the_turn_proposed_nothing(self) -> None:
+        # A turn with only plain text (no propose_hypothesis, no end_session)
+        # must still work exactly as before -- no tool_result blocks to add.
+        now = datetime(2026, 8, 15, tzinfo=timezone.utc)
+        text_only = llm_client.LlmTurnResult(
+            content_blocks=[{"type": "text", "text": "Still researching."}],
+            usage={"input_tokens": 900, "output_tokens": 40},
+            stop_reason="end_turn",
+            raw_response={"content": [{"type": "text", "text": "Still researching."}]},
+        )
+        end_result = self._end_session_result()
+        captured: list = []
+
+        with patch(
+            "nero_core.eve.session.llm_client.call_turn",
+            side_effect=self._mock_call_turn_capturing_messages([text_only, end_result], captured),
+        ):
+            session.run_session(api_key="fake-key", stub=False, now=now)
+
+        last_message = captured[1][-1]
+        tool_result_blocks = [b for b in last_message["content"] if b.get("type") == "tool_result"]
+        self.assertEqual(tool_result_blocks, [])
+
+    def test_multiple_propose_hypothesis_calls_in_one_turn_each_get_their_own_tool_result(self) -> None:
+        now = datetime(2026, 8, 15, tzinfo=timezone.utc)
+        content = [
+            {"type": "tool_use", "id": "toolu_a", "name": "propose_hypothesis", "input": {"hypothesis": {"hypothesis_name": "A"}}},
+            {"type": "tool_use", "id": "toolu_b", "name": "propose_hypothesis", "input": {"hypothesis": {"hypothesis_name": "B"}}},
+        ]
+        two_proposals = llm_client.LlmTurnResult(
+            content_blocks=content, usage={"input_tokens": 1000, "output_tokens": 150}, stop_reason="tool_use", raw_response={"content": content}
+        )
+        end_result = self._end_session_result()
+        captured: list = []
+
+        with patch(
+            "nero_core.eve.session.llm_client.call_turn",
+            side_effect=self._mock_call_turn_capturing_messages([two_proposals, end_result], captured),
+        ):
+            session.run_session(api_key="fake-key", stub=False, now=now)
+
+        tool_result_ids = {b["tool_use_id"] for b in captured[1][-1]["content"] if b.get("type") == "tool_result"}
+        self.assertEqual(tool_result_ids, {"toolu_a", "toolu_b"})
 
 
 class MaxTurnsCapTest(_IsolatedStorageTestCase):

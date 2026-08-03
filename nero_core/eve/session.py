@@ -39,7 +39,7 @@ from nero_core.eve import hypothesis_shapes
 from nero_core.eve import llm_client
 from nero_core.eve import storage
 from nero_core.eve.cost import web_search_count
-from nero_core.eve.tools_defs import END_SESSION_TOOL_NAME, WEB_SEARCH_TOOL, default_tools
+from nero_core.eve.tools_defs import END_SESSION_TOOL_NAME, PROPOSE_HYPOTHESIS_TOOL_NAME, WEB_SEARCH_TOOL, default_tools
 
 MAX_TURNS = 40
 
@@ -54,6 +54,8 @@ EXPECTED_TOOL_RESULT_TOKENS = 2000
 # ONE turn could run, reused directly (not re-guessed) so this bound and the
 # tool's own configured cap can never silently drift apart.
 MAX_SEARCHES_PER_TURN = WEB_SEARCH_TOOL["max_uses"]
+
+PROPOSE_HYPOTHESIS_ACK_TEXT = "Hypothesis recorded for scoring."
 
 TERMINATION_END_SESSION = "end_session_called"
 TERMINATION_MAX_TURNS = "max_turns_safety_cap_reached"
@@ -239,7 +241,15 @@ def run_session(
             terminated_because = TERMINATION_END_SESSION
             break
 
-        messages.append(llm_client.build_continue_user_message())
+        # Real incident, 2026-08-03: this project's first-ever real (non-stub)
+        # multi-turn session crashed with a 400 here -- propose_hypothesis is a
+        # CLIENT-defined tool (unlike web_search, which Anthropic resolves
+        # server-side within the same turn), so the Messages API requires a
+        # tool_result for every propose_hypothesis call in the VERY NEXT
+        # message, or the next call is rejected outright. See llm_client.
+        # build_next_user_message's own docstring.
+        pending_proposals = llm_client.extract_tool_uses(result.content_blocks, PROPOSE_HYPOTHESIS_TOOL_NAME)
+        messages.append(llm_client.build_next_user_message(pending_proposals, PROPOSE_HYPOTHESIS_ACK_TEXT))
 
     ended_at = datetime.now(timezone.utc)
     all_assistant_text = "\n".join(all_assistant_text_parts)

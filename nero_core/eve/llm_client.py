@@ -87,7 +87,20 @@ class LlmParameters:
     claude_api_version: str = "2023-06-01"
     claude_max_tokens: int = 4096
     claude_thinking: dict = field(default_factory=lambda: {"type": "disabled"})
-    claude_timeout_seconds: int = 60
+    # 120s (was 60s until 2026-08-03): call_turn is a plain, non-streaming
+    # requests.post -- the entire response (up to claude_max_tokens, with a
+    # full system prompt, context block, and 3 tool definitions on the very
+    # first, coldest/largest call) must be generated server-side before any
+    # byte returns. Two real, consecutive first-turn sessions both hit the
+    # old 60s ceiling with a plain ReadTimeout (no HTTP status at all -- the
+    # connection succeeded, the server just hadn't finished by then), losing
+    # the entire session (and a real, conservatively-counted ledger
+    # reservation each time -- see budget_ledger.py's own RESERVE-THEN-
+    # RECONCILE section) to a margin that was simply too tight, not a
+    # connectivity problem (confirmed separately: github.com and
+    # api.anthropic.com's own root both responded in under a second at the
+    # same time these calls were timing out).
+    claude_timeout_seconds: int = 120
 
 
 DEFAULT_LLM_PARAMETERS = LlmParameters()
@@ -127,6 +140,32 @@ def build_context_user_message(context_text: str, task_text: str) -> dict:
 
 def build_continue_user_message(text: str = "Continue your research, or call end_session when finished.") -> dict:
     return {"role": "user", "content": [{"type": "text", "text": text}]}
+
+
+def build_next_user_message(
+    pending_tool_use_blocks: list[dict],
+    ack_text: str,
+    continue_text: str = "Continue your research, or call end_session when finished.",
+) -> dict:
+    """The message that must follow an assistant turn containing CLIENT-defined
+    tool_use blocks (e.g. propose_hypothesis) that aren't end_session (a session
+    that called end_session never sends another message at all -- see
+    nero_core.eve.session's own loop). Real incident, 2026-08-03: this
+    project's first-ever real (non-stub) multi-turn session crashed with a 400
+    ("tool_use ids were found without tool_result blocks immediately after")
+    because the loop previously just appended a plain continue-text message,
+    unconditionally, regardless of whether the prior assistant turn left any
+    tool_use call needing a reply. Per the Messages API's own protocol, ONE
+    tool_result block is required per pending tool_use id, in the VERY NEXT
+    message -- server-executed tools (web_search) never need this (Anthropic
+    resolves those within the same assistant turn), only client-defined ones.
+    A single combined user message (tool_results first, then the continue
+    text) -- not two consecutive user messages, which the API does not expect."""
+    content: list[dict] = [
+        {"type": "tool_result", "tool_use_id": block["id"], "content": ack_text} for block in pending_tool_use_blocks
+    ]
+    content.append({"type": "text", "text": continue_text})
+    return {"role": "user", "content": content}
 
 
 def assistant_message_from_result(result: LlmTurnResult) -> dict:
@@ -293,7 +332,13 @@ def call_turn(
     except requests.exceptions.HTTPError as exc:
         if response.status_code in REJECTED_BEFORE_TOKEN_PROCESSING_STATUS_CODES:
             raise RejectedBeforeTokenProcessingError(response.status_code, str(exc)) from exc
-        raise
+        # Diagnostic gap found 2026-08-03: a bare `raise` here discarded the
+        # response body -- Anthropic's actual validation-error message (the
+        # one piece of information that would explain a 400, vs. a generic
+        # "400 Client Error" with no detail) was never surfaced anywhere,
+        # including in this module's own real-run logs. Re-raised with the
+        # body attached, original exception preserved as the cause.
+        raise requests.exceptions.HTTPError(f"{exc} -- response body: {response.text[:2000]}", response=response) from exc
     payload = response.json()
     return LlmTurnResult(
         content_blocks=payload.get("content") or [],
