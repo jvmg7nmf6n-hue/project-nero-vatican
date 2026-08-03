@@ -64,7 +64,7 @@ describe("deriveProvenanceLine", () => {
       backtest_evaluation: makeBacktestEvaluation({ verdict_is: "DIED", verdict_oos: "INSUFFICIENT_SAMPLE", evaluated_at: "2026-08-02" }),
     });
     expect(deriveProvenanceLine(entry, [])).toBe(
-      "Verified — backtest evidence, written 2026-08-02, not re-evaluated since."
+      "Under Trial — backtest evidence, written 2026-08-02, not re-evaluated since."
     );
   });
 
@@ -74,7 +74,7 @@ describe("deriveProvenanceLine", () => {
       source_report_written_at: "2026-07-18",
     });
     expect(deriveProvenanceLine(entry, [])).toBe(
-      "Verified — backtest evidence, written 2026-07-18, not re-evaluated since."
+      "Under Trial — backtest evidence, written 2026-07-18, not re-evaluated since."
     );
   });
 
@@ -85,7 +85,7 @@ describe("deriveProvenanceLine", () => {
       backtest_evaluation: makeBacktestEvaluation({ is_trades: 61, evaluated_at: "2026-07-17" }),
     });
     expect(deriveProvenanceLine(entry, [])).toBe(
-      "Verified — backtest evidence, written 2026-07-17, not re-evaluated since."
+      "Under Trial — backtest evidence, written 2026-07-17, not re-evaluated since."
     );
   });
 
@@ -98,7 +98,7 @@ describe("deriveProvenanceLine", () => {
       backtest_evaluation: makeBacktestEvaluation({ is_trades: 61, oos_trades: 22, evaluated_at: "2026-07-17" }),
     });
     const line = deriveProvenanceLine(entry, []);
-    expect(line).toContain("Verified — two-leg funding-costed backtest, edge survives but basis/liquidation risk still unmodeled.");
+    expect(line).toContain("Under Trial — two-leg funding-costed backtest, edge survives but basis/liquidation risk still unmodeled.");
     expect(line).toContain("OOS expectancy (+0.0025R) is thin enough that a different live data pull could flip its sign");
     expect(line).toContain("grid-shift audits fetch live vendor data that isn't pinned");
     expect(line).toContain(
@@ -131,20 +131,20 @@ describe("deriveProvenanceLine", () => {
   it("reports live resolved trades, updated automatically, when there is no backtest evidence at all", () => {
     const entry = makeEntry({ source_report: null, source_report_written_at: null });
     const stats = [makeStats({ resolved_trades: 14, win_rate: 0.5 })];
-    expect(deriveProvenanceLine(entry, stats)).toBe("Verified — 14 live resolved trades, updated automatically.");
+    expect(deriveProvenanceLine(entry, stats)).toBe("Under Trial — 14 live resolved trades, updated automatically.");
   });
 
   it("uses singular 'trade' for exactly 1 live resolved trade", () => {
     const entry = makeEntry({ source_report: null, source_report_written_at: null });
     const stats = [makeStats({ resolved_trades: 1, win_rate: 1 })];
-    expect(deriveProvenanceLine(entry, stats)).toBe("Verified — 1 live resolved trade, updated automatically.");
+    expect(deriveProvenanceLine(entry, stats)).toBe("Under Trial — 1 live resolved trade, updated automatically.");
   });
 
   it("never matches a stats row for a different strategy_version (RMR two-version-same-asset discipline)", () => {
     const entry = makeEntry({ source_report: null, source_report_written_at: null });
     const stats = [makeStats({ strategy_version: "breakout-momentum-v9.9.9-different", resolved_trades: 40 })];
     expect(deriveProvenanceLine(entry, stats)).toBe(
-      "Verified — this status is a hand-written note only; no structured backtest or live-trade evidence is recorded yet."
+      "Under Trial — this status is a hand-written note only; no structured backtest or live-trade evidence is recorded yet."
     );
   });
 
@@ -159,7 +159,7 @@ describe("deriveProvenanceLine", () => {
     );
   });
 
-  it("uses the actual tier label, not a hardcoded 'Verified', for a non-verified strategy with backtest evidence", () => {
+  it("uses the actual tier label, not a hardcoded 'Under Trial', for a non-verified strategy with backtest evidence", () => {
     const entry = makeEntry({
       verification_status: "watchlist — DIED in-sample, promising out-of-sample",
       backtest_evaluation: makeBacktestEvaluation({ verdict_is: "DIED", evaluated_at: "2026-08-02" }),
@@ -184,7 +184,7 @@ describe("deriveProvenanceLine", () => {
     const { backtest_evaluation: _omit, ...entryWithoutBacktestEvaluation } = makeEntry();
     expect(() => deriveProvenanceLine(entryWithoutBacktestEvaluation as StrategyRosterEntry, [])).not.toThrow();
     expect(deriveProvenanceLine(entryWithoutBacktestEvaluation as StrategyRosterEntry, [])).toBe(
-      "Verified — this status is a hand-written note only; no structured backtest or live-trade evidence is recorded yet."
+      "Under Trial — this status is a hand-written note only; no structured backtest or live-trade evidence is recorded yet."
     );
   });
 });

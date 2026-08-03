@@ -78,9 +78,9 @@ describe("StrategyCard: research status and current signal are two separate elem
     const researchStatus = screen.getByTestId("research-status");
     const currentSignal = screen.getByTestId("current-signal");
 
-    expect(researchStatus).toHaveTextContent("Verified");
+    expect(researchStatus).toHaveTextContent("Under Trial");
     expect(researchStatus).toHaveTextContent("Research status");
-    expect(currentSignal).not.toHaveTextContent("Verified");
+    expect(currentSignal).not.toHaveTextContent("Under Trial");
     expect(currentSignal).not.toHaveTextContent("Research status");
   });
 
@@ -229,7 +229,7 @@ describe("StrategyCard badge provenance", () => {
   it("shows the backtest-evidence provenance line under the tier badge, written date included", () => {
     render(<StrategyCard entry={makeEntry()} recentRows={[]} stats={[]} />);
     expect(screen.getByTestId("provenance-line")).toHaveTextContent(
-      "Verified — backtest evidence, written 2026-07-18, not re-evaluated since."
+      "Under Trial — backtest evidence, written 2026-07-18, not re-evaluated since."
     );
   });
 
@@ -260,7 +260,7 @@ describe("StrategyCard badge provenance", () => {
       />
     );
     expect(screen.getByTestId("provenance-line")).toHaveTextContent(
-      "Verified — 14 live resolved trades, updated automatically."
+      "Under Trial — 14 live resolved trades, updated automatically."
     );
   });
 });

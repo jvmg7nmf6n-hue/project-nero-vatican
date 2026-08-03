@@ -14,12 +14,17 @@ import { DEFAULT_BACKTEST_EVALUATION, type StrategyRosterEntry, type StrategySta
 // back to a different vendor mid-run -- see docs/grid_shift_robustness_
 // followup.md's NEAR/2h note), that a different data pull could plausibly
 // flip its sign. This is intentionally more conservative than the generic
-// "Verified -- backtest evidence, written <date>" phrasing every other
+// "Under Trial -- backtest evidence, written <date>" phrasing every other
 // strategy gets, and intentionally NOT the old net_pnl/notional-only caveat
 // -- both real gaps (basis/liquidation risk, thin/unpinned OOS) are now
 // named explicitly rather than left for a reader to infer from the raw R.
+// Tier label hardcoded here (not read from TIER_LABELS) because this whole
+// line is a fixed, hand-authored override for one specific strategy, not a
+// generic priority-logic template -- see TIER_LABELS's own comment for the
+// "Verified" -> "Under Trial" rename this literal string must stay in sync
+// with by hand.
 const COINTEGRATION_PAIRS_PROVENANCE =
-  "Verified — two-leg funding-costed backtest, edge survives but basis/liquidation risk still unmodeled. " +
+  "Under Trial — two-leg funding-costed backtest, edge survives but basis/liquidation risk still unmodeled. " +
   "OOS expectancy (+0.0025R) is thin enough that a different live data pull could flip its sign — grid-shift " +
   "audits fetch live vendor data that isn't pinned, so this could change on a re-run. Its R is net_pnl/notional, " +
   "not a stop-distance risk multiple, so it is not comparable to other strategies' R on this page.";
@@ -40,7 +45,7 @@ function hasStructuredBacktestEvidence(evaluation: NonNullable<StrategyRosterEnt
 
 // Badge-provenance fix (docs/investigations/live_strategy_backtest_and_
 // universe_expansion_report.md's follow-up item 1): a tier badge alone
-// ("Verified") doesn't say what it rests on or when that evidence was last
+// ("Under Trial") doesn't say what it rests on or when that evidence was last
 // touched -- a strategy backed by a real multi-year backtest looked
 // identical to one backed by a single hand-typed status string. No new
 // computation happens here -- every branch below only reads fields other

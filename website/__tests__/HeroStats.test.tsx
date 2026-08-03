@@ -51,7 +51,7 @@ describe("HeroStats verified-configs tile", () => {
   it("shows the verified config count matching the roster, with a distinct-family subtext", () => {
     render(<HeroStats summary={SUMMARY} roster={ROSTER} />);
 
-    expect(screen.getByText("Verified configs")).toBeInTheDocument();
+    expect(screen.getByText("Under Trial configs")).toBeInTheDocument();
     expect(screen.getByText("4 distinct families")).toBeInTheDocument();
   });
 

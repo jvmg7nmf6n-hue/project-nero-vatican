@@ -90,7 +90,7 @@ export default function HeroStats({ summary, roster, heartbeat = null }: HeroSta
         <StatTile label="Configs tested" value={configsTested} />
         <StatTile label="Live signals" value={liveSignals} />
         <StatTile
-          label="Verified configs"
+          label="Under Trial configs"
           value={verifiedConfigCount}
           sublabel={
             verifiedConfigCount > 0

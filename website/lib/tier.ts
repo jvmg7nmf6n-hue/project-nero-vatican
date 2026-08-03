@@ -2,8 +2,16 @@ export type Tier = "verified" | "watchlist" | "experimental";
 
 export const TIER_ORDER: Tier[] = ["verified", "watchlist", "experimental"];
 
+// Display labels only -- the underlying Tier VALUES ("verified"/"watchlist"/
+// "experimental") and classifyTier's own classification logic are untouched.
+// "Verified" -> "Under Trial" (2026-08-03, display-only rename): this project
+// makes no claim that a "verified" config is proven in any final sense --
+// every one of them keeps trading and keeps accruing evidence, so a label
+// implying a closed, finished judgment was never quite honest. The
+// underlying tier (still internally "verified", still classified the exact
+// same way) is unchanged; only the word shown to a reader changes.
 export const TIER_LABELS: Record<Tier, string> = {
-  verified: "Verified",
+  verified: "Under Trial",
   watchlist: "Watchlist",
   experimental: "Experimental",
 };

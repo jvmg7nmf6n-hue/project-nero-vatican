@@ -139,7 +139,7 @@ describe("StrategyDetailPage", () => {
     render(jsx);
 
     expect(screen.getByText("BREAKOUT_MOMENTUM")).toBeInTheDocument();
-    expect(screen.getByText("Verified")).toBeInTheDocument();
+    expect(screen.getByText("Under Trial")).toBeInTheDocument();
     expect(screen.getByTestId("strategy-description")).toBeInTheDocument();
     expect(screen.getByText("Test mechanism description.")).toBeInTheDocument();
     expect(screen.getByText("Test verification note.")).toBeInTheDocument();
@@ -243,7 +243,7 @@ describe("StrategyDetailPage", () => {
     render(jsx);
 
     expect(screen.getByTestId("provenance-line")).toHaveTextContent(
-      "Verified — backtest evidence, written 2026-07-18, not re-evaluated since."
+      "Under Trial — backtest evidence, written 2026-07-18, not re-evaluated since."
     );
   });
 
@@ -277,7 +277,7 @@ describe("StrategyDetailPage", () => {
     render(jsx);
 
     const provenance = screen.getByTestId("provenance-line");
-    expect(provenance).toHaveTextContent("Verified — two-leg funding-costed backtest, edge survives but basis/liquidation risk still unmodeled.");
+    expect(provenance).toHaveTextContent("Under Trial — two-leg funding-costed backtest, edge survives but basis/liquidation risk still unmodeled.");
     expect(provenance).toHaveTextContent("OOS expectancy (+0.0025R) is thin enough");
     expect(provenance).toHaveTextContent("net_pnl/notional");
     expect(provenance).toHaveTextContent("not comparable to other strategies' R on this page");

@@ -81,9 +81,9 @@ export default function StrategyCard({ entry, recentRows, stats }: StrategyCardP
           <TierBadge tier={tier} />
         </div>
         {/* Badge provenance -- what the tier badge above actually rests on
-            and when, so "Verified" never reads as one uniform claim whether
-            it's backed by a multi-year backtest, live paper-trading data
-            only, or nothing but this hand-written status string. */}
+            and when, so "Under Trial" never reads as one uniform claim
+            whether it's backed by a multi-year backtest, live paper-trading
+            data only, or nothing but this hand-written status string. */}
         <p data-testid="provenance-line" className="mt-1 text-[11px] text-muted">
           {provenanceLine}
         </p>
