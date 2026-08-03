@@ -2,56 +2,8 @@
   "schema_version": 1,
   "asset": "EUR/USD",
   "timeframe": "4h",
-  "last_updated": "2026-08-01T20:14:44.557372+00:00",
+  "last_updated": "2026-08-02T20:15:59.357627+00:00",
   "candles": [
-    {
-      "time": 1782730800,
-      "open": 1.13824,
-      "high": 1.14174,
-      "low": 1.13821,
-      "close": 1.13963,
-      "volume": null
-    },
-    {
-      "time": 1782745200,
-      "open": 1.1396,
-      "high": 1.14117,
-      "low": 1.13948,
-      "close": 1.1401,
-      "volume": null
-    },
-    {
-      "time": 1782759600,
-      "open": 1.14014,
-      "high": 1.14309,
-      "low": 1.14006,
-      "close": 1.14262,
-      "volume": null
-    },
-    {
-      "time": 1782774000,
-      "open": 1.14269,
-      "high": 1.14295,
-      "low": 1.14217,
-      "close": 1.14248,
-      "volume": null
-    },
-    {
-      "time": 1782788400,
-      "open": 1.14245,
-      "high": 1.1427,
-      "low": 1.1413,
-      "close": 1.1417,
-      "volume": null
-    },
-    {
-      "time": 1782802800,
-      "open": 1.14166,
-      "high": 1.14169,
-      "low": 1.13894,
-      "close": 1.13901,
-      "volume": null
-    },
     {
       "time": 1782817200,
       "open": 1.13912,
@@ -1602,6 +1554,54 @@
       "high": 1.15404,
       "low": 1.15271,
       "close": 1.15309,
+      "volume": null
+    },
+    {
+      "time": 1785610800,
+      "open": 1.15304,
+      "high": 1.15404,
+      "low": 1.15276,
+      "close": 1.15305,
+      "volume": null
+    },
+    {
+      "time": 1785625200,
+      "open": 1.15304,
+      "high": 1.15407,
+      "low": 1.15278,
+      "close": 1.15332,
+      "volume": null
+    },
+    {
+      "time": 1785639600,
+      "open": 1.15333,
+      "high": 1.15396,
+      "low": 1.15272,
+      "close": 1.1534,
+      "volume": null
+    },
+    {
+      "time": 1785654000,
+      "open": 1.1534,
+      "high": 1.15396,
+      "low": 1.15264,
+      "close": 1.1535,
+      "volume": null
+    },
+    {
+      "time": 1785668400,
+      "open": 1.1535,
+      "high": 1.15386,
+      "low": 1.15264,
+      "close": 1.15355,
+      "volume": null
+    },
+    {
+      "time": 1785682800,
+      "open": 1.15353,
+      "high": 1.15393,
+      "low": 1.15299,
+      "close": 1.15319,
       "volume": null
     }
   ]

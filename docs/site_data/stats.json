@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-02T06:03:39.977370+00:00",
+  "last_updated": "2026-08-03T03:22:54.204597+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -33,7 +33,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 9
+        "NO_TRADE": 11
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -177,7 +177,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 12
+        "NO_TRADE": 13
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -195,7 +195,7 @@
         "ENTRY": 1,
         "EXIT": 1,
         "WATCH": 0,
-        "NO_TRADE": 11
+        "NO_TRADE": 12
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -231,7 +231,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 9
+        "NO_TRADE": 11
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -240,36 +240,44 @@
       "strategy": "ORDERFLOW_IMBALANCE",
       "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
-      "resolved_trades": 13,
+      "resolved_trades": 16,
       "unverified_trades": 27,
-      "win_rate": 0.46153846153846156,
+      "win_rate": 0.5,
       "expectancy_r": null,
-      "avg_return_pct": -0.13853579830683962,
+      "avg_return_pct": -0.1199081252023753,
       "signal_counts": {
-        "ENTRY": 40,
-        "EXIT": 40,
+        "ENTRY": 44,
+        "EXIT": 43,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null,
+      "open_position": {
+        "entry_price": 63212.16,
+        "entry_timestamp": "2026-08-03T02:55:54.983435+00:00",
+        "candle_timestamp": "2026-08-03T01:59:59.999000+00:00"
+      },
       "unverified_open_entries": 0
     },
     {
       "strategy": "ORDERFLOW_IMBALANCE",
       "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
-      "resolved_trades": 10,
+      "resolved_trades": 13,
       "unverified_trades": 25,
-      "win_rate": 0.6,
+      "win_rate": 0.6153846153846154,
       "expectancy_r": null,
-      "avg_return_pct": 0.09297585319542312,
+      "avg_return_pct": 0.11747408458846581,
       "signal_counts": {
-        "ENTRY": 35,
-        "EXIT": 35,
+        "ENTRY": 39,
+        "EXIT": 38,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null,
+      "open_position": {
+        "entry_price": 1867.19,
+        "entry_timestamp": "2026-08-03T02:55:54.983435+00:00",
+        "candle_timestamp": "2026-08-03T01:59:59.999000+00:00"
+      },
       "unverified_open_entries": 0
     },
     {
