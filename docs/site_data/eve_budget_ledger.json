@@ -215,5 +215,119 @@
     },
     "created_at": "2026-08-03T09:55:20.349103+00:00",
     "reconciled_at": "2026-08-03T09:55:20.349103+00:00"
+  },
+  {
+    "schema_version": 1,
+    "entry_id": "ea99ba90-f86a-44aa-9bfd-291fea42717b",
+    "session_id": "eve-20260803T142519Z-718833c9",
+    "turn_index": 0,
+    "status": "actual",
+    "month": "2026-08",
+    "projected_cost_usd": 0.098258,
+    "actual_cost_usd": 0.1299593,
+    "usage": {
+      "input_tokens": 14,
+      "cache_creation_input_tokens": 28859,
+      "cache_read_input_tokens": 50069,
+      "output_tokens": 2777,
+      "web_search_requests": 2
+    },
+    "created_at": "2026-08-03T14:25:19.547816+00:00",
+    "reconciled_at": "2026-08-03T14:25:19.547816+00:00"
+  },
+  {
+    "schema_version": 1,
+    "entry_id": "59932321-10d9-4eba-835c-6cad1c6e059e",
+    "session_id": "eve-20260803T142519Z-718833c9",
+    "turn_index": 1,
+    "status": "actual",
+    "month": "2026-08",
+    "projected_cost_usd": 0.252876,
+    "actual_cost_usd": 0.0473012,
+    "usage": {
+      "input_tokens": 18823,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 10926,
+      "output_tokens": 747,
+      "web_search_requests": 0
+    },
+    "created_at": "2026-08-03T14:25:19.547816+00:00",
+    "reconciled_at": "2026-08-03T14:25:19.547816+00:00"
+  },
+  {
+    "schema_version": 1,
+    "entry_id": "bd1e986d-142a-468e-bd5c-c96b55765a4c",
+    "session_id": "eve-20260803T142519Z-718833c9",
+    "turn_index": 2,
+    "status": "actual",
+    "month": "2026-08",
+    "projected_cost_usd": 0.15449000000000002,
+    "actual_cost_usd": 0.0689255,
+    "usage": {
+      "input_tokens": 19608,
+      "cache_creation_input_tokens": 2729,
+      "cache_read_input_tokens": 39785,
+      "output_tokens": 1493,
+      "web_search_requests": 0
+    },
+    "created_at": "2026-08-03T14:25:19.547816+00:00",
+    "reconciled_at": "2026-08-03T14:25:19.547816+00:00"
+  },
+  {
+    "schema_version": 1,
+    "entry_id": "deb9b8fc-fc2d-41e3-9288-76340e98beaf",
+    "session_id": "eve-20260803T142519Z-718833c9",
+    "turn_index": 3,
+    "status": "actual",
+    "month": "2026-08",
+    "projected_cost_usd": 0.219236,
+    "actual_cost_usd": 0.0577092,
+    "usage": {
+      "input_tokens": 21437,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 10926,
+      "output_tokens": 1265,
+      "web_search_requests": 0
+    },
+    "created_at": "2026-08-03T14:25:19.547816+00:00",
+    "reconciled_at": "2026-08-03T14:25:19.547816+00:00"
+  },
+  {
+    "schema_version": 1,
+    "entry_id": "d8c3c05a-416f-4bc4-bd1b-9432af845323",
+    "session_id": "eve-20260803T142519Z-718833c9",
+    "turn_index": 4,
+    "status": "actual",
+    "month": "2026-08",
+    "projected_cost_usd": 0.159718,
+    "actual_cost_usd": 0.0948778,
+    "usage": {
+      "input_tokens": 22815,
+      "cache_creation_input_tokens": 8158,
+      "cache_read_input_tokens": 42514,
+      "output_tokens": 1035,
+      "web_search_requests": 1
+    },
+    "created_at": "2026-08-03T14:25:19.547816+00:00",
+    "reconciled_at": "2026-08-03T14:25:19.547816+00:00"
+  },
+  {
+    "schema_version": 1,
+    "entry_id": "99bcc24c-42bf-4f7e-9d4f-e874ba825f8b",
+    "session_id": "eve-20260803T142519Z-718833c9",
+    "turn_index": 5,
+    "status": "actual",
+    "month": "2026-08",
+    "projected_cost_usd": 0.24196600000000001,
+    "actual_cost_usd": 0.0846274,
+    "usage": {
+      "input_tokens": 29764,
+      "cache_creation_input_tokens": 1534,
+      "cache_read_input_tokens": 50672,
+      "output_tokens": 1113,
+      "web_search_requests": 0
+    },
+    "created_at": "2026-08-03T14:25:19.547816+00:00",
+    "reconciled_at": "2026-08-03T14:25:19.547816+00:00"
   }
 ]

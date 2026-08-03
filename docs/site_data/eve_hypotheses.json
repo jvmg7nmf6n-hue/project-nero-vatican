@@ -251,5 +251,351 @@
     "candle_row_count": null,
     "fdr_survives_oos": null,
     "fdr_survives_is": null
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260803T142519Z-718833c9",
+    "turn_index": 0,
+    "tool_use_id": "toolu_01QnDz8qr2SschNgkQztG5tT",
+    "proposed_at": "2026-08-03T14:25:19.547816+00:00",
+    "raw_hypothesis": {
+      "hypothesis_name": "ADX-Confirmed Volatility Breakout (BB Upper/Lower Break with Trend-Strength Filter)",
+      "mechanism": "Classic Bollinger Band breakouts (price closing outside the bands after a low-volatility contraction) are prone to false breakouts/whipsaws when the underlying market has no real directional conviction. Web research on this exact combination (BB breakout + ADX confirmation) reports that adding an ADX trend-strength filter to a raw squeeze-breakout meaningfully improves quality by rejecting breakouts that occur in choppy, low-ADX regimes. This differs from the graveyard's BOS_CONTINUATION (structural swing-point break, diluted by a capped ATR stop) and REPAIR_BREAKOUT_QUALITY (already failed) by using a volatility-band trigger rather than a structural swing-point trigger, and by requiring a currently-elevated ADX (adx14 > 25, a real trend already establishing) rather than any structure-break event, which the graveyard diagnosed as too frequent/non-selective. The RSI ceiling (rsi14 < 70 for longs) is added to avoid entering right at exhaustion/blow-off-top conditions where the breakout is already extended. This is a bidirectional hypothesis (long on upper-band breaks, short on lower-band breaks) tested on a liquid trending asset.",
+      "asset": "BTC/4h",
+      "timeframe": "4h",
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "close",
+            "op": "cross_above",
+            "compare_to_field": "bb_upper"
+          },
+          {
+            "field": "adx14",
+            "op": "gt",
+            "value": 25
+          },
+          {
+            "field": "rsi14",
+            "op": "lt",
+            "value": 70
+          }
+        ]
+      },
+      "structured_entry_rule_short": {
+        "conditions": [
+          {
+            "field": "close",
+            "op": "cross_below",
+            "compare_to_field": "bb_lower"
+          },
+          {
+            "field": "adx14",
+            "op": "gt",
+            "value": 25
+          },
+          {
+            "field": "rsi14",
+            "op": "gt",
+            "value": 30
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_atr_multiple": 1.5,
+        "target_r_multiple": 2.0,
+        "max_holding_hours": 48
+      }
+    },
+    "testability": "TESTABLE",
+    "verdict_is": null,
+    "verdict_oos": null,
+    "verdict_combined": null,
+    "contamination_tags": [],
+    "testability_reason": "structured_entry_rule and structured_exit_plan both parse via rule_dsl (candle data source refused rather than substituted: BTC/4h/4h is not in Eve's APPROVED_RESEARCH_UNIVERSE [('BTC', '4h'), ('ETH', '4h'), ('PAXG', '4h'), ('SOL', '4h')] -- refusing to silently fall back to the candles site display export (200 rows, no random baseline ever computed for this pair).)",
+    "p_value_is": null,
+    "p_value_oos": null,
+    "frequency_classification": null,
+    "measured_trades_per_year": null,
+    "candle_data_source": "refused",
+    "candle_row_count": null,
+    "fdr_survives_oos": null,
+    "fdr_survives_is": null
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260803T142519Z-718833c9",
+    "turn_index": 1,
+    "tool_use_id": "toolu_01AJc1gSHayYYgM8znU22SeT",
+    "proposed_at": "2026-08-03T14:25:19.547816+00:00",
+    "raw_hypothesis": {
+      "hypothesis_name": "Weekly Precious-Metals Extreme Z-Score Reversion with RSI Confirmation",
+      "mechanism": "The graveyard's RANGE_MEAN_REVERSION entry notes that a real, mechanistically-corroborated 'confirmation filter' effect was found (exit mix shifted meaningfully toward reversion-target hits) but was only tested on a sample-starved BTC/1d config, while explicitly suggesting the same logic be applied to the already-more-promising GOLD/1week and SILVER/1week configs. This hypothesis follows that fix rationale directly but with a distinct, more selective entry than a generic range/pullback rule: it requires a genuinely extreme statistical deviation (zscore20 <= -2, i.e. price 2+ standard deviations below its 20-period mean) AND a confirming oversold RSI reading (rsi14 <= 30) simultaneously, on the weekly timeframe where mean-reversion in metals has historically been a stronger, lower-noise regime than on faster crypto timeframes. Requiring both a price-based extremity measure and a momentum-based oversold confirmation (rather than either alone) is the 'confirmation' mechanism the graveyard diagnosis pointed to, aimed at cutting the false-signal rate that a single-indicator threshold would admit. Exit targets reversion back toward the mean (ma20) rather than a fixed R-multiple, since the whole thesis is about reversion to trend, not momentum continuation.",
+      "asset": "GOLD/1week",
+      "timeframe": "1week",
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "zscore20",
+            "op": "lte",
+            "value": -2
+          },
+          {
+            "field": "rsi14",
+            "op": "lte",
+            "value": 30
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_atr_multiple": 2.0,
+        "target": "dynamic_target_condition",
+        "dynamic_target_condition": {
+          "field": "close",
+          "op": "gte",
+          "compare_to_field": "ma20"
+        },
+        "max_holding_hours": 2160
+      }
+    },
+    "testability": "TESTABLE",
+    "verdict_is": null,
+    "verdict_oos": null,
+    "verdict_combined": null,
+    "contamination_tags": [],
+    "testability_reason": "structured_entry_rule and structured_exit_plan both parse via rule_dsl (candle data source refused rather than substituted: GOLD/1week/1week is not in Eve's APPROVED_RESEARCH_UNIVERSE [('BTC', '4h'), ('ETH', '4h'), ('PAXG', '4h'), ('SOL', '4h')] -- refusing to silently fall back to the candles site display export (200 rows, no random baseline ever computed for this pair).)",
+    "p_value_is": null,
+    "p_value_oos": null,
+    "frequency_classification": null,
+    "measured_trades_per_year": null,
+    "candle_data_source": "refused",
+    "candle_row_count": null,
+    "fdr_survives_oos": null,
+    "fdr_survives_is": null
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260803T142519Z-718833c9",
+    "turn_index": 2,
+    "tool_use_id": "toolu_01TMrRBU8VtYQZdrcXYYWe6j",
+    "proposed_at": "2026-08-03T14:25:19.547816+00:00",
+    "raw_hypothesis": {
+      "hypothesis_name": "Weekly Precious-Metals Extreme Z-Score Reversion with RSI Confirmation (corrected DSL syntax)",
+      "mechanism": "Corrected resubmission of the prior weekly metals mean-reversion hypothesis with proper flat exit-plan syntax (previous submission incorrectly included both a 'target' key and a 'dynamic_target_condition' key together). Mechanism unchanged: the graveyard's RANGE_MEAN_REVERSION diagnosis found a real confirmation-filter effect but tested it only on a sample-starved BTC/1d config, and explicitly suggested applying the same logic to GOLD/1week and SILVER/1week instead. This entry requires a genuinely extreme statistical deviation (zscore20 <= -2) AND a confirming oversold RSI (rsi14 <= 30) simultaneously on the weekly timeframe, aiming to cut the false-signal rate a single-indicator threshold would admit. Exit targets reversion back toward the 20-period mean rather than a fixed R-multiple, since the thesis is about mean reversion, not momentum continuation.",
+      "asset": "GOLD/1week",
+      "timeframe": "1week",
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "zscore20",
+            "op": "lte",
+            "value": -2
+          },
+          {
+            "field": "rsi14",
+            "op": "lte",
+            "value": 30
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_atr_multiple": 2.0,
+        "dynamic_target_condition": {
+          "field": "close",
+          "op": "gte",
+          "compare_to_field": "ma20"
+        },
+        "max_holding_hours": 2160
+      }
+    },
+    "testability": "TESTABLE",
+    "verdict_is": null,
+    "verdict_oos": null,
+    "verdict_combined": null,
+    "contamination_tags": [],
+    "testability_reason": "structured_entry_rule and structured_exit_plan both parse via rule_dsl (candle data source refused rather than substituted: GOLD/1week/1week is not in Eve's APPROVED_RESEARCH_UNIVERSE [('BTC', '4h'), ('ETH', '4h'), ('PAXG', '4h'), ('SOL', '4h')] -- refusing to silently fall back to the candles site display export (200 rows, no random baseline ever computed for this pair).)",
+    "p_value_is": null,
+    "p_value_oos": null,
+    "frequency_classification": null,
+    "measured_trades_per_year": null,
+    "candle_data_source": "refused",
+    "candle_row_count": null,
+    "fdr_survives_oos": null,
+    "fdr_survives_is": null
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260803T142519Z-718833c9",
+    "turn_index": 3,
+    "tool_use_id": "toolu_01E3H8zLKGgZ5wUzMVNsibcw",
+    "proposed_at": "2026-08-03T14:25:19.547816+00:00",
+    "raw_hypothesis": {
+      "hypothesis_name": "Silver Weekly Extreme Z-Score Reversion with RSI Confirmation",
+      "mechanism": "Same mechanism and rationale as the GOLD/1week extreme-zscore reversion hypothesis, applied to SILVER/1week -- the graveyard's RANGE_MEAN_REVERSION fix_rationale named both GOLD/1week and SILVER/1week as the platform's better-sampled, already-promising configs where the diagnosed confirmation-filter effect should be tested, rather than the sample-starved BTC/1d config it was actually tested on. Silver is more volatile than gold (higher beta to industrial/risk sentiment), so testing the identical rule on both metals independently checks whether the mean-reversion edge is a general precious-metals property or specific to gold's typically lower volatility and higher safe-haven bid.",
+      "asset": "SILVER/1week",
+      "timeframe": "1week",
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "zscore20",
+            "op": "lte",
+            "value": -2
+          },
+          {
+            "field": "rsi14",
+            "op": "lte",
+            "value": 30
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_atr_multiple": 2.0,
+        "dynamic_target_condition": {
+          "field": "close",
+          "op": "gte",
+          "compare_to_field": "ma20"
+        },
+        "max_holding_hours": 2160
+      }
+    },
+    "testability": "TESTABLE",
+    "verdict_is": null,
+    "verdict_oos": null,
+    "verdict_combined": null,
+    "contamination_tags": [],
+    "testability_reason": "structured_entry_rule and structured_exit_plan both parse via rule_dsl (candle data source refused rather than substituted: SILVER/1week/1week is not in Eve's APPROVED_RESEARCH_UNIVERSE [('BTC', '4h'), ('ETH', '4h'), ('PAXG', '4h'), ('SOL', '4h')] -- refusing to silently fall back to the candles site display export (200 rows, no random baseline ever computed for this pair).)",
+    "p_value_is": null,
+    "p_value_oos": null,
+    "frequency_classification": null,
+    "measured_trades_per_year": null,
+    "candle_data_source": "refused",
+    "candle_row_count": null,
+    "fdr_survives_oos": null,
+    "fdr_survives_is": null
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260803T142519Z-718833c9",
+    "turn_index": 3,
+    "tool_use_id": "toolu_01W515ibN3VAupVAqTKmcVDv",
+    "proposed_at": "2026-08-03T14:25:19.547816+00:00",
+    "raw_hypothesis": {
+      "hypothesis_name": "Overextended-Trend Exhaustion Fade on Mega-Cap Tech Daily Charts",
+      "mechanism": "Large-cap tech equities (e.g. AAPL, MSFT, NVDA) on the daily timeframe exhibit periods of strong persistent trending (high ADX) punctuated by short-term overextension that tends to mean-revert even within an intact longer-term uptrend -- a 'pullback within trend' idea distinct from the graveyard's failed TREND_PULLBACK filter variants (which failed due to non-selective BOS-recency/FVG-overlap filters, not the core pullback concept). This version avoids those specific failed filters entirely: instead of a structure-based trigger, it uses a pure statistical overextension trigger (zscore20 >= 2, price 2+ SD above its 20-period mean) gated by a long-term uptrend filter (close > ma200, confirming we are not fading a genuine breakdown) and a momentum exhaustion confirmation (rsi14 >= 70). The short (fade) entry bets that after a sharp overextension above the mean within an established uptrend, price pulls back toward ma20 before continuing, which is a shorter-horizon, mean-reversion-style trade layered on top of a trend filter rather than a trend-continuation bet itself.",
+      "asset": "MSFT/1day",
+      "timeframe": "1day",
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "close",
+            "op": "gt",
+            "compare_to_field": "ma200"
+          },
+          {
+            "field": "zscore20",
+            "op": "gte",
+            "value": 2
+          },
+          {
+            "field": "rsi14",
+            "op": "gte",
+            "value": 70
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_atr_multiple": 2.0,
+        "dynamic_target_condition": {
+          "field": "close",
+          "op": "lte",
+          "compare_to_field": "ma20"
+        },
+        "max_holding_hours": 240
+      }
+    },
+    "testability": "TESTABLE",
+    "verdict_is": null,
+    "verdict_oos": null,
+    "verdict_combined": null,
+    "contamination_tags": [],
+    "testability_reason": "structured_entry_rule and structured_exit_plan both parse via rule_dsl (candle data source refused rather than substituted: MSFT/1day/1day is not in Eve's APPROVED_RESEARCH_UNIVERSE [('BTC', '4h'), ('ETH', '4h'), ('PAXG', '4h'), ('SOL', '4h')] -- refusing to silently fall back to the candles site display export (200 rows, no random baseline ever computed for this pair).)",
+    "p_value_is": null,
+    "p_value_oos": null,
+    "frequency_classification": null,
+    "measured_trades_per_year": null,
+    "candle_data_source": "refused",
+    "candle_row_count": null,
+    "fdr_survives_oos": null,
+    "fdr_survives_is": null
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260803T142519Z-718833c9",
+    "turn_index": 4,
+    "tool_use_id": "toolu_015Bso1CXMPquy7ej1osPvmU",
+    "proposed_at": "2026-08-03T14:25:19.547816+00:00",
+    "raw_hypothesis": {
+      "hypothesis_name": "USD/JPY Daily MA-Stack Confluence Trend Continuation",
+      "mechanism": "This tests whether a simple, purely price-based moving-average 'stack' confluence (ma20 > ma50 > ma200, i.e. short, medium and long-term trend all aligned bullish) combined with a shallow pullback entry (price crossing back above ma20 after dipping toward it) offers a genuine directional edge on USD/JPY daily -- a pair known for strong multi-month directional runs driven by Fed-BOJ policy divergence and carry-trade flows per current market commentary. This is mechanistically distinct from the graveyard's failed TREND_PULLBACK variants, whose failure was specifically diagnosed as due to non-selective structural filters (FVG-overlap, stale BOS-recency windows) layered on top -- this version uses no structural/FVG/BOS logic at all, relying purely on the MA-stack regime filter (a level-based, not candle-count-based, condition, avoiding the grid-shift-artifact failure mode seen elsewhere in the graveyard) plus a fresh pullback-and-reclaim trigger via cross_above of ma20.",
+      "asset": "USD/JPY/1day",
+      "timeframe": "1day",
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "ma20",
+            "op": "gt",
+            "compare_to_field": "ma50"
+          },
+          {
+            "field": "ma50",
+            "op": "gt",
+            "compare_to_field": "ma200"
+          },
+          {
+            "field": "close",
+            "op": "cross_above",
+            "compare_to_field": "ma20"
+          }
+        ]
+      },
+      "structured_entry_rule_short": {
+        "conditions": [
+          {
+            "field": "ma20",
+            "op": "lt",
+            "compare_to_field": "ma50"
+          },
+          {
+            "field": "ma50",
+            "op": "lt",
+            "compare_to_field": "ma200"
+          },
+          {
+            "field": "close",
+            "op": "cross_below",
+            "compare_to_field": "ma20"
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_atr_multiple": 1.5,
+        "target_r_multiple": 2.5,
+        "max_holding_hours": 240
+      }
+    },
+    "testability": "TESTABLE",
+    "verdict_is": null,
+    "verdict_oos": null,
+    "verdict_combined": null,
+    "contamination_tags": [],
+    "testability_reason": "structured_entry_rule and structured_exit_plan both parse via rule_dsl (candle data source refused rather than substituted: USD/JPY/1day/1day is not in Eve's APPROVED_RESEARCH_UNIVERSE [('BTC', '4h'), ('ETH', '4h'), ('PAXG', '4h'), ('SOL', '4h')] -- refusing to silently fall back to the candles site display export (200 rows, no random baseline ever computed for this pair).)",
+    "p_value_is": null,
+    "p_value_oos": null,
+    "frequency_classification": null,
+    "measured_trades_per_year": null,
+    "candle_data_source": "refused",
+    "candle_row_count": null,
+    "fdr_survives_oos": null,
+    "fdr_survives_is": null
   }
 ]
