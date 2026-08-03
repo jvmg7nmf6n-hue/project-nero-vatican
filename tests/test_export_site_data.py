@@ -218,6 +218,117 @@ class RoundTripStatsTest(unittest.TestCase):
 
         self.assertEqual(gold_stats["signal_counts"], {"ENTRY": 1, "EXIT": 0, "WATCH": 0, "NO_TRADE": 2})
 
+
+class RMultipleReconstructionTest(unittest.TestCase):
+    """ORDERFLOW_IMBALANCE's own EXIT reasoning never embeds r_multiple= --
+    a real pipeline gap (win rate alone was already shown to be misleading
+    by omission for it: 61.5% wins at +0.012R). This fallback reconstructs
+    R from entry_price/stop_loss/exit_price -- the SAME data
+    live_scheduler.py's own _reconstruct_open_position already recovers for
+    exit evaluation -- fixing both historical rows (this runs at export
+    time, not write time) and future ones."""
+
+    ORDERFLOW_STRATEGY = "ORDERFLOW_IMBALANCE"
+    ORDERFLOW_VERSION = "orderflow-imbalance-v1.0.0"
+
+    # Must postdate nero_core.execution.quarantine.QUARANTINE_CUTOFFS for
+    # (ORDERFLOW_IMBALANCE, this version, BTC/ETH) -- a real, documented
+    # incident cutoff, not a magic number -- or these rows get correctly
+    # quarantined by that unrelated, real filter and resolved_trades stays 0
+    # regardless of what this test is actually trying to exercise.
+    SAFE_T0 = 1_800_000_000_000
+
+    def test_reconstructs_r_multiple_for_a_long_trade_from_entry_stop_loss_and_exit_price(self) -> None:
+        rows = [
+            _row(1, "r1", self.ORDERFLOW_STRATEGY, self.ORDERFLOW_VERSION, "BTC", "ENTRY", candle_timestamp=self.SAFE_T0,
+                 entry_price=100.0, reasoning="direction=LONG stop_loss=95.00000000 imbalance_ratio=1.5000"),
+            _row(2, "r1", self.ORDERFLOW_STRATEGY, self.ORDERFLOW_VERSION, "BTC", "EXIT", candle_timestamp=self.SAFE_T0 + 1000,
+                 exit_price=110.0, reasoning="RATIO_REVERSAL exit, imbalance_ratio=0.8000"),
+        ]
+        export = build_stats_export(rows, now=NOW)
+        stats = next(s for s in export["strategies"] if s["strategy"] == self.ORDERFLOW_STRATEGY and s["asset"] == "BTC")
+
+        # risk_per_unit = |100 - 95| = 5; r_multiple = (110 - 100) / 5 = 2.0
+        self.assertEqual(stats["resolved_trades"], 1)
+        self.assertAlmostEqual(stats["expectancy_r"], 2.0, places=6)
+
+    def test_reconstructs_r_multiple_for_a_short_trade(self) -> None:
+        rows = [
+            _row(1, "r1", self.ORDERFLOW_STRATEGY, self.ORDERFLOW_VERSION, "ETH", "ENTRY", candle_timestamp=self.SAFE_T0,
+                 entry_price=100.0, reasoning="direction=SHORT stop_loss=105.00000000 imbalance_ratio=0.5000"),
+            _row(2, "r1", self.ORDERFLOW_STRATEGY, self.ORDERFLOW_VERSION, "ETH", "EXIT", candle_timestamp=self.SAFE_T0 + 1000,
+                 exit_price=90.0, reasoning="STOP exit, imbalance_ratio=n/a"),
+        ]
+        export = build_stats_export(rows, now=NOW)
+        stats = next(s for s in export["strategies"] if s["strategy"] == self.ORDERFLOW_STRATEGY and s["asset"] == "ETH")
+
+        # risk_per_unit = |100 - 105| = 5; SHORT: r_multiple = (100 - 90) / 5 = 2.0
+        self.assertEqual(stats["resolved_trades"], 1)
+        self.assertAlmostEqual(stats["expectancy_r"], 2.0, places=6)
+
+    def test_averages_correctly_across_multiple_reconstructed_trades(self) -> None:
+        rows = [
+            _row(1, "r1", self.ORDERFLOW_STRATEGY, self.ORDERFLOW_VERSION, "BTC", "ENTRY", candle_timestamp=self.SAFE_T0,
+                 entry_price=100.0, reasoning="direction=LONG stop_loss=95.00000000 imbalance_ratio=1.5000"),
+            _row(2, "r1", self.ORDERFLOW_STRATEGY, self.ORDERFLOW_VERSION, "BTC", "EXIT", candle_timestamp=self.SAFE_T0 + 1000,
+                 exit_price=105.0, reasoning="RATIO_REVERSAL exit, imbalance_ratio=0.8000"),  # +1.0R
+            _row(3, "r1", self.ORDERFLOW_STRATEGY, self.ORDERFLOW_VERSION, "BTC", "ENTRY", candle_timestamp=self.SAFE_T0 + 2000,
+                 entry_price=200.0, reasoning="direction=LONG stop_loss=190.00000000 imbalance_ratio=1.5000"),
+            _row(4, "r1", self.ORDERFLOW_STRATEGY, self.ORDERFLOW_VERSION, "BTC", "EXIT", candle_timestamp=self.SAFE_T0 + 3000,
+                 exit_price=180.0, reasoning="STOP exit, imbalance_ratio=n/a"),  # -2.0R
+        ]
+        export = build_stats_export(rows, now=NOW)
+        stats = next(s for s in export["strategies"] if s["strategy"] == self.ORDERFLOW_STRATEGY and s["asset"] == "BTC")
+
+        self.assertEqual(stats["resolved_trades"], 2)
+        self.assertAlmostEqual(stats["expectancy_r"], -0.5, places=6)  # mean(+1.0, -2.0)
+
+    def test_never_reconstructs_when_entry_reasoning_lacks_the_expected_shape(self) -> None:
+        # A strategy whose ENTRY reasoning has neither direction= nor
+        # stop_loss= (every strategy except ORDERFLOW_IMBALANCE today) must
+        # fall through to None, exactly as before this fallback existed --
+        # never a fabricated number from an unrelated reasoning shape.
+        rows = [
+            _row(1, "r1", self.ORDERFLOW_STRATEGY, self.ORDERFLOW_VERSION, "BTC", "ENTRY", candle_timestamp=self.SAFE_T0,
+                 entry_price=100.0, reasoning="entry conditions satisfied"),
+            _row(2, "r1", self.ORDERFLOW_STRATEGY, self.ORDERFLOW_VERSION, "BTC", "EXIT", candle_timestamp=self.SAFE_T0 + 1000,
+                 exit_price=110.0, reasoning="RATIO_REVERSAL exit, imbalance_ratio=0.8000"),
+        ]
+        export = build_stats_export(rows, now=NOW)
+        stats = next(s for s in export["strategies"] if s["strategy"] == self.ORDERFLOW_STRATEGY and s["asset"] == "BTC")
+
+        self.assertEqual(stats["resolved_trades"], 1)
+        self.assertIsNone(stats["expectancy_r"])
+
+    def test_never_reconstructs_when_risk_per_unit_is_zero(self) -> None:
+        rows = [
+            _row(1, "r1", self.ORDERFLOW_STRATEGY, self.ORDERFLOW_VERSION, "BTC", "ENTRY", candle_timestamp=self.SAFE_T0,
+                 entry_price=100.0, reasoning="direction=LONG stop_loss=100.00000000 imbalance_ratio=1.5000"),
+            _row(2, "r1", self.ORDERFLOW_STRATEGY, self.ORDERFLOW_VERSION, "BTC", "EXIT", candle_timestamp=self.SAFE_T0 + 1000,
+                 exit_price=110.0, reasoning="RATIO_REVERSAL exit, imbalance_ratio=0.8000"),
+        ]
+        export = build_stats_export(rows, now=NOW)
+        stats = next(s for s in export["strategies"] if s["strategy"] == self.ORDERFLOW_STRATEGY and s["asset"] == "BTC")
+
+        self.assertEqual(stats["resolved_trades"], 1)
+        self.assertIsNone(stats["expectancy_r"])
+
+    def test_direct_extraction_still_wins_when_a_strategy_logs_r_multiple_directly(self) -> None:
+        # A strategy that already embeds r_multiple= in its EXIT reasoning
+        # must use that value directly, never the reconstruction, even if
+        # its ENTRY reasoning happens to also look ORDERFLOW-shaped.
+        rows = [
+            _row(1, "r1", GOLD_STRATEGY, GOLD_VERSION, "GOLD", "ENTRY", candle_timestamp=1000,
+                 entry_price=100.0, reasoning="direction=LONG stop_loss=95.00000000"),
+            _row(2, "r1", GOLD_STRATEGY, GOLD_VERSION, "GOLD", "EXIT", candle_timestamp=2000,
+                 exit_price=110.0, reasoning="TARGET exit, r_multiple=1.250, net_pnl=45.00"),
+        ]
+        export = build_stats_export(rows, now=NOW)
+        gold_stats = next(s for s in export["strategies"] if s["strategy"] == GOLD_STRATEGY)
+
+        # The DIRECTLY logged 1.250 wins, not the reconstructed (110-100)/5=2.0.
+        self.assertAlmostEqual(gold_stats["expectancy_r"], 1.25, places=6)
+
     def test_roster_order_is_stable(self) -> None:
         export = build_stats_export([], now=NOW)
         names = [s["strategy"] for s in export["strategies"]]
@@ -487,12 +598,32 @@ class BuildStrategiesExportTest(unittest.TestCase):
         self.assertEqual(evaluation["is_trades"], 61)
         self.assertEqual(evaluation["oos_trades"], 22)
 
-    def test_configs_with_no_structured_evaluation_export_the_default(self) -> None:
+    def test_news_sentiment_is_permanently_unbacktestable_not_merely_unevaluated(self) -> None:
+        # UPDATED (badge-provenance follow-up): NEWS_SENTIMENT now has a real
+        # backtest_evaluation entry -- permanently_unbacktestable=True, with
+        # untestable_reason explaining why -- distinct from a config that
+        # simply hasn't been evaluated yet (DEFAULT_BACKTEST_EVALUATION,
+        # verified by the OTHER test below against a genuinely unmapped config).
         export = build_strategies_export(now=NOW)
         news_entries = [e for e in export["strategies"] if e["name"] == "NEWS_SENTIMENT"]
+        self.assertTrue(news_entries)
         for entry in news_entries:
             self.assertIsNone(entry["backtest_evaluation"]["verdict_is"])
-            self.assertIsNotNone(entry["backtest_evaluation"]["note"])
+            self.assertTrue(entry["backtest_evaluation"]["permanently_unbacktestable"])
+            self.assertIsNotNone(entry["backtest_evaluation"]["untestable_reason"])
+
+    def test_a_config_with_no_backtest_evaluation_entry_at_all_exports_the_default(self) -> None:
+        # DONCHIAN_TREND/GOLD has a real source_report but no structured
+        # backtest_evaluation entry -- must render the honest "not yet
+        # evaluated with this structured format" default, never a
+        # fabricated verdict and never confused with the permanently-
+        # unbacktestable case above.
+        export = build_strategies_export(now=NOW)
+        entry = next(e for e in export["strategies"] if e["name"] == "DONCHIAN_TREND" and e["asset"] == "GOLD")
+        self.assertIsNone(entry["backtest_evaluation"]["verdict_is"])
+        self.assertFalse(entry["backtest_evaluation"]["permanently_unbacktestable"])
+        self.assertIsNone(entry["backtest_evaluation"]["untestable_reason"])
+        self.assertIsNotNone(entry["backtest_evaluation"]["note"])
 
 
 class WriteSiteDataTest(unittest.TestCase):

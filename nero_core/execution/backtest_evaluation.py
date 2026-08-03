@@ -36,6 +36,25 @@ PROMISING-WATCHLIST vocabulary was never applied (no bootstrap CI was
 computed with this module), NOT that no evaluation happened at all; read
 `is_trades`/`oos_trades`/`is_expectancy_r`/`oos_expectancy_r` together with
 `method` for what was actually measured.
+
+TWO DIFFERENT KINDS OF "UNTESTABLE" (added for the site's badge-provenance
+work -- see docs/investigations/live_strategy_backtest_and_universe_
+expansion_report.md's follow-up items 3/1): `permanently_unbacktestable`
+distinguishes them, since collapsing both into one `untestable_reason`
+string would blur a distinction that matters to a reader deciding how much
+to trust a badge --
+  - COINTEGRATION_PAIRS (`permanently_unbacktestable=False`): wrong harness,
+    right data. A DIFFERENT real backtest engine (`run_pairs_backtest`)
+    could and did produce real evidence -- see is_trades/oos_trades above.
+  - ORDERFLOW_IMBALANCE / NEWS_SENTIMENT (`permanently_unbacktestable=
+    True`): no historical data source exists for either (order-book depth
+    has no replay API; historical timestamped headlines aren't sourced in
+    this codebase) -- no backtest engine, dedicated or otherwise, could ever
+    produce is_trades/oos_trades for these. The ONLY evidence that will
+    ever exist for these two is accumulated live trade data (see stats.json's
+    own resolved_trades/expectancy_r for the real numbers) -- untestable_reason
+    says so explicitly rather than leaving a reader to guess why
+    is_trades/oos_trades are both null here too.
 """
 from __future__ import annotations
 
@@ -62,6 +81,7 @@ BACKTEST_EVALUATIONS: dict[tuple[str, str, str], dict[str, object]] = {
             "logic via tools.backtest_compare.run_backtest"
         ),
         "untestable_reason": None,
+        "permanently_unbacktestable": False,
         "note": None,
     },
     ("RANGE_MEAN_REVERSION", "range-mean-reversion-v1.3.0-confirmation", "BTC"): {
@@ -79,6 +99,7 @@ BACKTEST_EVALUATIONS: dict[tuple[str, str, str], dict[str, object]] = {
             "logic via tools.backtest_compare.run_backtest"
         ),
         "untestable_reason": None,
+        "permanently_unbacktestable": False,
         "note": None,
     },
     # COINTEGRATION_PAIRS -- see this module's own docstring on why
@@ -103,6 +124,87 @@ BACKTEST_EVALUATIONS: dict[tuple[str, str, str], dict[str, object]] = {
             "mean no evidence exists -- see is_trades/oos_trades/is_expectancy_r/oos_expectancy_r "
             "above, measured via this strategy's own separate, real backtest engine instead."
         ),
+        "permanently_unbacktestable": False,
+        "note": None,
+    },
+    # ORDERFLOW_IMBALANCE / NEWS_SENTIMENT -- permanently unbacktestable, see
+    # this module's own docstring's "TWO DIFFERENT KINDS OF UNTESTABLE"
+    # section. No is_trades/oos_trades here on purpose: those fields mean
+    # "backtest trade count," and no backtest, by any engine, will ever
+    # exist for either -- live resolved_trades/expectancy_r (stats.json,
+    # NOT this module) are the only evidence that will ever exist for these.
+    ("ORDERFLOW_IMBALANCE", "orderflow-imbalance-v1.0.0", "BTC"): {
+        "verdict_is": None, "verdict_oos": None, "is_trades": None, "oos_trades": None,
+        "is_expectancy_r": None, "oos_expectancy_r": None, "evaluated_at": None, "data_source": None,
+        "method": None,
+        "untestable_reason": (
+            "No historical data source exists -- Binance's public order-book depth REST endpoint "
+            "has no replay/history API. No backtest engine, dedicated or otherwise, could ever be "
+            "built for this strategy. The only evidence that will ever exist is accumulated live "
+            "trade data -- see this record's own live resolved-trade count and expectancy."
+        ),
+        "permanently_unbacktestable": True,
+        "note": None,
+    },
+    ("ORDERFLOW_IMBALANCE", "orderflow-imbalance-v1.0.0", "ETH"): {
+        "verdict_is": None, "verdict_oos": None, "is_trades": None, "oos_trades": None,
+        "is_expectancy_r": None, "oos_expectancy_r": None, "evaluated_at": None, "data_source": None,
+        "method": None,
+        "untestable_reason": (
+            "No historical data source exists -- Binance's public order-book depth REST endpoint "
+            "has no replay/history API. No backtest engine, dedicated or otherwise, could ever be "
+            "built for this strategy. The only evidence that will ever exist is accumulated live "
+            "trade data -- see this record's own live resolved-trade count and expectancy."
+        ),
+        "permanently_unbacktestable": True,
+        "note": None,
+    },
+    ("NEWS_SENTIMENT", "news-sentiment-v1.0.0", "GOLD"): {
+        "verdict_is": None, "verdict_oos": None, "is_trades": None, "oos_trades": None,
+        "is_expectancy_r": None, "oos_expectancy_r": None, "evaluated_at": None, "data_source": None,
+        "method": None,
+        "untestable_reason": (
+            "No historical, timestamped headline archive is sourced in this codebase -- unlike "
+            "ORDERFLOW_IMBALANCE this is not structurally impossible in principle, just not built. "
+            "The only evidence that exists today is accumulated live trade data."
+        ),
+        "permanently_unbacktestable": True,
+        "note": None,
+    },
+    ("NEWS_SENTIMENT", "news-sentiment-v1.0.0", "BTC"): {
+        "verdict_is": None, "verdict_oos": None, "is_trades": None, "oos_trades": None,
+        "is_expectancy_r": None, "oos_expectancy_r": None, "evaluated_at": None, "data_source": None,
+        "method": None,
+        "untestable_reason": (
+            "No historical, timestamped headline archive is sourced in this codebase -- unlike "
+            "ORDERFLOW_IMBALANCE this is not structurally impossible in principle, just not built. "
+            "The only evidence that exists today is accumulated live trade data."
+        ),
+        "permanently_unbacktestable": True,
+        "note": None,
+    },
+    ("NEWS_SENTIMENT", "news-sentiment-v2.0.0-llm-claude", "GOLD"): {
+        "verdict_is": None, "verdict_oos": None, "is_trades": None, "oos_trades": None,
+        "is_expectancy_r": None, "oos_expectancy_r": None, "evaluated_at": None, "data_source": None,
+        "method": None,
+        "untestable_reason": (
+            "No historical, timestamped headline archive is sourced in this codebase -- unlike "
+            "ORDERFLOW_IMBALANCE this is not structurally impossible in principle, just not built. "
+            "The only evidence that exists today is accumulated live trade data."
+        ),
+        "permanently_unbacktestable": True,
+        "note": None,
+    },
+    ("NEWS_SENTIMENT", "news-sentiment-v2.0.0-llm-claude", "BTC"): {
+        "verdict_is": None, "verdict_oos": None, "is_trades": None, "oos_trades": None,
+        "is_expectancy_r": None, "oos_expectancy_r": None, "evaluated_at": None, "data_source": None,
+        "method": None,
+        "untestable_reason": (
+            "No historical, timestamped headline archive is sourced in this codebase -- unlike "
+            "ORDERFLOW_IMBALANCE this is not structurally impossible in principle, just not built. "
+            "The only evidence that exists today is accumulated live trade data."
+        ),
+        "permanently_unbacktestable": True,
         "note": None,
     },
 }
@@ -118,6 +220,7 @@ DEFAULT_BACKTEST_EVALUATION: dict[str, object] = {
     "data_source": None,
     "method": None,
     "untestable_reason": None,
+    "permanently_unbacktestable": False,
     "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description.",
 }
 

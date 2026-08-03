@@ -61,3 +61,34 @@ def source_report_for(strategy_id: str, strategy_version: str, asset: str) -> st
     asset). Falls back to DEFAULT_SOURCE_REPORT (None) -- never raises, never guesses
     a doc path for a config nobody has actually annotated here yet."""
     return SOURCE_REPORTS.get((strategy_id, strategy_version, asset), DEFAULT_SOURCE_REPORT)
+
+
+# Badge-provenance work (see docs/investigations/live_strategy_backtest_and_
+# universe_expansion_report.md's follow-up): "written <date>" needs a real
+# date for every "Verified — backtest evidence" badge whose only structured
+# record is this narrative doc link (no nero_core.execution.backtest_
+# evaluation entry). Keyed by DOC PATH (not by strategy) since several
+# configs cite the same report -- one entry per unique doc, not per config.
+# Each date is that file's own first-commit date (`git log --follow
+# --diff-filter=A --format=%ad --date=short -- <path> | tail -1`), computed
+# once by hand and recorded here -- matching this module's own established
+# "human-editable lookup, never a live git call at runtime" convention. A
+# report added later without an entry here falls back to None (the website
+# shows no fabricated date rather than guessing one).
+SOURCE_REPORT_WRITTEN_AT: dict[str, str] = {
+    "docs/statistical_harness_upgrade.md": "2026-07-18",
+    "docs/range_mean_reversion_task2_sweep.md": "2026-07-20",
+    "docs/rmr_variant_research_stage1.md": "2026-07-20",
+    "docs/metals_phase_a_full_sweep.md": "2026-07-19",
+    "docs/gold_silver_ratio_mr_results.md": "2026-07-21",
+    "docs/pead_results.md": "2026-07-21",
+    "docs/donchian_deep_dive_closing_report.md": "2026-07-21",
+}
+
+
+def source_report_written_at(path: str | None) -> str | None:
+    """None if `path` is None (no report at all) or not yet in the maintained
+    lookup above -- never a guessed date."""
+    if path is None:
+        return None
+    return SOURCE_REPORT_WRITTEN_AT.get(path)
