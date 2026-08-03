@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-03T03:22:54.204603+00:00",
+  "last_updated": "2026-08-03T10:50:54.173266+00:00",
   "strategies": [
     {
       "name": "BREAKOUT_MOMENTUM",
@@ -8,7 +8,22 @@
       "asset": "GOLD",
       "timeframe": "1week",
       "verification_status": "triple-verified",
-      "source_report": "docs/statistical_harness_upgrade.md"
+      "source_report": "docs/statistical_harness_upgrade.md",
+      "source_report_written_at": "2026-07-18",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "TREND_PULLBACK",
@@ -16,7 +31,22 @@
       "asset": "BNB",
       "timeframe": "12h",
       "verification_status": "verified — sample-limited",
-      "source_report": "docs/statistical_harness_upgrade.md"
+      "source_report": "docs/statistical_harness_upgrade.md",
+      "source_report_written_at": "2026-07-18",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "BREAKOUT_MOMENTUM",
@@ -24,7 +54,22 @@
       "asset": "SILVER",
       "timeframe": "24h",
       "verification_status": "promising-watchlist — forward-testing, not verified",
-      "source_report": "docs/metals_phase_a_full_sweep.md"
+      "source_report": "docs/metals_phase_a_full_sweep.md",
+      "source_report_written_at": "2026-07-19",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "TREND_PULLBACK",
@@ -32,7 +77,22 @@
       "asset": "SILVER",
       "timeframe": "24h",
       "verification_status": "promising-watchlist — forward-testing, not verified",
-      "source_report": "docs/metals_phase_a_full_sweep.md"
+      "source_report": "docs/metals_phase_a_full_sweep.md",
+      "source_report_written_at": "2026-07-19",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "VOLATILITY_SQUEEZE",
@@ -40,7 +100,22 @@
       "asset": "SILVER",
       "timeframe": "24h",
       "verification_status": "promising-watchlist — forward-testing, not verified",
-      "source_report": "docs/metals_phase_a_full_sweep.md"
+      "source_report": "docs/metals_phase_a_full_sweep.md",
+      "source_report_written_at": "2026-07-19",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "VOLATILITY_SQUEEZE",
@@ -48,7 +123,22 @@
       "asset": "SILVER",
       "timeframe": "24h",
       "verification_status": "promising-watchlist — forward-testing, not verified",
-      "source_report": "docs/metals_phase_a_full_sweep.md"
+      "source_report": "docs/metals_phase_a_full_sweep.md",
+      "source_report_written_at": "2026-07-19",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "VOLATILITY_SQUEEZE",
@@ -56,7 +146,22 @@
       "asset": "SILVER",
       "timeframe": "24h",
       "verification_status": "promising-watchlist — forward-testing, not verified",
-      "source_report": "docs/metals_phase_a_full_sweep.md"
+      "source_report": "docs/metals_phase_a_full_sweep.md",
+      "source_report_written_at": "2026-07-19",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "RANGE_MEAN_REVERSION",
@@ -64,7 +169,22 @@
       "asset": "GOLD",
       "timeframe": "1week",
       "verification_status": "watchlist — forward-testing, not verified (band-timing beat random both halves; N below 20-trade bar)",
-      "source_report": "docs/range_mean_reversion_task2_sweep.md"
+      "source_report": "docs/range_mean_reversion_task2_sweep.md",
+      "source_report_written_at": "2026-07-20",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "RANGE_MEAN_REVERSION",
@@ -72,7 +192,22 @@
       "asset": "SILVER",
       "timeframe": "1week",
       "verification_status": "watchlist — forward-testing, not verified (band-timing beat random both halves; N below 20-trade bar)",
-      "source_report": "docs/range_mean_reversion_task2_sweep.md"
+      "source_report": "docs/range_mean_reversion_task2_sweep.md",
+      "source_report_written_at": "2026-07-20",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "RANGE_MEAN_REVERSION",
@@ -80,7 +215,22 @@
       "asset": "BTC",
       "timeframe": "24h",
       "verification_status": "watchlist — forward-testing, not verified (mechanism-backed, LOW SAMPLE, CI crosses zero, 1d grid-shift structurally unavailable)",
-      "source_report": "docs/rmr_variant_research_stage1.md"
+      "source_report": "docs/rmr_variant_research_stage1.md",
+      "source_report_written_at": "2026-07-20",
+      "backtest_evaluation": {
+        "verdict_is": "DIED",
+        "verdict_oos": "INSUFFICIENT_SAMPLE",
+        "is_trades": 10,
+        "oos_trades": 5,
+        "is_expectancy_r": -0.28,
+        "oos_expectancy_r": 0.744,
+        "evaluated_at": "2026-08-02",
+        "data_source": "docs/research_data/evaluation_candles/BTC_24h.json — 1800 daily candles, 2021-08-29 to 2026-08-02, Binance",
+        "method": "split_chronological + bootstrap_mean_r_ci + classify_verdict (the same statistical harness Adam/Eve hypotheses use), applied to this strategy's own real entry/exit/sizing logic via tools.backtest_compare.run_backtest",
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": null
+      }
     },
     {
       "name": "RANGE_MEAN_REVERSION",
@@ -88,7 +238,22 @@
       "asset": "BTC",
       "timeframe": "24h",
       "verification_status": "watchlist — forward-testing, not verified (68% reversion-target exit rate vs 32% baseline; LOW SAMPLE, CI crosses zero, 1d grid-shift structurally unavailable)",
-      "source_report": "docs/rmr_variant_research_stage1.md"
+      "source_report": "docs/rmr_variant_research_stage1.md",
+      "source_report_written_at": "2026-07-20",
+      "backtest_evaluation": {
+        "verdict_is": "DIED",
+        "verdict_oos": "INSUFFICIENT_SAMPLE",
+        "is_trades": 9,
+        "oos_trades": 7,
+        "is_expectancy_r": -0.101,
+        "oos_expectancy_r": 0.433,
+        "evaluated_at": "2026-08-02",
+        "data_source": "docs/research_data/evaluation_candles/BTC_24h.json — 1800 daily candles, 2021-08-29 to 2026-08-02, Binance",
+        "method": "split_chronological + bootstrap_mean_r_ci + classify_verdict (the same statistical harness Adam/Eve hypotheses use), applied to this strategy's own real entry/exit/sizing logic via tools.backtest_compare.run_backtest",
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": null
+      }
     },
     {
       "name": "DONCHIAN_TREND",
@@ -96,7 +261,22 @@
       "asset": "GOLD",
       "timeframe": "1week",
       "verification_status": "watchlist — CI clears zero both halves, adequate sample, breakout-timing edge confirmed vs random baseline; grid-shift structurally unavailable at 1week (settlement gaps) — this is the ceiling, not a data shortfall",
-      "source_report": "docs/donchian_deep_dive_closing_report.md"
+      "source_report": "docs/donchian_deep_dive_closing_report.md",
+      "source_report_written_at": "2026-07-21",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "COINTEGRATION_PAIRS",
@@ -104,7 +284,22 @@
       "asset": "BTC-ETH",
       "timeframe": "12h",
       "verification_status": "verified — weakest, live-proving",
-      "source_report": "docs/statistical_harness_upgrade.md"
+      "source_report": "docs/statistical_harness_upgrade.md",
+      "source_report_written_at": "2026-07-18",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": 61,
+        "oos_trades": 22,
+        "is_expectancy_r": 0.047,
+        "oos_expectancy_r": 0.003,
+        "evaluated_at": "2026-07-17",
+        "data_source": "Binance 12h BTC+ETH, native grid, 6509 aligned candles",
+        "method": "run_pairs_backtest (this strategy's own dedicated two-asset engine) + grid-shift robustness audit across 4 offsets, all PASS",
+        "untestable_reason": "Not compatible with the single-asset rule_dsl/auto_tester harness Adam/Eve hypotheses use -- confirmed structurally this session: auto_tester.test_hypothesis takes exactly one candles DataFrame, and rule_dsl has no two-asset field concept at all. This does NOT mean no evidence exists -- see is_trades/oos_trades/is_expectancy_r/oos_expectancy_r above, measured via this strategy's own separate, real backtest engine instead.",
+        "permanently_unbacktestable": false,
+        "note": null
+      }
     },
     {
       "name": "NEWS_SENTIMENT",
@@ -112,7 +307,22 @@
       "asset": "GOLD",
       "timeframe": "daily",
       "verification_status": "forward-test-only, no historical backtest",
-      "source_report": null
+      "source_report": null,
+      "source_report_written_at": null,
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": "No historical, timestamped headline archive is sourced in this codebase -- unlike ORDERFLOW_IMBALANCE this is not structurally impossible in principle, just not built. The only evidence that exists today is accumulated live trade data.",
+        "permanently_unbacktestable": true,
+        "note": null
+      }
     },
     {
       "name": "NEWS_SENTIMENT",
@@ -120,7 +330,22 @@
       "asset": "BTC",
       "timeframe": "daily",
       "verification_status": "forward-test-only, no historical backtest",
-      "source_report": null
+      "source_report": null,
+      "source_report_written_at": null,
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": "No historical, timestamped headline archive is sourced in this codebase -- unlike ORDERFLOW_IMBALANCE this is not structurally impossible in principle, just not built. The only evidence that exists today is accumulated live trade data.",
+        "permanently_unbacktestable": true,
+        "note": null
+      }
     },
     {
       "name": "NEWS_SENTIMENT",
@@ -128,7 +353,22 @@
       "asset": "GOLD",
       "timeframe": "daily",
       "verification_status": "experimental — LLM-powered, forward-testing only, zero live resolved predictions, gate (b) surprise_score has zero live exercise, running in parallel with the original keyword-based version for direct comparison",
-      "source_report": null
+      "source_report": null,
+      "source_report_written_at": null,
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": "No historical, timestamped headline archive is sourced in this codebase -- unlike ORDERFLOW_IMBALANCE this is not structurally impossible in principle, just not built. The only evidence that exists today is accumulated live trade data.",
+        "permanently_unbacktestable": true,
+        "note": null
+      }
     },
     {
       "name": "NEWS_SENTIMENT",
@@ -136,7 +376,22 @@
       "asset": "BTC",
       "timeframe": "daily",
       "verification_status": "experimental — LLM-powered, forward-testing only, zero live resolved predictions, gate (b) surprise_score has zero live exercise, running in parallel with the original keyword-based version for direct comparison",
-      "source_report": null
+      "source_report": null,
+      "source_report_written_at": null,
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": "No historical, timestamped headline archive is sourced in this codebase -- unlike ORDERFLOW_IMBALANCE this is not structurally impossible in principle, just not built. The only evidence that exists today is accumulated live trade data.",
+        "permanently_unbacktestable": true,
+        "note": null
+      }
     },
     {
       "name": "ORDERFLOW_IMBALANCE",
@@ -144,7 +399,22 @@
       "asset": "BTC",
       "timeframe": "snapshot",
       "verification_status": "experimental — snapshot-based, forward-testing only, no backtest exists",
-      "source_report": null
+      "source_report": null,
+      "source_report_written_at": null,
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": "No historical data source exists -- Binance's public order-book depth REST endpoint has no replay/history API. No backtest engine, dedicated or otherwise, could ever be built for this strategy. The only evidence that will ever exist is accumulated live trade data -- see this record's own live resolved-trade count and expectancy.",
+        "permanently_unbacktestable": true,
+        "note": null
+      }
     },
     {
       "name": "ORDERFLOW_IMBALANCE",
@@ -152,7 +422,22 @@
       "asset": "ETH",
       "timeframe": "snapshot",
       "verification_status": "experimental — snapshot-based, forward-testing only, no backtest exists",
-      "source_report": null
+      "source_report": null,
+      "source_report_written_at": null,
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": "No historical data source exists -- Binance's public order-book depth REST endpoint has no replay/history API. No backtest engine, dedicated or otherwise, could ever be built for this strategy. The only evidence that will ever exist is accumulated live trade data -- see this record's own live resolved-trade count and expectancy.",
+        "permanently_unbacktestable": true,
+        "note": null
+      }
     },
     {
       "name": "GOLD_SILVER_RATIO_MR",
@@ -160,7 +445,22 @@
       "asset": "GOLD-SILVER",
       "timeframe": "24h",
       "verification_status": "watchlist — forward-testing, not verified (positive both halves, edge-over-random positive 3/4 configs; pairs-aware stop; vendor-timestamp fix applied; 1day grid-shift structurally unavailable)",
-      "source_report": "docs/gold_silver_ratio_mr_results.md"
+      "source_report": "docs/gold_silver_ratio_mr_results.md",
+      "source_report_written_at": "2026-07-21",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "PEAD",
@@ -168,7 +468,22 @@
       "asset": "AAPL",
       "timeframe": "1day",
       "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
-      "source_report": "docs/pead_results.md"
+      "source_report": "docs/pead_results.md",
+      "source_report_written_at": "2026-07-21",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "PEAD",
@@ -176,7 +491,22 @@
       "asset": "MSFT",
       "timeframe": "1day",
       "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
-      "source_report": "docs/pead_results.md"
+      "source_report": "docs/pead_results.md",
+      "source_report_written_at": "2026-07-21",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "PEAD",
@@ -184,7 +514,22 @@
       "asset": "GOOGL",
       "timeframe": "1day",
       "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
-      "source_report": "docs/pead_results.md"
+      "source_report": "docs/pead_results.md",
+      "source_report_written_at": "2026-07-21",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "PEAD",
@@ -192,7 +537,22 @@
       "asset": "TSLA",
       "timeframe": "1day",
       "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
-      "source_report": "docs/pead_results.md"
+      "source_report": "docs/pead_results.md",
+      "source_report_written_at": "2026-07-21",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "PEAD",
@@ -200,7 +560,22 @@
       "asset": "AMZN",
       "timeframe": "1day",
       "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
-      "source_report": "docs/pead_results.md"
+      "source_report": "docs/pead_results.md",
+      "source_report_written_at": "2026-07-21",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "PEAD",
@@ -208,7 +583,22 @@
       "asset": "NVDA",
       "timeframe": "1day",
       "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
-      "source_report": "docs/pead_results.md"
+      "source_report": "docs/pead_results.md",
+      "source_report_written_at": "2026-07-21",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "PEAD",
@@ -216,7 +606,22 @@
       "asset": "META",
       "timeframe": "1day",
       "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
-      "source_report": "docs/pead_results.md"
+      "source_report": "docs/pead_results.md",
+      "source_report_written_at": "2026-07-21",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "PEAD",
@@ -224,7 +629,22 @@
       "asset": "AAPL",
       "timeframe": "1day",
       "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
-      "source_report": "docs/pead_results.md"
+      "source_report": "docs/pead_results.md",
+      "source_report_written_at": "2026-07-21",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "PEAD",
@@ -232,7 +652,22 @@
       "asset": "MSFT",
       "timeframe": "1day",
       "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
-      "source_report": "docs/pead_results.md"
+      "source_report": "docs/pead_results.md",
+      "source_report_written_at": "2026-07-21",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "PEAD",
@@ -240,7 +675,22 @@
       "asset": "GOOGL",
       "timeframe": "1day",
       "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
-      "source_report": "docs/pead_results.md"
+      "source_report": "docs/pead_results.md",
+      "source_report_written_at": "2026-07-21",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "PEAD",
@@ -248,7 +698,22 @@
       "asset": "TSLA",
       "timeframe": "1day",
       "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
-      "source_report": "docs/pead_results.md"
+      "source_report": "docs/pead_results.md",
+      "source_report_written_at": "2026-07-21",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "PEAD",
@@ -256,7 +721,22 @@
       "asset": "AMZN",
       "timeframe": "1day",
       "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
-      "source_report": "docs/pead_results.md"
+      "source_report": "docs/pead_results.md",
+      "source_report_written_at": "2026-07-21",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "PEAD",
@@ -264,7 +744,22 @@
       "asset": "NVDA",
       "timeframe": "1day",
       "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
-      "source_report": "docs/pead_results.md"
+      "source_report": "docs/pead_results.md",
+      "source_report_written_at": "2026-07-21",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "PEAD",
@@ -272,7 +767,22 @@
       "asset": "META",
       "timeframe": "1day",
       "verification_status": "verified — survivor-bias caveat: tested on 7 large successful companies only; CI entirely positive; edge-over-random +0.35 to +0.60; real-world performance may differ",
-      "source_report": "docs/pead_results.md"
+      "source_report": "docs/pead_results.md",
+      "source_report_written_at": "2026-07-21",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "DONCHIAN_TREND",
@@ -280,7 +790,22 @@
       "asset": "EUR/USD",
       "timeframe": "1week",
       "verification_status": "watchlist — positive both halves, N20 cross-asset pattern confirmed; grid-shift structurally unavailable at 1week",
-      "source_report": "docs/donchian_deep_dive_closing_report.md"
+      "source_report": "docs/donchian_deep_dive_closing_report.md",
+      "source_report_written_at": "2026-07-21",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "DONCHIAN_TREND",
@@ -288,7 +813,22 @@
       "asset": "GBP/USD",
       "timeframe": "1week",
       "verification_status": "watchlist — positive both halves, N20 cross-asset pattern confirmed; grid-shift structurally unavailable at 1week",
-      "source_report": "docs/donchian_deep_dive_closing_report.md"
+      "source_report": "docs/donchian_deep_dive_closing_report.md",
+      "source_report_written_at": "2026-07-21",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     },
     {
       "name": "DONCHIAN_TREND",
@@ -296,7 +836,22 @@
       "asset": "USD/JPY",
       "timeframe": "1week",
       "verification_status": "watchlist — positive both halves, structural-trend parameter; grid-shift structurally unavailable at 1week",
-      "source_report": "docs/donchian_deep_dive_closing_report.md"
+      "source_report": "docs/donchian_deep_dive_closing_report.md",
+      "source_report_written_at": "2026-07-21",
+      "backtest_evaluation": {
+        "verdict_is": null,
+        "verdict_oos": null,
+        "is_trades": null,
+        "oos_trades": null,
+        "is_expectancy_r": null,
+        "oos_expectancy_r": null,
+        "evaluated_at": null,
+        "data_source": null,
+        "method": null,
+        "untestable_reason": null,
+        "permanently_unbacktestable": false,
+        "note": "Not yet evaluated with this structured format — see the research status and linked source report above for the original backtest description."
+      }
     }
   ]
 }
