@@ -169,6 +169,59 @@ class LookaheadRiskTagTest(unittest.TestCase):
         flags = scoring.tag_lookahead_risk(session_record, backtest_window_start=datetime(2026, 1, 1, tzinfo=timezone.utc))
         self.assertEqual(flags, [])
 
+    # CC-1 directive, item A4: real page_age values gathered from two live
+    # Eve sessions ("December 10, 2025", "March 9, 2025", "1 month ago",
+    # "3 days ago", "3 weeks ago") previously all fell through to
+    # _parse_loose_date's ISO-only format list and were silently treated as
+    # "no publication date" -- never flagged no matter how recent the real
+    # source was. These tests use the exact real-sample strings on record.
+
+    def test_spelled_out_month_format_is_flagged_when_after_window(self) -> None:
+        session_record = self._session_with_search_result("December 10, 2025")
+        flags = scoring.tag_lookahead_risk(session_record, backtest_window_start=datetime(2025, 12, 1, tzinfo=timezone.utc))
+        self.assertEqual(len(flags), 1)
+
+    def test_spelled_out_month_format_is_not_flagged_when_before_window(self) -> None:
+        session_record = self._session_with_search_result("March 9, 2025")
+        flags = scoring.tag_lookahead_risk(session_record, backtest_window_start=datetime(2025, 6, 1, tzinfo=timezone.utc))
+        self.assertEqual(flags, [])
+
+    def _session_with_search_result_and_started_at(self, page_age: str, started_at: str) -> dict:
+        session_record = self._session_with_search_result(page_age)
+        session_record["started_at"] = started_at
+        return session_record
+
+    def test_relative_days_ago_is_measured_from_session_started_at_not_wall_clock(self) -> None:
+        # started_at 2026-01-10, "3 days ago" -> 2026-01-07. Window start
+        # 2026-01-01 pre-dates that -> flagged.
+        session_record = self._session_with_search_result_and_started_at("3 days ago", "2026-01-10T00:00:00+00:00")
+        flags = scoring.tag_lookahead_risk(session_record, backtest_window_start=datetime(2026, 1, 1, tzinfo=timezone.utc))
+        self.assertEqual(len(flags), 1)
+
+    def test_relative_days_ago_not_flagged_when_resolved_date_precedes_window(self) -> None:
+        # Same "3 days ago" resolves to 2026-01-07 -- a window starting
+        # 2026-01-08 must NOT flag it (proves the offset is computed
+        # precisely from started_at, not just "roughly recent").
+        session_record = self._session_with_search_result_and_started_at("3 days ago", "2026-01-10T00:00:00+00:00")
+        flags = scoring.tag_lookahead_risk(session_record, backtest_window_start=datetime(2026, 1, 8, tzinfo=timezone.utc))
+        self.assertEqual(flags, [])
+
+    def test_relative_weeks_ago_and_months_ago_are_parsed_not_silently_dropped(self) -> None:
+        weeks_session = self._session_with_search_result_and_started_at("3 weeks ago", "2026-02-01T00:00:00+00:00")
+        weeks_flags = scoring.tag_lookahead_risk(weeks_session, backtest_window_start=datetime(2026, 1, 1, tzinfo=timezone.utc))
+        self.assertEqual(len(weeks_flags), 1)  # 2026-02-01 minus 3 weeks = 2026-01-11, after window start
+
+        months_session = self._session_with_search_result_and_started_at("1 month ago", "2026-02-01T00:00:00+00:00")
+        months_flags = scoring.tag_lookahead_risk(months_session, backtest_window_start=datetime(2026, 1, 1, tzinfo=timezone.utc))
+        self.assertEqual(len(months_flags), 1)  # 2026-02-01 minus ~30 days = ~2026-01-02, after window start
+
+    def test_relative_date_without_session_started_at_falls_back_without_crashing(self) -> None:
+        # No started_at on the session -- must fall back to wall-clock now
+        # rather than raising, and must not fabricate a flag either way.
+        session_record = self._session_with_search_result("3 days ago")
+        flags = scoring.tag_lookahead_risk(session_record, backtest_window_start=datetime(2026, 1, 1, tzinfo=timezone.utc))
+        self.assertIsInstance(flags, list)
+
     def test_flags_never_discard_only_flag(self) -> None:
         # Structural guarantee: tag_lookahead_risk only ever returns
         # ADDITIONAL information (a list of flags) -- it has no code path

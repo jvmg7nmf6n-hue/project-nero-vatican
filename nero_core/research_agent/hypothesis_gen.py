@@ -204,7 +204,17 @@ class HypothesisGenParameters:
     #    pure output headroom.
     claude_max_tokens: int = 2048
     claude_thinking: dict = field(default_factory=lambda: {"type": "disabled"})
-    claude_timeout_seconds: int = 30
+    # 180s (was 30s, then 90s via the CC-1 review's own item A2, which
+    # itself proved insufficient on the very next real manual run -- 3/3
+    # web-search calls hit ReadTimeout again at 90s on 2026-08-04). The
+    # web-search channel (generate_web_hypotheses, tools=[WEB_SEARCH_TOOL])
+    # waits on Anthropic's own server-side search execution before any byte
+    # returns, the same "coldest/largest call, non-streaming requests.post"
+    # shape that made Eve's own claude_timeout_seconds insufficient at 60s,
+    # then 120s, before landing at 180s (see nero_core.eve.llm_client.
+    # LlmParameters's own docstring) -- matching that already-proven value
+    # here rather than guessing at a third intermediate number.
+    claude_timeout_seconds: int = 180
     input_cost_per_mtok: float = INPUT_COST_PER_MTOK
     output_cost_per_mtok: float = OUTPUT_COST_PER_MTOK
 
@@ -380,6 +390,39 @@ class ResponseParseError(Exception):
         self.usage = usage
 
 
+# CC-1 review, item A3 -- confirmed gap: 3 real ReadTimeout calls previously
+# fell into the same generic `except requests.RequestException` branch as
+# every other transport failure and were recorded as "nothing billed" --
+# literally $0.000000 in total_llm_cost_usd, indistinguishable from a call
+# that never reached Anthropic's servers at all. A ReadTimeout means the
+# CONNECTION succeeded and the request was sent -- Anthropic's server may
+# have already started (and billed) processing before the response timed
+# out client-side; the real cost is UNKNOWN, not confirmed zero. Mirrors
+# nero_core.eve.llm_client.RejectedBeforeTokenProcessingError's own
+# confirmed-vs-unknown distinction exactly (401/403/429 = rejected before
+# any token was processed = a REAL, confirmed $0, never billed) --
+# reinlined here rather than imported, since Adam and Eve stay two fully
+# independent systems with no cross-import between them (see this module's
+# own DataSourceRefusedError precedent in pipeline.py).
+REJECTED_BEFORE_TOKEN_PROCESSING_STATUS_CODES = frozenset({401, 403, 429})
+
+
+class RejectedBeforeTokenProcessingError(Exception):
+    """Raised by _call_claude ONLY for a response whose status code is in
+    REJECTED_BEFORE_TOKEN_PROCESSING_STATUS_CODES -- every one of these is
+    rejected by an auth/rate-limit layer before the model ever sees the
+    request, so the real cost is confirmed $0, not an estimate. Any OTHER
+    failure (ReadTimeout, ConnectionError, a 5xx, a malformed 400) is left
+    to propagate as the original requests.exceptions.RequestException,
+    since those could plausibly have reached the model (and been billed)
+    before failing -- callers must count those as UNKNOWN cost, never a
+    confirmed $0."""
+
+    def __init__(self, status_code: int, message: str) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+
 def _call_claude(
     prompt: str, api_key: str, params: HypothesisGenParameters, tools: list[dict] | None = None
 ) -> tuple[dict, dict]:
@@ -412,7 +455,12 @@ def _call_claude(
         json=body,
         timeout=params.claude_timeout_seconds,
     )
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as exc:
+        if response.status_code in REJECTED_BEFORE_TOKEN_PROCESSING_STATUS_CODES:
+            raise RejectedBeforeTokenProcessingError(response.status_code, str(exc)) from exc
+        raise
     payload = response.json()
     usage = payload.get("usage") or {}
     try:
@@ -621,8 +669,26 @@ class GenerationRunResult:
     duplicates_skipped: list[dict] = field(default_factory=list)
     llm_calls_made: int = 0
     total_cost_usd: float = 0.0
+    # CC-1 review, item A3 -- explained, not a bug: despite the name, this is
+    # a CALL-COUNT limit (calls_made >= max_calls_per_run), never a dollar
+    # threshold -- there is no such thing as a cost-in-dollars limit anywhere
+    # in this module. It is set independently of total_cost_usd and can
+    # therefore be True on a run that spent (or, per calls_with_unknown_cost
+    # above, may have spent) $0.00 -- that combination is expected, not a
+    # sign either field is wrong. Kept under its original name (a rename
+    # would touch every caller/test for a clarity-only change); this comment
+    # exists so the next reader doesn't have to re-derive that.
     cost_limit_hit: bool = False
     errors: list[dict] = field(default_factory=list)
+    # CC-1 review, item A3: calls that failed with an error OTHER than a
+    # confirmed-$0 401/403/429 rejection (e.g. ReadTimeout, ConnectionError,
+    # a 5xx) -- the connection may have reached Anthropic's servers before
+    # failing, so the real cost is UNKNOWN, never silently folded into
+    # total_cost_usd as if it were a confirmed zero. Included in
+    # llm_calls_made (the attempt still consumed the run's call budget) but
+    # broken out here so a reader can see total_cost_usd is a FLOOR, not a
+    # confirmed total, whenever this is nonzero.
+    calls_with_unknown_cost: int = 0
 
 
 def generate_hypotheses(
@@ -647,6 +713,7 @@ def generate_hypotheses(
     calls_made = 0
     total_cost = 0.0
     cost_limit_hit = False
+    calls_with_unknown_cost = 0
 
     pricing_warning = _pricing_staleness_warning(now)
     if pricing_warning:
@@ -662,7 +729,7 @@ def generate_hypotheses(
             preflight_note = validate_api_key(api_key, params)
         except ApiKeyRejectedError as exc:
             errors.append({"scan_finding": "(preflight key validation)", "message": str(exc)})
-            return GenerationRunResult(hypotheses, duplicates, 1, total_cost, cost_limit_hit, errors)
+            return GenerationRunResult(hypotheses, duplicates, 1, total_cost, cost_limit_hit, errors, calls_with_unknown_cost)
         if preflight_note:
             # Non-fatal (see validate_api_key's own docstring -- only a 401 stops
             # the run here) but no longer silent: previously this note vanished
@@ -700,9 +767,22 @@ def generate_hypotheses(
                            f"this request even though the response couldn't be used)",
             })
             continue
+        except RejectedBeforeTokenProcessingError as exc:
+            # Confirmed $0 -- rejected before the model ever saw a token
+            # (401/403/429). See the exception's own docstring.
+            calls_made += 1
+            errors.append({"scan_finding": finding.description, "message": f"HTTP {exc.status_code}: {exc} (confirmed $0.00 -- rejected before any token was processed)"})
+            continue
         except (requests.RequestException, KeyError, ValueError) as exc:
-            calls_made += 1  # the attempt still consumed this run's call budget; nothing billed
-            errors.append({"scan_finding": finding.description, "message": f"{exc.__class__.__name__}: {exc}"})
+            # CC-1 review, item A3: the attempt still consumed this run's
+            # call budget, but "nothing billed" is no longer assumed -- a
+            # ReadTimeout/ConnectionError/5xx means the request may have
+            # reached Anthropic's servers before failing, so the real cost
+            # is UNKNOWN, tracked separately rather than silently folded
+            # into total_cost as a confirmed zero.
+            calls_made += 1
+            calls_with_unknown_cost += 1
+            errors.append({"scan_finding": finding.description, "message": f"{exc.__class__.__name__}: {exc} (cost UNKNOWN, not confirmed $0 -- request may have reached Anthropic's servers before failing)"})
             continue
 
         calls_made += 1
@@ -712,7 +792,7 @@ def generate_hypotheses(
         hypotheses.append(record)
         known.append(record)
 
-    return GenerationRunResult(hypotheses, duplicates, calls_made, total_cost, cost_limit_hit, errors)
+    return GenerationRunResult(hypotheses, duplicates, calls_made, total_cost, cost_limit_hit, errors, calls_with_unknown_cost)
 
 
 def persist_hypotheses(hypotheses: list[dict], path: Path = DEFAULT_HYPOTHESES_PATH) -> None:
@@ -777,7 +857,9 @@ this project's own currently-tracked (asset, timeframe) pairs, listed below -- d
 invent an untracked asset or timeframe; a hypothesis for a pair with no real candle data
 on this platform can never be measured or tested, no matter how sound the idea is.
 
-CURRENTLY TRACKED (asset, timeframe) PAIRS -- pick exactly one of these:
+APPROVED RESEARCH PAIRS -- the only (asset, timeframe) pairs with a real backtest history
+export AND a computed random-hypothesis baseline behind them; anything else cannot be
+scored no matter how sound the idea is -- pick exactly one of these:
 {pairs_line}
 
 ALREADY-PROPOSED HYPOTHESES (avoid a near-duplicate of any of these):
@@ -974,6 +1056,7 @@ def generate_web_hypotheses(
     calls_made = 0
     total_cost = 0.0
     cost_limit_hit = False
+    calls_with_unknown_cost = 0
 
     pricing_warning = _pricing_staleness_warning(now)
     if pricing_warning:
@@ -1012,9 +1095,22 @@ def generate_web_hypotheses(
                            f"this request even though the response couldn't be used)",
             })
             continue
+        except RejectedBeforeTokenProcessingError as exc:
+            # Confirmed $0 -- rejected before the model ever saw a token.
+            calls_made += 1
+            errors.append({"scan_finding": "(web search)", "message": f"HTTP {exc.status_code}: {exc} (confirmed $0.00 -- rejected before any token was processed)"})
+            continue
         except (requests.RequestException, KeyError, ValueError) as exc:
-            calls_made += 1  # attempt consumed budget; nothing billed
-            errors.append({"scan_finding": "(web search)", "message": f"{exc.__class__.__name__}: {exc}"})
+            # CC-1 review, item A3: real ReadTimeout incident this fixes --
+            # 3 web-search calls timed out and were recorded as "nothing
+            # billed." The connection succeeded and Anthropic may have
+            # already started (and billed) processing a tool-using call
+            # before the response timed out client-side -- the real cost is
+            # UNKNOWN, tracked separately, never silently folded into
+            # total_cost as a confirmed zero.
+            calls_made += 1
+            calls_with_unknown_cost += 1
+            errors.append({"scan_finding": "(web search)", "message": f"{exc.__class__.__name__}: {exc} (cost UNKNOWN, not confirmed $0 -- request may have reached Anthropic's servers before failing)"})
             continue
 
         calls_made += 1
@@ -1034,4 +1130,4 @@ def generate_web_hypotheses(
     if calls_made >= max_calls_per_run:
         cost_limit_hit = True
 
-    return GenerationRunResult(hypotheses, [], calls_made, total_cost, cost_limit_hit, errors)
+    return GenerationRunResult(hypotheses, [], calls_made, total_cost, cost_limit_hit, errors, calls_with_unknown_cost)

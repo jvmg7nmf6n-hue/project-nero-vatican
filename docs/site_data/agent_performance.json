@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-29T17:17:03.810695+00:00",
+  "last_updated": "2026-08-04T11:10:43.890088+00:00",
   "cumulative": {
-    "hypotheses_generated": 0,
+    "hypotheses_generated": 2,
     "duplicates_skipped": 0,
-    "too_slow_rejected": 0,
+    "too_slow_rejected": 2,
     "unmeasurable_rejected": 0,
     "tested": 0,
     "survived": 0,
@@ -12,9 +12,14 @@
     "died": 0,
     "untestable": 0,
     "no_candles_available": 0,
-    "llm_calls_made": 3,
-    "total_llm_cost_usd": 0.0,
-    "survival_rate": null
+    "llm_calls_made": 9,
+    "total_llm_cost_usd": 0.55804,
+    "survival_rate": null,
+    "web_hypotheses_generated": 2,
+    "web_llm_calls_made": 6,
+    "calls_with_unknown_cost": 4,
+    "web_calls_with_unknown_cost": 4,
+    "web_total_llm_cost_usd": 0.55804
   },
   "runs": [
     {
@@ -52,6 +57,80 @@
       "llm_calls_made": 3,
       "total_llm_cost_usd": 0.0,
       "cost_limit_hit": false
+    },
+    {
+      "run_at": "2026-08-04T10:55:25.360565+00:00",
+      "enabled": true,
+      "reason": "",
+      "status": "error",
+      "errors": [
+        {
+          "phase": "hypothesis_gen",
+          "context": "(web search)",
+          "message": "ReadTimeout: HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out. (read timeout=90) (cost UNKNOWN, not confirmed $0 -- request may have reached Anthropic's servers before failing)"
+        },
+        {
+          "phase": "hypothesis_gen",
+          "context": "(web search)",
+          "message": "ReadTimeout: HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out. (read timeout=90) (cost UNKNOWN, not confirmed $0 -- request may have reached Anthropic's servers before failing)"
+        },
+        {
+          "phase": "hypothesis_gen",
+          "context": "(web search)",
+          "message": "ReadTimeout: HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out. (read timeout=90) (cost UNKNOWN, not confirmed $0 -- request may have reached Anthropic's servers before failing)"
+        }
+      ],
+      "hypotheses_generated": 0,
+      "duplicates_skipped": 0,
+      "too_slow_rejected": 0,
+      "unmeasurable_rejected": 0,
+      "tested": 0,
+      "survived": 0,
+      "promising_watchlist": 0,
+      "died": 0,
+      "untestable": 0,
+      "no_candles_available": 0,
+      "llm_calls_made": 3,
+      "total_llm_cost_usd": 0.0,
+      "cost_limit_hit": true,
+      "calls_with_unknown_cost": 3,
+      "web_hypotheses_generated": 0,
+      "web_llm_calls_made": 3,
+      "web_total_llm_cost_usd": 0.0,
+      "web_cost_limit_hit": true,
+      "web_calls_with_unknown_cost": 3
+    },
+    {
+      "run_at": "2026-08-04T11:10:43.890088+00:00",
+      "enabled": true,
+      "reason": "",
+      "status": "error",
+      "errors": [
+        {
+          "phase": "hypothesis_gen",
+          "context": "(web search)",
+          "message": "ReadTimeout: HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out. (read timeout=180) (cost UNKNOWN, not confirmed $0 -- request may have reached Anthropic's servers before failing)"
+        }
+      ],
+      "hypotheses_generated": 2,
+      "duplicates_skipped": 0,
+      "too_slow_rejected": 2,
+      "unmeasurable_rejected": 0,
+      "tested": 0,
+      "survived": 0,
+      "promising_watchlist": 0,
+      "died": 0,
+      "untestable": 0,
+      "no_candles_available": 0,
+      "llm_calls_made": 3,
+      "total_llm_cost_usd": 0.55804,
+      "cost_limit_hit": true,
+      "calls_with_unknown_cost": 1,
+      "web_hypotheses_generated": 2,
+      "web_llm_calls_made": 3,
+      "web_total_llm_cost_usd": 0.55804,
+      "web_cost_limit_hit": true,
+      "web_calls_with_unknown_cost": 1
     }
   ],
   "corrections": [

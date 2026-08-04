@@ -94,7 +94,7 @@ import math
 import re
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Callable
 
 from nero_core.research_agent.auto_tester import VERDICT_UNTESTABLE as ADAM_VERDICT_UNTESTABLE
@@ -484,15 +484,50 @@ def apply_self_derivative_tags(scored_records: list[dict], eve_history: list[dic
     return updated
 
 
-def _parse_loose_date(raw: object) -> datetime | None:
+# CC-1 directive, item A4: real web_search_tool_result page_age values
+# gathered from two live Eve sessions were NOT covered by the original
+# ISO-only format list -- "December 10, 2025" / "March 9, 2025" (a
+# spelled-out-month absolute date) and "1 month ago" / "3 days ago" /
+# "3 weeks ago" (a relative-to-search-time date) both failed to parse and
+# were silently treated as "no publication date" (i.e. never flagged for
+# lookahead risk, no matter how recent the actual source was).
+_RELATIVE_DATE_PATTERN = re.compile(r"^(\d+)\s+(hour|day|week|month|year)s?\s+ago$", re.IGNORECASE)
+_RELATIVE_DATE_UNIT_TO_TIMEDELTA = {
+    "hour": lambda n: timedelta(hours=n),
+    "day": lambda n: timedelta(days=n),
+    "week": lambda n: timedelta(weeks=n),
+    # No calendar-aware month/year unit exists on timedelta -- these are
+    # documented approximations (30-day month, 365-day year), which is fine
+    # here: this feeds a FLAG-never-DISCARD check (tag_lookahead_risk), so
+    # erring a few days off the true calendar date does not change any
+    # gating outcome, only the flagged reason text.
+    "month": lambda n: timedelta(days=30 * n),
+    "year": lambda n: timedelta(days=365 * n),
+}
+
+
+def _parse_loose_date(raw: object, reference: datetime | None = None) -> datetime | None:
+    """`reference` is the point in time relative-format dates ("3 days ago")
+    are measured from -- the caller passes the session's own started_at, NOT
+    wall-clock now, since a relative date on a page fetched during the
+    session is relative to WHEN IT WAS FETCHED, not to whenever this scoring
+    function happens to run afterward. Defaults to wall-clock now only when
+    the caller has no better reference available."""
     if not isinstance(raw, str):
         return None
-    for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S%z"):
+    raw = raw.strip()
+    for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S%z", "%B %d, %Y"):
         try:
             parsed = datetime.strptime(raw, fmt)
             return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
         except ValueError:
             continue
+    match = _RELATIVE_DATE_PATTERN.match(raw)
+    if match:
+        amount = int(match.group(1))
+        unit = match.group(2).lower()
+        ref = reference if reference is not None else datetime.now(timezone.utc)
+        return ref - _RELATIVE_DATE_UNIT_TO_TIMEDELTA[unit](amount)
     return None
 
 
@@ -507,6 +542,18 @@ def tag_lookahead_risk(session_record: dict, backtest_window_start: datetime) ->
     declines to guess at. FLAG, NEVER DISCARD (spec 3.5's own words) -- this
     returns tags for a human to review, never removes or downgrades
     anything."""
+    # Relative page_age values ("3 days ago") are relative to when Eve's
+    # search ran, i.e. this session's own started_at -- NOT wall-clock now,
+    # which could be arbitrarily later than the session (e.g. this scoring
+    # function re-run against an old session file).
+    reference = None
+    started_at = session_record.get("started_at")
+    if isinstance(started_at, str):
+        try:
+            reference = datetime.fromisoformat(started_at)
+        except ValueError:
+            reference = None
+
     flags = []
     for turn in session_record.get("turns", []):
         raw_response = turn.get("raw_response") or {}
@@ -517,7 +564,7 @@ def tag_lookahead_risk(session_record: dict, backtest_window_start: datetime) ->
                 if not isinstance(result, dict):
                     continue
                 page_age = result.get("page_age")
-                pub_date = _parse_loose_date(page_age)
+                pub_date = _parse_loose_date(page_age, reference)
                 if pub_date is not None and pub_date >= backtest_window_start:
                     flags.append({
                         "tag": "LOOKAHEAD_RISK",

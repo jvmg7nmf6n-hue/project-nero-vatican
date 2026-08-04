@@ -37,6 +37,8 @@ class _FakeResult:
     web_llm_calls_made: int = 0
     web_total_llm_cost_usd: float = 0.0
     web_cost_limit_hit: bool = False
+    calls_with_unknown_cost: int = 0
+    web_calls_with_unknown_cost: int = 0
 
 
 class RecordRunTest(unittest.TestCase):

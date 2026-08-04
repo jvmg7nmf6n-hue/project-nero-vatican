@@ -38,6 +38,10 @@ _CUMULATIVE_INT_FIELDS = (
     "hypotheses_generated", "duplicates_skipped", "too_slow_rejected", "unmeasurable_rejected",
     "tested", "survived", "promising_watchlist", "died", "untestable", "no_candles_available",
     "llm_calls_made", "web_hypotheses_generated", "web_llm_calls_made",
+    # CC-1 review, item A3: cumulative count of calls whose real cost is
+    # UNKNOWN (not confirmed $0) -- see pipeline.PipelineRunResult's own
+    # calls_with_unknown_cost/web_calls_with_unknown_cost fields.
+    "calls_with_unknown_cost", "web_calls_with_unknown_cost",
 )
 
 
@@ -98,6 +102,10 @@ def _run_entry(result, now: datetime) -> dict:
         "llm_calls_made": result.llm_calls_made,
         "total_llm_cost_usd": result.total_llm_cost_usd,
         "cost_limit_hit": result.cost_limit_hit,
+        # CC-1 review, item A3: total_llm_cost_usd above is a FLOOR, not a
+        # confirmed total, whenever this is nonzero -- see pipeline.
+        # PipelineRunResult's own calls_with_unknown_cost docstring.
+        "calls_with_unknown_cost": result.calls_with_unknown_cost,
         # Web-sourced discovery channel breakdown -- additive, not a
         # replacement for the combined fields above (see
         # pipeline.PipelineRunResult's own web_* fields, which this mirrors).
@@ -108,6 +116,7 @@ def _run_entry(result, now: datetime) -> dict:
         "web_llm_calls_made": result.web_llm_calls_made,
         "web_total_llm_cost_usd": result.web_total_llm_cost_usd,
         "web_cost_limit_hit": result.web_cost_limit_hit,
+        "web_calls_with_unknown_cost": result.web_calls_with_unknown_cost,
     }
 
 
@@ -122,7 +131,8 @@ def record_run(result, path: Path = DEFAULT_PERFORMANCE_PATH, now: datetime | No
     if result.enabled:
         for field in ("hypotheses_generated", "duplicates_skipped", "too_slow_rejected", "unmeasurable_rejected",
                        "survived", "promising_watchlist", "died", "untestable", "no_candles_available", "llm_calls_made",
-                       "web_hypotheses_generated", "web_llm_calls_made"):
+                       "web_hypotheses_generated", "web_llm_calls_made",
+                       "calls_with_unknown_cost", "web_calls_with_unknown_cost"):
             cumulative[field] = cumulative.get(field, 0) + getattr(result, field)
         cumulative["tested"] = cumulative.get("tested", 0) + run_entry["tested"]
         cumulative["total_llm_cost_usd"] = cumulative.get("total_llm_cost_usd", 0.0) + result.total_llm_cost_usd

@@ -157,6 +157,39 @@ class GenerateWebHypothesesTest(unittest.TestCase):
         self.assertIn("skip", result.errors[-1]["message"].lower())
         self.assertIn("proprietary rule set", result.errors[-1]["message"])
 
+    def test_429_on_the_real_call_is_confirmed_zero_cost_not_unknown(self) -> None:
+        # CC-1 directive, item A3: rejected before any token was processed --
+        # must NOT be counted in calls_with_unknown_cost.
+        with patch(
+            "nero_core.research_agent.hypothesis_gen.requests.post",
+            side_effect=[_FakeResponse({}, status_code=200), _FakeResponse({}, status_ok=False, status_code=429)],
+        ):
+            result = generate_web_hypotheses([], [], "fake-key", TRACKED_PAIRS, max_calls_per_run=1, now=NOW)
+
+        self.assertEqual(result.llm_calls_made, 1)
+        self.assertEqual(result.calls_with_unknown_cost, 0)
+        self.assertEqual(result.total_cost_usd, 0.0)
+        self.assertIn("HTTP 429", result.errors[-1]["message"])
+        self.assertIn("confirmed $0.00", result.errors[-1]["message"])
+
+    def test_read_timeout_on_the_real_call_increments_calls_with_unknown_cost(self) -> None:
+        # CC-1 directive, item A3: the real 3-timeout incident this fixes --
+        # the connection may have reached Anthropic's servers before the
+        # client-side timeout fired, so the true cost is UNKNOWN, not $0.
+        import requests as requests_module
+
+        with patch(
+            "nero_core.research_agent.hypothesis_gen.requests.post",
+            side_effect=[_FakeResponse({}, status_code=200), requests_module.exceptions.ReadTimeout("timed out")],
+        ):
+            result = generate_web_hypotheses([], [], "fake-key", TRACKED_PAIRS, max_calls_per_run=1, now=NOW)
+
+        self.assertEqual(result.llm_calls_made, 1)
+        self.assertEqual(result.calls_with_unknown_cost, 1)
+        self.assertEqual(result.total_cost_usd, 0.0)
+        self.assertIn("ReadTimeout", result.errors[-1]["message"])
+        self.assertIn("cost UNKNOWN, not confirmed $0", result.errors[-1]["message"])
+
     def test_invalid_source_tier_falls_back_to_the_most_conservative_tier(self) -> None:
         data = dict(WEB_HYPOTHESIS_DATA, source_tier="extremely_credible_trust_me")
         payload = _payload(data)

@@ -502,6 +502,78 @@ class PreflightIntegrationTest(unittest.TestCase):
         self.assertIn("preflight network blip", result.errors[0]["message"])
 
 
+class RejectedBeforeTokenProcessingOnRealCallTest(unittest.TestCase):
+    """CC-1 directive, item A3: PreflightIntegrationTest above covers a 401 on
+    the PREFLIGHT call (which has its own dedicated short-circuit and stops
+    the whole run after exactly one call). This class covers the separate
+    case of a 403/429 on the REAL per-finding call, after preflight already
+    succeeded -- confirmed $0.00 (rejected before any token was processed),
+    and must NOT be counted in calls_with_unknown_cost."""
+
+    def test_429_on_the_real_call_is_confirmed_zero_cost_not_unknown(self) -> None:
+        with patch(
+            "nero_core.research_agent.hypothesis_gen.requests.post",
+            side_effect=[_FakeResponse({}, status_code=200), _FakeResponse({}, status_ok=False, status_code=429)],
+        ):
+            result = generate_hypotheses([_finding()], [], "fake-key", now=NOW)
+
+        self.assertEqual(result.llm_calls_made, 1)
+        self.assertEqual(result.calls_with_unknown_cost, 0)
+        self.assertEqual(result.total_cost_usd, 0.0)
+        self.assertIn("HTTP 429", result.errors[-1]["message"])
+        self.assertIn("confirmed $0.00", result.errors[-1]["message"])
+
+    def test_403_on_the_real_call_is_confirmed_zero_cost_not_unknown(self) -> None:
+        with patch(
+            "nero_core.research_agent.hypothesis_gen.requests.post",
+            side_effect=[_FakeResponse({}, status_code=200), _FakeResponse({}, status_ok=False, status_code=403)],
+        ):
+            result = generate_hypotheses([_finding()], [], "fake-key", now=NOW)
+
+        self.assertEqual(result.llm_calls_made, 1)
+        self.assertEqual(result.calls_with_unknown_cost, 0)
+        self.assertEqual(result.total_cost_usd, 0.0)
+        self.assertIn("HTTP 403", result.errors[-1]["message"])
+        self.assertIn("confirmed $0.00", result.errors[-1]["message"])
+
+
+class UnknownCostOnTransportFailureOfTheRealCallTest(unittest.TestCase):
+    """CC-1 directive, item A3: a ReadTimeout/ConnectionError on the REAL
+    per-finding call (distinct from test_api_error_is_recorded_and_counts_
+    against_call_budget above, which asserts llm_calls_made/errors but not
+    this new field) means the request may have reached Anthropic's servers
+    before failing -- cost is UNKNOWN, not confirmed $0, and must be tracked
+    via calls_with_unknown_cost so total_llm_cost_usd stays an honest FLOOR."""
+
+    def test_read_timeout_on_the_real_call_increments_calls_with_unknown_cost(self) -> None:
+        import requests as requests_module
+
+        with patch(
+            "nero_core.research_agent.hypothesis_gen.requests.post",
+            side_effect=[_FakeResponse({}, status_code=200), requests_module.exceptions.ReadTimeout("timed out")],
+        ):
+            result = generate_hypotheses([_finding()], [], "fake-key", now=NOW)
+
+        self.assertEqual(result.llm_calls_made, 1)
+        self.assertEqual(result.calls_with_unknown_cost, 1)
+        self.assertEqual(result.total_cost_usd, 0.0)
+        self.assertIn("ReadTimeout", result.errors[-1]["message"])
+        self.assertIn("cost UNKNOWN, not confirmed $0", result.errors[-1]["message"])
+
+    def test_connection_error_on_the_real_call_also_increments_calls_with_unknown_cost(self) -> None:
+        import requests as requests_module
+
+        with patch(
+            "nero_core.research_agent.hypothesis_gen.requests.post",
+            side_effect=[_FakeResponse({}, status_code=200), requests_module.ConnectionError("down")],
+        ):
+            result = generate_hypotheses([_finding()], [], "fake-key", now=NOW)
+
+        self.assertEqual(result.calls_with_unknown_cost, 1)
+        self.assertEqual(result.total_cost_usd, 0.0)
+        self.assertIn("cost UNKNOWN, not confirmed $0", result.errors[-1]["message"])
+
+
 class PersistHypothesesTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = Path(tempfile.mkdtemp())

@@ -193,6 +193,13 @@ class PipelineRunResult:
     llm_calls_made: int = 0
     total_llm_cost_usd: float = 0.0
     cost_limit_hit: bool = False
+    # CC-1 review, item A3: calls that failed with something OTHER than a
+    # confirmed-$0 401/403/429 rejection (e.g. the real ReadTimeout incident
+    # this fixes) -- total_llm_cost_usd is a FLOOR, not a confirmed total,
+    # whenever this is nonzero, since the real cost of those calls is
+    # unknown, not zero. See hypothesis_gen.GenerationRunResult's own
+    # calls_with_unknown_cost, which this is summed from (both channels).
+    calls_with_unknown_cost: int = 0
     too_slow_rejected: int = 0
     unmeasurable_rejected: int = 0
     survived: int = 0
@@ -218,6 +225,7 @@ class PipelineRunResult:
     web_llm_calls_made: int = 0
     web_total_llm_cost_usd: float = 0.0
     web_cost_limit_hit: bool = False
+    web_calls_with_unknown_cost: int = 0
 
 
 def run_pipeline(
@@ -247,11 +255,29 @@ def run_pipeline(
         + scan_result.correlation_breakdowns
         + scan_result.low_strategy_coverage
     )
+    # CC-1 review, item A1 -- confirmed gap: scanner.run_scan() (correctly)
+    # scans EVERY tracked (asset, timeframe) pair (quant_metrics.json's own
+    # wide universe -- crypto, metals, equities, forex alike), but nothing
+    # downstream of it ever narrowed that to APPROVED_RESEARCH_UNIVERSE
+    # before handing a finding to generate_hypotheses -- a scan finding is
+    # 1:1 with a specific asset by construction (scanner.py's own
+    # ScanFinding.asset), so there is no "pick from a list" mechanism a
+    # prompt-level instruction could redirect the way Eve's own worked
+    # example does; the only correct place to apply the restriction is here,
+    # before generation, not as a downstream refusal on an idea Adam never
+    # had a chance to redirect. A finding for an unscoreable pair is not
+    # silently discarded from the SCAN itself (scanner.py, and every OTHER
+    # consumer of ScanResult, is untouched) -- only excluded from what
+    # becomes hypothesis-generation input. If a hypothesis somehow still
+    # names an out-of-universe pair (e.g. the LLM overrides `asset` in its
+    # own JSON response), the existing per-hypothesis data_source_refused
+    # accounting below still records it honestly, unchanged.
+    scoreable_findings = [f for f in all_findings if (f.asset, f.timeframe) in APPROVED_RESEARCH_UNIVERSE]
 
     failure_patterns = _load_failure_patterns(DEFAULT_FAILURE_PATTERNS_PATH)
     existing_hypotheses = hypothesis_gen.load_existing_hypotheses()
     generation = hypothesis_gen.generate_hypotheses(
-        all_findings, failure_patterns, api_key, existing_hypotheses, max_calls_per_run, now
+        scoreable_findings, failure_patterns, api_key, existing_hypotheses, max_calls_per_run, now
     )
     hypothesis_gen.persist_hypotheses(generation.hypotheses)
 
@@ -263,7 +289,21 @@ def run_pipeline(
     # scanner-sourced output is also visible as "already proposed" context to
     # the web-search prompt, same in-run-dedup spirit generate_hypotheses
     # already applies to itself via its own `known` list.
-    tracked_pairs = hypothesis_gen.load_tracked_asset_timeframes()
+    #
+    # CC-1 review, item A1: this list feeds _build_web_search_prompt's own
+    # "pick exactly one of these" instruction -- unlike the scanner path,
+    # this one DOES have a real "pick from a list" mechanism, so the fix here
+    # is a pure data-correctness swap (the right list plugged into the same
+    # existing parameter), not new restriction logic. Previously this was
+    # hypothesis_gen.load_tracked_asset_timeframes() -- the same WIDE
+    # tracked-universe list Eve's own pre-fix context.py used -- which is
+    # exactly why Adam's real run picked MSFT/AMZN/AAPL/USD-JPY: the prompt
+    # literally said "pick exactly one of these" and they were on the list,
+    # just not a scoreable one. Framed as available data, not permitted
+    # ideas, same as Eve's own fix -- if Adam's own response still names a
+    # pair outside this list, data_source_refused below still records it
+    # honestly rather than silently dropping it.
+    tracked_pairs = sorted(APPROVED_RESEARCH_UNIVERSE)
     web_generation = hypothesis_gen.generate_web_hypotheses(
         existing_hypotheses + generation.hypotheses, failure_patterns, api_key, tracked_pairs, web_max_calls_per_run, now
     )
@@ -339,6 +379,7 @@ def run_pipeline(
         llm_calls_made=generation.llm_calls_made + web_generation.llm_calls_made,
         total_llm_cost_usd=generation.total_cost_usd + web_generation.total_cost_usd,
         cost_limit_hit=generation.cost_limit_hit or web_generation.cost_limit_hit,
+        calls_with_unknown_cost=generation.calls_with_unknown_cost + web_generation.calls_with_unknown_cost,
         too_slow_rejected=too_slow,
         unmeasurable_rejected=unmeasurable,
         survived=survived,
@@ -352,6 +393,7 @@ def run_pipeline(
         web_llm_calls_made=web_generation.llm_calls_made,
         web_total_llm_cost_usd=web_generation.total_cost_usd,
         web_cost_limit_hit=web_generation.cost_limit_hit,
+        web_calls_with_unknown_cost=web_generation.calls_with_unknown_cost,
     )
     performance.record_run(result, now=now)
     return result
@@ -373,9 +415,16 @@ def main() -> None:
     print(f"status={result.status} enabled={result.enabled} reason={result.reason!r}")
     print(f"hypotheses_generated={result.hypotheses_generated} duplicates_skipped={result.duplicates_skipped}")
     print(f"llm_calls_made={result.llm_calls_made} total_llm_cost_usd={result.total_llm_cost_usd:.6f} cost_limit_hit={result.cost_limit_hit}")
+    if result.calls_with_unknown_cost:
+        # CC-1 review, item A3: total_llm_cost_usd above is a FLOOR, not a
+        # confirmed total, whenever this is nonzero -- printed as its own
+        # prominent line (never silently folded into the cost line above)
+        # so a reader can never mistake "unmeasured" for "confirmed zero."
+        print(f"  WARNING: {result.calls_with_unknown_cost} call(s) failed with UNKNOWN cost (not confirmed $0) -- "
+              f"total_llm_cost_usd above is a FLOOR, not a confirmed total. See ERRORS below for detail.")
     print(f"  of which web_search: web_hypotheses_generated={result.web_hypotheses_generated} "
           f"web_llm_calls_made={result.web_llm_calls_made} web_total_llm_cost_usd={result.web_total_llm_cost_usd:.6f} "
-          f"web_cost_limit_hit={result.web_cost_limit_hit}")
+          f"web_cost_limit_hit={result.web_cost_limit_hit} web_calls_with_unknown_cost={result.web_calls_with_unknown_cost}")
     print(f"too_slow_rejected={result.too_slow_rejected} unmeasurable_rejected={result.unmeasurable_rejected}")
     print(f"survived={result.survived} promising_watchlist={result.promising_watchlist} died={result.died} untestable={result.untestable}")
     print(f"no_candles_available={result.no_candles_available} data_source_refused={result.data_source_refused}")

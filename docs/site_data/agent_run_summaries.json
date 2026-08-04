@@ -41,6 +41,127 @@
     },
     "backfilled": true,
     "data_completeness": "aggregate_only -- per-hypothesis names and individual claim/measured values are NOT available and are not fabricated here",
-    "provenance_note": "These figures were reported by the user in chat, described as originating from Adam real (nero_core.research_agent.pipeline) GitHub Actions run on 2026-08-03: 9 hypotheses generated, all 9 rejected TOO_SLOW by the frequency gate, claimed 24-32 trades/year vs measured 2.5-15 trades/year, ~4.79x average overestimate. This run was never written to any committed file -- confirmed directly: docs/site_data/agent_hypotheses.json and docs/site_data/agent_test_results.json do not exist anywhere in this repository (research_agent_manual.yml deliberately has no commit step for those two files -- see research_agent_run_summary.py module docstring), and docs/site_data/agent_performance.json (which IS committed) has only 2 runs on file, both dated 2026-07-29T16:45/17:17 UTC, both with hypotheses_generated=0 (the pre-working-key dry runs) -- no 2026-08-03 entry exists there either. This 2026-08-03 run could NOT be independently reconstructed from any committed artifact in this repository. These are the ONLY figures available for it; they are chat-transcript-sourced, not independently verified against a committed file, and must never be presented as repo-verified."
+    "provenance_note": "These figures were reported by the user in chat, described as originating from Adam real (nero_core.research_agent.pipeline) GitHub Actions run on 2026-08-03: 9 hypotheses generated, all 9 rejected TOO_SLOW by the frequency gate, claimed 24-32 trades/year vs measured 2.5-15 trades/year, ~4.79x average overestimate. This run was never written to any committed file -- confirmed directly: docs/site_data/agent_hypotheses.json and docs/site_data/agent_test_results.json do not exist anywhere in this repository (research_agent_manual.yml deliberately has no commit step for those two files -- see research_agent_run_summary.py module docstring), and docs/site_data/agent_performance.json (which IS committed) has only 2 runs on file, both dated 2026-07-29T16:45/17:17 UTC, both with hypotheses_generated=0 (the pre-working-key dry runs) -- no 2026-08-03 entry exists there either. This 2026-08-03 run could NOT be independently reconstructed from any committed artifact in this repository. These are the ONLY figures available for it; they are chat-transcript-sourced, not independently verified against a committed file, and must never be presented as repo-verified.",
+    "sample_size_caveat": "CC-1 directive, item A6: this run predates commit 5dd51a0 ('Add full-history research candle export, split from the website's 200-row display export'), which did not exist on 2026-08-03 -- before that split, every (asset, timeframe) pair's ONLY available candle source was the website's own 200-row display export. At the 4h timeframe (the only timeframe in nero_core.asset_universe.APPROVED_RESEARCH_UNIVERSE), 200 rows covers 200*4h = 800h = ~33.3 days, well under a year. The measured_trades_per_year figures above (2.5-15) were therefore almost certainly annualized from a ~33-trading-day sample, not a full year of candles -- an extrapolation, not a direct year-long measurement, and the true measured frequency over a full year could differ meaningfully (either direction) from what a ~33-day window implies. This does NOT invalidate the qualitative finding (claimed rates were still overestimates, all 9 were still correctly rejected TOO_SLOW), but the precise ~4.79x figure should be treated as provisional until re-measured against the full-history research export the above commit now provides. Flagged here for that re-measurement; not yet re-run."
+  },
+  {
+    "run_at": "2026-08-04T11:01:19.177208+00:00",
+    "source": "research_agent_run_summary.py",
+    "run_aggregate": {
+      "hypotheses_generated": 0,
+      "duplicates_skipped": 0,
+      "llm_calls_made": 3,
+      "total_llm_cost_usd": 0.0,
+      "cost_limit_hit": true,
+      "by_channel": {
+        "scanner": {
+          "hypotheses": 0,
+          "calls": 0,
+          "cost_usd": 0.0
+        },
+        "web_search": {
+          "hypotheses": 0,
+          "calls": 3,
+          "cost_usd": 0.0,
+          "cost_limit_hit": true
+        }
+      },
+      "web_search_zero_hypotheses_note": true,
+      "too_slow_rejected": 0,
+      "unmeasurable_rejected": 0,
+      "survived": 0,
+      "promising_watchlist": 0,
+      "died": 0,
+      "untestable": 0,
+      "no_candles_available": 0
+    },
+    "n_test_results": 0,
+    "per_hypothesis": [],
+    "untested_no_candles": [],
+    "too_slow": [],
+    "unmeasurable": [],
+    "calibration": null
+  },
+  {
+    "run_at": "2026-08-04T11:19:56.922724+00:00",
+    "source": "research_agent_run_summary.py",
+    "run_aggregate": {
+      "hypotheses_generated": 2,
+      "duplicates_skipped": 0,
+      "llm_calls_made": 3,
+      "total_llm_cost_usd": 0.55804,
+      "cost_limit_hit": true,
+      "by_channel": {
+        "scanner": {
+          "hypotheses": 0,
+          "calls": 0,
+          "cost_usd": 0.0
+        },
+        "web_search": {
+          "hypotheses": 2,
+          "calls": 3,
+          "cost_usd": 0.55804,
+          "cost_limit_hit": true
+        }
+      },
+      "web_search_zero_hypotheses_note": false,
+      "too_slow_rejected": 2,
+      "unmeasurable_rejected": 0,
+      "survived": 0,
+      "promising_watchlist": 0,
+      "died": 0,
+      "untestable": 0,
+      "no_candles_available": 0
+    },
+    "n_test_results": 2,
+    "per_hypothesis": [
+      {
+        "hypothesis_name": "RSI2_TREND_PULLBACK_PAXG_4H",
+        "asset": "PAXG",
+        "timeframe": "4h",
+        "discovery_channel": "web_search",
+        "llm_claimed_trades_per_year": 35.0,
+        "measured_trades_per_year": 0.498181404864742,
+        "expected_time_to_30_trades_months": 722.6283367556468,
+        "frequency_classification": "TOO_SLOW",
+        "verdict": "SKIPPED"
+      },
+      {
+        "hypothesis_name": "ADX_REGIME_IGNITION_SOL_4H",
+        "asset": "SOL",
+        "timeframe": "4h",
+        "discovery_channel": "web_search",
+        "llm_claimed_trades_per_year": 45.0,
+        "measured_trades_per_year": 16.93816776540123,
+        "expected_time_to_30_trades_months": 21.253774610460198,
+        "frequency_classification": "TOO_SLOW",
+        "verdict": "SKIPPED"
+      }
+    ],
+    "untested_no_candles": [],
+    "too_slow": [
+      {
+        "hypothesis_name": "RSI2_TREND_PULLBACK_PAXG_4H",
+        "measured_trades_per_year": 0.498181404864742,
+        "llm_claimed_trades_per_year": 35.0
+      },
+      {
+        "hypothesis_name": "ADX_REGIME_IGNITION_SOL_4H",
+        "measured_trades_per_year": 16.93816776540123,
+        "llm_claimed_trades_per_year": 45.0
+      }
+    ],
+    "unmeasurable": [],
+    "calibration": {
+      "average_ratio": 36.45612728321993,
+      "median_ratio": 36.45612728321993,
+      "n": 2,
+      "direction": "overestimate",
+      "ratio_by_hypothesis_name": {
+        "RSI2_TREND_PULLBACK_PAXG_4H": 70.25553274013232,
+        "ADX_REGIME_IGNITION_SOL_4H": 2.6567218263075247
+      },
+      "infinite_overestimate_hypothesis_names": []
+    }
   }
 ]

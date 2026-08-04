@@ -5,6 +5,7 @@ import unittest
 from contextlib import redirect_stdout
 from unittest.mock import patch
 
+from nero_core.asset_universe import APPROVED_RESEARCH_UNIVERSE
 from nero_core.research_agent.hypothesis_gen import GenerationRunResult
 from nero_core.research_agent.pipeline import (
     STATUS_CLEAN,
@@ -13,7 +14,7 @@ from nero_core.research_agent.pipeline import (
     main,
     run_pipeline,
 )
-from nero_core.research_agent.scanner import ScanResult
+from nero_core.research_agent.scanner import ScanFinding, ScanResult
 
 EMPTY_SCAN = ScanResult([], [], [], [], [])
 
@@ -215,6 +216,93 @@ class WebSearchChannelMergeTest(unittest.TestCase):
         self.assertEqual(result.web_llm_calls_made, 1)
         self.assertAlmostEqual(result.total_llm_cost_usd, 0.07, places=8)
         self.assertAlmostEqual(result.web_total_llm_cost_usd, 0.05, places=8)
+
+
+class ScannerFindingsRestrictedToApprovedUniverseTest(unittest.TestCase):
+    """CC-1 review, item A1: confirmed gap -- Adam's scanner scans every
+    tracked (asset, timeframe) pair (crypto/metals/equities/forex alike),
+    but nothing narrowed that down to APPROVED_RESEARCH_UNIVERSE before
+    handing a finding to hypothesis generation, so real runs proposed
+    MSFT/AMZN/AAPL/USD-JPY and hit data_source_refused on all 9. A scan
+    finding is 1:1 with a specific asset by construction, so filtering must
+    happen here, before generate_hypotheses is ever called -- there is no
+    prompt-level "pick from a list" mechanism that could redirect an
+    already-asset-specific finding the way the web-search channel's own
+    tracked_pairs list can."""
+
+    def _finding(self, asset: str, timeframe: str) -> ScanFinding:
+        return ScanFinding("extreme_zscore", asset, timeframe, f"{asset}/{timeframe} test finding", 3.0, None, "test", "2026-08-04T00:00:00+00:00")
+
+    def test_only_approved_universe_findings_reach_generate_hypotheses(self) -> None:
+        approved_asset, approved_timeframe = next(iter(APPROVED_RESEARCH_UNIVERSE))
+        scan_with_mixed_findings = ScanResult(
+            [self._finding(approved_asset, approved_timeframe), self._finding("MSFT", "1day")], [], [], [], []
+        )
+        captured_findings = []
+
+        def _capture_generate_hypotheses(scan_findings, *args, **kwargs):
+            captured_findings.extend(scan_findings)
+            return GenerationRunResult()
+
+        with patch("nero_core.research_agent.pipeline.is_enabled", return_value=True), \
+             patch("nero_core.research_agent.pipeline.scanner.run_scan", return_value=scan_with_mixed_findings), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.load_existing_hypotheses", return_value=[]), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.generate_hypotheses", side_effect=_capture_generate_hypotheses), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.generate_web_hypotheses", return_value=GenerationRunResult()), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.persist_hypotheses"), \
+             patch("nero_core.research_agent.pipeline.auto_tester.persist_test_results"), \
+             patch("nero_core.research_agent.pipeline.performance.record_run"):
+            run_pipeline(api_key="fake-key")
+
+        self.assertEqual(len(captured_findings), 1)
+        self.assertEqual((captured_findings[0].asset, captured_findings[0].timeframe), (approved_asset, approved_timeframe))
+
+    def test_the_scan_result_itself_still_carries_every_finding_unfiltered(self) -> None:
+        # scanner.py and ScanResult are untouched -- only what feeds
+        # hypothesis generation is restricted. A reader of result.scan_result
+        # still sees the MSFT finding; it's just never turned into a
+        # hypothesis proposal.
+        scan_with_mixed_findings = ScanResult([self._finding("MSFT", "1day")], [], [], [], [])
+        with patch("nero_core.research_agent.pipeline.is_enabled", return_value=True), \
+             patch("nero_core.research_agent.pipeline.scanner.run_scan", return_value=scan_with_mixed_findings), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.load_existing_hypotheses", return_value=[]), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.generate_hypotheses", return_value=GenerationRunResult()), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.generate_web_hypotheses", return_value=GenerationRunResult()), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.persist_hypotheses"), \
+             patch("nero_core.research_agent.pipeline.auto_tester.persist_test_results"), \
+             patch("nero_core.research_agent.pipeline.performance.record_run"):
+            result = run_pipeline(api_key="fake-key")
+
+        self.assertEqual(len(result.scan_result.extreme_zscore), 1)
+        self.assertEqual(result.scan_result.extreme_zscore[0].asset, "MSFT")
+
+
+class WebSearchChannelUsesApprovedUniverseTest(unittest.TestCase):
+    """CC-1 review, item A1: the web-search channel's own tracked_pairs
+    argument must be the scoreable APPROVED_RESEARCH_UNIVERSE, not the wide
+    tracked-everything list -- this is why real runs picked USD/JPY (it was
+    "tracked" but never scoreable)."""
+
+    def test_generate_web_hypotheses_receives_the_approved_universe_not_the_wide_tracked_list(self) -> None:
+        captured_tracked_pairs = []
+
+        def _capture_generate_web_hypotheses(existing, failure_patterns, api_key, tracked_pairs, *args, **kwargs):
+            captured_tracked_pairs.extend(tracked_pairs)
+            return GenerationRunResult()
+
+        with patch("nero_core.research_agent.pipeline.is_enabled", return_value=True), \
+             patch("nero_core.research_agent.pipeline.scanner.run_scan", return_value=EMPTY_SCAN), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.load_existing_hypotheses", return_value=[]), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.generate_hypotheses", return_value=GenerationRunResult()), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.generate_web_hypotheses", side_effect=_capture_generate_web_hypotheses), \
+             patch("nero_core.research_agent.pipeline.hypothesis_gen.persist_hypotheses"), \
+             patch("nero_core.research_agent.pipeline.auto_tester.persist_test_results"), \
+             patch("nero_core.research_agent.pipeline.performance.record_run"):
+            run_pipeline(api_key="fake-key")
+
+        self.assertEqual(set(captured_tracked_pairs), APPROVED_RESEARCH_UNIVERSE)
+        self.assertNotIn(("MSFT", "1day"), captured_tracked_pairs)
+        self.assertNotIn(("USD/JPY", "1day"), captured_tracked_pairs)
 
 
 class RealDefaultCandlesProviderRefusalTest(unittest.TestCase):
