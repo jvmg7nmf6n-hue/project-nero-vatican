@@ -161,3 +161,23 @@ from the reports existing as of 2026-07-18 — update this file (add entries, do
 rewrite existing ones) after future research batches complete, rather than
 auto-scraping `docs/*.md`, since "why it died" is a synthesized judgment call a script
 shouldn't be trusted to make unsupervised.
+
+**`failure_patterns.json` must be updated in the SAME commit as any `graveyard.json`
+addition.** These are two separate, both hand-curated files with two separate
+audiences: `graveyard.json` is read by nothing in `nero_core/` — it exists for the
+public `/graveyard` page and `/lab`'s Research Scoreboard only. `failure_patterns.json`
+is the file Adam (`nero_core/research_agent/hypothesis_gen.py`, `pipeline.py`) and Eve
+(`nero_core/eve/context.py`, `session.py`) actually read as graveyard context, and the
+only file `check_graveyard_match`'s duplicate-detection compares new hypotheses
+against. A `graveyard.json` entry with no `failure_patterns.json` counterpart is
+invisible to both agents — confirmed as a real, live gap on 2026-08-04 (9 entries had
+silently diverged; see `tests/test_graveyard_failure_pattern_sync.py`, which now fails
+CI if this happens again). When adding a `graveyard.json` entry, also add a
+`failure_patterns.json` entry for it: `name` (matching `graveyard.json`'s own, or
+`graveyard_failure_pattern_sync`'s own membership test fails), `family`,
+`failure_pattern` (one of the closed set in `website/lib/types.ts`'s `FailurePattern`
+union — not free text, even though nothing on the Python side enforces this except the
+same regression test), `fixable`, `source_doc`. The reverse is not required —
+`failure_patterns.json` may carry an entry with no `graveyard.json` counterpart (e.g.
+`RANGE_MEAN_REVERSION`, a still-open repair candidate per `repair_candidates.json`
+rather than a permanently-closed family).

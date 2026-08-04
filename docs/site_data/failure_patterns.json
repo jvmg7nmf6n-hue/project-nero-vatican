@@ -7,6 +7,13 @@
     "source_doc": "docs/fvg_reversion_report.md"
   },
   {
+    "name": "FVG_REVERSION (cross-asset extension)",
+    "family": "Fair Value Gap",
+    "failure_pattern": "edge-over-random-negative",
+    "fixable": false,
+    "source_doc": "docs/comprehensive_asset_expansion_closing_report.md"
+  },
+  {
     "name": "BOS_CONTINUATION",
     "family": "Break of Structure",
     "failure_pattern": "regime-filter-only",
@@ -62,6 +69,34 @@
     "source_doc": "docs/macro_risk_on_report.md"
   },
   {
+    "name": "MACRO_RISK_ON (metals extension: SILVER/PLATINUM)",
+    "family": "Macro Regime",
+    "failure_pattern": "mechanism-doesn't-transfer",
+    "fixable": false,
+    "source_doc": "docs/metals_phase_a_full_sweep.md"
+  },
+  {
+    "name": "MACRO_RISK_ON (stocks extension: SPY/QQQ/IWM)",
+    "family": "Macro Regime",
+    "failure_pattern": "mechanism-doesn't-transfer",
+    "fixable": false,
+    "source_doc": "docs/stock_task_a2_full_sweep.md"
+  },
+  {
+    "name": "MACRO_RISK_ON (forex extension: EUR/USD, USD/JPY)",
+    "family": "Macro Regime",
+    "failure_pattern": "mechanism-doesn't-transfer",
+    "fixable": false,
+    "source_doc": "docs/forex_task_b2_full_sweep.md"
+  },
+  {
+    "name": "MACRO_RISK_ON (PSX extension: HBL)",
+    "family": "Macro Regime",
+    "failure_pattern": "mechanism-doesn't-transfer",
+    "fixable": false,
+    "source_doc": "docs/psx_task2_full_sweep.md"
+  },
+  {
     "name": "CARRY_MOMENTUM",
     "family": "Forex Carry",
     "failure_pattern": "edge-over-random-negative",
@@ -70,12 +105,32 @@
     "source_doc": "docs/carry_momentum_results.md"
   },
   {
-    "name": "RANGE_MEAN_REVERSION",
+    "name": "RANGE_MEAN_REVERSION variant experiments (EUR/USD 4h long-only, ETH 4h adx-falling)",
+    "family": "Range Mean Reversion",
+    "failure_pattern": "edge-over-random-negative",
+    "fixable": true,
+    "source_doc": "docs/rmr_variant_research_closing_report.md"
+  },
+  {
+    "name": "REGIME_TRANSITION",
     "family": "Range Mean Reversion",
     "failure_pattern": "sample-too-thin",
     "fixable": true,
-    "fix_rationale": "Stage 2's diagnosis found real, mechanistically-corroborated value in a 'confirmation' filter (exit mix shifted from 32% to 68% REVERSION_TARGET on BTC/1d), but every variant tested it on the thinnest, most sample-starved config (BTC/1d, 7-19 trades) rather than on RMR's own best, least-thin results (GOLD/1week and SILVER/1week, already on the live watchlist). Applying the same diagnosis-justified confirmation logic to the weekly-metals configs tests whether it concentrates an already-real edge instead of further diluting an already-thin one.",
-    "source_doc": "docs/rmr_variant_research_closing_report.md"
+    "source_doc": "docs/ranging_regime_batch_r1_regime_transition.md"
+  },
+  {
+    "name": "RANGE_MATURITY gate",
+    "family": "Range Mean Reversion",
+    "failure_pattern": "regime-filter-only",
+    "fixable": true,
+    "source_doc": "docs/ranging_regime_batch_r2_range_maturity.md"
+  },
+  {
+    "name": "REGIME_ALLOCATOR (ADX-gating existing survivors)",
+    "family": "Range Mean Reversion",
+    "failure_pattern": "regime-filter-only",
+    "fixable": false,
+    "source_doc": "docs/ranging_regime_batch_r3_regime_allocator.md"
   },
   {
     "name": "Vol-Clustering position-size multiplier (H2)",
@@ -97,5 +152,13 @@
     "failure_pattern": "edge-over-random-negative",
     "fixable": false,
     "source_doc": "docs/repair_breakout_quality_verification_report.md"
+  },
+  {
+    "name": "RANGE_MEAN_REVERSION",
+    "family": "Range Mean Reversion",
+    "failure_pattern": "sample-too-thin",
+    "fixable": true,
+    "fix_rationale": "Stage 2's diagnosis found real, mechanistically-corroborated value in a 'confirmation' filter (exit mix shifted from 32% to 68% REVERSION_TARGET on BTC/1d), but every variant tested it on the thinnest, most sample-starved config (BTC/1d, 7-19 trades) rather than on RMR's own best, least-thin results (GOLD/1week and SILVER/1week, already on the live watchlist). Applying the same diagnosis-justified confirmation logic to the weekly-metals configs tests whether it concentrates an already-real edge instead of further diluting an already-thin one.",
+    "source_doc": "docs/rmr_variant_research_closing_report.md"
   }
 ]
