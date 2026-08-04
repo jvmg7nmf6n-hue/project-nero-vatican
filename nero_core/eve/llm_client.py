@@ -87,20 +87,24 @@ class LlmParameters:
     claude_api_version: str = "2023-06-01"
     claude_max_tokens: int = 4096
     claude_thinking: dict = field(default_factory=lambda: {"type": "disabled"})
-    # 120s (was 60s until 2026-08-03): call_turn is a plain, non-streaming
-    # requests.post -- the entire response (up to claude_max_tokens, with a
-    # full system prompt, context block, and 3 tool definitions on the very
-    # first, coldest/largest call) must be generated server-side before any
-    # byte returns. Two real, consecutive first-turn sessions both hit the
-    # old 60s ceiling with a plain ReadTimeout (no HTTP status at all -- the
-    # connection succeeded, the server just hadn't finished by then), losing
-    # the entire session (and a real, conservatively-counted ledger
-    # reservation each time -- see budget_ledger.py's own RESERVE-THEN-
-    # RECONCILE section) to a margin that was simply too tight, not a
-    # connectivity problem (confirmed separately: github.com and
+    # 180s (was 120s until 2026-08-04, 60s until 2026-08-03): call_turn is a
+    # plain, non-streaming requests.post -- the entire response (up to
+    # claude_max_tokens, with a full system prompt, context block, and 3 tool
+    # definitions on the very first, coldest/largest call) must be generated
+    # server-side before any byte returns. Two real, consecutive first-turn
+    # sessions hit the old 60s ceiling with a plain ReadTimeout (2026-08-03);
+    # a third real attempt (eve-20260804T015806Z-243d095f) hit the SAME
+    # failure mode again at the (by-then-current) 120s ceiling on 2026-08-04
+    # -- confirming 120s is not consistently sufficient either, not a one-off
+    # fluke of the first fix. No HTTP status at all in any of the three
+    # cases -- the connection succeeded, the server just hadn't finished by
+    # then -- losing the entire session (and a real, conservatively-counted
+    # ledger reservation each time -- see budget_ledger.py's own RESERVE-
+    # THEN-RECONCILE section) to a margin that was simply too tight, not a
+    # connectivity problem (confirmed separately, both times: github.com and
     # api.anthropic.com's own root both responded in under a second at the
     # same time these calls were timing out).
-    claude_timeout_seconds: int = 120
+    claude_timeout_seconds: int = 180
 
 
 DEFAULT_LLM_PARAMETERS = LlmParameters()
