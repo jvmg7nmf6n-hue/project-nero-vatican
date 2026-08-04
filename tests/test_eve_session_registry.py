@@ -30,11 +30,15 @@ class RegistryShapeTest(unittest.TestCase):
             self.assertIsInstance(entry["counts_toward_pre_registered_8"], bool)
             self.assertTrue(entry.get("reason"), f"{entry['session_id']} has no reason recorded")
 
-    def test_no_session_counts_yet(self) -> None:
-        # As of this fix landing, nothing has run under the corrected system
-        # yet -- every existing session predates the DSL vocabulary + validator.
-        self.assertTrue(all(not e["counts_toward_pre_registered_8"] for e in self.registry["sessions"]))
-        self.assertEqual(self.registry["next_countable_session_number"], 1)
+    def test_exactly_one_session_counts_so_far(self) -> None:
+        # 2026-08-04: eve-20260804T020749Z-4cf6e4c9 is Session 1 of 8 -- the
+        # first session to run to completion under the fully-corrected
+        # system. Every OTHER entry (2 spec-defect sessions, 3 crashed
+        # attempts) must still not count.
+        counting = [e for e in self.registry["sessions"] if e["counts_toward_pre_registered_8"]]
+        self.assertEqual(len(counting), 1)
+        self.assertEqual(counting[0]["session_id"], "eve-20260804T020749Z-4cf6e4c9")
+        self.assertEqual(self.registry["next_countable_session_number"], 2)
 
     def test_session_count_reconciliation_is_recorded_not_silently_changed(self) -> None:
         # 2026-08-03: the pre-registered session count was reconciled from an

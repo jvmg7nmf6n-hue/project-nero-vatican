@@ -597,5 +597,354 @@
     "candle_row_count": null,
     "fdr_survives_oos": null,
     "fdr_survives_is": null
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260804T020749Z-4cf6e4c9",
+    "turn_index": 0,
+    "tool_use_id": "toolu_01LWb5Sa5B9TrswAHNVkNtfY",
+    "proposed_at": "2026-08-04T02:07:49.935649+00:00",
+    "raw_hypothesis": {
+      "hypothesis_name": "PAXG_PEG_REVERSION",
+      "mechanism": "PAXG is a gold-redeemable token (1:1 physical bullion, LBMA vaults) whose price is structurally arbitraged back to spot gold by redemption/creation mechanics, unlike BTC/ETH/SOL where mean-reversion is a purely technical/behavioral pattern. This platform's prior MEAN_REVERSION variants failed with grid-shift-artifact (edge disappeared when the candle grid was time-shifted), suggesting those signals were curve-fit to bar alignment rather than a real economic force. PAXG's reversion, by contrast, is driven by a genuine arbitrage/redemption mechanism that shouldn't care about candle alignment, so a simple zscore20 oversold entry may show a real, alignment-robust edge that plain crypto mean-reversion didn't. Entry: buy when price is statistically stretched below its 20-period mean (zscore20 <= -1.5) while not in a strong downtrend (adx14 below 25 filters out momentum-crash regimes where reversion is less reliable). Exit with a tight ATR stop and modest target reflecting the fact that PAXG's realized moves are small.",
+      "asset": "PAXG",
+      "timeframe": "4h",
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "zscore20",
+            "op": "lte",
+            "value": -1.5
+          },
+          {
+            "field": "adx14",
+            "op": "lt",
+            "value": 25
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_atr_multiple": 1.5,
+        "target_r_multiple": 1.5,
+        "max_holding_hours": 96
+      },
+      "expected_frequency_per_year": "100-170 (zscore threshold estimated to trigger roughly 5-8% of 4h candles)",
+      "notes_on_graveyard": "Distinguishes itself from the failed MEAN_REVERSION variants (grid-shift-artifact) by targeting an asset whose reversion is structurally/arbitrage-driven rather than a technical pattern that could be a bar-alignment artifact. Also distinguishes from RANGE_MEAN_REVERSION (sample-too-thin on BTC/1d) by using a high-frequency 4h timeframe on a scorable pair.",
+      "generated_at": "2026-08-04T02:07:49.935649+00:00"
+    },
+    "testability": "TESTABLE",
+    "verdict_is": "DIED",
+    "verdict_oos": "INSUFFICIENT_SAMPLE",
+    "verdict_combined": "DIED",
+    "contamination_tags": [],
+    "testability_reason": "structured_entry_rule and structured_exit_plan both parse via rule_dsl",
+    "p_value_is": 0.09769623987289422,
+    "p_value_oos": null,
+    "frequency_classification": "VIABLE",
+    "measured_trades_per_year": 35.86906115026142,
+    "candle_data_source": "research_export",
+    "candle_row_count": 4400,
+    "fdr_survives_oos": null,
+    "fdr_survives_is": false
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260804T020749Z-4cf6e4c9",
+    "turn_index": 1,
+    "tool_use_id": "toolu_01EvZL9eNxQZ4v7aBFzCb4T7",
+    "proposed_at": "2026-08-04T02:07:49.935649+00:00",
+    "raw_hypothesis": {
+      "hypothesis_name": "BTC_VOL_EXPANSION_BREAKOUT",
+      "mechanism": "Distinct from the graveyard's BOS_CONTINUATION (which was diagnosed as a generic-trend-following-with-ATR-stop in disguise, since the structural stop rarely bound) and from FVG_REVERSION (a price-structure reversion idea that failed outright): this hypothesis is a pure volatility-regime signal. When price closes above its own upper Bollinger Band (bb_upper) after a period where the band was relatively tight (approximated here by requiring adx14 to be rising through a trend threshold, i.e. adx14 > 20, confirming a fresh trend is forming rather than already extended), it signals a genuine volatility expansion / regime change rather than a stale continuation. The key difference from BOS_CONTINUATION's failure mode is using a band-relative trigger (bb_upper cross) instead of a structural swing-point trigger, so the stop and the signal are aligned to the same volatility measure (ATR) rather than a structural stop being capped/overridden by an unrelated ATR cap.",
+      "asset": "BTC",
+      "timeframe": "4h",
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "close",
+            "op": "cross_above",
+            "compare_to_field": "bb_upper"
+          },
+          {
+            "field": "adx14",
+            "op": "gt",
+            "value": 20
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_atr_multiple": 2.0,
+        "target_r_multiple": 2.0,
+        "max_holding_hours": 48
+      },
+      "expected_frequency_per_year": "65-110 (band-upper crosses combined with a moderate ADX filter, estimated at 3-5% of 4h candles)",
+      "notes_on_graveyard": "Aims to avoid BOS_CONTINUATION's diagnosed failure (structural stop dominated by ATR cap, making it generic trend-following) by making the entry AND stop both volatility-native (Bollinger + ATR) from the start, so there's no hidden mismatch between signal type and risk mechanics.",
+      "generated_at": "2026-08-04T02:07:49.935649+00:00"
+    },
+    "testability": "TESTABLE",
+    "verdict_is": "PROMISING_WATCHLIST",
+    "verdict_oos": "DIED",
+    "verdict_combined": "DIED",
+    "contamination_tags": [
+      {
+        "tag": "SELF_DERIVATIVE",
+        "matched_hypothesis_name": "ADX-Confirmed Volatility Breakout (BB Upper/Lower Break with Trend-Strength Filter)",
+        "similarity": 0.6598,
+        "method": "term-frequency cosine similarity (lexical, not semantic)"
+      },
+      {
+        "tag": "SELF_DERIVATIVE",
+        "matched_hypothesis_name": "Weekly Precious-Metals Extreme Z-Score Reversion with RSI Confirmation",
+        "similarity": 0.6022,
+        "method": "term-frequency cosine similarity (lexical, not semantic)"
+      }
+    ],
+    "testability_reason": "structured_entry_rule and structured_exit_plan both parse via rule_dsl",
+    "p_value_is": 0.3452259857209401,
+    "p_value_oos": 0.25987617399187757,
+    "frequency_classification": "VIABLE",
+    "measured_trades_per_year": 55.796317344851104,
+    "candle_data_source": "research_export",
+    "candle_row_count": 4400,
+    "fdr_survives_oos": null,
+    "excluded_from_fdr_family_reason": "self_derivative",
+    "fdr_survives_is": null
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260804T020749Z-4cf6e4c9",
+    "turn_index": 2,
+    "tool_use_id": "toolu_01LND5UQWcQLB9zYLU4sb5US",
+    "proposed_at": "2026-08-04T02:07:49.935649+00:00",
+    "raw_hypothesis": {
+      "hypothesis_name": "SOL_TREND_ALIGNED_PULLBACK",
+      "mechanism": "SOL is a higher-beta altcoin than BTC/ETH, with sharper pullbacks within uptrends. Rather than a pure mean-reversion play (graveyard: MEAN_REVERSION variants failed with grid-shift-artifact) or a structural break play (graveyard: BOS_CONTINUATION, TREND_PULLBACK filter variants failed), this hypothesis combines a momentum-oscillator dip (rsi14 <= 35, a pullback but not a capitulation extreme) with a strict higher-timeframe trend filter (close > ma200, confirming the asset is in a structural uptrend on the 4h chart itself, not relying on a separate structural/BOS detection layer that was diagnosed as unreliable). The idea is that in a confirmed uptrend, moderate RSI dips are lower-risk re-entry points than either extreme oversold (capitulation, often continues) or shallow dips (no edge). This is a plain oscillator+trend-filter combination, deliberately avoiding the FVG-overlap and BOS-recency filters diagnosed as no-ops or artifacts in the graveyard.",
+      "asset": "SOL",
+      "timeframe": "4h",
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "rsi14",
+            "op": "lte",
+            "value": 35
+          },
+          {
+            "field": "close",
+            "op": "gt",
+            "compare_to_field": "ma200"
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_atr_multiple": 1.5,
+        "target_r_multiple": 2.0,
+        "max_holding_hours": 72
+      },
+      "expected_frequency_per_year": "85-130 (RSI<=35 estimated at 4-6% of 4h candles for a volatile altcoin, further filtered by trend condition which should still leave majority of occurrences since dips-in-uptrend are common)",
+      "notes_on_graveyard": "Differs from TREND_PULLBACK filter variants (which failed due to no-op BOS-recency and FVG-overlap filters) by using only simple, always-computable fields (rsi14, ma200) rather than structural pattern detection that was diagnosed as either a no-op or curve-fit.",
+      "generated_at": "2026-08-04T02:07:49.935649+00:00"
+    },
+    "testability": "TESTABLE",
+    "verdict_is": "DIED",
+    "verdict_oos": "DIED",
+    "verdict_combined": "DIED",
+    "contamination_tags": [
+      {
+        "tag": "SELF_DERIVATIVE",
+        "matched_hypothesis_name": "Overextended-Trend Exhaustion Fade on Mega-Cap Tech Daily Charts",
+        "similarity": 0.6187,
+        "method": "term-frequency cosine similarity (lexical, not semantic)"
+      }
+    ],
+    "testability_reason": "structured_entry_rule and structured_exit_plan both parse via rule_dsl",
+    "p_value_is": 0.16309465233645248,
+    "p_value_oos": null,
+    "frequency_classification": "FAST",
+    "measured_trades_per_year": 103.12355080700159,
+    "candle_data_source": "research_export",
+    "candle_row_count": 4400,
+    "fdr_survives_oos": null,
+    "fdr_survives_is": null,
+    "excluded_from_fdr_family_reason": "self_derivative"
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260804T020749Z-4cf6e4c9",
+    "turn_index": 3,
+    "tool_use_id": "toolu_01Lm2urB2aYg1jwbZjLc5vR6",
+    "proposed_at": "2026-08-04T02:07:49.935649+00:00",
+    "raw_hypothesis": {
+      "hypothesis_name": "ETH_BIDIRECTIONAL_ZSCORE_FADE",
+      "mechanism": "A symmetric, bidirectional statistical mean-reversion play on ETH: fade extreme short-term dislocations (zscore20) in both directions, using a volatility-regime filter (adx14 < 20, i.e. non-trending/ranging conditions only) to avoid fading into strong trends -- this is the same class of filter diagnosed as important in RANGE_MEAN_REVERSION's more successful configs. Making it bidirectional both increases trade count (helping clear the 30-60/year frequency bar and the 20-trades-per-half verdict requirement) and provides a natural robustness check: if only one side (long or short) shows edge while the other doesn't, that itself is diagnostic information about whether the effect is a real symmetric mean-reversion phenomenon or a directional-momentum artifact in disguise.",
+      "asset": "ETH",
+      "timeframe": "4h",
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "zscore20",
+            "op": "lte",
+            "value": -2.0
+          },
+          {
+            "field": "adx14",
+            "op": "lt",
+            "value": 20
+          }
+        ]
+      },
+      "structured_entry_rule_short": {
+        "conditions": [
+          {
+            "field": "zscore20",
+            "op": "gte",
+            "value": 2.0
+          },
+          {
+            "field": "adx14",
+            "op": "lt",
+            "value": 20
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_atr_multiple": 1.5,
+        "target_r_multiple": 1.0,
+        "max_holding_hours": 48
+      },
+      "expected_frequency_per_year": "85-130 combined across both directions (each side estimated at 2-3% of candles under the ranging-only filter)",
+      "notes_on_graveyard": "Explicitly designed to test the ADX/ranging-regime filter that RANGE_MEAN_REVERSION's diagnosis flagged as carrying real value, but on a scorable 4h pair rather than the thin BTC/1d sample, and made bidirectional to maximize trade count against the frequency gate.",
+      "generated_at": "2026-08-04T02:07:49.935649+00:00"
+    },
+    "testability": "TESTABLE",
+    "verdict_is": null,
+    "verdict_oos": null,
+    "verdict_combined": "SKIPPED",
+    "contamination_tags": [],
+    "testability_reason": "structured_entry_rule and structured_exit_plan both parse via rule_dsl",
+    "p_value_is": null,
+    "p_value_oos": null,
+    "frequency_classification": "TOO_SLOW",
+    "measured_trades_per_year": 27.399977267560807,
+    "candle_data_source": "research_export",
+    "candle_row_count": 4400,
+    "fdr_survives_oos": null,
+    "fdr_survives_is": null
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260804T020749Z-4cf6e4c9",
+    "turn_index": 4,
+    "tool_use_id": "toolu_01Riai74YNcpwnUSqEgPeTHH",
+    "proposed_at": "2026-08-04T02:07:49.935649+00:00",
+    "raw_hypothesis": {
+      "hypothesis_name": "BTC_MOMENTUM_IGNITION",
+      "mechanism": "A short-horizon momentum-continuation idea distinct from BOS_CONTINUATION (which failed because its structural stop was dominated by a generic ATR cap 75-95% of the time, making it secretly just trend-following). This hypothesis is explicitly and only trend-following by design (no structural-break pretense to be diluted): it enters on a single strong momentum candle (ret_1 > 0.015, i.e. a >1.5% move in one 4h candle) while RSI is not yet overbought (rsi14 < 70), aiming to catch the early/ignition phase of a momentum burst before it's extended, rather than chasing an already-stretched move. Because the entry and stop are both plainly volatility/momentum based with no structural claim, there's no risk of the same 'stop dominates diagnosed signal' dilution problem.",
+      "asset": "BTC",
+      "timeframe": "4h",
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "ret_1",
+            "op": "gt",
+            "value": 0.015
+          },
+          {
+            "field": "rsi14",
+            "op": "lt",
+            "value": 70
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_atr_multiple": 1.5,
+        "target_r_multiple": 1.5,
+        "max_holding_hours": 24
+      },
+      "expected_frequency_per_year": "unclear but likely 80-150 (single-candle >1.5% moves are common in BTC 4h data; exact rate depends on realized volatility regime across the sample period)",
+      "notes_on_graveyard": "Deliberately simpler than BOS_CONTINUATION -- no structural swing-point stop that could be diluted/capped -- to isolate whether plain momentum-ignition entries carry edge once the structural-stop confound diagnosed in the graveyard is removed entirely rather than patched.",
+      "generated_at": "2026-08-04T02:07:49.935649+00:00"
+    },
+    "testability": "TESTABLE",
+    "verdict_is": "DIED",
+    "verdict_oos": "PROMISING_WATCHLIST",
+    "verdict_combined": "DIED",
+    "contamination_tags": [],
+    "testability_reason": "structured_entry_rule and structured_exit_plan both parse via rule_dsl",
+    "p_value_is": 0.004357447847703755,
+    "p_value_oos": 0.22359924739482473,
+    "frequency_classification": "FAST",
+    "measured_trades_per_year": 77.218117754035,
+    "candle_data_source": "research_export",
+    "candle_row_count": 4400,
+    "fdr_survives_oos": false,
+    "fdr_survives_is": true
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260804T020749Z-4cf6e4c9",
+    "turn_index": 5,
+    "tool_use_id": "toolu_0182XKTAtxgyHULtTnhPsqP4",
+    "proposed_at": "2026-08-04T02:07:49.935649+00:00",
+    "raw_hypothesis": {
+      "hypothesis_name": "PAXG_PREMIUM_FADE_DYNAMIC_EXIT",
+      "mechanism": "Complementary short-side to PAXG_PEG_REVERSION: when PAXG trades at a statistically extreme premium (zscore20 >= 1.5) relative to its own recent mean, the same redemption-arbitrage mechanism that pulls discounts back up should also pull premiums back down (issuance arbitrage: when PAXG > spot+fees, arbitrageurs mint new tokens against gold and sell, pushing price down). Unlike the long-side hypothesis this uses a dynamic exit tied to the mean itself (dynamic_target_condition: exit when close crosses back below ma20) rather than a fixed R-multiple target, since the natural exit point for a reversion trade is 'reversion achieved' rather than an arbitrary multiple -- this tests a different, and specifically DSL-supported, exit mechanic than any prior exit-mechanics hypothesis on this platform (the graveyard's EMA-trail exit was an asymmetric trailing stop, not a mean-reversion target).",
+      "asset": "PAXG",
+      "timeframe": "4h",
+      "structured_entry_rule_short": {
+        "conditions": [
+          {
+            "field": "zscore20",
+            "op": "gte",
+            "value": 1.5
+          },
+          {
+            "field": "adx14",
+            "op": "lt",
+            "value": 25
+          }
+        ]
+      },
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "zscore20",
+            "op": "gte",
+            "value": 1.5
+          },
+          {
+            "field": "adx14",
+            "op": "lt",
+            "value": 25
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_atr_multiple": 1.5,
+        "target": "dynamic_target_condition",
+        "dynamic_target_condition": {
+          "field": "close",
+          "op": "lt",
+          "compare_to_field": "ma20"
+        },
+        "max_holding_hours": 96
+      },
+      "expected_frequency_per_year": "100-170 (mirrors the long-side zscore threshold frequency estimate)",
+      "notes_on_graveyard": "Tests a mean-reversion-to-target exit mechanic (dynamic_target_condition against ma20) rather than a fixed R-multiple, distinct from the failed EMA-trail exit (which was an asymmetric trailing-stop mechanism, not a mean-target exit). If the DSL rejects the nested 'target':'dynamic_target_condition' key alongside a separate dynamic_target_condition key, please treat structured_exit_plan as: stop_atr_multiple=1.5, target=dynamic_target_condition={field:close, op:lt, compare_to_field:ma20}, max_holding_hours=96.",
+      "generated_at": "2026-08-04T02:07:49.935649+00:00"
+    },
+    "testability": "TESTABLE",
+    "verdict_is": "PROMISING_WATCHLIST",
+    "verdict_oos": "DIED",
+    "verdict_combined": "DIED",
+    "contamination_tags": [],
+    "testability_reason": "structured_entry_rule and structured_exit_plan both parse via rule_dsl",
+    "p_value_is": 0.1609435883775996,
+    "p_value_oos": null,
+    "frequency_classification": "FAST",
+    "measured_trades_per_year": 138.49443055239826,
+    "candle_data_source": "research_export",
+    "candle_row_count": 4400,
+    "fdr_survives_oos": null,
+    "fdr_survives_is": false
   }
 ]
