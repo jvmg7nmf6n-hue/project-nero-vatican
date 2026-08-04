@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-03T21:00:44.218636+00:00",
+  "last_updated": "2026-08-04T15:56:05.083766+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -21,13 +21,13 @@
       "strategy_version": "trend-pullback-v1.0.0",
       "asset": "BNB",
       "gate": "12h",
-      "last_signal_at": "2026-08-03T13:46:35.310829+00:00",
+      "last_signal_at": "2026-08-04T13:07:10.484201+00:00",
       "resolved_trades": 0,
       "win_rate": null,
       "open_position": null,
       "stale": false,
       "flag_reason": null,
-      "evaluation_gap_hours": 1.7764755080555557,
+      "evaluation_gap_hours": 1.1195792225,
       "freshness_flagged": false
     },
     {
@@ -40,7 +40,7 @@
       "win_rate": null,
       "open_position": null,
       "stale": true,
-      "flag_reason": "most recent evaluation lagged its own candle close by 22.9h (expected within 4.0h) -- timeliness is degrading even though evaluations are still happening",
+      "flag_reason": "last signal was 61.1h ago, expected at least every 48h",
       "evaluation_gap_hours": 22.866989258055554,
       "freshness_flagged": true
     },
@@ -54,7 +54,7 @@
       "win_rate": null,
       "open_position": null,
       "stale": true,
-      "flag_reason": "most recent evaluation lagged its own candle close by 22.9h (expected within 4.0h) -- timeliness is degrading even though evaluations are still happening",
+      "flag_reason": "last signal was 61.1h ago, expected at least every 48h",
       "evaluation_gap_hours": 22.866989258055554,
       "freshness_flagged": true
     },
@@ -68,7 +68,7 @@
       "win_rate": null,
       "open_position": null,
       "stale": true,
-      "flag_reason": "most recent evaluation lagged its own candle close by 22.9h (expected within 4.0h) -- timeliness is degrading even though evaluations are still happening",
+      "flag_reason": "last signal was 61.1h ago, expected at least every 48h",
       "evaluation_gap_hours": 22.866989258055554,
       "freshness_flagged": true
     },
@@ -82,7 +82,7 @@
       "win_rate": null,
       "open_position": null,
       "stale": true,
-      "flag_reason": "most recent evaluation lagged its own candle close by 22.9h (expected within 4.0h) -- timeliness is degrading even though evaluations are still happening",
+      "flag_reason": "last signal was 61.1h ago, expected at least every 48h",
       "evaluation_gap_hours": 22.866989258055554,
       "freshness_flagged": true
     },
@@ -96,7 +96,7 @@
       "win_rate": null,
       "open_position": null,
       "stale": true,
-      "flag_reason": "most recent evaluation lagged its own candle close by 22.9h (expected within 4.0h) -- timeliness is degrading even though evaluations are still happening",
+      "flag_reason": "last signal was 61.1h ago, expected at least every 48h",
       "evaluation_gap_hours": 22.866989258055554,
       "freshness_flagged": true
     },
@@ -133,13 +133,13 @@
       "strategy_version": "range-mean-reversion-v1.1.0-long-only",
       "asset": "BTC",
       "gate": "24h",
-      "last_signal_at": "2026-08-03T02:55:54.983435+00:00",
+      "last_signal_at": "2026-08-04T00:14:39.613607+00:00",
       "resolved_trades": 0,
       "win_rate": null,
       "open_position": null,
       "stale": false,
       "flag_reason": null,
-      "evaluation_gap_hours": 2.9319401208333336,
+      "evaluation_gap_hours": 0.24433739083333333,
       "freshness_flagged": false
     },
     {
@@ -147,13 +147,13 @@
       "strategy_version": "range-mean-reversion-v1.3.0-confirmation",
       "asset": "BTC",
       "gate": "24h",
-      "last_signal_at": "2026-08-03T02:55:54.983435+00:00",
+      "last_signal_at": "2026-08-04T00:14:39.613607+00:00",
       "resolved_trades": 0,
       "win_rate": null,
       "open_position": null,
       "stale": false,
       "flag_reason": null,
-      "evaluation_gap_hours": 2.9319401208333336,
+      "evaluation_gap_hours": 0.24433739083333333,
       "freshness_flagged": false
     },
     {
@@ -175,13 +175,13 @@
       "strategy_version": "cointegration-pairs-v1.0.0",
       "asset": "BTC-ETH",
       "gate": "12h",
-      "last_signal_at": "2026-08-03T13:46:35.310829+00:00",
+      "last_signal_at": "2026-08-04T13:07:10.484201+00:00",
       "resolved_trades": 0,
       "win_rate": null,
       "open_position": null,
       "stale": false,
       "flag_reason": null,
-      "evaluation_gap_hours": 1.7764755080555557,
+      "evaluation_gap_hours": 1.1195792225,
       "freshness_flagged": false
     },
     {
@@ -505,10 +505,14 @@
       "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
       "gate": null,
-      "last_signal_at": "2026-08-03T20:36:30.724882+00:00",
-      "resolved_trades": 18,
-      "win_rate": 0.5555555555555556,
-      "open_position": null,
+      "last_signal_at": "2026-08-04T13:07:10.484201+00:00",
+      "resolved_trades": 20,
+      "win_rate": 0.5,
+      "open_position": {
+        "entry_price": 63906.41,
+        "entry_timestamp": "2026-08-04T13:07:10.484201+00:00",
+        "candle_timestamp": "2026-08-04T12:59:59.999000+00:00"
+      },
       "stale": false,
       "flag_reason": null,
       "evaluation_gap_hours": null,
@@ -519,10 +523,14 @@
       "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
       "gate": null,
-      "last_signal_at": "2026-08-03T08:03:48.047450+00:00",
+      "last_signal_at": "2026-08-04T13:07:10.484201+00:00",
       "resolved_trades": 14,
       "win_rate": 0.5714285714285714,
-      "open_position": null,
+      "open_position": {
+        "entry_price": 1875.11,
+        "entry_timestamp": "2026-08-04T13:07:10.484201+00:00",
+        "candle_timestamp": "2026-08-04T12:59:59.999000+00:00"
+      },
       "stale": false,
       "flag_reason": null,
       "evaluation_gap_hours": null,
