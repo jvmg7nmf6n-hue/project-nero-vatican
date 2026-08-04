@@ -329,5 +329,18 @@
     },
     "created_at": "2026-08-03T14:25:19.547816+00:00",
     "reconciled_at": "2026-08-03T14:25:19.547816+00:00"
+  },
+  {
+    "schema_version": 1,
+    "entry_id": "7035f85f-f5ae-4b16-8bbf-aa6ec3b21fae",
+    "session_id": "eve-20260804T015806Z-243d095f",
+    "turn_index": 0,
+    "status": "reserved",
+    "month": "2026-08",
+    "projected_cost_usd": 0.098258,
+    "actual_cost_usd": null,
+    "usage": null,
+    "created_at": "2026-08-04T01:58:06.936123+00:00",
+    "reconciled_at": null
   }
 ]
