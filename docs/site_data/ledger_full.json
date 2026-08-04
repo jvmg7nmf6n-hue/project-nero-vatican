@@ -1,7 +1,51 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-03T23:13:29.898996+00:00",
+  "last_updated": "2026-08-04T00:16:22.647900+00:00",
   "rows": [
+    {
+      "timestamp": "2026-08-04T00:14:39.613607+00:00",
+      "strategy": "COINTEGRATION_PAIRS",
+      "strategy_version": "cointegration-pairs-v1.0.0",
+      "asset": "BTC-ETH",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "|z|=0.42 below entry threshold 2.0",
+      "candle_timestamp": "2026-08-03T23:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-08-04T00:14:39.613607+00:00",
+      "strategy": "RANGE_MEAN_REVERSION",
+      "strategy_version": "range-mean-reversion-v1.3.0-confirmation",
+      "asset": "BTC",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NO_CONFIRMATION_PATTERN",
+      "candle_timestamp": "2026-08-03T23:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-08-04T00:14:39.613607+00:00",
+      "strategy": "RANGE_MEAN_REVERSION",
+      "strategy_version": "range-mean-reversion-v1.1.0-long-only",
+      "asset": "BTC",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NO_BAND_BREACH",
+      "candle_timestamp": "2026-08-03T23:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-08-04T00:14:39.613607+00:00",
+      "strategy": "TREND_PULLBACK",
+      "strategy_version": "trend-pullback-v1.0.0",
+      "asset": "BNB",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NOT_IN_ESTABLISHED_UPTREND, NO_RECENT_PULLBACK_TO_MA50, RSI_OUTSIDE_NEUTRAL_BAND",
+      "candle_timestamp": "2026-08-03T23:59:59.999000+00:00"
+    },
     {
       "timestamp": "2026-08-03T23:13:25.166035+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
