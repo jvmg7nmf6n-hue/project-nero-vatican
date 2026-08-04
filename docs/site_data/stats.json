@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-03T15:11:49.803676+00:00",
+  "last_updated": "2026-08-04T00:16:22.650258+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -33,7 +33,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 13
+        "NO_TRADE": 14
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -177,7 +177,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 13
+        "NO_TRADE": 14
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -195,7 +195,7 @@
         "ENTRY": 1,
         "EXIT": 1,
         "WATCH": 0,
-        "NO_TRADE": 12
+        "NO_TRADE": 13
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -231,7 +231,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 13
+        "NO_TRADE": 14
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -240,14 +240,14 @@
       "strategy": "ORDERFLOW_IMBALANCE",
       "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
-      "resolved_trades": 17,
+      "resolved_trades": 19,
       "unverified_trades": 27,
-      "win_rate": 0.5294117647058824,
-      "expectancy_r": -0.2942720570322154,
-      "avg_return_pct": -0.04259365280116748,
+      "win_rate": 0.5263157894736842,
+      "expectancy_r": -0.26163991728278424,
+      "avg_return_pct": -0.03668565847584719,
       "signal_counts": {
-        "ENTRY": 44,
-        "EXIT": 44,
+        "ENTRY": 46,
+        "EXIT": 46,
         "WATCH": 0,
         "NO_TRADE": 0
       },
