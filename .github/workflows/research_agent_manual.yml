@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   research-agent:
@@ -31,12 +31,18 @@ jobs:
         continue-on-error: false
 
       - name: Print readable run summary
+        # Also writes docs/site_data/agent_run_summaries.json (append-only)
+        # -- see research_agent_run_summary.py's own module docstring
+        # (CC-1 review item 2): this run's aggregate calibration numbers
+        # (claimed vs measured trades/year, TOO_SLOW rejections) must never
+        # again exist only in this job's own log/artifact.
         run: python tools/research_agent_run_summary.py
 
-      # No commit/push step on purpose: this run's output must not become
-      # part of the record until a human has inspected it (agent_hypotheses.
-      # json is append-only, so bad entries can't be cleanly removed later).
-      # The three JSON files are uploaded as a downloadable artifact instead.
+      # STILL no commit/push for the three RAW files below on purpose: this
+      # run's own hypothesis output must not become part of the record until
+      # a human has inspected it (agent_hypotheses.json is append-only, so a
+      # bad entry can't be cleanly removed later). Uploaded as a downloadable
+      # artifact instead, unchanged from before.
       - name: Upload run output as artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -48,3 +54,26 @@ jobs:
             docs/site_data/agent_performance.json
           if-no-files-found: warn
           retention-days: 30
+
+      # docs/site_data/agent_run_summaries.json IS committed automatically,
+      # unlike the three files above -- it carries only AGGREGATE, DERIVED
+      # statistics (counts, ratios, which hypothesis NAMES were TOO_SLOW),
+      # never the raw hypothesis text/mechanism itself, so it does not carry
+      # the same "un-reviewed bad proposal, can't be undone" risk the
+      # no-commit rule above exists to guard against.
+      - name: Commit run summary
+        if: always()
+        run: |
+          git config user.name "nero-research-agent-summary"
+          git config user.email "actions@users.noreply.github.com"
+          git pull --rebase origin main || git rebase --abort || true
+          if [ -f docs/site_data/agent_run_summaries.json ]; then
+            git add -f docs/site_data/agent_run_summaries.json
+          fi
+          if git diff --cached --quiet; then
+            echo "no run summary changes"
+            exit 0
+          fi
+          git commit -m "Record Research Agent run summary"
+          git pull --rebase origin main || git rebase --abort || true
+          git push || echo "run summary push skipped; next run will retry"

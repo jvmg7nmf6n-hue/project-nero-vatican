@@ -146,6 +146,15 @@ VERDICT_EVE_INSUFFICIENT_SAMPLE = "INSUFFICIENT_SAMPLE"
 
 DERIVATIVE_SIMILARITY_THRESHOLD = 0.6
 DEFAULT_FDR_ALPHA = 0.05
+DERIVATIVE_TAG_NAME = "DERIVATIVE"
+# Added for the CC-1 review's item 1 (confirmed gap: eve_hypotheses.json was
+# write-only, and tag_derivative was only ever called with adam_history --
+# nothing stopped Eve re-proposing her own past idea and having it counted
+# as a fresh independent data point). Distinct tag name from DERIVATIVE_TAG_
+# NAME so a record's contamination_tags can never conflate "converges with
+# something Adam already proposed" and "Eve has already proposed this
+# herself" -- see apply_self_derivative_tags below.
+SELF_DERIVATIVE_TAG_NAME = "SELF_DERIVATIVE"
 
 
 def classify_testability(raw_hypothesis: dict) -> tuple[str, str]:
@@ -323,21 +332,53 @@ def score_all(records: list[dict], candles_provider: Callable[[str, str], object
     return [score_hypothesis(r, candles_provider, now=now) for r in records]
 
 
+def is_self_derivative(record: dict) -> bool:
+    """True iff `record` carries a SELF_DERIVATIVE contamination tag (see
+    apply_self_derivative_tags below). Public (no leading underscore) --
+    apply_fdr_correction uses this to exclude a self-derivative hypothesis
+    from the FDR family, and nero_core.eve.pipeline uses it directly to
+    count self-derivative hypotheses per session for ablation_metadata (CC-1
+    review item 1d), rather than duplicating the contamination_tags-scanning
+    logic in a second place. A record can have MULTIPLE contamination_tags
+    entries (e.g. both DERIVATIVE and SELF_DERIVATIVE); any one
+    SELF_DERIVATIVE tag is enough."""
+    return any(t.get("tag") == SELF_DERIVATIVE_TAG_NAME for t in (record.get("contamination_tags") or []))
+
+
 def apply_fdr_correction(scored_records: list[dict], alpha: float = DEFAULT_FDR_ALPHA, field: str = "p_value_oos") -> list[dict]:
     """Spec 3.3: 'Report both everywhere. Never report verdict_is alone.'
     -- but the FDR-corrected HEADLINE number (spec 3.4) is the
     out-of-sample one by default (field='p_value_oos'); callers that also
     want an FDR pass over p_value_is can call this again with
     field='p_value_is'. Records with no usable p-value in `field` get
-    fdr_survives_{is,oos}=None, never a fabricated True/False."""
+    fdr_survives_{is,oos}=None, never a fabricated True/False.
+
+    SELF_DERIVATIVE EXCLUSION (added after the CC-1 review's own item 1):
+    a hypothesis Eve has already proposed in an earlier session is not an
+    INDEPENDENT test of the 5% OOS bar, even though it is still scored and
+    its real verdict is still recorded in full (this project's rule is
+    "measure, never gate" -- see module docstring). It is therefore
+    excluded from the FDR family here regardless of whether it has a real
+    p-value: `fdr_survives_{is,oos}` stays None for it, and
+    `excluded_from_fdr_family_reason` is set explicitly to
+    "self_derivative" so that None is never ambiguous with "no p-value for
+    an unrelated reason" (e.g. INSUFFICIENT_SAMPLE). Callers MUST run
+    apply_self_derivative_tags (and apply_derivative_tags, though that one
+    does not affect FDR membership) BEFORE this function, or every record
+    is (correctly, conservatively) treated as NOT self-derivative."""
     result_field = "fdr_survives_oos" if field == "p_value_oos" else "fdr_survives_is"
-    indices_with_p = [i for i, r in enumerate(scored_records) if r.get(field) is not None]
+    indices_with_p = [
+        i for i, r in enumerate(scored_records)
+        if r.get(field) is not None and not is_self_derivative(r)
+    ]
     p_values = [scored_records[i][field] for i in indices_with_p]
     survives = benjamini_hochberg(p_values, alpha=alpha)
 
     updated = [dict(r) for r in scored_records]
     for r in updated:
         r.setdefault(result_field, None)
+        if is_self_derivative(r) and r.get(field) is not None:
+            r["excluded_from_fdr_family_reason"] = "self_derivative"
     for pos, idx in enumerate(indices_with_p):
         updated[idx][result_field] = survives[pos]
     return updated
@@ -378,11 +419,22 @@ def _term_frequency_cosine_similarity(text_a: str, text_b: str) -> float:
     return dot / (norm_a * norm_b)
 
 
-def tag_derivative(raw_hypothesis: dict, adam_history: list[dict], threshold: float = DERIVATIVE_SIMILARITY_THRESHOLD) -> list[dict]:
+def tag_derivative(
+    raw_hypothesis: dict,
+    adam_history: list[dict],
+    threshold: float = DERIVATIVE_SIMILARITY_THRESHOLD,
+    tag_name: str = DERIVATIVE_TAG_NAME,
+) -> list[dict]:
     """Informational only, never gating (spec 3.5): flags similarity to any
-    prior Adam hypothesis TEXT (verdicts were never supplied to Eve in the
-    first place -- see nero_core.eve.context -- so this measures
-    CONVERGENCE, not copying-of-a-known-winner)."""
+    prior hypothesis TEXT in `adam_history` (originally always Adam's own
+    history -- verdicts were never supplied to Eve in the first place, see
+    nero_core.eve.context -- so this measures CONVERGENCE, not copying-of-
+    a-known-winner). `tag_name` defaults to DERIVATIVE_TAG_NAME (the
+    original, still-default behavior, byte-identical for every existing
+    caller); apply_self_derivative_tags below reuses this SAME function and
+    SAME threshold unmodified, passing Eve's own prior-session history and
+    tag_name=SELF_DERIVATIVE_TAG_NAME instead -- deliberately not a
+    reimplementation of the similarity method."""
     text = f"{raw_hypothesis.get('hypothesis_name', '')} {raw_hypothesis.get('mechanism', '')}"
     flags = []
     for prior in adam_history:
@@ -390,7 +442,7 @@ def tag_derivative(raw_hypothesis: dict, adam_history: list[dict], threshold: fl
         similarity = _term_frequency_cosine_similarity(text, prior_text)
         if similarity >= threshold:
             flags.append({
-                "tag": "DERIVATIVE",
+                "tag": tag_name,
                 "matched_hypothesis_name": prior.get("hypothesis_name"),
                 "similarity": round(similarity, 4),
                 "method": "term-frequency cosine similarity (lexical, not semantic)",
@@ -404,6 +456,30 @@ def apply_derivative_tags(scored_records: list[dict], adam_history: list[dict]) 
         raw = r.get("raw_hypothesis") if isinstance(r.get("raw_hypothesis"), dict) else {}
         tags = list(r.get("contamination_tags") or [])
         tags.extend(tag_derivative(raw, adam_history))
+        updated.append({**r, "contamination_tags": tags})
+    return updated
+
+
+def apply_self_derivative_tags(scored_records: list[dict], eve_history: list[dict]) -> list[dict]:
+    """CC-1 review, item 1: Eve's own PRIOR-SESSION hypothesis history
+    (raw_hypothesis dicts from earlier sessions' records in eve_hypotheses.
+    json, filtered by the caller to exclude the CURRENT session's own
+    records -- see pipeline.py's load_eve_history_excluding_session) checked
+    with the exact same tag_derivative function and DERIVATIVE_SIMILARITY_
+    THRESHOLD (0.6) as the Adam-history check -- same discipline as
+    WEB_SEARCH_TOOL's own byte-identical reuse, not a reinvented method.
+
+    A hypothesis tagged SELF_DERIVATIVE here is NOT discarded and NOT
+    re-scored differently -- "measure, never gate" (module docstring)
+    applies exactly as it does to every other contamination tag. What
+    changes is downstream, in apply_fdr_correction: a self-derivative
+    hypothesis is excluded from the FDR family, because a hypothesis Eve
+    has already tried is not an INDEPENDENT test of the survival bar."""
+    updated = []
+    for r in scored_records:
+        raw = r.get("raw_hypothesis") if isinstance(r.get("raw_hypothesis"), dict) else {}
+        tags = list(r.get("contamination_tags") or [])
+        tags.extend(tag_derivative(raw, eve_history, tag_name=SELF_DERIVATIVE_TAG_NAME))
         updated.append({**r, "contamination_tags": tags})
     return updated
 

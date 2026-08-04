@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
-from tools.research_agent_run_summary import build_summary
+from tools.research_agent_run_summary import append_run_summary, build_summary, compute_summary_data
 
 
 class BuildSummaryTest(unittest.TestCase):
@@ -151,6 +154,113 @@ class BuildSummaryTest(unittest.TestCase):
         out = build_summary(hypotheses, test_results, None)
         self.assertIn("measured=0 trades/yr, LLM claimed 15.0 -- infinite overestimate", out)
         self.assertIn("(no hypothesis had both a measurable frequency and an LLM claim to compare)", out)
+
+
+class ComputeSummaryDataTest(unittest.TestCase):
+    """compute_summary_data is the single source of truth build_summary
+    formats and append_run_summary persists -- direct coverage of the
+    structured facts, independent of build_summary's own text formatting."""
+
+    def test_calibration_ratio_and_direction_match_the_overestimate_flag_case(self) -> None:
+        hypotheses = [
+            {"hypothesis_name": "A", "asset": "BTC", "timeframe": "1h", "expected_frequency_claim": 60.0},
+            {"hypothesis_name": "B", "asset": "ETH", "timeframe": "1h", "expected_frequency_claim": 90.0},
+        ]
+        test_results = [
+            {"hypothesis_name": "A", "asset": "BTC", "timeframe": "1h", "verdict": "DIED", "frequency_classification": "VIABLE", "measured_trades_per_year": 20.0, "expected_time_to_30_trades_months": 18.0},
+            {"hypothesis_name": "B", "asset": "ETH", "timeframe": "1h", "verdict": "DIED", "frequency_classification": "VIABLE", "measured_trades_per_year": 30.0, "expected_time_to_30_trades_months": 12.0},
+        ]
+        data = compute_summary_data(hypotheses, test_results, None)
+        self.assertEqual(data["calibration"]["n"], 2)
+        self.assertEqual(data["calibration"]["direction"], "overestimate")
+        self.assertAlmostEqual(data["calibration"]["average_ratio"], (3.0 + 3.0) / 2)
+        self.assertEqual(data["calibration"]["ratio_by_hypothesis_name"]["A"], 3.0)
+        self.assertEqual(data["calibration"]["ratio_by_hypothesis_name"]["B"], 3.0)
+
+    def test_zero_measured_frequency_recorded_as_infinite_overestimate_not_a_crash(self) -> None:
+        hypotheses = [{"hypothesis_name": "D", "asset": "BTC", "timeframe": "1h", "expected_frequency_claim": 15.0}]
+        test_results = [{"hypothesis_name": "D", "asset": "BTC", "timeframe": "1h", "verdict": "SKIPPED", "frequency_classification": "TOO_SLOW", "measured_trades_per_year": 0.0, "expected_time_to_30_trades_months": None}]
+        data = compute_summary_data(hypotheses, test_results, None)
+        self.assertEqual(data["calibration"], None)
+        self.assertEqual(data["too_slow"][0]["measured_trades_per_year"], 0.0)
+
+    def test_no_calibration_data_when_nothing_has_both_claim_and_measurement(self) -> None:
+        data = compute_summary_data([], [], None)
+        self.assertIsNone(data["calibration"])
+
+    def test_run_aggregate_none_when_no_run_entry(self) -> None:
+        data = compute_summary_data([], [], None)
+        self.assertIsNone(data["run_aggregate"])
+
+    def test_run_aggregate_present_and_by_channel_split_computed(self) -> None:
+        run_entry = {
+            "hypotheses_generated": 2, "duplicates_skipped": 0, "llm_calls_made": 5,
+            "total_llm_cost_usd": 0.08, "cost_limit_hit": True,
+            "too_slow_rejected": 0, "unmeasurable_rejected": 0,
+            "survived": 0, "promising_watchlist": 0, "died": 0, "untestable": 0, "no_candles_available": 0,
+            "web_hypotheses_generated": 0, "web_llm_calls_made": 3, "web_total_llm_cost_usd": 0.05, "web_cost_limit_hit": True,
+        }
+        data = compute_summary_data([], [], run_entry)
+        self.assertEqual(data["run_aggregate"]["by_channel"]["scanner"]["calls"], 2)
+        self.assertEqual(data["run_aggregate"]["by_channel"]["web_search"]["calls"], 3)
+        self.assertTrue(data["run_aggregate"]["web_search_zero_hypotheses_note"])
+
+    def test_output_is_json_serializable(self) -> None:
+        # append_run_summary writes this straight to JSON -- must never
+        # contain a non-serializable value (e.g. a NaN float from a bad
+        # division, or a set instead of a list).
+        hypotheses = [{"hypothesis_name": "A", "asset": "BTC", "timeframe": "1h", "expected_frequency_claim": 40.0}]
+        test_results = [{"hypothesis_name": "A", "asset": "BTC", "timeframe": "1h", "verdict": "DIED", "frequency_classification": "VIABLE", "measured_trades_per_year": 25.0, "expected_time_to_30_trades_months": 14.4}]
+        data = compute_summary_data(hypotheses, test_results, None)
+        json.dumps(data)  # must not raise
+
+
+class AppendRunSummaryTest(unittest.TestCase):
+    """CC-1 review, item 2b: persist every real run's summary to an
+    append-only committed file, so this never depends on a transcript
+    again."""
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.path = Path(self._tmpdir.name) / "agent_run_summaries.json"
+
+    def tearDown(self) -> None:
+        self._tmpdir.cleanup()
+
+    def test_creates_the_file_with_one_entry(self) -> None:
+        data = compute_summary_data([], [], None)
+        append_run_summary(data, run_at="2026-08-03T12:00:00+00:00", source="research_agent_run_summary.py", path=self.path)
+        on_disk = json.loads(self.path.read_text(encoding="utf-8"))
+        self.assertEqual(len(on_disk), 1)
+        self.assertEqual(on_disk[0]["run_at"], "2026-08-03T12:00:00+00:00")
+        self.assertEqual(on_disk[0]["source"], "research_agent_run_summary.py")
+
+    def test_append_only_preserves_prior_entries(self) -> None:
+        data = compute_summary_data([], [], None)
+        append_run_summary(data, run_at="2026-08-01T00:00:00+00:00", source="research_agent_run_summary.py", path=self.path)
+        append_run_summary(data, run_at="2026-08-02T00:00:00+00:00", source="research_agent_run_summary.py", path=self.path)
+        on_disk = json.loads(self.path.read_text(encoding="utf-8"))
+        self.assertEqual(len(on_disk), 2)
+        self.assertEqual([e["run_at"] for e in on_disk], ["2026-08-01T00:00:00+00:00", "2026-08-02T00:00:00+00:00"])
+
+    def test_backfilled_source_tag_is_distinct_from_a_real_run(self) -> None:
+        # CC-1 review, item 2c: a reconstructed/backfilled entry must never
+        # be indistinguishable from a real script-produced one.
+        data = compute_summary_data([], [], None)
+        append_run_summary(data, run_at="2026-08-03T00:00:00+00:00", source="backfilled-from-chat-transcript-not-independently-verified", path=self.path)
+        on_disk = json.loads(self.path.read_text(encoding="utf-8"))
+        self.assertNotEqual(on_disk[0]["source"], "research_agent_run_summary.py")
+
+    def test_creates_parent_directory_if_missing(self) -> None:
+        nested_path = Path(self._tmpdir.name) / "nested" / "dir" / "agent_run_summaries.json"
+        data = compute_summary_data([], [], None)
+        append_run_summary(data, run_at="2026-08-03T00:00:00+00:00", source="research_agent_run_summary.py", path=nested_path)
+        self.assertTrue(nested_path.exists())
+
+    def test_no_leftover_tmp_file_after_write(self) -> None:
+        data = compute_summary_data([], [], None)
+        append_run_summary(data, run_at="2026-08-03T00:00:00+00:00", source="research_agent_run_summary.py", path=self.path)
+        self.assertFalse((self.path.parent / (self.path.name + ".tmp")).exists())
 
 
 if __name__ == "__main__":

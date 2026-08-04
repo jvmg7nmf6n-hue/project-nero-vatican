@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import inspect
+import json
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -108,6 +109,124 @@ class EnabledStubPipelineTest(_IsolatedStorageTestCase):
 
         self.assertTrue(result.enabled)
         self.assertEqual(result.lookahead_risk_flags, [])
+
+
+def _prior_eve_record(session_id: str, hypothesis_name: str, mechanism: str, asset: str = "BTC", timeframe: str = "1h") -> dict:
+    return {
+        "schema_version": storage.SCHEMA_VERSION,
+        "session_id": session_id,
+        "turn_index": 0,
+        "tool_use_id": "toolu_prior",
+        "proposed_at": "2026-08-01T00:00:00+00:00",
+        "raw_hypothesis": {"hypothesis_name": hypothesis_name, "mechanism": mechanism, "asset": asset, "timeframe": timeframe},
+        "testability": "TESTABLE",
+        "verdict_is": None, "verdict_oos": None, "verdict_combined": None,
+        "contamination_tags": [],
+    }
+
+
+class LoadEveHistoryExcludingSessionTest(_IsolatedStorageTestCase):
+    """Direct unit coverage of pipeline._load_eve_history_excluding_session
+    -- the loader must filter out the current session's own (already-
+    persisted-by-session.py, still-UNSCORED) records, or a self-dedup check
+    built on top of it would compare every hypothesis against itself."""
+
+    def test_excludes_only_the_given_session_id(self) -> None:
+        storage.append_json_list(self.hypotheses_path, [
+            _prior_eve_record("session-A", "IDEA_A", "mechanism a"),
+            _prior_eve_record("session-B", "IDEA_B", "mechanism b"),
+        ])
+        history = pipeline._load_eve_history_excluding_session("session-A")
+        self.assertEqual([h["hypothesis_name"] for h in history], ["IDEA_B"])
+
+    def test_empty_file_returns_empty_history(self) -> None:
+        self.assertEqual(pipeline._load_eve_history_excluding_session("any-session"), [])
+
+    def test_records_missing_raw_hypothesis_are_skipped_not_crashed_on(self) -> None:
+        storage.append_json_list(self.hypotheses_path, [{"schema_version": 1, "session_id": "session-C"}])
+        self.assertEqual(pipeline._load_eve_history_excluding_session("other"), [])
+
+
+class SelfDedupEndToEndTest(_IsolatedStorageTestCase):
+    """CC-1 review, item 1c: a concrete before/after example proving the
+    self-dedup check actually catches a repeat, run through the real
+    pipeline (stub mode -- the stub script's own hypothesis is
+    EVE_STUB_ZSCORE_REVERSION, mechanism 'Stub mechanism for dry-run
+    testing only -- not a real research claim.', see llm_client._stub_
+    script), not just the isolated scoring-module unit tests."""
+
+    def test_repeating_a_prior_sessions_hypothesis_is_tagged_and_excluded_from_fdr(self) -> None:
+        # BEFORE: eve_hypotheses.json already has a near-identical prior
+        # hypothesis from a different session. Uses a LARGER candle set
+        # (n=5000, vs the module default 600) so the stub's own zscore20<-2
+        # rule realizes enough real out-of-sample trades to get an actual
+        # non-null p-value -- confirmed empirically: at n=600 this
+        # hypothesis's own verdict_oos is INSUFFICIENT_SAMPLE (p_value_oos
+        # already None for an unrelated reason), which would make this
+        # specific assertion vacuously true regardless of whether the
+        # self-derivative exclusion did anything. n=5000 gives a real
+        # p_value_oos, so `excluded_from_fdr_family_reason` being set here
+        # actually proves the exclusion fired.
+        storage.append_json_list(self.hypotheses_path, [
+            _prior_eve_record("prior-session-999", "EVE_STUB_ZSCORE_REVERSION_PRIOR", "Stub mechanism for dry-run testing only -- not a real research claim.")
+        ])
+
+        candles = _make_candles(n=5000)
+        with patch.dict("os.environ", {EVE_ENABLED_ENV_VAR: "true"}):
+            result = pipeline.run_pipeline(
+                api_key="fake", stub=True, candles_provider=lambda a, t: candles, now=datetime(2026, 8, 15, tzinfo=timezone.utc)
+            )
+
+        # AFTER: this session's own (near-identical) stub hypothesis is
+        # caught -- still scored (never discarded, never gated), but
+        # excluded from the FDR family since it isn't an independent test.
+        scored = result.scored_hypotheses[0]
+        self.assertIsNotNone(scored["p_value_oos"], "test setup must produce a real p-value or this assertion proves nothing")
+        self.assertTrue(scoring.is_self_derivative(scored))
+        self.assertEqual(scored["excluded_from_fdr_family_reason"], "self_derivative")
+        self.assertIsNone(scored["fdr_survives_oos"])
+        self.assertNotEqual(scored["testability"], "UNSCORED", "must still be scored, never discarded")
+
+    def test_a_genuinely_novel_hypothesis_is_never_flagged(self) -> None:
+        storage.append_json_list(self.hypotheses_path, [
+            _prior_eve_record("prior-session-999", "COMPLETELY_UNRELATED_IDEA", "funding rate extremes on perpetual futures force a leveraged unwind", asset="ETH", timeframe="4h")
+        ])
+
+        candles = _make_candles(n=5000)
+        with patch.dict("os.environ", {EVE_ENABLED_ENV_VAR: "true"}):
+            result = pipeline.run_pipeline(
+                api_key="fake", stub=True, candles_provider=lambda a, t: candles, now=datetime(2026, 8, 15, tzinfo=timezone.utc)
+            )
+
+        scored = result.scored_hypotheses[0]
+        self.assertFalse(scoring.is_self_derivative(scored))
+        self.assertIsNotNone(scored["p_value_oos"], "test setup must produce a real p-value or this assertion proves nothing")
+        self.assertIn(scored["fdr_survives_oos"], (True, False))
+
+    def test_ablation_metadata_records_the_self_derivative_count(self) -> None:
+        storage.append_json_list(self.hypotheses_path, [
+            _prior_eve_record("prior-session-999", "EVE_STUB_ZSCORE_REVERSION_PRIOR", "Stub mechanism for dry-run testing only -- not a real research claim.")
+        ])
+
+        candles = _make_candles()
+        with patch.dict("os.environ", {EVE_ENABLED_ENV_VAR: "true"}):
+            result = pipeline.run_pipeline(
+                api_key="fake", stub=True, candles_provider=lambda a, t: candles, now=datetime(2026, 8, 15, tzinfo=timezone.utc)
+            )
+
+        record = json.loads(storage.session_record_path(result.session_result.session_id).read_text(encoding="utf-8"))
+        self.assertEqual(record["ablation_metadata"]["n_self_derivative_hypotheses"], 1)
+
+    def test_zero_self_derivative_count_is_recorded_explicitly_not_omitted(self) -> None:
+        candles = _make_candles()
+        with patch.dict("os.environ", {EVE_ENABLED_ENV_VAR: "true"}):
+            result = pipeline.run_pipeline(
+                api_key="fake", stub=True, candles_provider=lambda a, t: candles, now=datetime(2026, 8, 15, tzinfo=timezone.utc)
+            )
+
+        record = json.loads(storage.session_record_path(result.session_result.session_id).read_text(encoding="utf-8"))
+        self.assertIn("n_self_derivative_hypotheses", record["ablation_metadata"])
+        self.assertEqual(record["ablation_metadata"]["n_self_derivative_hypotheses"], 0)
 
 
 class DefaultCandlesProviderResearchFallbackTest(unittest.TestCase):

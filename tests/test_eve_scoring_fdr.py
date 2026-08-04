@@ -239,5 +239,71 @@ class ApplyFdrCorrectionTest(unittest.TestCase):
         self.assertNotIn("fdr_survives_oos", updated[0])
 
 
+class SelfDerivativeExcludedFromFdrFamilyTest(unittest.TestCase):
+    """CC-1 review, item 1a: a self-derivative hypothesis is still SCORED
+    and its verdict still RECORDED (measure, never gate) -- what changes is
+    that it is excluded from the FDR family, because it is not an
+    independent test. This must be explicit in the record, not just an
+    absence."""
+
+    def _self_derivative_record(self, p_value_oos):
+        return {
+            "hypothesis_name": "REPEAT", "p_value_oos": p_value_oos, "p_value_is": p_value_oos,
+            "contamination_tags": [{"tag": "SELF_DERIVATIVE", "matched_hypothesis_name": "PRIOR", "similarity": 0.9, "method": "x"}],
+        }
+
+    def _fresh_record(self, p_value_oos):
+        return {"hypothesis_name": "FRESH", "p_value_oos": p_value_oos, "p_value_is": p_value_oos, "contamination_tags": []}
+
+    def test_self_derivative_record_excluded_even_with_a_significant_p_value(self) -> None:
+        # Would otherwise trivially "survive" FDR (p=0.001, alone in the
+        # family) -- must instead be excluded regardless of how significant
+        # its own p-value looks.
+        records = [self._self_derivative_record(0.001)]
+        updated = scoring.apply_fdr_correction(records, field="p_value_oos")
+        self.assertIsNone(updated[0]["fdr_survives_oos"])
+
+    def test_exclusion_reason_is_explicit_not_just_a_bare_none(self) -> None:
+        records = [self._self_derivative_record(0.001)]
+        updated = scoring.apply_fdr_correction(records, field="p_value_oos")
+        self.assertEqual(updated[0]["excluded_from_fdr_family_reason"], "self_derivative")
+
+    def test_a_record_with_no_p_value_at_all_gets_no_fabricated_exclusion_reason(self) -> None:
+        # A record can be None for an unrelated reason (e.g. INSUFFICIENT_
+        # SAMPLE) without ever being self-derivative -- must not silently
+        # acquire an "excluded_from_fdr_family_reason" it doesn't deserve.
+        records = [self._fresh_record(None)]
+        updated = scoring.apply_fdr_correction(records, field="p_value_oos")
+        self.assertNotIn("excluded_from_fdr_family_reason", updated[0])
+
+    def test_fresh_hypothesis_still_participates_in_the_family_normally(self) -> None:
+        records = [self._self_derivative_record(0.001), self._fresh_record(0.002)]
+        updated = scoring.apply_fdr_correction(records, field="p_value_oos", alpha=0.05)
+        self.assertIsNone(updated[0]["fdr_survives_oos"])
+        self.assertTrue(updated[1]["fdr_survives_oos"])
+
+    def test_self_derivative_status_never_affects_the_bh_threshold_for_others(self) -> None:
+        # A self-derivative record excluded from the family must not be
+        # counted in BH's own `n` (family size) -- confirm by comparing
+        # against running BH directly on just the fresh p-values.
+        fresh_p_values = [0.01, 0.02, 0.5]
+        direct = scoring.benjamini_hochberg(fresh_p_values, alpha=0.05)
+
+        records = [self._self_derivative_record(0.0001)] + [self._fresh_record(p) for p in fresh_p_values]
+        updated = scoring.apply_fdr_correction(records, field="p_value_oos", alpha=0.05)
+        via_pipeline = [r["fdr_survives_oos"] for r in updated[1:]]
+        self.assertEqual(via_pipeline, direct)
+
+    def test_verdict_and_p_value_are_untouched_only_fdr_survives_changes(self) -> None:
+        # "Scored yes, verdict recorded yes, counted as an independent data
+        # point no" -- the self-derivative record's own p_value_oos and any
+        # verdict fields must be left exactly as scored.
+        record = self._self_derivative_record(0.001)
+        record["verdict_oos"] = "SURVIVED"
+        updated = scoring.apply_fdr_correction([record], field="p_value_oos")
+        self.assertEqual(updated[0]["p_value_oos"], 0.001)
+        self.assertEqual(updated[0]["verdict_oos"], "SURVIVED")
+
+
 if __name__ == "__main__":
     unittest.main()

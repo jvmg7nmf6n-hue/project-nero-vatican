@@ -1,0 +1,46 @@
+[
+  {
+    "run_at": "2026-08-03",
+    "source": "chat-transcript-sourced, not independently verified (backfilled 2026-08-03, see provenance_note)",
+    "run_aggregate": {
+      "hypotheses_generated": 9,
+      "duplicates_skipped": null,
+      "llm_calls_made": null,
+      "total_llm_cost_usd": null,
+      "cost_limit_hit": null,
+      "by_channel": null,
+      "web_search_zero_hypotheses_note": null,
+      "too_slow_rejected": 9,
+      "unmeasurable_rejected": null,
+      "survived": 0,
+      "promising_watchlist": 0,
+      "died": 0,
+      "untestable": 0,
+      "no_candles_available": null
+    },
+    "n_test_results": 9,
+    "per_hypothesis": null,
+    "untested_no_candles": null,
+    "too_slow": null,
+    "unmeasurable": null,
+    "calibration": {
+      "average_ratio": 4.79,
+      "median_ratio": null,
+      "n": 9,
+      "direction": "overestimate",
+      "ratio_by_hypothesis_name": null,
+      "infinite_overestimate_hypothesis_names": null,
+      "claimed_trades_per_year_range": [
+        24,
+        32
+      ],
+      "measured_trades_per_year_range": [
+        2.5,
+        15
+      ]
+    },
+    "backfilled": true,
+    "data_completeness": "aggregate_only -- per-hypothesis names and individual claim/measured values are NOT available and are not fabricated here",
+    "provenance_note": "These figures were reported by the user in chat, described as originating from Adam real (nero_core.research_agent.pipeline) GitHub Actions run on 2026-08-03: 9 hypotheses generated, all 9 rejected TOO_SLOW by the frequency gate, claimed 24-32 trades/year vs measured 2.5-15 trades/year, ~4.79x average overestimate. This run was never written to any committed file -- confirmed directly: docs/site_data/agent_hypotheses.json and docs/site_data/agent_test_results.json do not exist anywhere in this repository (research_agent_manual.yml deliberately has no commit step for those two files -- see research_agent_run_summary.py module docstring), and docs/site_data/agent_performance.json (which IS committed) has only 2 runs on file, both dated 2026-07-29T16:45/17:17 UTC, both with hypotheses_generated=0 (the pre-working-key dry runs) -- no 2026-08-03 entry exists there either. This 2026-08-03 run could NOT be independently reconstructed from any committed artifact in this repository. These are the ONLY figures available for it; they are chat-transcript-sourced, not independently verified against a committed file, and must never be presented as repo-verified."
+  }
+]

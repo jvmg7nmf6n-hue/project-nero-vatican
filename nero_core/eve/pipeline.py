@@ -176,11 +176,38 @@ def _persist_scored_hypotheses(scored: list[dict]) -> None:
     storage.atomic_write_json_list(storage.DEFAULT_HYPOTHESES_PATH, updated)
 
 
-def _persist_lookahead_flags(session_record: dict, lookahead_flags: list[dict]) -> None:
-    if not lookahead_flags:
-        return
-    updated = {**session_record, "lookahead_risk_flags": lookahead_flags}
+def _load_eve_history_excluding_session(session_id: str) -> list[dict]:
+    """CC-1 review, item 1: Eve's own past hypotheses -- every OTHER
+    session's raw_hypothesis dicts read straight from eve_hypotheses.json
+    (confirmed gap being fixed here: that file was write-only, read back by
+    nothing, before this function existed). Filters out `session_id`'s own
+    records -- by the time this is called, session.run_session has already
+    persisted THIS session's own (still-UNSCORED) records to the same file
+    (see session.py's own end-of-function write), so an unfiltered read
+    would compare every hypothesis against itself and flag 100% of them."""
+    existing = storage.read_json_list(storage.DEFAULT_HYPOTHESES_PATH)
+    return [
+        r["raw_hypothesis"] for r in existing
+        if isinstance(r, dict) and r.get("session_id") != session_id and isinstance(r.get("raw_hypothesis"), dict)
+    ]
+
+
+def _persist_session_record_amendments(session_record: dict, lookahead_flags: list[dict], n_self_derivative: int) -> dict:
+    """Amends the already-persisted session record with everything only
+    knowable AFTER scoring runs -- lookahead-risk flags (spec 3.5) and the
+    self-derivative count (CC-1 review item 1d, 'record the per-session
+    count in ablation metadata'). Scoring is a completely separate pass
+    after session.run_session returns (see session.py's own module
+    docstring), so neither of these can be known at the point session.py
+    writes its own record. ONE combined atomic write, not two separate
+    ones -- two independent read-modify-write calls against the same file
+    would let the second silently clobber the first's amendment. Always
+    writes (a lookahead_flags empty list and a self-derivative count of 0
+    are both meaningful facts, not absence of data)."""
+    updated_ablation = {**(session_record.get("ablation_metadata") or {}), "n_self_derivative_hypotheses": n_self_derivative}
+    updated = {**session_record, "lookahead_risk_flags": lookahead_flags, "ablation_metadata": updated_ablation}
     storage.atomic_write_json_dict(storage.session_record_path(session_record["session_id"]), updated)
+    return updated
 
 
 @dataclass(frozen=True)
@@ -236,15 +263,22 @@ def run_pipeline(
         result = session.run_session(api_key=api_key, stub=stub, now=now)
 
         adam_history = eve_context.load_adam_history_verdict_stripped()
+        eve_history = _load_eve_history_excluding_session(result.session_id)
         scored = scoring.score_all(result.hypothesis_records, candles_provider=candles_provider, now=now)
+        # Contamination tagging BEFORE FDR correction (order matters, unlike
+        # before CC-1's own item 1 fix): apply_fdr_correction now excludes a
+        # SELF_DERIVATIVE-tagged record from the FDR family, so the tag must
+        # already be attached by the time it runs.
+        scored = scoring.apply_derivative_tags(scored, adam_history=adam_history)
+        scored = scoring.apply_self_derivative_tags(scored, eve_history=eve_history)
         scored = scoring.apply_fdr_correction(scored, field="p_value_oos")
         scored = scoring.apply_fdr_correction(scored, field="p_value_is")
-        scored = scoring.apply_derivative_tags(scored, adam_history=adam_history)
         _persist_scored_hypotheses(scored)
 
+        n_self_derivative = sum(1 for r in scored if scoring.is_self_derivative(r))
         window_start = _compute_backtest_window_start(scored, candles_provider)
         lookahead_flags = scoring.tag_lookahead_risk(result.record, window_start) if window_start is not None else []
-        _persist_lookahead_flags(result.record, lookahead_flags)
+        _persist_session_record_amendments(result.record, lookahead_flags, n_self_derivative)
     except Exception as exc:
         eve_notify.send_failure(reason=f"crash: {exc.__class__.__name__}: {exc}")
         raise
