@@ -35,6 +35,32 @@ def _finding() -> ScanFinding:
     return ScanFinding("extreme_zscore", "BTC", "1h", "BTC/1h extreme z-score", 3.0, 42.0, "note", NOW.isoformat())
 
 
+def _sse_lines_from_payload(payload: dict) -> list[str]:
+    """CC-1 Master Directive Phase 1c: encodes the plain {"content": [...],
+    "usage": {...}} shape this fixture already builds as the real SSE event
+    sequence hypothesis_gen._call_claude's now-streaming request receives --
+    see the identical helper's own docstring in
+    test_research_agent_hypothesis_gen.py (reinlined here, not imported)."""
+    lines: list[str] = []
+
+    def emit(event_type: str, data: dict) -> None:
+        lines.append(f"event: {event_type}")
+        lines.append(f"data: {json.dumps(data)}")
+        lines.append("")
+
+    emit("message_start", {"type": "message_start", "message": {"content": [], "usage": {}}})
+    for idx, block in enumerate(payload.get("content") or []):
+        if block.get("type") == "text":
+            emit("content_block_start", {"type": "content_block_start", "index": idx, "content_block": {"type": "text", "text": ""}})
+            emit("content_block_delta", {"type": "content_block_delta", "index": idx, "delta": {"type": "text_delta", "text": block.get("text", "")}})
+        else:
+            emit("content_block_start", {"type": "content_block_start", "index": idx, "content_block": block})
+        emit("content_block_stop", {"type": "content_block_stop", "index": idx})
+    emit("message_delta", {"type": "message_delta", "delta": {"stop_reason": payload.get("stop_reason")}, "usage": payload.get("usage") or {}})
+    emit("message_stop", {"type": "message_stop"})
+    return lines
+
+
 class _FakeResponse:
     def __init__(self, payload: dict, status_code: int = 200) -> None:
         self._payload = payload
@@ -45,6 +71,9 @@ class _FakeResponse:
 
     def json(self) -> dict:
         return self._payload
+
+    def iter_lines(self, decode_unicode: bool = True):
+        return iter(_sse_lines_from_payload(self._payload))
 
 
 def _claude_payload(data: dict) -> dict:

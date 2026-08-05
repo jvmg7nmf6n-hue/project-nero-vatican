@@ -45,11 +45,67 @@ WEB_HYPOTHESIS_DATA = {
 }
 
 
+def _sse_lines_from_payload(payload: dict) -> list[str]:
+    """CC-1 Master Directive Phase 1c: encodes the plain {"content": [...],
+    "usage": {...}} shape every existing test fixture already builds as the
+    real SSE event sequence _call_claude's now-streaming request receives --
+    see the identical helper's own docstring in
+    test_research_agent_hypothesis_gen.py (reinlined here, not imported --
+    two independent test files, same convention as the production module's
+    own no-cross-import discipline elsewhere in this codebase)."""
+    lines: list[str] = []
+
+    def emit(event_type: str, data: dict) -> None:
+        lines.append(f"event: {event_type}")
+        lines.append(f"data: {json.dumps(data)}")
+        lines.append("")
+
+    emit("message_start", {"type": "message_start", "message": {"content": [], "usage": {}}})
+    for idx, block in enumerate(payload.get("content") or []):
+        block_type = block.get("type")
+        if block_type in ("tool_use", "server_tool_use"):
+            emit("content_block_start", {"type": "content_block_start", "index": idx, "content_block": {**block, "input": {}}})
+            emit("content_block_delta", {
+                "type": "content_block_delta", "index": idx,
+                "delta": {"type": "input_json_delta", "partial_json": json.dumps(block.get("input") or {})},
+            })
+        elif block_type == "text":
+            emit("content_block_start", {"type": "content_block_start", "index": idx, "content_block": {"type": "text", "text": ""}})
+            emit("content_block_delta", {
+                "type": "content_block_delta", "index": idx,
+                "delta": {"type": "text_delta", "text": block.get("text", "")},
+            })
+        else:
+            emit("content_block_start", {"type": "content_block_start", "index": idx, "content_block": block})
+        emit("content_block_stop", {"type": "content_block_stop", "index": idx})
+    emit("message_delta", {"type": "message_delta", "delta": {"stop_reason": payload.get("stop_reason")}, "usage": payload.get("usage") or {}})
+    emit("message_stop", {"type": "message_stop"})
+    return lines
+
+
+def _sse_lines_with_stream_error(error_type: str, message: str) -> list[str]:
+    """See the identical helper's own docstring in
+    test_research_agent_hypothesis_gen.py -- reinlined here, not imported."""
+    lines: list[str] = []
+
+    def emit(event_type: str, data: dict) -> None:
+        lines.append(f"event: {event_type}")
+        lines.append(f"data: {json.dumps(data)}")
+        lines.append("")
+
+    emit("message_start", {"type": "message_start", "message": {"content": [], "usage": {"input_tokens": 500}}})
+    emit("error", {"type": "error", "error": {"type": error_type, "message": message}})
+    return lines
+
+
 class _FakeResponse:
-    def __init__(self, payload: dict, status_ok: bool = True, status_code: int = 200) -> None:
+    def __init__(
+        self, payload: dict, status_ok: bool = True, status_code: int = 200, stream_error: tuple[str, str] | None = None
+    ) -> None:
         self._payload = payload
         self._status_ok = status_ok
         self.status_code = status_code
+        self._stream_error = stream_error
 
     def raise_for_status(self) -> None:
         if not self._status_ok:
@@ -57,6 +113,11 @@ class _FakeResponse:
 
     def json(self) -> dict:
         return self._payload
+
+    def iter_lines(self, decode_unicode: bool = True):
+        if self._stream_error is not None:
+            return iter(_sse_lines_with_stream_error(*self._stream_error))
+        return iter(_sse_lines_from_payload(self._payload))
 
 
 def _payload(data: dict, input_tokens: int = 1000, output_tokens: int = 500, web_search_requests: int = 0) -> dict:
@@ -95,6 +156,64 @@ class WebSearchToolDeclarationTest(unittest.TestCase):
         self.assertIn("no special", sent_prompt.lower())
         self.assertIn("NEVER reproduce", sent_prompt)
         self.assertIn("20-30 trades per", sent_prompt)
+
+    def test_real_call_declares_streaming_but_preflight_does_not(self) -> None:
+        # CC-1 Master Directive Phase 1a: this is the fix for the confirmed
+        # idle-read-timeout crash named specifically for this web-search
+        # path -- a call idle for the whole server-side search is exactly
+        # the exposure streaming removes. The preflight probe (max_tokens=1,
+        # no tools) stays a plain, non-streaming call.
+        payload = _payload(WEB_HYPOTHESIS_DATA)
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse(payload)) as mock_post:
+            generate_web_hypotheses([], [], "fake-key", TRACKED_PAIRS, max_calls_per_run=1, now=NOW)
+
+        preflight_call, real_call = mock_post.call_args_list
+        self.assertNotIn("stream", preflight_call.kwargs["json"])
+        self.assertNotIn("stream", preflight_call.kwargs)
+        self.assertIs(real_call.kwargs["json"]["stream"], True)
+        self.assertIs(real_call.kwargs["stream"], True)
+
+    def test_streamed_web_search_blocks_reassemble_correctly(self) -> None:
+        # The realistic shape a web-search-enabled turn actually streams:
+        # a server_tool_use block (input built via input_json_delta, the
+        # SAME accumulate-then-parse-at-content_block_stop path a client
+        # tool_use block would use) followed by a web_search_tool_result
+        # block that arrives WHOLE (server-generated, no deltas -- confirmed
+        # against Anthropic's own real streaming trace), then the final text
+        # block with the hypothesis JSON. Exercises every content-block
+        # branch _assemble_streamed_response has, not just plain text.
+        payload = {
+            "content": [
+                {"type": "text", "text": "Searching for a documented calendar effect."},
+                {"type": "server_tool_use", "id": "srvtoolu_1", "name": "web_search", "input": {"query": "turn of month effect BTC"}},
+                {
+                    "type": "web_search_tool_result",
+                    "tool_use_id": "srvtoolu_1",
+                    "content": [{"type": "web_search_result", "url": "https://example.com/turn-of-month-effect", "title": "Turn-of-month effect", "page_age": "2020-01-01"}],
+                },
+                {"type": "text", "text": json.dumps(WEB_HYPOTHESIS_DATA)},
+            ],
+            "usage": {"input_tokens": 2000, "output_tokens": 400, "server_tool_use": {"web_search_requests": 1}},
+        }
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse(payload)):
+            result = generate_web_hypotheses([], [], "fake-key", TRACKED_PAIRS, max_calls_per_run=1, now=NOW)
+
+        self.assertEqual(len(result.hypotheses), 1)
+        self.assertEqual(result.hypotheses[0]["hypothesis_name"], WEB_HYPOTHESIS_DATA["hypothesis_name"])
+        expected_cost = (2000 / 1_000_000.0) * 2.00 + (400 / 1_000_000.0) * 10.00 + 1 * WEB_SEARCH_COST_PER_SEARCH
+        self.assertAlmostEqual(result.total_cost_usd, expected_cost, places=8)
+
+    def test_mid_stream_error_event_is_unknown_cost_not_a_confirmed_zero(self) -> None:
+        with patch(
+            "nero_core.research_agent.hypothesis_gen.requests.post",
+            side_effect=[_FakeResponse({}, status_code=200), _FakeResponse({}, stream_error=("overloaded_error", "Overloaded"))],
+        ):
+            result = generate_web_hypotheses([], [], "fake-key", TRACKED_PAIRS, max_calls_per_run=1, now=NOW)
+
+        self.assertEqual(result.calls_with_unknown_cost, 1)
+        self.assertEqual(result.total_cost_usd, 0.0)
+        self.assertIn("cost UNKNOWN, not confirmed $0", result.errors[-1]["message"])
+        self.assertIn("overloaded_error", result.errors[-1]["message"])
 
 
 class GenerateWebHypothesesTest(unittest.TestCase):

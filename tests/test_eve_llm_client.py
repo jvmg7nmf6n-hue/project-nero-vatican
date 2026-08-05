@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -10,6 +11,52 @@ from nero_core.eve.tools_defs import (
     WEB_SEARCH_TOOL,
     default_tools,
 )
+
+
+def _sse_lines_from_turn(content: list[dict], usage: dict, stop_reason: str | None = None) -> list[str]:
+    """CC-1 Master Directive Phase 1b/1c: encodes a plain {content, usage,
+    stop_reason} turn -- the shape call_turn's OLD non-streaming path got
+    directly from response.json() -- as the real SSE event sequence a
+    streamed call_turn request now receives. See the identical convention's
+    own docstring in test_research_agent_hypothesis_gen.py's
+    _sse_lines_from_payload (reinlined here, not imported -- nero_core/eve
+    and nero_core/research_agent stay independent, including in tests)."""
+    lines: list[str] = []
+
+    def emit(event_type: str, data: dict) -> None:
+        lines.append(f"event: {event_type}")
+        lines.append(f"data: {json.dumps(data)}")
+        lines.append("")
+
+    emit("message_start", {"type": "message_start", "message": {"content": [], "usage": {}}})
+    for idx, block in enumerate(content):
+        block_type = block.get("type")
+        if block_type in ("tool_use", "server_tool_use"):
+            emit("content_block_start", {"type": "content_block_start", "index": idx, "content_block": {**block, "input": {}}})
+            emit("content_block_delta", {
+                "type": "content_block_delta", "index": idx,
+                "delta": {"type": "input_json_delta", "partial_json": json.dumps(block.get("input") or {})},
+            })
+        elif block_type == "text":
+            emit("content_block_start", {"type": "content_block_start", "index": idx, "content_block": {"type": "text", "text": ""}})
+            emit("content_block_delta", {
+                "type": "content_block_delta", "index": idx,
+                "delta": {"type": "text_delta", "text": block.get("text", "")},
+            })
+        else:
+            emit("content_block_start", {"type": "content_block_start", "index": idx, "content_block": block})
+        emit("content_block_stop", {"type": "content_block_stop", "index": idx})
+    emit("message_delta", {"type": "message_delta", "delta": {"stop_reason": stop_reason}, "usage": usage})
+    emit("message_stop", {"type": "message_stop"})
+    return lines
+
+
+def _fake_stream_response(content: list[dict], usage: dict, stop_reason: str | None = None):
+    response = MagicMock()
+    response.status_code = 200
+    response.raise_for_status.return_value = None
+    response.iter_lines.return_value = iter(_sse_lines_from_turn(content, usage, stop_reason))
+    return response
 
 
 class WebSearchToolReuseTest(unittest.TestCase):
@@ -310,6 +357,94 @@ class RealCallHttpErrorHandlingTest(unittest.TestCase):
         with patch("nero_core.eve.llm_client.requests.post", return_value=self._mock_error_response(400)):
             with self.assertRaises(requests.exceptions.HTTPError):
                 llm_client.call_turn([], [], [], api_key="fake", stub=False, call_index=0)
+
+
+class RealCallStreamingTest(unittest.TestCase):
+    """CC-1 Master Directive Phase 1b: call_turn's real (non-stub) path must
+    issue a streamed request and correctly reassemble the SSE event sequence
+    back into the same LlmTurnResult shape the old non-streaming
+    response.json() path produced -- every downstream consumer (session.py's
+    extract_text/extract_tool_uses, scoring.py's raw_response["content"]
+    scan) depends on this staying byte-for-byte equivalent."""
+
+    def test_request_declares_streaming(self) -> None:
+        response = _fake_stream_response([{"type": "text", "text": "hi"}], {"input_tokens": 10, "output_tokens": 5}, "end_turn")
+        with patch("nero_core.eve.llm_client.requests.post", return_value=response) as mock_post:
+            llm_client.call_turn([], [], [], api_key="fake", stub=False, call_index=0)
+
+        self.assertIs(mock_post.call_args.kwargs["json"]["stream"], True)
+        self.assertIs(mock_post.call_args.kwargs["stream"], True)
+
+    def test_plain_text_turn_reassembles_correctly(self) -> None:
+        response = _fake_stream_response(
+            [{"type": "text", "text": "Researching a mean-reversion angle."}],
+            {"input_tokens": 1200, "output_tokens": 180},
+            "end_turn",
+        )
+        with patch("nero_core.eve.llm_client.requests.post", return_value=response):
+            result = llm_client.call_turn([], [], [], api_key="fake", stub=False, call_index=0)
+
+        self.assertEqual(llm_client.extract_text(result.content_blocks), "Researching a mean-reversion angle.")
+        self.assertEqual(result.stop_reason, "end_turn")
+        self.assertEqual(result.usage, {"input_tokens": 1200, "output_tokens": 180})
+
+    def test_tool_use_and_web_search_result_blocks_reassemble_correctly(self) -> None:
+        # The realistic multi-block shape one real Eve turn streams: a
+        # server_tool_use invocation (input via input_json_delta -- the same
+        # accumulate-then-parse-at-content_block_stop path a client tool_use
+        # block uses), the web_search_tool_result it produces (arrives
+        # WHOLE, no deltas -- server-generated), and a client propose_
+        # hypothesis tool_use call. Exercises every branch
+        # _assemble_streamed_message has to handle, not just plain text.
+        content = [
+            {"type": "server_tool_use", "id": "srvtoolu_1", "name": "web_search", "input": {"query": "z-score mean reversion"}},
+            {
+                "type": "web_search_tool_result",
+                "tool_use_id": "srvtoolu_1",
+                "content": [{"type": "web_search_result", "url": "https://example.com/paper", "title": "A paper", "page_age": "2020-01-01"}],
+            },
+            {
+                "type": "tool_use",
+                "id": "toolu_1",
+                "name": PROPOSE_HYPOTHESIS_TOOL_NAME,
+                "input": {"hypothesis": {"hypothesis_name": "TEST_HYPOTHESIS", "asset": "BTC", "timeframe": "1h"}},
+            },
+        ]
+        usage = {"input_tokens": 1400, "cache_read_input_tokens": 1100, "output_tokens": 220, "server_tool_use": {"web_search_requests": 1}}
+        response = _fake_stream_response(content, usage, "tool_use")
+        with patch("nero_core.eve.llm_client.requests.post", return_value=response):
+            result = llm_client.call_turn([], [], [], api_key="fake", stub=False, call_index=0)
+
+        self.assertEqual(result.stop_reason, "tool_use")
+        self.assertEqual(result.usage, usage)
+        proposals = llm_client.extract_tool_uses(result.content_blocks, PROPOSE_HYPOTHESIS_TOOL_NAME)
+        self.assertEqual(len(proposals), 1)
+        self.assertEqual(proposals[0]["input"]["hypothesis"]["hypothesis_name"], "TEST_HYPOTHESIS")
+        search_result_blocks = [b for b in result.content_blocks if b.get("type") == "web_search_tool_result"]
+        self.assertEqual(len(search_result_blocks), 1)
+        self.assertEqual(search_result_blocks[0]["content"][0]["url"], "https://example.com/paper")
+
+    def test_mid_stream_error_event_raises_stream_error(self) -> None:
+        # A real overloaded_error (Anthropic's own documented example)
+        # arriving mid-stream -- session.py's broad `except Exception` (see
+        # TERMINATION_CRASHED) must catch this exactly like a ReadTimeout,
+        # cost UNKNOWN, never a confirmed $0.
+        response = MagicMock()
+        response.status_code = 200
+        response.raise_for_status.return_value = None
+        lines = [
+            "event: message_start",
+            "data: " + json.dumps({"type": "message_start", "message": {"content": [], "usage": {"input_tokens": 500}}}),
+            "",
+            "event: error",
+            "data: " + json.dumps({"type": "error", "error": {"type": "overloaded_error", "message": "Overloaded"}}),
+            "",
+        ]
+        response.iter_lines.return_value = iter(lines)
+        with patch("nero_core.eve.llm_client.requests.post", return_value=response):
+            with self.assertRaises(llm_client.StreamError) as ctx:
+                llm_client.call_turn([], [], [], api_key="fake", stub=False, call_index=0)
+        self.assertIn("overloaded_error", str(ctx.exception))
 
 
 class MessageBuildersTest(unittest.TestCase):

@@ -53,6 +53,29 @@ FAKE_SECRET = "sk-ant-TESTSECRET-4f9a2b7c-do-not-leak-this"
 NOW = datetime(2026, 7, 29, tzinfo=timezone.utc)
 
 
+def _sse_lines_from_payload(payload: dict) -> list[str]:
+    """See the identical helper's own docstring in
+    test_research_agent_hypothesis_gen.py -- reinlined here, not imported."""
+    lines: list[str] = []
+
+    def emit(event_type: str, data: dict) -> None:
+        lines.append(f"event: {event_type}")
+        lines.append(f"data: {json.dumps(data)}")
+        lines.append("")
+
+    emit("message_start", {"type": "message_start", "message": {"content": [], "usage": {}}})
+    for idx, block in enumerate(payload.get("content") or []):
+        if block.get("type") == "text":
+            emit("content_block_start", {"type": "content_block_start", "index": idx, "content_block": {"type": "text", "text": ""}})
+            emit("content_block_delta", {"type": "content_block_delta", "index": idx, "delta": {"type": "text_delta", "text": block.get("text", "")}})
+        else:
+            emit("content_block_start", {"type": "content_block_start", "index": idx, "content_block": block})
+        emit("content_block_stop", {"type": "content_block_stop", "index": idx})
+    emit("message_delta", {"type": "message_delta", "delta": {"stop_reason": payload.get("stop_reason")}, "usage": payload.get("usage") or {}})
+    emit("message_stop", {"type": "message_stop"})
+    return lines
+
+
 class _FakeResponse:
     def __init__(self, payload: dict, status_ok: bool = True, status_code: int = 200) -> None:
         self._payload = payload
@@ -65,6 +88,9 @@ class _FakeResponse:
 
     def json(self) -> dict:
         return self._payload
+
+    def iter_lines(self, decode_unicode: bool = True):
+        return iter(_sse_lines_from_payload(self._payload))
 
 
 def _finding() -> ScanFinding:

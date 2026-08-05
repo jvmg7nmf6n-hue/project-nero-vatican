@@ -35,6 +35,7 @@ before a single real dollar is spent (see test_eve_stub_session_dry_run.py).
 """
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 
@@ -104,6 +105,19 @@ class LlmParameters:
     # connectivity problem (confirmed separately, both times: github.com and
     # api.anthropic.com's own root both responded in under a second at the
     # same time these calls were timing out).
+    #
+    # CC-1 Master Directive Phase 1b (2026-08-05): call_turn now issues this
+    # request with `stream=True` (see _assemble_streamed_message below).
+    # requests' `timeout` still applies to this constant, but its MEANING
+    # changed with streaming: it is now a per-read idle gap (time between
+    # consecutive bytes/SSE events), never a ceiling on the whole call's
+    # duration. Anthropic's streaming Messages API sends `content_block_delta`
+    # events throughout generation -- including across a server-side
+    # web_search, per the confirmed real event trace in Anthropic's own
+    # streaming docs -- plus periodic `ping` events, so the connection is no
+    # longer idle for the length of a whole call the way the old plain
+    # requests.post response was. 180s is kept, unchanged, as the fallback
+    # ceiling for the (now much rarer) case of a genuinely stalled read.
     claude_timeout_seconds: int = 180
 
 
@@ -307,6 +321,112 @@ def _stub_call_turn(call_index: int) -> LlmTurnResult:
     )
 
 
+class StreamError(Exception):
+    """Raised by call_turn ONLY for a mid-stream `event: error` (Anthropic's
+    own streaming docs give overloaded_error/HTTP-529-equivalent as the
+    documented example). The connection reached Anthropic and the turn may
+    already have been billed before failing, so nero_core.eve.session's own
+    broad `except Exception` (TERMINATION_CRASHED) catches this exactly like
+    a ReadTimeout/ConnectionError -- cost UNKNOWN, never a confirmed $0 (see
+    RejectedBeforeTokenProcessingError for the one narrow case where $0 IS
+    confirmed -- a mid-stream error is never that case, since token
+    processing had already started by the time any event streamed)."""
+
+
+def _iter_sse_events(response):
+    """Yields (event_type, data_str) pairs from a `stream=True` requests
+    Response's Server-Sent Events. Frame format per the SSE spec (and
+    confirmed against Anthropic's own real streaming traces): one or more
+    `data:` lines follow an `event:` line, and a blank line terminates the
+    event. `response.iter_lines` performs one socket read per line -- this
+    is the actual mechanism behind CC-1 Master Directive Phase 1's fix: a
+    `read` timeout now only fires on the gap between two consecutive lines
+    (content_block_delta/ping events arrive throughout generation, including
+    across a server-side web_search), never on the time to fully generate
+    the whole response the way a plain, non-streaming requests.post was
+    exposed to."""
+    event_type = None
+    data_lines: list[str] = []
+    for raw_line in response.iter_lines(decode_unicode=True):
+        line = raw_line if isinstance(raw_line, str) else (raw_line.decode("utf-8") if raw_line else "")
+        if line == "":
+            if data_lines:
+                yield event_type, "\n".join(data_lines)
+            event_type, data_lines = None, []
+            continue
+        if line.startswith("event:"):
+            event_type = line[len("event:"):].strip()
+        elif line.startswith("data:"):
+            data_lines.append(line[len("data:"):].strip())
+    if data_lines:
+        yield event_type, "\n".join(data_lines)
+
+
+def _assemble_streamed_message(response) -> dict:
+    """Consumes every SSE event from a streamed call and returns the exact
+    same {"content": [...], "usage": {...}, "stop_reason": ...} shape
+    response.json() used to hand back directly on the old non-streaming
+    path -- every downstream consumer (extract_text, extract_tool_uses,
+    nero_core.eve.scoring's raw_response["content"] scan for
+    web_search_tool_result blocks) stays byte-for-byte unchanged.
+
+    Per Anthropic's own streaming docs: `text_delta` appends to a block's
+    `text`; `input_json_delta` accumulates a partial JSON STRING (parsed
+    into the final `input` dict only at that block's `content_block_stop`,
+    per the docs' own explicit guidance -- never assume a partial parse is
+    valid mid-stream); a server_tool_use block (web_search invocation)
+    streams its `input` the same way a client tool_use block does; a
+    web_search_tool_result block arrives whole in its own
+    `content_block_start` (server-generated, never token-by-token, confirmed
+    against Anthropic's own real web-search streaming trace) with no deltas
+    at all. `usage` is CUMULATIVE (Anthropic's own explicit warning) --
+    merging message_start's usage with each message_delta's usage in
+    arrival order is exactly correct, including the case where
+    server_tool_use (web_search_requests count) only appears on the FINAL
+    message_delta, confirmed in Anthropic's own real web-search trace."""
+    blocks: dict[int, dict] = {}
+    partial_json: dict[int, str] = {}
+    usage: dict = {}
+    stop_reason = ""
+    for event_type, data in _iter_sse_events(response):
+        if not data:
+            continue
+        event = json.loads(data)
+        if event_type == "message_start":
+            usage.update((event.get("message") or {}).get("usage") or {})
+        elif event_type == "content_block_start":
+            idx = event["index"]
+            blocks[idx] = dict(event["content_block"])
+            if blocks[idx].get("type") in ("tool_use", "server_tool_use"):
+                partial_json[idx] = ""
+        elif event_type == "content_block_delta":
+            idx = event["index"]
+            delta = event.get("delta") or {}
+            if delta.get("type") == "text_delta":
+                blocks[idx]["text"] = blocks[idx].get("text", "") + delta.get("text", "")
+            elif delta.get("type") == "input_json_delta":
+                partial_json[idx] = partial_json.get(idx, "") + delta.get("partial_json", "")
+        elif event_type == "content_block_stop":
+            idx = event["index"]
+            if idx in partial_json:
+                raw = partial_json[idx]
+                blocks[idx]["input"] = json.loads(raw) if raw.strip() else {}
+        elif event_type == "message_delta":
+            usage.update(event.get("usage") or {})
+            delta_stop_reason = (event.get("delta") or {}).get("stop_reason")
+            if delta_stop_reason:
+                stop_reason = delta_stop_reason
+        elif event_type == "message_stop":
+            break
+        elif event_type == "error":
+            err = event.get("error") or {}
+            raise StreamError(f"stream error event ({err.get('type', 'unknown_error')}): {err.get('message', data)}")
+        # `ping` and any other/future event type are ignored, not fatal --
+        # per Anthropic's own versioning policy, new event types may be
+        # added and must be handled gracefully.
+    return {"content": [blocks[i] for i in sorted(blocks)], "usage": usage, "stop_reason": stop_reason}
+
+
 def call_turn(
     messages: list[dict],
     system_blocks: list[dict],
@@ -332,6 +452,7 @@ def call_turn(
         "system": system_blocks,
         "messages": messages,
         "tools": tools,
+        "stream": True,
     }
     response = requests.post(
         params.claude_api_url,
@@ -342,6 +463,7 @@ def call_turn(
         },
         json=body,
         timeout=params.claude_timeout_seconds,
+        stream=True,
     )
     try:
         response.raise_for_status()
@@ -353,9 +475,11 @@ def call_turn(
         # one piece of information that would explain a 400, vs. a generic
         # "400 Client Error" with no detail) was never surfaced anywhere,
         # including in this module's own real-run logs. Re-raised with the
-        # body attached, original exception preserved as the cause.
+        # body attached, original exception preserved as the cause. (An error
+        # response is never itself an SSE stream -- `.text` is safe to read
+        # here regardless of `stream=True` on the request.)
         raise requests.exceptions.HTTPError(f"{exc} -- response body: {response.text[:2000]}", response=response) from exc
-    payload = response.json()
+    payload = _assemble_streamed_message(response)
     return LlmTurnResult(
         content_blocks=payload.get("content") or [],
         usage=payload.get("usage") or {},

@@ -423,6 +423,97 @@ class RejectedBeforeTokenProcessingError(Exception):
         self.status_code = status_code
 
 
+def _iter_sse_events(response):
+    """Yields (event_type, data_str) pairs from a `stream=True` requests
+    Response's Server-Sent Events. CC-1 Master Directive Phase 1a: this is
+    the mechanism behind converting _call_claude (both the scanner path and
+    generate_web_hypotheses's web-search path share this one function) off
+    plain requests.post -- `response.iter_lines` performs one socket read per
+    line, so the configured read timeout now only ever fires on the gap
+    between two consecutive SSE lines (content_block_delta/ping events arrive
+    throughout generation, including across a server-side web_search), never
+    on the time to generate the ENTIRE response the way the old non-streaming
+    call was exposed to (confirmed against Anthropic's own streaming docs:
+    https://platform.claude.com/docs/en/docs/build-with-claude/streaming)."""
+    event_type = None
+    data_lines: list[str] = []
+    for raw_line in response.iter_lines(decode_unicode=True):
+        line = raw_line if isinstance(raw_line, str) else (raw_line.decode("utf-8") if raw_line else "")
+        if line == "":
+            if data_lines:
+                yield event_type, "\n".join(data_lines)
+            event_type, data_lines = None, []
+            continue
+        if line.startswith("event:"):
+            event_type = line[len("event:"):].strip()
+        elif line.startswith("data:"):
+            data_lines.append(line[len("data:"):].strip())
+    if data_lines:
+        yield event_type, "\n".join(data_lines)
+
+
+def _assemble_streamed_response(response) -> dict:
+    """Consumes every SSE event from a streamed call and returns the exact
+    same {"content": [...], "usage": {...}} shape response.json() used to
+    hand back directly on the old non-streaming path -- _extract_text and
+    the usage/cost helpers below stay byte-for-byte unchanged. Raises
+    requests.exceptions.HTTPError on a mid-stream `event: error` (Anthropic's
+    own docs give overloaded_error/HTTP-529-equivalent as the example) -- the
+    connection reached Anthropic and may have been billed before failing, so
+    this is deliberately a requests.exceptions.HTTPError (a RequestException
+    subclass), caught by generate_hypotheses/generate_web_hypotheses's
+    existing broad `except (requests.RequestException, KeyError, ValueError)`
+    branch -- cost UNKNOWN, never folded into total_cost as a confirmed $0.
+
+    Per Anthropic's own docs: `input_json_delta` accumulates a partial JSON
+    STRING, parsed into the final `input` only at that block's
+    `content_block_stop` (this module's own web-search path's server_tool_use
+    blocks stream input the same way a client tool_use block would, though
+    _call_claude never needs to read that input itself); `usage` is
+    CUMULATIVE, so merging message_start's usage with each message_delta's
+    usage in arrival order is correct, including web_search_requests only
+    appearing on the FINAL message_delta (confirmed in Anthropic's own real
+    web-search streaming trace)."""
+    blocks: dict[int, dict] = {}
+    partial_json: dict[int, str] = {}
+    usage: dict = {}
+    for event_type, data in _iter_sse_events(response):
+        if not data:
+            continue
+        event = json.loads(data)
+        if event_type == "message_start":
+            usage.update((event.get("message") or {}).get("usage") or {})
+        elif event_type == "content_block_start":
+            idx = event["index"]
+            blocks[idx] = dict(event["content_block"])
+            if blocks[idx].get("type") in ("tool_use", "server_tool_use"):
+                partial_json[idx] = ""
+        elif event_type == "content_block_delta":
+            idx = event["index"]
+            delta = event.get("delta") or {}
+            if delta.get("type") == "text_delta":
+                blocks[idx]["text"] = blocks[idx].get("text", "") + delta.get("text", "")
+            elif delta.get("type") == "input_json_delta":
+                partial_json[idx] = partial_json.get(idx, "") + delta.get("partial_json", "")
+        elif event_type == "content_block_stop":
+            idx = event["index"]
+            if idx in partial_json:
+                raw = partial_json[idx]
+                blocks[idx]["input"] = json.loads(raw) if raw.strip() else {}
+        elif event_type == "message_delta":
+            usage.update(event.get("usage") or {})
+        elif event_type == "message_stop":
+            break
+        elif event_type == "error":
+            err = event.get("error") or {}
+            raise requests.exceptions.HTTPError(
+                f"stream error event ({err.get('type', 'unknown_error')}): {err.get('message', data)}"
+            )
+        # `ping` and any other/future event type are ignored, not fatal --
+        # per Anthropic's own versioning policy, new event types may be added.
+    return {"content": [blocks[i] for i in sorted(blocks)], "usage": usage}
+
+
 def _call_claude(
     prompt: str, api_key: str, params: HypothesisGenParameters, tools: list[dict] | None = None
 ) -> tuple[dict, dict]:
@@ -436,12 +527,19 @@ def _call_claude(
     `tools` (added for web-sourced generation -- see generate_web_hypotheses):
     when given, added to the request body as-is (e.g. [WEB_SEARCH_TOOL]) --
     the scanner path's own calls never pass this, so its request body is
-    byte-for-byte unchanged from before this parameter existed."""
+    byte-for-byte unchanged from before this parameter existed.
+
+    CC-1 Master Directive Phase 1a (2026-08-05): issues this request with
+    `stream=True` -- both callers share this one function, so converting it
+    fixes the confirmed idle-read-timeout exposure for the web-search path
+    (the one this directive named) and, as a strict byproduct, the scanner
+    path too (there is no separate non-streaming variant to keep)."""
     body = {
         "model": params.claude_model,
         "max_tokens": params.claude_max_tokens,
         "thinking": params.claude_thinking,
         "messages": [{"role": "user", "content": prompt}],
+        "stream": True,
     }
     if tools:
         body["tools"] = tools
@@ -454,6 +552,7 @@ def _call_claude(
         },
         json=body,
         timeout=params.claude_timeout_seconds,
+        stream=True,
     )
     try:
         response.raise_for_status()
@@ -461,7 +560,7 @@ def _call_claude(
         if response.status_code in REJECTED_BEFORE_TOKEN_PROCESSING_STATUS_CODES:
             raise RejectedBeforeTokenProcessingError(response.status_code, str(exc)) from exc
         raise
-    payload = response.json()
+    payload = _assemble_streamed_response(response)
     usage = payload.get("usage") or {}
     try:
         text = _extract_text(payload.get("content")).strip()

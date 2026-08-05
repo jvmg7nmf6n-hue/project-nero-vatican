@@ -29,11 +29,75 @@ def _finding(asset="BTC", timeframe="1h", finding_type="extreme_zscore", descrip
     return ScanFinding(finding_type, asset, timeframe, description, 3.0, 42.0, "measured note", NOW.isoformat())
 
 
+def _sse_lines_from_payload(payload: dict) -> list[str]:
+    """CC-1 Master Directive Phase 1c: encodes the plain {"content": [...],
+    "usage": {...}} shape every existing test fixture already builds as the
+    real SSE event sequence _call_claude's now-streaming request receives
+    (message_start -> content_block_start/delta*/stop per block ->
+    message_delta -> message_stop), so every existing test keeps exercising
+    the exact same production parsing path (_assemble_streamed_response) a
+    real streamed call goes through -- only this one helper needed to learn
+    the wire format, not each of the ~34 call sites in this file."""
+    lines: list[str] = []
+
+    def emit(event_type: str, data: dict) -> None:
+        lines.append(f"event: {event_type}")
+        lines.append(f"data: {json.dumps(data)}")
+        lines.append("")
+
+    emit("message_start", {"type": "message_start", "message": {"content": [], "usage": {}}})
+    for idx, block in enumerate(payload.get("content") or []):
+        block_type = block.get("type")
+        if block_type in ("tool_use", "server_tool_use"):
+            emit("content_block_start", {"type": "content_block_start", "index": idx, "content_block": {**block, "input": {}}})
+            emit("content_block_delta", {
+                "type": "content_block_delta", "index": idx,
+                "delta": {"type": "input_json_delta", "partial_json": json.dumps(block.get("input") or {})},
+            })
+        elif block_type == "text":
+            emit("content_block_start", {"type": "content_block_start", "index": idx, "content_block": {"type": "text", "text": ""}})
+            emit("content_block_delta", {
+                "type": "content_block_delta", "index": idx,
+                "delta": {"type": "text_delta", "text": block.get("text", "")},
+            })
+        else:
+            # Server-populated blocks (e.g. web_search_tool_result) and
+            # anything else arrive whole in one content_block_start, no
+            # deltas -- matches Anthropic's own real streaming trace.
+            emit("content_block_start", {"type": "content_block_start", "index": idx, "content_block": block})
+        emit("content_block_stop", {"type": "content_block_stop", "index": idx})
+    emit("message_delta", {"type": "message_delta", "delta": {"stop_reason": payload.get("stop_reason")}, "usage": payload.get("usage") or {}})
+    emit("message_stop", {"type": "message_stop"})
+    return lines
+
+
+def _sse_lines_with_stream_error(error_type: str, message: str) -> list[str]:
+    """A real mid-stream `event: error` (CC-1 Master Directive Phase 1d) --
+    Anthropic's own streaming docs give overloaded_error/HTTP-529-equivalent
+    as the documented example. message_start reports real, non-zero
+    input_tokens first: the connection reached Anthropic and tokens may
+    already have been processed/billed before the error, which is exactly
+    why this must be caught as UNKNOWN cost, never a confirmed $0."""
+    lines: list[str] = []
+
+    def emit(event_type: str, data: dict) -> None:
+        lines.append(f"event: {event_type}")
+        lines.append(f"data: {json.dumps(data)}")
+        lines.append("")
+
+    emit("message_start", {"type": "message_start", "message": {"content": [], "usage": {"input_tokens": 500}}})
+    emit("error", {"type": "error", "error": {"type": error_type, "message": message}})
+    return lines
+
+
 class _FakeResponse:
-    def __init__(self, payload: dict, status_ok: bool = True, status_code: int = 200) -> None:
+    def __init__(
+        self, payload: dict, status_ok: bool = True, status_code: int = 200, stream_error: tuple[str, str] | None = None
+    ) -> None:
         self._payload = payload
         self._status_ok = status_ok
         self.status_code = status_code
+        self._stream_error = stream_error
 
     def raise_for_status(self) -> None:
         if not self._status_ok:
@@ -41,6 +105,11 @@ class _FakeResponse:
 
     def json(self) -> dict:
         return self._payload
+
+    def iter_lines(self, decode_unicode: bool = True):
+        if self._stream_error is not None:
+            return iter(_sse_lines_with_stream_error(*self._stream_error))
+        return iter(_sse_lines_from_payload(self._payload))
 
 
 def _claude_payload(data: dict, input_tokens: int = 1000, output_tokens: int = 500, with_thinking_block: bool = False) -> dict:
@@ -572,6 +641,43 @@ class UnknownCostOnTransportFailureOfTheRealCallTest(unittest.TestCase):
         self.assertEqual(result.calls_with_unknown_cost, 1)
         self.assertEqual(result.total_cost_usd, 0.0)
         self.assertIn("cost UNKNOWN, not confirmed $0", result.errors[-1]["message"])
+
+
+class StreamingRequestTest(unittest.TestCase):
+    """CC-1 Master Directive Phase 1a/1d: _call_claude must issue every real
+    per-finding call (never the preflight, which stays a tiny non-streaming
+    max_tokens=1 probe) as a streamed request -- this is the fix for the
+    confirmed idle-read-timeout crash, and this test is the guard against a
+    silent revert back to plain requests.post."""
+
+    def test_real_call_declares_streaming_but_preflight_does_not(self) -> None:
+        payload = _claude_payload(VALID_HYPOTHESIS_DATA)
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse(payload)) as mock_post:
+            generate_hypotheses([_finding()], [], "fake-key", now=NOW)
+
+        preflight_call, real_call = mock_post.call_args_list
+        self.assertNotIn("stream", preflight_call.kwargs["json"])
+        self.assertNotIn("stream", preflight_call.kwargs)
+        self.assertIs(real_call.kwargs["json"]["stream"], True)
+        self.assertIs(real_call.kwargs["stream"], True)
+
+    def test_mid_stream_error_event_is_unknown_cost_not_a_confirmed_zero(self) -> None:
+        # A real overloaded_error (Anthropic's own documented example)
+        # arriving mid-stream, after message_start already reported real
+        # input_tokens -- the request reached Anthropic and may have been
+        # billed before failing, so this must land in the SAME
+        # calls_with_unknown_cost bucket as a ReadTimeout/ConnectionError,
+        # never a confirmed $0.
+        with patch(
+            "nero_core.research_agent.hypothesis_gen.requests.post",
+            side_effect=[_FakeResponse({}, status_code=200), _FakeResponse({}, stream_error=("overloaded_error", "Overloaded"))],
+        ):
+            result = generate_hypotheses([_finding()], [], "fake-key", now=NOW)
+
+        self.assertEqual(result.calls_with_unknown_cost, 1)
+        self.assertEqual(result.total_cost_usd, 0.0)
+        self.assertIn("cost UNKNOWN, not confirmed $0", result.errors[-1]["message"])
+        self.assertIn("overloaded_error", result.errors[-1]["message"])
 
 
 class PersistHypothesesTest(unittest.TestCase):
