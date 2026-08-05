@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-04T23:12:19.620067+00:00",
+  "last_updated": "2026-08-05T00:14:15.751824+00:00",
   "correlation_matrix": [
     {
       "asset_a": "AAPL",
       "asset_b": "AMZN",
       "timeframe": "1day",
-      "correlation": -0.30132514099387414,
+      "correlation": -0.32978941543356305,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AAPL",
@@ -16,47 +16,47 @@
       "timeframe": "1day",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AAPL",
       "asset_b": "GOOGL",
       "timeframe": "1day",
-      "correlation": -0.1619006918564189,
+      "correlation": -0.19862452441767997,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AAPL",
       "asset_b": "META",
       "timeframe": "1day",
-      "correlation": 0.03614279951166218,
+      "correlation": -0.012050813780586317,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AAPL",
       "asset_b": "MSFT",
       "timeframe": "1day",
-      "correlation": 0.10480313266302144,
+      "correlation": 0.07256780373730655,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AAPL",
       "asset_b": "NVDA",
       "timeframe": "1day",
-      "correlation": -0.16048848043726782,
+      "correlation": -0.19872368907812413,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AAPL",
       "asset_b": "TSLA",
       "timeframe": "1day",
-      "correlation": -0.014336486567489854,
+      "correlation": -0.04175515609923291,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AAPL",
@@ -64,7 +64,7 @@
       "timeframe": "1day",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AMZN",
@@ -72,47 +72,47 @@
       "timeframe": "1day",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AMZN",
       "asset_b": "GOOGL",
       "timeframe": "1day",
-      "correlation": 0.7096036997660448,
+      "correlation": 0.7244425083784306,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AMZN",
       "asset_b": "META",
       "timeframe": "1day",
-      "correlation": 0.32928817219925605,
+      "correlation": 0.366044775876517,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AMZN",
       "asset_b": "MSFT",
       "timeframe": "1day",
-      "correlation": 0.4896513025104774,
+      "correlation": 0.523494543643588,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AMZN",
       "asset_b": "NVDA",
       "timeframe": "1day",
-      "correlation": 0.31028301794947083,
+      "correlation": 0.32487908231700763,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AMZN",
       "asset_b": "TSLA",
       "timeframe": "1day",
-      "correlation": 0.3349095213911123,
+      "correlation": 0.3546029903687199,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AMZN",
@@ -120,7 +120,7 @@
       "timeframe": "1day",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "EUR/USD",
@@ -128,7 +128,7 @@
       "timeframe": "1day",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "EUR/USD",
@@ -136,7 +136,7 @@
       "timeframe": "1day",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "EUR/USD",
@@ -144,7 +144,7 @@
       "timeframe": "1day",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "EUR/USD",
@@ -152,7 +152,7 @@
       "timeframe": "1day",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "EUR/USD",
@@ -160,47 +160,47 @@
       "timeframe": "1day",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "EUR/USD",
       "asset_b": "USD/JPY",
       "timeframe": "1day",
-      "correlation": -0.4997357492619325,
+      "correlation": -0.47083470599283983,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOOGL",
       "asset_b": "META",
       "timeframe": "1day",
-      "correlation": 0.459796842278967,
+      "correlation": 0.507887794722668,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOOGL",
       "asset_b": "MSFT",
       "timeframe": "1day",
-      "correlation": 0.16692700614486913,
+      "correlation": 0.22631049617505292,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOOGL",
       "asset_b": "NVDA",
       "timeframe": "1day",
-      "correlation": 0.2839911490135381,
+      "correlation": 0.32218599553949895,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOOGL",
       "asset_b": "TSLA",
       "timeframe": "1day",
-      "correlation": 0.49936772358888276,
+      "correlation": 0.5195967042937847,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOOGL",
@@ -208,31 +208,31 @@
       "timeframe": "1day",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "META",
       "asset_b": "MSFT",
       "timeframe": "1day",
-      "correlation": -0.13868888605924362,
+      "correlation": -0.05748062714710796,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "META",
       "asset_b": "NVDA",
       "timeframe": "1day",
-      "correlation": 0.17616053124659,
+      "correlation": 0.21674815076424148,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "META",
       "asset_b": "TSLA",
       "timeframe": "1day",
-      "correlation": 0.3629159422722578,
+      "correlation": 0.3905885781398202,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "META",
@@ -240,23 +240,23 @@
       "timeframe": "1day",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "MSFT",
       "asset_b": "NVDA",
       "timeframe": "1day",
-      "correlation": 0.054387895360833285,
+      "correlation": 0.10935895051320313,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "MSFT",
       "asset_b": "TSLA",
       "timeframe": "1day",
-      "correlation": 0.16791217401743266,
+      "correlation": 0.20388218152667734,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "MSFT",
@@ -264,15 +264,15 @@
       "timeframe": "1day",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "NVDA",
       "asset_b": "TSLA",
       "timeframe": "1day",
-      "correlation": 0.3761449393320385,
+      "correlation": 0.3936842052819518,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "NVDA",
@@ -280,7 +280,7 @@
       "timeframe": "1day",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "TSLA",
@@ -288,15 +288,15 @@
       "timeframe": "1day",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AAPL",
       "asset_b": "AMZN",
       "timeframe": "4h",
-      "correlation": -0.30001079101595535,
+      "correlation": -0.3038154126627413,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AAPL",
@@ -304,7 +304,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AAPL",
@@ -312,7 +312,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AAPL",
@@ -320,7 +320,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AAPL",
@@ -328,39 +328,39 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AAPL",
       "asset_b": "GOOGL",
       "timeframe": "4h",
-      "correlation": -0.017215713713577854,
+      "correlation": -0.003186583969629675,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AAPL",
       "asset_b": "META",
       "timeframe": "4h",
-      "correlation": 0.12559352058478557,
+      "correlation": 0.13018254205485144,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AAPL",
       "asset_b": "MSFT",
       "timeframe": "4h",
-      "correlation": 0.0566222248881041,
+      "correlation": 0.06611298911264442,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AAPL",
       "asset_b": "NVDA",
       "timeframe": "4h",
-      "correlation": -0.16148158861806494,
+      "correlation": -0.1564362194192658,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AAPL",
@@ -368,15 +368,15 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AAPL",
       "asset_b": "TSLA",
       "timeframe": "4h",
-      "correlation": -0.041532521857627513,
+      "correlation": -0.044985196416294816,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AAPL",
@@ -384,7 +384,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AMZN",
@@ -392,7 +392,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AMZN",
@@ -400,7 +400,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AMZN",
@@ -408,7 +408,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AMZN",
@@ -416,39 +416,39 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AMZN",
       "asset_b": "GOOGL",
       "timeframe": "4h",
-      "correlation": 0.7362781347975569,
+      "correlation": 0.691641779223376,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AMZN",
       "asset_b": "META",
       "timeframe": "4h",
-      "correlation": 0.3463749946047835,
+      "correlation": 0.32742687596791814,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AMZN",
       "asset_b": "MSFT",
       "timeframe": "4h",
-      "correlation": 0.507630374143983,
+      "correlation": 0.46991476748115046,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AMZN",
       "asset_b": "NVDA",
       "timeframe": "4h",
-      "correlation": 0.23420650762783907,
+      "correlation": 0.21445807627431504,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AMZN",
@@ -456,15 +456,15 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AMZN",
       "asset_b": "TSLA",
       "timeframe": "4h",
-      "correlation": 0.28165229260312524,
+      "correlation": 0.32903743076773434,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "AMZN",
@@ -472,15 +472,15 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BNB",
       "asset_b": "BTC",
       "timeframe": "4h",
-      "correlation": 0.6768437446741783,
+      "correlation": 0.6880306034781916,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BNB",
@@ -488,7 +488,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BNB",
@@ -496,7 +496,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BNB",
@@ -504,7 +504,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BNB",
@@ -512,7 +512,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BNB",
@@ -520,7 +520,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BNB",
@@ -528,15 +528,15 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BNB",
       "asset_b": "SILVER",
       "timeframe": "4h",
-      "correlation": 0.17982890352871755,
+      "correlation": 0.3076881912128963,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BNB",
@@ -544,7 +544,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BNB",
@@ -552,7 +552,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BTC",
@@ -560,7 +560,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BTC",
@@ -568,7 +568,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BTC",
@@ -576,7 +576,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BTC",
@@ -584,7 +584,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BTC",
@@ -592,7 +592,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BTC",
@@ -600,15 +600,15 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BTC",
       "asset_b": "SILVER",
       "timeframe": "4h",
-      "correlation": 0.59472968691422,
+      "correlation": 0.4176866469167204,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BTC",
@@ -616,7 +616,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BTC",
@@ -624,15 +624,15 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "EUR/USD",
       "asset_b": "GOLD",
       "timeframe": "4h",
-      "correlation": 0.6837202468876681,
+      "correlation": 0.4441633526042164,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "EUR/USD",
@@ -640,7 +640,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "EUR/USD",
@@ -648,7 +648,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "EUR/USD",
@@ -656,7 +656,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "EUR/USD",
@@ -664,15 +664,15 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "EUR/USD",
       "asset_b": "SILVER",
       "timeframe": "4h",
-      "correlation": null,
-      "window_used": 29,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "correlation": 0.04400152168035923,
+      "window_used": 30,
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "EUR/USD",
@@ -680,15 +680,15 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "EUR/USD",
       "asset_b": "USD/JPY",
       "timeframe": "4h",
-      "correlation": -0.8718007927824031,
+      "correlation": -0.8070728195083823,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOLD",
@@ -696,7 +696,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOLD",
@@ -704,7 +704,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOLD",
@@ -712,7 +712,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOLD",
@@ -720,15 +720,15 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOLD",
       "asset_b": "SILVER",
       "timeframe": "4h",
-      "correlation": null,
-      "window_used": 29,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "correlation": 0.7782490555035674,
+      "window_used": 30,
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOLD",
@@ -736,39 +736,39 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOLD",
       "asset_b": "USD/JPY",
       "timeframe": "4h",
-      "correlation": -0.5338640011828629,
+      "correlation": -0.18596904104714737,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOOGL",
       "asset_b": "META",
       "timeframe": "4h",
-      "correlation": 0.4773941369255253,
+      "correlation": 0.4611481216726283,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOOGL",
       "asset_b": "MSFT",
       "timeframe": "4h",
-      "correlation": 0.34686526577566457,
+      "correlation": 0.3014376133222369,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOOGL",
       "asset_b": "NVDA",
       "timeframe": "4h",
-      "correlation": 0.20339805466022995,
+      "correlation": 0.20549776338355855,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOOGL",
@@ -776,15 +776,15 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOOGL",
       "asset_b": "TSLA",
       "timeframe": "4h",
-      "correlation": 0.4628968186521984,
+      "correlation": 0.5604787922925358,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOOGL",
@@ -792,23 +792,23 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "META",
       "asset_b": "MSFT",
       "timeframe": "4h",
-      "correlation": -0.02447219402748556,
+      "correlation": -0.05381595341773818,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "META",
       "asset_b": "NVDA",
       "timeframe": "4h",
-      "correlation": 0.3194567130324588,
+      "correlation": 0.31035083960983845,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "META",
@@ -816,15 +816,15 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "META",
       "asset_b": "TSLA",
       "timeframe": "4h",
-      "correlation": 0.3684726568320127,
+      "correlation": 0.3906464489412517,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "META",
@@ -832,15 +832,15 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "MSFT",
       "asset_b": "NVDA",
       "timeframe": "4h",
-      "correlation": 0.016726516033855738,
+      "correlation": 0.010953868418144524,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "MSFT",
@@ -848,15 +848,15 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "MSFT",
       "asset_b": "TSLA",
       "timeframe": "4h",
-      "correlation": 0.1468147385637942,
+      "correlation": 0.18530309745257642,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "MSFT",
@@ -864,7 +864,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "NVDA",
@@ -872,15 +872,15 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "NVDA",
       "asset_b": "TSLA",
       "timeframe": "4h",
-      "correlation": 0.40517203753247794,
+      "correlation": 0.42223051100611414,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "NVDA",
@@ -888,7 +888,7 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "SILVER",
@@ -896,15 +896,15 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "SILVER",
       "asset_b": "USD/JPY",
       "timeframe": "4h",
-      "correlation": null,
-      "window_used": 29,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "correlation": -0.17691977864806413,
+      "window_used": 30,
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "TSLA",
@@ -912,31 +912,31 @@
       "timeframe": "4h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BNB",
       "asset_b": "BTC",
       "timeframe": "12h",
-      "correlation": 0.6566977792980676,
+      "correlation": 0.6606716336856634,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BNB",
       "asset_b": "BTC",
       "timeframe": "24h",
-      "correlation": 0.7182850890262099,
+      "correlation": 0.7358177853775428,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BNB",
       "asset_b": "GOLD",
       "timeframe": "24h",
-      "correlation": -0.018577344194809164,
+      "correlation": -0.00964515462934593,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BNB",
@@ -944,15 +944,15 @@
       "timeframe": "24h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BTC",
       "asset_b": "GOLD",
       "timeframe": "24h",
-      "correlation": 0.06022039735052018,
+      "correlation": 0.060718307501296066,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "BTC",
@@ -960,7 +960,7 @@
       "timeframe": "24h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOLD",
@@ -968,15 +968,15 @@
       "timeframe": "24h",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "EUR/USD",
       "asset_b": "GBP/USD",
       "timeframe": "1week",
-      "correlation": 0.8343266363527408,
+      "correlation": 0.8343266363527411,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "EUR/USD",
@@ -984,7 +984,7 @@
       "timeframe": "1week",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "EUR/USD",
@@ -992,15 +992,15 @@
       "timeframe": "1week",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "EUR/USD",
       "asset_b": "USD/JPY",
       "timeframe": "1week",
-      "correlation": -0.6883673899068585,
+      "correlation": -0.6883673899068584,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GBP/USD",
@@ -1008,7 +1008,7 @@
       "timeframe": "1week",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GBP/USD",
@@ -1016,15 +1016,15 @@
       "timeframe": "1week",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GBP/USD",
       "asset_b": "USD/JPY",
       "timeframe": "1week",
-      "correlation": -0.6387913500006746,
+      "correlation": -0.6387913500006742,
       "window_used": 30,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOLD",
@@ -1032,7 +1032,7 @@
       "timeframe": "1week",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "GOLD",
@@ -1040,7 +1040,7 @@
       "timeframe": "1week",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     },
     {
       "asset_a": "SILVER",
@@ -1048,7 +1048,7 @@
       "timeframe": "1week",
       "correlation": null,
       "window_used": 0,
-      "computed_at": "2026-08-04T23:12:19.643398+00:00"
+      "computed_at": "2026-08-05T00:14:15.762414+00:00"
     }
   ],
   "volatility_regimes": [
@@ -1056,111 +1056,111 @@
       "asset": "AAPL",
       "timeframe": "1day",
       "regime": "HIGH",
-      "conditional_vol": 0.4118699947928095,
-      "vol_ratio": 1.374705447659576,
-      "shock_score": 68.73527238297879,
+      "conditional_vol": 0.4053647839296442,
+      "vol_ratio": 1.344486180502911,
+      "shock_score": 67.22430902514554,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "AAPL",
       "timeframe": "4h",
       "regime": "HIGH",
-      "conditional_vol": 0.4812043628945796,
-      "vol_ratio": 1.4067491569367443,
-      "shock_score": 70.33745784683721,
+      "conditional_vol": 0.467016538599739,
+      "vol_ratio": 1.3651693674010665,
+      "shock_score": 68.25846837005332,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "AMZN",
       "timeframe": "1day",
       "regime": "EXTREME",
-      "conditional_vol": 0.6373042080235027,
-      "vol_ratio": 1.6207046982770061,
-      "shock_score": 81.0352349138503,
+      "conditional_vol": 0.6419636833495941,
+      "vol_ratio": 1.6114449780439837,
+      "shock_score": 80.57224890219918,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "AMZN",
       "timeframe": "4h",
       "regime": "HIGH",
-      "conditional_vol": 0.6123987923182603,
-      "vol_ratio": 1.4827531994594656,
-      "shock_score": 74.13765997297328,
+      "conditional_vol": 0.5993609745487898,
+      "vol_ratio": 1.4500354443671435,
+      "shock_score": 72.50177221835717,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "BNB",
       "timeframe": "12h",
       "regime": "NORMAL",
-      "conditional_vol": 0.14178765762513817,
-      "vol_ratio": 0.8709573764668808,
-      "shock_score": 43.54786882334404,
+      "conditional_vol": 0.13777935160501037,
+      "vol_ratio": 0.846432667869041,
+      "shock_score": 42.32163339345205,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "BNB",
       "timeframe": "24h",
       "regime": "LOW",
-      "conditional_vol": 0.24392077627775285,
-      "vol_ratio": 0.7034706730087863,
-      "shock_score": 35.17353365043932,
+      "conditional_vol": 0.23782761793128915,
+      "vol_ratio": 0.6918563175066365,
+      "shock_score": 34.59281587533182,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "BNB",
       "timeframe": "4h",
       "regime": "NORMAL",
-      "conditional_vol": 0.09653733551396729,
-      "vol_ratio": 1.0406619201649543,
-      "shock_score": 52.03309600824772,
+      "conditional_vol": 0.09088570425771327,
+      "vol_ratio": 0.9833919039740422,
+      "shock_score": 49.16959519870211,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "BTC",
       "timeframe": "12h",
       "regime": "NORMAL",
-      "conditional_vol": 0.1630162695553421,
-      "vol_ratio": 0.8786777601033278,
-      "shock_score": 43.93388800516639,
+      "conditional_vol": 0.15843021883689906,
+      "vol_ratio": 0.8568837120996359,
+      "shock_score": 42.844185604981796,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "BTC",
       "timeframe": "24h",
       "regime": "NORMAL",
-      "conditional_vol": 0.24632207091882194,
-      "vol_ratio": 0.8525572476213105,
-      "shock_score": 42.627862381065526,
+      "conditional_vol": 0.241478011596849,
+      "vol_ratio": 0.8350342185039474,
+      "shock_score": 41.75171092519737,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "BTC",
       "timeframe": "4h",
       "regime": "NORMAL",
-      "conditional_vol": 0.1016446661000198,
-      "vol_ratio": 1.0657774301911092,
-      "shock_score": 53.288871509555456,
+      "conditional_vol": 0.09606502100913024,
+      "vol_ratio": 1.0140628344943086,
+      "shock_score": 50.70314172471543,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "EUR/USD",
       "timeframe": "1day",
       "regime": "NORMAL",
-      "conditional_vol": 0.039090049221868324,
-      "vol_ratio": 0.985671915198998,
-      "shock_score": 49.2835957599499,
+      "conditional_vol": 0.03875063243140029,
+      "vol_ratio": 0.9754792113354692,
+      "shock_score": 48.77396056677346,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "EUR/USD",
@@ -1170,17 +1170,17 @@
       "vol_ratio": 0.800718205660941,
       "shock_score": 40.03591028304705,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "EUR/USD",
       "timeframe": "4h",
       "regime": "NORMAL",
-      "conditional_vol": 0.018742570820389087,
-      "vol_ratio": 0.9218541197910102,
-      "shock_score": 46.09270598955051,
+      "conditional_vol": 0.0178253765189243,
+      "vol_ratio": 0.8856457501452362,
+      "shock_score": 44.282287507261806,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "GBP/USD",
@@ -1190,7 +1190,7 @@
       "vol_ratio": 0.9337652085505397,
       "shock_score": 46.688260427526984,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "GOLD",
@@ -1200,107 +1200,107 @@
       "vol_ratio": 1.0048062883733468,
       "shock_score": 50.24031441866734,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "GOLD",
       "timeframe": "24h",
       "regime": "NORMAL",
-      "conditional_vol": 0.1620364379268572,
-      "vol_ratio": 0.8258507267478864,
-      "shock_score": 41.29253633739432,
+      "conditional_vol": 0.15833710579376367,
+      "vol_ratio": 0.8059608156530405,
+      "shock_score": 40.29804078265202,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "GOLD",
       "timeframe": "4h",
       "regime": "NORMAL",
-      "conditional_vol": 0.04452012935295195,
-      "vol_ratio": 0.8000612015516505,
-      "shock_score": 40.003060077582525,
+      "conditional_vol": 0.04925047657401445,
+      "vol_ratio": 0.8706449683498209,
+      "shock_score": 43.53224841749104,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "GOOGL",
       "timeframe": "1day",
-      "regime": "NORMAL",
-      "conditional_vol": 0.4563809779162284,
-      "vol_ratio": 1.1756271172975015,
-      "shock_score": 58.781355864875074,
+      "regime": "HIGH",
+      "conditional_vol": 0.47970343262715265,
+      "vol_ratio": 1.2319081824507228,
+      "shock_score": 61.59540912253614,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "GOOGL",
       "timeframe": "4h",
       "regime": "HIGH",
-      "conditional_vol": 0.5248052269821105,
-      "vol_ratio": 1.2704291355670907,
-      "shock_score": 63.52145677835453,
+      "conditional_vol": 0.5096809474187552,
+      "vol_ratio": 1.2344110730475915,
+      "shock_score": 61.72055365237957,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "META",
       "timeframe": "1day",
       "regime": "NORMAL",
-      "conditional_vol": 0.5277904314704981,
-      "vol_ratio": 1.1088137041991226,
-      "shock_score": 55.44068520995613,
+      "conditional_vol": 0.5599700188771893,
+      "vol_ratio": 1.1539516979873141,
+      "shock_score": 57.69758489936571,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "META",
       "timeframe": "4h",
       "regime": "HIGH",
-      "conditional_vol": 0.63779297149589,
-      "vol_ratio": 1.2253696210668839,
-      "shock_score": 61.26848105334419,
+      "conditional_vol": 0.6194056121476353,
+      "vol_ratio": 1.1910034931512603,
+      "shock_score": 59.55017465756301,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "MSFT",
       "timeframe": "1day",
       "regime": "EXTREME",
-      "conditional_vol": 0.6238369445148185,
-      "vol_ratio": 1.5319676441547552,
-      "shock_score": 76.59838220773776,
+      "conditional_vol": 0.6331630773578282,
+      "vol_ratio": 1.5392841095184224,
+      "shock_score": 76.96420547592112,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "MSFT",
       "timeframe": "4h",
       "regime": "HIGH",
-      "conditional_vol": 0.6338812970633048,
-      "vol_ratio": 1.4931919482993468,
-      "shock_score": 74.65959741496734,
+      "conditional_vol": 0.6164785986750356,
+      "vol_ratio": 1.4517486079928532,
+      "shock_score": 72.58743039964266,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "NVDA",
       "timeframe": "1day",
       "regime": "NORMAL",
-      "conditional_vol": 0.4127572770266986,
-      "vol_ratio": 1.0223652503815357,
-      "shock_score": 51.11826251907679,
+      "conditional_vol": 0.415680679942052,
+      "vol_ratio": 1.0231847164642476,
+      "shock_score": 51.15923582321238,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "NVDA",
       "timeframe": "4h",
       "regime": "NORMAL",
-      "conditional_vol": 0.4287521381819929,
-      "vol_ratio": 1.158963167841095,
-      "shock_score": 57.94815839205475,
+      "conditional_vol": 0.4190552570430623,
+      "vol_ratio": 1.1368171480261013,
+      "shock_score": 56.840857401305065,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "SILVER",
@@ -1310,57 +1310,57 @@
       "vol_ratio": 1.1157630742792837,
       "shock_score": 55.788153713964185,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "SILVER",
       "timeframe": "24h",
       "regime": "NORMAL",
-      "conditional_vol": 0.416898573496352,
-      "vol_ratio": 0.8323805909597289,
-      "shock_score": 41.61902954798645,
+      "conditional_vol": 0.40423086192490537,
+      "vol_ratio": 0.8071642258599722,
+      "shock_score": 40.35821129299861,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "SILVER",
       "timeframe": "4h",
       "regime": "NORMAL",
-      "conditional_vol": 0.15320529366204327,
-      "vol_ratio": 1.0188121202083773,
-      "shock_score": 50.94060601041887,
+      "conditional_vol": 0.1269405090756324,
+      "vol_ratio": 0.9259550351930541,
+      "shock_score": 46.297751759652705,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "TSLA",
       "timeframe": "1day",
       "regime": "HIGH",
-      "conditional_vol": 0.6757289715359261,
-      "vol_ratio": 1.2565424585875926,
-      "shock_score": 62.827122929379634,
+      "conditional_vol": 0.6686066668662394,
+      "vol_ratio": 1.2356669516281555,
+      "shock_score": 61.783347581407774,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "TSLA",
       "timeframe": "4h",
       "regime": "HIGH",
-      "conditional_vol": 0.660897357472734,
-      "vol_ratio": 1.2308196493524648,
-      "shock_score": 61.54098246762324,
+      "conditional_vol": 0.6434762825981735,
+      "vol_ratio": 1.1989651515255357,
+      "shock_score": 59.94825757627679,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "USD/JPY",
       "timeframe": "1day",
       "regime": "EXTREME",
-      "conditional_vol": 0.0974781702598419,
-      "vol_ratio": 1.724172290916744,
-      "shock_score": 86.20861454583721,
+      "conditional_vol": 0.09520040125719907,
+      "vol_ratio": 1.6863275878948156,
+      "shock_score": 84.31637939474078,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "USD/JPY",
@@ -1370,17 +1370,17 @@
       "vol_ratio": 0.8693517022494629,
       "shock_score": 43.467585112473145,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     },
     {
       "asset": "USD/JPY",
       "timeframe": "4h",
       "regime": "NORMAL",
-      "conditional_vol": 0.0621694029034014,
-      "vol_ratio": 1.135761532731875,
-      "shock_score": 56.78807663659376,
+      "conditional_vol": 0.05895188445575771,
+      "vol_ratio": 1.0759872353545996,
+      "shock_score": 53.799361767729984,
       "model_used": "EWMA fallback",
-      "computed_at": "2026-08-04T23:12:19.844787+00:00"
+      "computed_at": "2026-08-05T00:14:15.850512+00:00"
     }
   ],
   "cointegration": [
@@ -1393,18 +1393,18 @@
       "cointegrated": null,
       "window_used": 0,
       "note": "Only 0 overlapping calendar dates between these two files (need >= 30) -- despite sharing a timeframe label, they don't share a real calendar grid. Insufficient data, not a fabricated result.",
-      "computed_at": "2026-08-04T23:12:20.835013+00:00"
+      "computed_at": "2026-08-05T00:14:16.380242+00:00"
     },
     {
       "asset_a": "BTC",
       "asset_b": "BNB",
       "timeframe_a": "12h",
       "timeframe_b": "12h",
-      "pvalue": 0.3549804357604571,
+      "pvalue": 0.3814064251508211,
       "cointegrated": false,
       "window_used": 200,
       "note": "Not cointegrated at 95% confidence over this window. Descriptive statistic, not a trading signal.",
-      "computed_at": "2026-08-04T23:12:20.835013+00:00"
+      "computed_at": "2026-08-05T00:14:16.380242+00:00"
     },
     {
       "asset_a": "EUR/USD",
@@ -1415,18 +1415,18 @@
       "cointegrated": false,
       "window_used": 200,
       "note": "Not cointegrated at 95% confidence over this window. Descriptive statistic, not a trading signal.",
-      "computed_at": "2026-08-04T23:12:20.835013+00:00"
+      "computed_at": "2026-08-05T00:14:16.380242+00:00"
     },
     {
       "asset_a": "USD/JPY",
       "asset_b": "GBP/USD",
       "timeframe_a": "1week",
       "timeframe_b": "1week",
-      "pvalue": 0.28038841150789007,
+      "pvalue": 0.2803884115078905,
       "cointegrated": false,
       "window_used": 200,
       "note": "Not cointegrated at 95% confidence over this window. Descriptive statistic, not a trading signal.",
-      "computed_at": "2026-08-04T23:12:20.835013+00:00"
+      "computed_at": "2026-08-05T00:14:16.380242+00:00"
     }
   ],
   "lead_lag": [
@@ -1435,30 +1435,30 @@
       "benchmark": "BTC",
       "timeframe": "12h",
       "best_lag": 1,
-      "correlation": 0.18093935259666008,
+      "correlation": 0.18144968223543512,
       "window_used": 199,
       "note": "BTC leads BNB by 1 period(s), correlation 0.18.",
-      "computed_at": "2026-08-04T23:12:20.881273+00:00"
+      "computed_at": "2026-08-05T00:14:16.400141+00:00"
     },
     {
       "asset": "BNB",
       "benchmark": "BTC",
       "timeframe": "24h",
       "best_lag": 3,
-      "correlation": -0.06309779034088729,
+      "correlation": -0.06416946210224567,
       "window_used": 199,
       "note": "BTC leads BNB by 3 period(s), correlation -0.06.",
-      "computed_at": "2026-08-04T23:12:20.881273+00:00"
+      "computed_at": "2026-08-05T00:14:16.400141+00:00"
     },
     {
       "asset": "BNB",
       "benchmark": "BTC",
       "timeframe": "4h",
       "best_lag": 1,
-      "correlation": -0.1530401743130935,
+      "correlation": -0.14919274969392607,
       "window_used": 199,
       "note": "BTC leads BNB by 1 period(s), correlation -0.15.",
-      "computed_at": "2026-08-04T23:12:20.881273+00:00"
+      "computed_at": "2026-08-05T00:14:16.400141+00:00"
     }
   ]
 }

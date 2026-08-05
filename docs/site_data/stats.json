@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-04T23:12:17.493406+00:00",
+  "last_updated": "2026-08-05T00:12:56.733592+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -33,7 +33,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 15
+        "NO_TRADE": 16
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -51,7 +51,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 10
+        "NO_TRADE": 11
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -69,7 +69,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 10
+        "NO_TRADE": 11
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -87,7 +87,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 10
+        "NO_TRADE": 11
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -105,7 +105,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 10
+        "NO_TRADE": 11
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -123,7 +123,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 10
+        "NO_TRADE": 11
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -177,7 +177,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 14
+        "NO_TRADE": 15
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -195,7 +195,7 @@
         "ENTRY": 1,
         "EXIT": 1,
         "WATCH": 0,
-        "NO_TRADE": 13
+        "NO_TRADE": 14
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -231,7 +231,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 15
+        "NO_TRADE": 16
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -285,7 +285,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 4
+        "NO_TRADE": 5
       },
       "open_position": null,
       "unverified_open_entries": 0
