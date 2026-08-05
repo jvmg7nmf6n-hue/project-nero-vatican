@@ -1712,6 +1712,11 @@ New directive, same initiative — continues directly from the prior "CC-1
 Master Directive v2" section above (Phases 1/2 shipped as `1d0bc45`/`3fcd9c1`,
 closing report `f6ccd4c`/`a0584eb`).
 
+**This directive's own commits (item 0, filled in after each push):** Item
+2 = `1652ffe`, Item 4 = `e3730ca`, Item 5 = `dfaf70e`, this closing report
+= `9192e9d`. All four verified on `origin/main` via `git log origin/main
+--oneline` immediately after pushing, not assumed from `git commit` alone.
+
 ## ITEM 1 — Three questions, answered before any code
 
 ### 1a — the real remaining budget, recomputed live
