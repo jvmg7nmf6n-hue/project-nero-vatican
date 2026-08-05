@@ -683,3 +683,519 @@ own git history is currently **empty** (0 commits), which the directive
 did not know when it described `agent_run_summaries.json` as `agent_test_results.json`'s
 committed sibling -- both are real files, but only one of the two has ever
 actually landed a commit. See item 4a above.
+---
+
+# CC-1 MASTER DIRECTIVE — Agent Visibility & Operation (2026-08-05)
+
+Format per item: FINDING → CONFIDENCE → RECOMMENDATION or WHAT SHIPPED.
+
+## Item 0 — push verification, every commit
+
+Confirmed at the start: local `main` and `origin/main` both at `c310a41`
+(no divergence). Three commits made this directive, each fetched-and-
+merged against any new automated-log commits before pushing (never force),
+then verified against `origin/main` directly:
+
+1. **Phase 1.1** (`4ae7c49`) — merged one intervening automated commit
+   (`f8e98a2`, "Update live scheduler execution log", zero file overlap),
+   pushed, confirmed: `git log origin/main --oneline -3` →
+   ```
+   4ae7c49 CC-1 Master Directive Phase 1.1: Eve crash-safety
+   f8e98a2 Update live scheduler execution log
+   c310a41 CC-1 closeout: state item 1's live-URL verification as unable-to-verify
+   ```
+2. **Phase 2** (`162b20b`) — no divergence at push time, confirmed:
+   ```
+   162b20b CC-1 Master Directive Phase 2: the Agents tab
+   4ae7c49 CC-1 Master Directive Phase 1.1: Eve crash-safety
+   f8e98a2 Update live scheduler execution log
+   ```
+3. **This report** (below, its own commit hash pasted after push).
+
+**CONFIDENCE:** confirmed-from-data (real `git log origin/main` output,
+not the commit/push step's own exit code, per the standing rule).
+
+---
+
+## PHASE 1.1 — Eve crash-safety
+
+**FINDING:** confirmed exactly as the directive stated: `session.py`'s
+turn loop caught only `RejectedBeforeTokenProcessingError`; any other
+exception (a `ReadTimeout` from the bare `requests.post` in
+`llm_client.call_turn`) propagated past `run_session`'s own final write
+block, losing the whole session — including hypotheses from earlier
+successful turns, since `hypothesis_records` was flushed exactly once, at
+the end.
+
+**WHAT SHIPPED** (`nero_core/eve/session.py`, `nero_core/eve/pipeline.py`,
+`nero_core/eve/budget_ledger.py`; committed `4ae7c49`):
+
+- **1.1a — incremental persistence.** Each turn's newly-finalized
+  `propose_hypothesis` records are now written to `eve_hypotheses.json`
+  immediately (`storage.append_json_list`, already a documented no-op on
+  an empty list — see its own docstring) right after they're extracted,
+  not accumulated and flushed once at the end. The old end-of-function
+  bulk write is **removed**, not left alongside the new per-turn one — it
+  would otherwise double-write every entry on a normal, uncrashed
+  completion. Confirmed by `CrashSafetyTest::test_normal_completion_does_not_double_write_hypotheses`.
+- **1.1b — partial session record on crash.** The entire turn loop is now
+  wrapped in `try:`/`except Exception as exc:`. On any exception, a
+  **partial** session record is written to the SAME
+  `storage.session_record_path(session_id)` a normal completion would use
+  — `terminated_because: "crashed_mid_session"` (new constant
+  `TERMINATION_CRASHED`), `crash_reason` (the real exception class+message),
+  `turn_reached`, the full `turns_log`, and every hypothesis this session
+  produced before the crash (`partial: true`) — then re-raises, so
+  `nero_core.eve.pipeline`'s own crash notification still fires and the
+  process still exits non-zero. Confirmed by
+  `CrashSafetyTest::test_a_partial_session_record_is_written_on_crash`.
+- **1.1c — the budget reservation, corrected from the directive's own
+  literal instruction.** The directive asked to "release the budget
+  reservation on ANY exception." **This was NOT implemented as literally
+  stated — it would have been a real accounting bug, not a fix.**
+  `nero_core/eve/budget_ledger.py`'s own module docstring (RELEASE, THE
+  THIRD OUTCOME section) is explicit and deliberate: `release_entry`
+  (which counts a reservation as a **confirmed $0**) is reserved
+  exclusively for `RejectedBeforeTokenProcessingError` (401/403/429 —
+  rejected before any token was processed, a REAL confirmed zero). A
+  `ReadTimeout`'s real cost is genuinely **unknown** — Anthropic's servers
+  may have already started (and billed) processing before the client-side
+  timeout fired. Releasing it would claim a confirmed $0 this project
+  cannot actually confirm, directly violating budget_ledger.py's own
+  stated hard invariant: "UNDER-COUNTING IS THE ONE DIRECTION THIS MUST
+  NEVER DRIFT." Instead, a new function, `mark_entry_crashed`, **keeps the
+  entry `"reserved"` (still conservatively counted, correct)** and adds
+  `crash_reason`/`crash_marked_at` annotation fields, so a future orphaned
+  reservation is self-documenting instead of a silent, unexplained
+  mystery. Confirmed by
+  `CrashSafetyTest::test_the_crashed_turns_reservation_is_marked_not_released`,
+  which also proves the entry still correctly blocks a later session's
+  budget check (the conservative, correct behavior — the opposite of the
+  401/403/429 case).
+- **1.1d — name the session in the crash notification.** `session.py`'s
+  `_new_session_id` is renamed to the public `new_session_id`, and
+  `run_session` now accepts an optional `session_id` parameter (`None`
+  mints one internally, exactly as before, for every existing caller).
+  `nero_core/eve/pipeline.py::run_pipeline` now mints the `session_id`
+  **before** calling `session.run_session`, passes it in explicitly, and
+  uses that same captured value in the crash notification
+  (`eve_notify.send_failure(..., session_id=session_id)`). Before this,
+  `build_failure_message`'s own fallback text — "Eve session FAILED
+  (before a session id was assigned)" — was **misleading** in this exact
+  case: a session_id genuinely *was* minted, it just wasn't threaded
+  through. Confirmed by
+  `test_eve_pipeline.py::CrashNotifyTest::test_the_crash_notification_names_the_real_session_id_not_just_a_generic_message`.
+  **Incidental correctness improvement, not requested but worth noting:**
+  `run_pipeline` now resolves `now` once and passes the SAME value to both
+  `session.run_session` and `scoring.score_all` — before this change, a
+  `None` `now` would have been independently re-resolved to two slightly
+  different real clock reads in each function.
+- **1.1e — countability, code-enforced.** New test,
+  `test_eve_session_registry.py::RegistryMatchesRealLedgerTest::test_every_countable_session_has_at_least_one_hypothesis_record`
+  — cross-checks every `eve_session_registry.json` entry marked
+  `counts_toward_pre_registered_8: true` against the REAL, committed
+  `eve_hypotheses.json`, asserting at least one hypothesis record exists
+  under that `session_id`. Before this, the counting rule was prose in a
+  hand-maintained JSON file with nothing enforcing it; passes today
+  against the one real countable session
+  (`eve-20260804T020749Z-4cf6e4c9`, which has 6 real records).
+
+**Real orphaned reservations — 6, not 3 (a stale figure in the directive,
+see the Stale Figures section below).** Reconciliation proposed, NOT
+implemented, per the directive's own out-of-scope instruction:
+
+| session_id | classification | projected_cost_usd |
+|---|---|---|
+| `eve-20260803T074058Z-df7df0f9` | crashed_before_completion (ReadTimeout, 60s ceiling) | $0.098258 |
+| `eve-20260803T075102Z-2b98a5f0` | crashed_before_completion (ReadTimeout, 60s ceiling) | $0.098258 |
+| `eve-20260803T080243Z-29f48c2e` | crashed_before_completion (400 tool_result protocol bug, fixed same day) | $0.364236 |
+| `eve-20260803T080720Z-12e60677` | crashed_before_completion (same 400 bug) | $0.327358 |
+| `eve-20260803T081007Z-b7568699` | crashed_before_completion (same 400 bug) | $0.287342 |
+| `eve-20260804T015806Z-243d095f` | crashed_before_completion (ReadTimeout, 120s ceiling) | $0.098258 |
+
+Total conservatively counted: **$1.27371**, all against the "2026-08"
+month bucket (`month_spent_usd` filters strictly by month string — this
+impact is naturally bounded to August; it does not carry forward into
+September regardless of whether it's ever reconciled).
+
+**Reconciliation options, real tradeoffs, none implemented or
+recommended:**
+1. **Leave as-is.** Correct and self-limiting (bounded to August, per
+   above). Cost: ~$1.27 of August's $20 ceiling stays locked for the rest
+   of the month even though the true spend was likely small or zero.
+2. **Manually verify true cost via Anthropic's own billing console** for
+   each of the 6 timestamps, then apply a new, explicit
+   `manually_reconciled` status recording the verified figure. Requires
+   human access outside this repo/session — cannot be done by this agent.
+3. **Distinguish the two failure classes before deciding.** The 3
+   ReadTimeout-caused entries and the 3 already-fixed-400-bug-caused
+   entries are mechanically different (idle-gap timeout vs. a malformed-
+   request rejection). Whether a 400 is *always* a confirmed $0 the way
+   401/403/429 are is a genuinely open question this project's own code
+   does not currently answer — `REJECTED_BEFORE_TOKEN_PROCESSING_STATUS_CODES`
+   deliberately excludes 400, which this report treats as intentional
+   (not an oversight to silently correct) rather than assuming 400 is
+   safe to release.
+
+**CONFIDENCE:** confirmed-from-code (full read of the corrected
+`session.py`/`pipeline.py`/`budget_ledger.py`), confirmed-from-data (real
+ledger inspection, real registry cross-check), confirmed-from-test (10 new
+tests, all passing — 6 in `test_eve_session_termination.py`'s new
+`CrashSafetyTest`, 1 in `test_eve_session_registry.py`, 1 in
+`test_eve_pipeline.py`'s `CrashNotifyTest`, plus the rename's own
+propagation into 1 existing test).
+
+---
+
+## PHASE 1.2 — How to run both agents
+
+Delivered in full in this directive's own mid-conversation response,
+before Phase 2 work began (per the directive's own sequencing
+requirement). Reproduced here for the permanent record:
+
+**Adam:** workflow `.github/workflows/research_agent_manual.yml`
+("Research Agent (manual run)"), `workflow_dispatch` with zero inputs.
+Dispatch via GitHub UI, `gh workflow run research_agent_manual.yml`, or
+the REST API. Requires `ANTHROPIC_API_KEY` as a repo secret — **cannot
+verify from code whether it is actually configured** (GitHub UI only,
+unable-to-verify). 180s timeout confirmed deployed (traced
+`pipeline.py` → `generate_web_hypotheses`'s own default `params=
+DEFAULT_PARAMETERS` → `HypothesisGenParameters()`'s own
+`claude_timeout_seconds: int = 180` default, no override anywhere). Real
+cost per run: $0 to $0.558 (n=4 real runs, too few for a stable average).
+
+**Eve:** no workflow exists at all (confirmed: grepped every
+`.github/workflows/*.yml`, zero references to `nero_core.eve.pipeline`).
+Run directly: `EVE_ENABLED=true ANTHROPIC_API_KEY=<key> python -m
+nero_core.eve.pipeline`. `EVE_ENABLED` is a plain runtime env var, read
+fresh on every `run_pipeline()` call — neither a scheduler switch (none
+exists to switch) nor a build-time flag. Session 2 needs no config change,
+just the same command — nothing in code caps session count; the 8-session
+bar is a human-honored commitment in `eve_session_registry.json`, not a
+technical gate. Session 1 real cost: **$0.4273** (recomputed directly from
+the real ledger, matches the directive's own figure exactly). New finding
+the directive didn't have: **August month-to-date spend is $3.415** of the
+$20 ceiling, of which **~$1.27 is the 6 orphaned entries above**, leaving
+~$16.59 real headroom.
+
+**API key:** Adam has no stub mode at all (grepped — none exists); cannot
+run meaningfully without a real key. Eve has `EVE_STUB_MODE=1` (a fully
+deterministic, no-network canned script) but it produces no new real data.
+
+---
+
+## PHASE 2 — The Agents tab
+
+**Item 2.1, checked before building, as instructed:** all three of Eve's
+fetchable data sources already live under `docs/site_data/` — confirmed
+directly against `nero_core/eve/storage.py`'s own path constants
+(`DEFAULT_HYPOTHESES_PATH`, `DEFAULT_BUDGET_LEDGER_PATH`,
+`EVE_SESSIONS_DIR`). **No export step needed** for `eve_hypotheses.json`,
+`eve_session_registry.json`, or `eve_budget_ledger.json` — `fetchJson`
+reaches them exactly like every other site export. **`eve_sessions/<id>.json`
+is a directory of one file per session, not a single list** — reading ALL
+of them would require first listing session_ids (from the registry) then
+fetching each individually (N+1 requests). **Deliberately not fetched this
+phase**: `eve_session_registry.json`'s own `classification`/`reason` text
+already carries everything the Session Health panel needs (which sessions
+crashed, and why, in real prose) without the extra per-session fetches —
+a scope decision, not an oversight, stated here rather than silently made.
+
+**WHAT SHIPPED** (committed `162b20b`):
+- `website/lib/types.ts` — `EveHypothesisRecord`, `EveSessionRegistryEntry`/
+  `EveSessionRegistryExport`, `EveBudgetLedgerEntry` (deliberately minimal
+  — only fields this site reads).
+- `website/lib/data.ts` — `fetchEveHypotheses`/`fetchEveSessionRegistry`/
+  `fetchEveBudgetLedger`.
+- `website/lib/agentsPage.ts` (new) — pure derivation functions, kept
+  separate and unit-tested (matching `lib/researchScoreboard.ts`'s own
+  precedent): `computePreRegistrationProgress`, `computeEveFunnel`,
+  `computeAdamFunnel`, `extractFrequencyClaims`.
+- `website/app/agents/page.tsx` (new) — the page itself.
+- `website/app/layout.tsx` — nav entry, placed alongside the existing
+  Factory Loop link, before Lab.
+
+**Every real number on the page, with its source:**
+
+| Panel | Number | Real value | Source |
+|---|---|---|---|
+| Pre-registration progress | Session N of 8 | Session 1 of 8 | `eve_session_registry.json`, `sessions[].counts_toward_pre_registered_8` |
+| | Remaining | 7 | `8 - N`, computed |
+| | SURVIVED | 0 | `eve_hypotheses.json`, `verdict_combined === "SURVIVED"` count |
+| | Recorded spend | $2.1416 (Eve) + $0.55804 (Adam) | `eve_budget_ledger.json` status="actual" sum; `agent_performance.json` cumulative.total_llm_cost_usd |
+| | Unknown-cost calls | Eve: 6 calls, $1.27371 projected; Adam: 4 calls | `eve_budget_ledger.json` status="reserved"; `agent_performance.json` cumulative.calls_with_unknown_cost |
+| Eve funnel (Session 1) | 6 → 6 → 5 → 0 | confirmed exact | `eve_hypotheses.json`, filtered to `eve-20260804T020749Z-4cf6e4c9` |
+| | 1 TOO_SLOW, 2 SELF_DERIVATIVE | confirmed exact | same, `frequency_classification`/`contamination_tags` |
+| Adam funnel (cumulative) | 2 → 2 → 0 → 0 | confirmed exact | `agent_performance.json` cumulative |
+| | 2 TOO_SLOW | confirmed exact | same |
+| Session health | 6 of 9 crashed | confirmed exact | `eve_session_registry.json`, all 9 entries |
+| Claimed vs. measured | RSI2_TREND_PULLBACK_PAXG_4H: 35.0 claimed / 0.50 measured | confirmed exact | `agent_run_summaries.json`, `too_slow[]` |
+| | ADX_REGIME_IGNITION_SOL_4H: 45.0 claimed / 16.94 measured | confirmed exact | same |
+
+**One real number the directive named but this page deliberately does NOT
+show numerically:** Eve's own `ETH_BIDIRECTIONAL_ZSCORE_FADE` (Session 1's
+one TOO_SLOW rejection, 27.4/yr measured) carries a self-claimed
+`expected_frequency_per_year` field, but it is a free-text STRING ("85-130
+combined across both directions...") rather than a clean number like
+Adam's `expected_frequency_claim`. Forcing it into the same "claimed X,
+measured Y" numeric row as Adam's two would either mangle the real string
+or fabricate false numeric precision — the Claimed vs. Measured panel is
+scoped to Adam's two real numeric examples, exactly as the directive
+itself named them, and this is flagged here rather than silently decided.
+
+**Out of scope, confirmed not built:** no time-series charts (n=1 countable
+Eve session, n=2 Adam hypotheses — a chart would be a straight line; this
+becomes meaningful once several more countable sessions/runs exist — no
+fixed number is claimed here, since none is derivable from 1-2 data
+points). No raw proposal text anywhere on the page — every field read from
+`eve_hypotheses.json`/`agent_performance.json`/`agent_run_summaries.json`
+is already a derived count, name, or verdict, never `mechanism`/
+`raw_hypothesis` free text rendered directly (`EveRawHypothesis`'s own
+type only exposes `hypothesis_name`/`asset`/`timeframe`, not `mechanism`).
+
+**Test counts, Phase 2:** 17 new website tests (11 in
+`__tests__/agentsPage.test.ts` for the pure lib functions — including a
+real-data cross-check against the committed registry file — plus 6 in
+`__tests__/agentsPageRender.test.tsx` for the page itself), all pass.
+
+---
+
+## PHASE 3 — Report only, nothing implemented
+
+### 3.1 Running agents from the website
+
+**FINDING:** the site is fully static (`fetchJson` against committed
+JSON via `next: { revalidate: 300 }` ISR, confirmed — no API route, no
+server component that writes anywhere, confirmed by grep across
+`website/app/api/` — that directory does not exist in this repo).
+Dispatching a GitHub Actions `workflow_dispatch` requires an authenticated
+token with `actions:write` on this repo; that token cannot live in a
+public static frontend's shipped JS bundle under any circumstance — it
+would be extractable by anyone viewing network requests or source.
+
+**Three real options, no recommendation (deliberate decision needed):**
+
+1. **An authenticated serverless function** (e.g. a small API route on a
+   host that supports them, or a separate minimal backend) holding the
+   GitHub token server-side, exposing one POST endpoint the site's own
+   button calls. *Effort:* moderate — new deploy target/secret
+   management, this project currently has none. *Security:* the token
+   never reaches the client, but the new endpoint itself becomes a fresh
+   attack surface needing its own auth (a shared secret is the minimum;
+   anyone who finds the URL and that secret can trigger real spend).
+2. **A narrowly-scoped GitHub App** (installed with `actions:write` on
+   this one repo only, nothing broader) whose credentials live behind the
+   same kind of serverless function as option 1. *Effort:* higher — App
+   registration plus the same backend work as option 1. *Security:*
+   materially better blast-radius containment than a broad personal
+   access token if the credential is ever compromised, since the App's
+   own permissions are scoped at creation time, not just by convention.
+3. **A manual-trigger page gated behind the owner's own GitHub OAuth
+   login**, so no standing token lives in this project's infrastructure
+   at all — each dispatch is authorized by the owner's own live GitHub
+   session. *Effort:* an OAuth flow (not nothing, but no new secret to
+   protect at rest). *Security:* the strongest of the three in one
+   specific sense (nothing to steal from this project's own servers), but
+   depends entirely on GitHub OAuth's own security model and correctly
+   restricting the callback to the owner's account.
+
+**Recommend nothing** — per the directive's own instruction, this needs a
+deliberate decision, not a default.
+
+### 3.2 Live repair progress for dead strategies
+
+**FINDING:** `factory_loop_status.json`'s real, current content —
+`"repair": {"count": 0, "open_chains": 0, "resolved_chains": 0}`,
+`"graveyard": {"count": 21, ...}` — confirmed, matches the directive's own
+figures exactly, no stale figure here. Repair Lab v1 is real and tested
+(`nero_core/research_agent/repair_lab.py`) but genuinely never launched.
+
+**What launching the first real repair chain would take, confirmed from
+code:**
+- `check_eligibility(original_result)` (`repair_lab.py:108-158`) requires
+  `verdict == VERDICT_DIED` **exactly** — a `SKIPPED` (TOO_SLOW/
+  UNMEASURABLE) or `UNTESTABLE` original result is explicitly out of
+  scope for v1, by design (TOO_SLOW's only real repair lever would be
+  loosening the entry gate, which is the exact gate-gaming behavior
+  `frequency_gate.py` exists to prevent — stated directly in
+  `check_eligibility`'s own docstring).
+- `can_launch_new_attempt(chain_attempts)` (`repair_lab.py:703-716`)
+  caps at `MAX_ATTEMPTS_PER_CHAIN = 4`.
+- Real, hand-curated candidates already exist:
+  `docs/site_data/repair_candidates.json` has **3** entries, each with a
+  real written diagnosis — `RANGE_MEAN_REVERSION` (sample-too-thin),
+  `BOS_CONTINUATION` (regime-filter-only), `LEADLAG_FOLLOW`
+  (grid-shift-artifact).
+- **Best candidate: `RANGE_MEAN_REVERSION`.** Its own committed diagnosis
+  is qualitatively different from the other two — it states a
+  *mechanistically-corroborated positive finding* ("a real... improvement
+  from a 'confirmation' filter... shifted BTC/1d's exit mix from 32%
+  REGIME_BREAK-dominated to 68% REVERSION_TARGET") that was simply tested
+  on the thinnest available config (7-19 trades/half). The other two
+  diagnose structural problems with the mechanism itself (a dominating
+  stop, a grid-alignment artifact) rather than "the right idea, wrong
+  sample" — `RANGE_MEAN_REVERSION` is the one candidate where the
+  documented diagnosis already points at a concrete, bounded fix (test
+  the SAME confirmation filter on a less-thin config) rather than
+  requiring a new mechanism insight.
+- **Cost:** one repair attempt is one `propose_modification` LLM call
+  (`repair_lab.py:350`) plus one real backtest run — comparable in shape
+  to a single Adam hypothesis-generation call, so on the order of
+  Adam's own per-call cost (well under $0.20 based on the real per-call
+  costs already observed across both agents' ledgers).
+- **Human-at-every-step:** yes, confirmed — `repair_lab.py`'s own module
+  docstring and this project's standing "nothing auto-wires without human
+  approval" rule (already true for Trial admission and graveyard
+  distillation) apply identically here; nothing in `repair_lab.py` or
+  `research_agent_manual.yml` auto-invokes a repair chain.
+
+**Nothing launched**, per the directive's own explicit instruction.
+
+### 3.3 Scheduling both agents
+
+**FINDING, real arithmetic:**
+- Eve's own per-session ceiling: $1.50 (`DEFAULT_SESSION_BUDGET_USD`).
+  Real Session 1 cost: $0.4273 — well under the ceiling, but the ceiling
+  is the number that must be used for a forward-looking schedule
+  projection (a session's real cost varies with how much Eve actually
+  does; the ceiling is the honest upper bound to budget against).
+- Adam's own real per-run cost: $0 to $0.558 (n=4, see Phase 1.2 above).
+- **A DAILY schedule** (both agents once/day): worst case
+  `(1.50 + 0.558) × 30 ≈ $61.74/month` against the $20 hard ceiling — the
+  ceiling itself would refuse calls once hit (never silently overspend,
+  confirmed from `pre_call_check`'s own code), but this means the
+  schedule would exhaust the WHOLE month's budget in **under 10 days**
+  at worst case (`20 / 2.058 ≈ 9.7` days), and even at Eve's REAL observed
+  $0.4273 + Adam's real $0.558 ≈ $0.985/day, that's ~20 days before
+  the ceiling binds — leaving no budget for the remainder of most months.
+- **A WEEKLY schedule**: worst case `2.058 × 4.33 ≈ $8.91/month` — fits
+  comfortably under $20, and burns through the entire ~$14 pre-
+  registration budget in **under 11 weeks** (`14 / 2.058 ≈ 6.8` sessions
+  worth, i.e. roughly the whole pre-registered 8-session bar in 7-8
+  weeks) if BOTH agents ran weekly together.
+- **Structural collision with the pre-registered 8-session design:** the
+  8-session bar is evaluated as 8 INDEPENDENT, individually-reviewed data
+  points (see `eve_session_registry.json`'s own per-session narrative
+  classification work — Session 0, 0-B, and the 5 crashes each required a
+  human read of what actually happened before being excluded or counted).
+  An automated schedule would produce Session 2 through 8 with no human
+  reviewing each one's real shape before the next fires — collapsing the
+  "deliberate, watched click" discipline `research_agent_manual.yml`'s own
+  comment states explicitly for Adam ("every run after it must be a
+  deliberate, watched click from the Actions tab, not an automation").
+- **Collision with "nothing auto-wires without human approval":** real,
+  but narrower than it first appears — a scheduled RUN producing a
+  hypothesis does not itself violate this rule (Trial admission, graveyard
+  distillation, and repair-chain launch are already separately gated on a
+  human, regardless of how the underlying hypothesis was generated). The
+  actual collision is with the "each session/run is a deliberately watched
+  event," not with any DOWNSTREAM auto-admission — those gates remain
+  intact either way.
+
+**Present options, enable nothing:**
+1. Keep manual-only (current state) — slowest, but preserves per-session
+   human review of the 8-session campaign.
+2. Weekly schedule — real arithmetic above fits the $20 ceiling
+   comfortably but compresses the whole pre-registered campaign into
+   ~2 months and removes the "deliberate click" review step Adam's own
+   workflow comment states as a design requirement, not just a habit.
+3. Daily schedule — real arithmetic above shows this exhausts the month's
+   ceiling in 10-20 days most months; **not viable as designed** without
+   either raising `MONTH_CEILING_USD` (a real-money decision, out of
+   scope here) or running far fewer real calls per invocation than either
+   agent currently makes.
+
+**Nothing enabled.**
+
+### 3.4 Adam's timeout fix — carried forward
+
+Still investigation-only from the prior directive: streaming recommended,
+~55 real test call sites across `test_research_agent_hypothesis_gen.py`
+(34)/`test_research_agent_web_hypothesis_gen.py` (15)/
+`test_eve_llm_client.py` (6), not implemented.
+
+**One clarification this directive's own Phase 1.1 work surfaced, worth
+carrying forward precisely:** Adam's `generate_web_hypotheses` (`hypothesis_gen.py:1108-1138`)
+**already** catches a `ReadTimeout` per-call, inside its own
+`for _ in range(max_calls_per_run):` loop (`except (requests.RequestException,
+KeyError, ValueError) as exc: ... calls_with_unknown_cost += 1 ...
+continue`) — one timed-out call does NOT lose the whole run for Adam, and
+its cost was already tracked as honestly UNKNOWN before this directive
+began (the prior directive's own item A3). **Phase 1.1's crash-safety work
+was necessary for Eve specifically because her architecture is
+fundamentally different — one long multi-turn conversation, not a loop of
+independent calls** — Adam never needed the equivalent fix because his
+loop shape already contained the failure. So: **Phase 1.1 brought Eve's
+resilience posture up to roughly where Adam's already was, architecturally
+— it does not change Adam's own situation at all.** Adam's own open
+problem remains exactly what the prior directive found: the ReadTimeout
+still reduces real THROUGHPUT (fewer real hypotheses produced per run,
+confirmed by the real 90s→180s data: 0→2 hypotheses, and even 180s still
+lost 1/3 calls on the most recent run) — only the still-unimplemented
+streaming fix addresses that.
+
+---
+
+## Out-of-scope confirmations, this directive
+
+- `EVE_ENABLED` was not enabled anywhere in code or CI; no automated
+  schedule was created (Phase 3.3, report only).
+- No repair chain was launched (Phase 3.2, report only).
+- No raw `agent_hypotheses.json`/Eve `mechanism` text was committed or
+  rendered anywhere on the new Agents page (confirmed above).
+- The streaming fix (Phase 3.4) was not implemented.
+- No binding freshness disqualification was re-enabled — zero files under
+  `nero_core/eve/scoring.py` or `nero_core/research_agent/trial.py`
+  touched this directive.
+- Eve's session/tool LOOP STRUCTURE (turn budgeting, DSL retry, tool
+  definitions) is unchanged — Phase 1.1 only added exception handling
+  around the existing loop, never altered what happens inside a normal
+  turn.
+- **Evidence-bar constants unchanged, confirmed by test:** zero files
+  under `tools/backtest_statistics.py`, `nero_core/research_agent/
+  frequency_gate.py`, or the constant-defining sections of
+  `nero_core/eve/scoring.py` were touched this directive (confirmed via
+  `git diff --stat` across both Phase 1.1 and Phase 2 commits — neither
+  touches any of those three files). The existing
+  `tests/test_eve_citation_freshness.py::ConstantsUncnhangedTest`
+  (asserting `MIN_SAMPLE_SIZE==20`, `TARGET_RESOLVED_TRADES==30`,
+  `FAST_MAX_MONTHS==6.0`, `VIABLE_MAX_MONTHS==12.0`, `DEFAULT_FDR_ALPHA==0.05`,
+  `FRESHNESS_DISQUALIFICATION_WINDOW_DAYS==30`) ran as part of this
+  directive's own full Python suite and still passes.
+
+## Test counts, this directive
+
+**Python:**
+- Before (start of this directive): 2521 tests, OK.
+- After Phase 1.1: **2527 tests, OK** (+6: 4 `CrashSafetyTest` tests + 1
+  countability test + 1 crash-notification-naming test).
+- Phase 2/3 touched zero Python files — the Python count is unchanged
+  from the Phase 1.1 figure for the rest of this directive.
+
+**Website:**
+- Before this directive: 607 tests, 605 passing, 2 pre-existing failures
+  (`siteDataSchema.test.ts`, unrelated — unchanged again this directive).
+- After Phase 2: **624 tests, 622 passing, same 2 pre-existing failures**.
+  Delta: **+17**, reconciling exactly (11 in `agentsPage.test.ts` + 6 in
+  `agentsPageRender.test.tsx`).
+
+## Stale figures found in this directive, and the real values
+
+1. **"Three existing orphaned reservations" (Phase 1.1c) — stale. The real
+   number is 6.** Verified two independent ways: direct inspection of
+   `eve_budget_ledger.json` (6 entries with `status: "reserved"`) and
+   cross-referenced against `eve_session_registry.json` (6 entries
+   classified `crashed_before_completion`) — both lists match exactly by
+   `session_id`. The directive's 3 named sessions
+   (`df7df0f9`/`2b98a5f0`/`243d095f`) are real and are the 3 pure-
+   ReadTimeout crashes; the other 3 (`29f48c2e`/`12e60677`/`b7568699`)
+   are a DIFFERENT, already-fixed-same-day bug (the 400 tool_result
+   protocol error) that also happens to have left an orphaned reservation
+   in the exact same shape. Both the reconciliation report and the real
+   dollar total ($1.27371, not a smaller 3-entry figure) reflect the real
+   count of 6.
+2. Every other figure checked against real, current data (Session 1's
+   $0.4273, Adam's $0.56/2 TOO_SLOW hypotheses with their exact claimed/
+   measured rates, the graveyard's 21 entries, Eve's Session 1 6→6→5→0
+   funnel with 1 TOO_SLOW at 27.4/yr and 2 SELF_DERIVATIVE) matched the
+   directive's own stated numbers exactly — no other staleness found.
