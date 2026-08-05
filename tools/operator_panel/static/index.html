@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vatican Operator Panel (local only)</title>
+<style>
+  :root { color-scheme: dark; }
+  body { background: #14100c; color: #e9dfce; font-family: -apple-system, Segoe UI, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; }
+  h2 { font-size: 1.1rem; border-bottom: 1px solid #3a332a; padding-bottom: .3rem; margin-top: 2.5rem; }
+  .banner { background: #3a1f1f; border: 1px solid #7a3a3a; padding: .75rem 1rem; border-radius: 6px; margin-bottom: 1.5rem; }
+  section { margin-bottom: 1.5rem; }
+  button { background: #2a2318; color: #e9dfce; border: 1px solid #57492f; border-radius: 4px; padding: .4rem .9rem; cursor: pointer; margin-right: .5rem; }
+  button:hover { background: #3a3020; }
+  button.danger { border-color: #7a3a3a; }
+  button.confirm { border-color: #3a7a4a; }
+  pre { background: #1c1712; padding: .75rem; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; max-height: 320px; }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  td, th { text-align: left; padding: .3rem .5rem; border-bottom: 1px solid #2a2318; }
+  .muted { color: #9c917c; font-size: .85rem; }
+  .stat { display: inline-block; margin-right: 1.5rem; }
+  .stat b { display: block; font-size: 1.3rem; }
+  .pending { border-left: 3px solid #b08a3a; padding-left: .6rem; margin-bottom: .8rem; }
+</style>
+</head>
+<body>
+<h1>Vatican Operator Panel</h1>
+<div class="banner">
+  Local only. Never deployed. No authentication -- this is your own machine, your own repo.
+  Every write goes through an existing project function; nothing here is a new write path.
+</div>
+
+<section>
+  <h2>Budget meter</h2>
+  <div id="budget">loading…</div>
+  <button onclick="loadBudget()">Refresh</button>
+</section>
+
+<section>
+  <h2>Run Adam</h2>
+  <button onclick="runAdam()">Run Adam (scanner + web search)</button>
+  <div id="adam-stream" class="muted"></div>
+</section>
+
+<section>
+  <h2>Run Eve</h2>
+  <div id="eve-preflight" class="muted">loading preflight…</div>
+  <button class="confirm" onclick="runEve()">Run Eve (one session)</button>
+  <div id="eve-stream" class="muted"></div>
+</section>
+
+<section>
+  <h2>Running processes / kill switch</h2>
+  <div id="runs"></div>
+  <button onclick="loadRuns()">Refresh</button>
+</section>
+
+<section>
+  <h2>Factory Loop</h2>
+  <button onclick="factoryLoopDryRun()">Dry run (default, writes nothing)</button>
+  <button class="confirm" onclick="factoryLoopLive()">Run for real (--live)</button>
+  <pre id="factory-loop-output">not run yet</pre>
+</section>
+
+<section>
+  <h2>Approval queue (REVIEW_PENDING)</h2>
+  <div id="approval-queue">loading…</div>
+  <button onclick="loadApprovalQueue()">Refresh</button>
+</section>
+
+<section>
+  <h2>Repair chain candidates</h2>
+  <div class="muted">Propose &amp; validate only -- this panel does not launch/commit a repair chain (see the closing report for why).</div>
+  <div id="repair-candidates">loading…</div>
+  <button onclick="loadRepairCandidates()">Refresh</button>
+</section>
+
+<script>
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || res.statusText);
+  return data;
+}
+
+async function loadBudget() {
+  const b = await api('/api/budget');
+  document.getElementById('budget').innerHTML = `
+    <div class="stat"><b>$${b.eve_actual_spend_usd}</b>Eve actual spend</div>
+    <div class="stat"><b>${b.eve_orphaned_reservations.count} / $${b.eve_orphaned_reservations.total_usd}</b>orphaned reservations</div>
+    <div class="stat"><b>$${b.pre_registration_remaining_usd}</b>remaining of $${b.pre_registration_budget_usd} pre-reg</div>
+    <div class="stat"><b>$${b.month_ceiling_remaining_usd}</b>remaining of $${b.month_ceiling_usd}/mo ceiling</div>
+    <div class="muted">Adam unknown-cost calls: ${b.adam_unknown_cost_calls === null ? 'UNKNOWN -- ' + b.adam_unknown_cost_calls_note : b.adam_unknown_cost_calls}</div>`;
+}
+
+async function loadEvePreflight() {
+  const p = await api('/api/eve/preflight');
+  document.getElementById('eve-preflight').innerText =
+    `Session ceiling: $${p.session_ceiling_usd} | pre-registration remaining: $${p.pre_registration_remaining_usd} | EVE_ENABLED (default env): ${p.eve_enabled}`;
+}
+
+function streamRun(path, body, outEl) {
+  const el = document.getElementById(outEl);
+  el.innerText = '';
+  fetch(path, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {}) })
+    .then(res => {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      function pump() {
+        reader.read().then(({done, value}) => {
+          if (done) return;
+          el.innerText += decoder.decode(value);
+          pump();
+        });
+      }
+      pump();
+    });
+}
+
+function runAdam() { streamRun('/api/adam/run', {}, 'adam-stream'); }
+function runEve() {
+  if (!confirm('This spends real money against the session ceiling shown above. Continue?')) return;
+  streamRun('/api/eve/run', {confirm: true}, 'eve-stream');
+}
+
+async function loadRuns() {
+  const r = await api('/api/runs');
+  document.getElementById('runs').innerHTML = r.running.length === 0 ? '<span class="muted">none running</span>' :
+    r.running.map(x => `${x.run_id} (pid ${x.pid}) <button class="danger" onclick="kill('${x.run_id}')">Kill</button>`).join('<br>');
+}
+async function kill(runId) { await api(`/api/kill/${runId}`, {method: 'POST'}); loadRuns(); }
+
+async function factoryLoopDryRun() {
+  const r = await api('/api/factory-loop/dry-run', {method: 'POST'});
+  document.getElementById('factory-loop-output').innerText = r.report_text;
+}
+async function factoryLoopLive() {
+  if (!confirm('This writes real Trial/status data and may spend money on distillation drafting. Continue?')) return;
+  const r = await api('/api/factory-loop/live', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({confirm: true})});
+  document.getElementById('factory-loop-output').innerText = r.report_text + '\n\n' + (r.draft_note || '');
+}
+
+async function loadApprovalQueue() {
+  const q = await api('/api/approval-queue');
+  const el = document.getElementById('approval-queue');
+  if (q.count === 0) { el.innerHTML = '<span class="muted">nothing pending</span>'; return; }
+  el.innerHTML = q.pending.map(d => `
+    <div class="pending">
+      <b>${d.name}</b> (${d.family}) — ${d.failure_pattern}<br>
+      <span class="muted">${d.why_it_died || ''}</span><br>
+      <button class="confirm" onclick="approve('${d.name}')">Approve</button>
+      <button class="danger" onclick="reject('${d.name}')">Reject</button>
+    </div>`).join('');
+}
+async function approve(name) { await api(`/api/approval-queue/${encodeURIComponent(name)}/approve`, {method: 'POST'}); loadApprovalQueue(); }
+async function reject(name) { await api(`/api/approval-queue/${encodeURIComponent(name)}/reject`, {method: 'POST'}); loadApprovalQueue(); }
+
+async function loadRepairCandidates() {
+  const r = await api('/api/repair/candidates');
+  document.getElementById('repair-candidates').innerHTML = '<table><tr><th>Hypothesis</th><th>Parent</th><th>Attempts</th><th>Can launch?</th><th></th></tr>' +
+    r.candidates.map(c => `<tr>
+      <td>${c.hypothesis_name}</td><td>${c.parent_strategy}</td>
+      <td>${c.attempts_launched}/4</td><td>${c.can_launch_new_attempt}</td>
+      <td><button onclick="proposeRepair('${c.hypothesis_name}')">Propose (real LLM call)</button></td>
+    </tr>`).join('') + '</table><pre id="repair-proposal"></pre>';
+}
+async function proposeRepair(name) {
+  if (!confirm('This makes one real LLM call. Continue?')) return;
+  try {
+    const r = await api('/api/repair/propose', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({hypothesis_name: name})});
+    document.getElementById('repair-proposal').innerText = JSON.stringify(r, null, 2);
+  } catch (e) {
+    document.getElementById('repair-proposal').innerText = 'Error: ' + e.message;
+  }
+}
+
+loadBudget();
+loadEvePreflight();
+loadRuns();
+loadApprovalQueue();
+loadRepairCandidates();
+</script>
+</body>
+</html>

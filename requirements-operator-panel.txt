@@ -1,0 +1,7 @@
+# CC-1 directive, item 4: the Local Operator Panel's ONLY extra dependency
+# beyond requirements.txt -- deliberately kept in its own file so no CI
+# workflow or the public website's own build needs to install a local-only
+# UI server. Install with: pip install -r requirements.txt -r requirements-operator-panel.txt
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9
