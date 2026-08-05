@@ -90,6 +90,25 @@ describe("AgentsPage", () => {
     expect(progress).toHaveTextContent("0 SURVIVED");
   });
 
+  it("shows the kill criterion verbatim, not just the sessions-budgeted/must-clear text", async () => {
+    // CC-1 directive item 5d: kill_criterion was typed (lib/types.ts) and
+    // fetched but never actually rendered anywhere on this page -- a real,
+    // confirmed gap this test closes.
+    await setupAndRender({});
+    expect(screen.getByTestId("kill-criterion")).toHaveTextContent(
+      "if Eve does not clear 5% after 8 (countable) sessions",
+    );
+  });
+
+  it("shows the random baseline panel with the real 0-survived headline", async () => {
+    // CC-1 directive item 5a: the strongest evidence in the project,
+    // static (not live-fetched) but must always be present and correct.
+    await setupAndRender({});
+    const panel = screen.getByTestId("random-baseline-panel");
+    expect(panel).toHaveTextContent("0 SURVIVED out of 1000 random hypotheses");
+    expect(panel).toHaveTextContent("PAXG");
+  });
+
   it("shows both agents' funnels", async () => {
     await setupAndRender({});
     expect(screen.getAllByText("Eve").length).toBeGreaterThan(0);

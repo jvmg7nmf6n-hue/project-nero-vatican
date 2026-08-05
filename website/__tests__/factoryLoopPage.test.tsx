@@ -1,13 +1,35 @@
 import { render, screen } from "@testing-library/react";
 import FactoryLoopPage from "@/app/factory-loop/page";
 import * as data from "@/lib/data";
-import type { AgentPerformanceExport, FactoryLoopStatusExport, GraveyardEntry } from "@/lib/types";
+import type { AgentPerformanceExport, FactoryLoopStatusExport, ForwardTrialRecord, GraveyardEntry } from "@/lib/types";
 
 jest.mock("@/lib/data");
 
 const mockFetchGraveyard = jest.mocked(data.fetchGraveyard);
 const mockFetchFactoryLoopStatus = jest.mocked(data.fetchFactoryLoopStatus);
 const mockFetchAgentPerformance = jest.mocked(data.fetchAgentPerformance);
+const mockFetchForwardTrial = jest.mocked(data.fetchForwardTrial);
+
+function forwardTrialRecord(overrides: Partial<ForwardTrialRecord> = {}): ForwardTrialRecord {
+  return {
+    trial_id: "774476ca-8a12-453d-955b-52b8abfc294a",
+    source_hypothesis_ref: {
+      origin: "fresh",
+      origin_agent: "adam",
+      hypothesis_name: "RSI2_TREND_PULLBACK_PAXG_4H",
+      session_id_or_run_ref: null,
+    },
+    entry_verdict: { verdict: "SKIPPED" },
+    measured_trades_per_year: 0.498181404864742,
+    projected_time_to_min_sample_years: 40.14601870864704,
+    projected_time_to_min_sample_label:
+      "40.1 years at the currently measured rate (0.50 trades/year) -- EXCEEDS the 2-year visibility horizon (item 4b)",
+    opened_at: "2026-08-05T23:04:59.453963+00:00",
+    status: "OPEN",
+    attribution: "Explored by Adam, our research agent.",
+    ...overrides,
+  };
+}
 
 function graveyardEntry(overrides: Partial<GraveyardEntry> = {}): GraveyardEntry {
   return {
@@ -56,6 +78,10 @@ function statusExport(overrides: Partial<FactoryLoopStatusExport> = {}): Factory
 }
 
 describe("FactoryLoopPage", () => {
+  beforeEach(() => {
+    mockFetchForwardTrial.mockResolvedValue(null);
+  });
+
   afterEach(() => {
     jest.resetAllMocks();
   });
@@ -138,5 +164,47 @@ describe("FactoryLoopPage", () => {
     render(await FactoryLoopPage());
 
     expect(screen.getByRole("img", { name: /Factory Loop/ })).toBeInTheDocument();
+  });
+
+  it("shows the unmeasurable_count honestly when a Trial entry projects beyond the 2-year horizon", async () => {
+    // CC-1 directive item 1c: this field was already computed by
+    // factory_loop_status_summary.py but never rendered anywhere -- real,
+    // confirmed gap this test closes.
+    mockFetchGraveyard.mockResolvedValue([]);
+    mockFetchFactoryLoopStatus.mockResolvedValue(
+      statusExport({ forward_trial: { count: 8, by_origin: { adam: 2, eve: 6, repaired: 0 }, unmeasurable_count: 1 } })
+    );
+    mockFetchAgentPerformance.mockResolvedValue(null);
+
+    render(await FactoryLoopPage());
+
+    expect(screen.getByTestId("unmeasurable-count")).toHaveTextContent("1");
+    expect(screen.getByTestId("unmeasurable-count")).toHaveTextContent("not a bug or a joke");
+  });
+
+  it("shows the real per-hypothesis Forward Trial table when records exist", async () => {
+    mockFetchGraveyard.mockResolvedValue([]);
+    mockFetchFactoryLoopStatus.mockResolvedValue(
+      statusExport({ forward_trial: { count: 1, by_origin: { adam: 1, eve: 0, repaired: 0 }, unmeasurable_count: 1 } })
+    );
+    mockFetchAgentPerformance.mockResolvedValue(null);
+    mockFetchForwardTrial.mockResolvedValue([forwardTrialRecord()]);
+
+    render(await FactoryLoopPage());
+
+    const row = screen.getByTestId("forward-trial-row");
+    expect(row).toHaveTextContent("RSI2_TREND_PULLBACK_PAXG_4H");
+    expect(row).toHaveTextContent("40.1 years");
+  });
+
+  it("never shows a resolved (non-OPEN) Trial record in the open-records table", async () => {
+    mockFetchGraveyard.mockResolvedValue([]);
+    mockFetchFactoryLoopStatus.mockResolvedValue(statusExport({ forward_trial: { count: 1, by_origin: { adam: 0, eve: 1, repaired: 0 }, unmeasurable_count: 0 } }));
+    mockFetchAgentPerformance.mockResolvedValue(null);
+    mockFetchForwardTrial.mockResolvedValue([forwardTrialRecord({ status: "SURVIVED_TRIAL", source_hypothesis_ref: { origin: "fresh", origin_agent: "eve", hypothesis_name: "RESOLVED_ONE", session_id_or_run_ref: null } })]);
+
+    render(await FactoryLoopPage());
+
+    expect(screen.queryByTestId("forward-trial-table")).not.toBeInTheDocument();
   });
 });

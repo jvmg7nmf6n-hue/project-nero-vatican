@@ -1,5 +1,5 @@
 import FactoryLoopDiagram from "@/components/FactoryLoopDiagram";
-import { fetchAgentPerformance, fetchFactoryLoopStatus, fetchGraveyard } from "@/lib/data";
+import { fetchAgentPerformance, fetchFactoryLoopStatus, fetchForwardTrial, fetchGraveyard } from "@/lib/data";
 
 export const revalidate = 300;
 
@@ -17,16 +17,19 @@ export const metadata = {
 // data yet, as long as it states plainly what's live vs. designed-not-yet-
 // populated -- never implying more exists than does.
 export default async function FactoryLoopPage() {
-  const [graveyard, factoryLoopStatus, agentPerformance] = await Promise.all([
+  const [graveyard, factoryLoopStatus, agentPerformance, forwardTrialRecords] = await Promise.all([
     fetchGraveyard(),
     fetchFactoryLoopStatus(),
     fetchAgentPerformance(),
+    fetchForwardTrial(),
   ]);
 
   const graveyardCount = graveyard?.length ?? 0;
   const forwardTrialCount = factoryLoopStatus?.forward_trial.count ?? 0;
+  const unmeasurableCount = factoryLoopStatus?.forward_trial.unmeasurable_count ?? 0;
   const repairChainCount = factoryLoopStatus?.repair.count ?? 0;
   const statusIsLive = factoryLoopStatus !== null;
+  const openTrialRecords = (forwardTrialRecords ?? []).filter((r) => r.status === "OPEN");
 
   const adamSurvived = agentPerformance?.cumulative.survived ?? 0;
   const adamPromisingWatchlist = agentPerformance?.cumulative.promising_watchlist ?? 0;
@@ -132,6 +135,39 @@ export default async function FactoryLoopPage() {
             ? "Zero is an honest, expected number this early — the admission mechanism only just shipped, not a sign anything is broken."
             : "The live count for this section has not started reporting yet — the mechanism that admits hypotheses to Forward Trial is built and tested, but no scheduled run has produced a status export yet."}
         </p>
+        {statusIsLive && unmeasurableCount > 0 && (
+          <p data-testid="unmeasurable-count" className="text-muted text-sm mt-2">
+            <strong className="text-parchment">{unmeasurableCount}</strong> of these {forwardTrialCount} project a
+            measurement time beyond our 2-year visibility horizon — shown here, not hidden or excluded, because
+            admission to Forward Trial is DSL-validity only, never gated on how often a rule fires. A large number
+            below is a real, honestly-measured result: it means this specific rule&apos;s trigger condition is
+            genuinely rare at its currently-known rate, not a bug or a joke.
+          </p>
+        )}
+        {openTrialRecords.length > 0 && (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-sm" data-testid="forward-trial-table">
+              <thead>
+                <tr className="text-left text-muted border-b border-gold/20">
+                  <th className="pr-3 py-1">Hypothesis</th>
+                  <th className="pr-3 py-1">Origin</th>
+                  <th className="pr-3 py-1">Entry verdict</th>
+                  <th className="py-1">Projected time to measure</th>
+                </tr>
+              </thead>
+              <tbody>
+                {openTrialRecords.map((r) => (
+                  <tr key={r.trial_id} data-testid="forward-trial-row" className="border-b border-gold/10">
+                    <td className="pr-3 py-1 text-parchment">{r.source_hypothesis_ref.hypothesis_name}</td>
+                    <td className="pr-3 py-1 text-muted">{r.source_hypothesis_ref.origin_agent}</td>
+                    <td className="pr-3 py-1 text-muted">{String(r.entry_verdict.verdict ?? "—")}</td>
+                    <td className="py-1 text-muted">{r.projected_time_to_min_sample_label}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <section className="mt-8">

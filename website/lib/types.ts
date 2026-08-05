@@ -557,6 +557,35 @@ export interface FactoryLoopStatusExport {
   repair: FactoryLoopRepairStatus;
 }
 
+// CC-1 directive, item 1c/5f: the per-record file (nero_core.research_agent.
+// trial.TrialRecord.to_dict(), appended by tools/factory_loop_run.py) --
+// distinct from FactoryLoopStatusExport above, which is only the aggregate
+// counts. Deliberately omits forward_tracking_db_ref (a local filesystem
+// path on whichever machine ran the admission, not meaningful to a site
+// reader). Already fetchable with zero export step (docs/site_data/
+// forward_trial.json, same "lives under docs/site_data/ already" convention
+// as Eve's three files below).
+export interface ForwardTrialSourceRef {
+  origin: "fresh" | "repaired";
+  origin_agent: "adam" | "eve";
+  hypothesis_name: string;
+  session_id_or_run_ref: string | null;
+  repair_chain_id?: string;
+  attempt_id?: string;
+}
+
+export interface ForwardTrialRecord {
+  trial_id: string;
+  source_hypothesis_ref: ForwardTrialSourceRef;
+  entry_verdict: { verdict: string | null; [key: string]: unknown };
+  measured_trades_per_year: number | null;
+  projected_time_to_min_sample_years: number | null;
+  projected_time_to_min_sample_label: string;
+  opened_at: string;
+  status: "OPEN" | "SURVIVED_TRIAL" | "FAILED_TRIAL";
+  attribution: string;
+}
+
 // --- Eve (nero_core/eve/) -- CC-1 Master Directive Phase 2. All three files
 // below already live under docs/site_data/ (confirmed directly against
 // nero_core/eve/storage.py's own DEFAULT_HYPOTHESES_PATH/

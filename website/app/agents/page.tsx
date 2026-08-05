@@ -46,6 +46,63 @@ function FunnelCard({ funnel }: { funnel: AgentFunnel }) {
   );
 }
 
+// CC-1 directive, item 5a: the strongest evidence this project has that its
+// own bar is real, not decorative — a random-hypothesis baseline run against
+// every pair in the search universe, scored by the EXACT SAME harness a real
+// Adam/Eve hypothesis goes through. Static data, not live-fetched: these are
+// five completed, one-time investigations (K=200 each), not something that
+// changes run to run, so hardcoding the real, already-committed numbers here
+// matches this site's own /methodology "static-prose" convention rather than
+// building a live export pipeline for numbers that will not move. Source,
+// verbatim, re-read directly from each file this directive (2026-08-06):
+// docs/investigations/{btc,eth,sol,paxg}_4h_random_baseline_result.json and
+// docs/investigations/btc_24h_random_baseline_result.json, each file's own
+// verdict_counts field.
+const RANDOM_BASELINES = [
+  { asset: "BTC", timeframe: "4h", k: 200, survived: 0, promisingWatchlist: 0, died: 69, skipped: 131 },
+  { asset: "BTC", timeframe: "24h", k: 200, survived: 0, promisingWatchlist: 0, died: 64, skipped: 136 },
+  { asset: "ETH", timeframe: "4h", k: 200, survived: 0, promisingWatchlist: 3, died: 63, skipped: 134 },
+  { asset: "SOL", timeframe: "4h", k: 200, survived: 0, promisingWatchlist: 0, died: 70, skipped: 130 },
+  { asset: "PAXG", timeframe: "4h", k: 200, survived: 0, promisingWatchlist: 8, died: 63, skipped: 129 },
+] as const;
+const RANDOM_BASELINE_TOTAL_K = RANDOM_BASELINES.reduce((sum, b) => sum + b.k, 0);
+const RANDOM_BASELINE_TOTAL_SURVIVED = RANDOM_BASELINES.reduce((sum, b) => sum + b.survived, 0);
+
+function RandomBaselinePanel() {
+  return (
+    <section data-testid="random-baseline-panel" className="rounded-lg border border-gold/40 bg-ink p-5">
+      <h2 className="font-serif text-xl text-parchment mb-3">The random baselines</h2>
+      <p className="text-parchment text-lg">
+        {RANDOM_BASELINE_TOTAL_SURVIVED} SURVIVED out of {RANDOM_BASELINE_TOTAL_K} random hypotheses
+      </p>
+      <p className="text-muted text-sm mt-2">
+        Before trusting any real Adam/Eve hypothesis that clears this project&apos;s own bar, we asked: how often does a
+        completely random entry rule clear it by chance alone? {RANDOM_BASELINE_TOTAL_K} randomly-generated hypotheses
+        (K=200 per pair, five baselines across every pair in the current research universe) were scored through the
+        exact same harness — same train/test split, same MIN_SAMPLE_SIZE, same bootstrap CI, same SURVIVED bar — as a
+        real proposal. Zero cleared it. This is the number that makes the bar real rather than decorative: a bar
+        nothing random can pass by luck is a bar that means something when a real hypothesis does clear it.
+      </p>
+      <ul className="mt-3 flex flex-col gap-1 text-sm">
+        {RANDOM_BASELINES.map((b) => (
+          <li key={`${b.asset}-${b.timeframe}`} className="text-muted">
+            <span className="text-parchment">
+              {b.asset}/{b.timeframe}
+            </span>{" "}
+            (K={b.k}): {b.survived} SURVIVED, {b.promisingWatchlist} PROMISING-WATCHLIST, {b.died} DIED, {b.skipped}{" "}
+            SKIPPED (too rare to measure)
+          </li>
+        ))}
+      </ul>
+      <p className="text-muted text-xs mt-3">
+        PROMISING-WATCHLIST occurring by chance (11 of {RANDOM_BASELINE_TOTAL_K}, concentrated in ETH/4h and PAXG/4h)
+        is expected and honest — it is the SURVIVED bar specifically (adequate sample AND a bootstrap CI that clears
+        zero on both halves) that no random hypothesis reached, in any of the five baselines.
+      </p>
+    </section>
+  );
+}
+
 const SESSION_CLASSIFICATION_LABELS: Record<string, string> = {
   crashed_before_completion: "Crashed",
 };
@@ -150,7 +207,15 @@ export default async function AgentsPage() {
           produce zero data points toward the 5%-OOS-survival bar) — see{" "}
           <span className="text-parchment">{eveRegistry?.pre_registration.eve_must_clear || "the pre-registration criterion"}</span>.
         </p>
+        {eveRegistry?.pre_registration.kill_criterion && (
+          <p data-testid="kill-criterion" className="text-muted text-xs mt-2 border-t border-gold/20 pt-2">
+            The condition under which we&apos;d call this wrong, stated in advance:{" "}
+            <span className="text-parchment">{eveRegistry.pre_registration.kill_criterion}</span>.
+          </p>
+        )}
       </section>
+
+      <RandomBaselinePanel />
 
       <section>
         <h2 className="font-serif text-2xl text-parchment mb-4">Funnel, side by side</h2>

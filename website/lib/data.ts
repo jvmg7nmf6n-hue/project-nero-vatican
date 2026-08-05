@@ -10,6 +10,7 @@ import type {
   EveSessionRegistryExport,
   FactoryLoopStatusExport,
   FailurePatternEntry,
+  ForwardTrialRecord,
   GraveyardEntry,
   HeartbeatStatus,
   LedgerExport,
@@ -141,6 +142,13 @@ export function fetchAgentRunSummaries(): Promise<AgentRunSummary[] | null> {
 // fallback, never treat null as "down."
 export function fetchFactoryLoopStatus(): Promise<FactoryLoopStatusExport | null> {
   return fetchJson<FactoryLoopStatusExport>("factory_loop_status.json");
+}
+
+// CC-1 directive, item 1c/5f: the per-record file (see ForwardTrialRecord's
+// own docstring in lib/types.ts) -- null (not an error) until at least one
+// hypothesis has been admitted, same convention as every fetcher above.
+export function fetchForwardTrial(): Promise<ForwardTrialRecord[] | null> {
+  return fetchJson<ForwardTrialRecord[]>("forward_trial.json");
 }
 
 // CC-1 Master Directive, Phase 2.1: Eve's own three fetchable files -- see
