@@ -322,10 +322,23 @@ item list, so nothing needed updating (per the directive's own
 **CONFIDENCE:** confirmed-from-code.
 
 **WHAT SHIPPED:** `website/app/layout.tsx` -- one `<Link href="/factory-loop">`
-inserted between the Graveyard and Lab links. **Live-URL verification:
-pending until after this section's own commit is pushed and confirmed
-landed (item 0) and the site's 300s ISR revalidation window has passed --
-see the verification note at the end of this section.**
+inserted between the Graveyard and Lab links. Committed and pushed (see
+item 0's `git log origin/main` output below, commit `9baf3ab`).
+
+**Live-URL verification: UNABLE TO VERIFY, stated plainly rather than
+guessed at.** This repository carries no deploy workflow under
+`.github/workflows/` (grepped: only `scheduler_heartbeat_check.yml`,
+`health_check.yml`, `live_scheduler.yml`, `research_agent_manual.yml` exist
+-- none builds or deploys the website) and no live domain is recorded
+anywhere in the repo (grepped for `vercel.app`/`pages.dev`/a project
+domain -- zero matches). The site is evidently deployed by an external
+service outside this repository's own files (most likely a host with its
+own GitHub integration, given the directive's own mention that `/lab` and
+`/factory-loop` are already live) -- but this agent has no record of that
+URL and, per standing instruction, will not guess or fabricate one to
+"verify" against. **The nav link change is shipped and pushed; visual
+confirmation on the real live URL needs to be done by whoever has that
+URL** -- flagged here rather than silently skipped or falsely claimed.
 
 ## Item 2 — Adam's web-search timeouts (investigation only, nothing implemented)
 
