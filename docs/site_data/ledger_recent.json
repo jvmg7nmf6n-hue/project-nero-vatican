@@ -1,7 +1,18 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-05T07:46:26.178436+00:00",
+  "last_updated": "2026-08-05T10:44:54.452035+00:00",
   "rows": [
+    {
+      "timestamp": "2026-08-05T10:44:51.442774+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
+      "asset": "BTC",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 64155.05,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=0.4805",
+      "candle_timestamp": "2026-08-05T09:59:59.999000+00:00"
+    },
     {
       "timestamp": "2026-08-05T06:13:38.723962+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
@@ -2189,17 +2200,6 @@
       "entry_price": null,
       "exit_price": null,
       "reasoning": "SQUEEZE_STREAK_TOO_SHORT, CLOSE_NOT_ABOVE_SQUEEZE_HIGH, CLOSE_NOT_ABOVE_TREND_MA",
-      "candle_timestamp": "2026-07-22T04:00:00+00:00"
-    },
-    {
-      "timestamp": "2026-07-28T03:48:34.609837+00:00",
-      "strategy": "TREND_PULLBACK",
-      "strategy_version": "trend-pullback-v1.5.0-silver-calibrated-24h",
-      "asset": "SILVER",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "NOT_IN_ESTABLISHED_UPTREND, NO_RECENT_PULLBACK_TO_MA50, CLOSE_NOT_BACK_ABOVE_MA50",
       "candle_timestamp": "2026-07-22T04:00:00+00:00"
     }
   ]
