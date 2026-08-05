@@ -1,7 +1,18 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-05T04:18:54.753979+00:00",
+  "last_updated": "2026-08-05T06:13:41.929395+00:00",
   "rows": [
+    {
+      "timestamp": "2026-08-05T06:13:38.723962+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
+      "asset": "ETH",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 1873.46,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=1.4996",
+      "candle_timestamp": "2026-08-05T05:59:59.999000+00:00"
+    },
     {
       "timestamp": "2026-08-05T03:27:19.373729+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
@@ -2189,17 +2200,6 @@
       "entry_price": null,
       "exit_price": null,
       "reasoning": "NOT_IN_ESTABLISHED_UPTREND, NO_RECENT_PULLBACK_TO_MA50, CLOSE_NOT_BACK_ABOVE_MA50",
-      "candle_timestamp": "2026-07-22T04:00:00+00:00"
-    },
-    {
-      "timestamp": "2026-07-28T03:48:34.609837+00:00",
-      "strategy": "BREAKOUT_MOMENTUM",
-      "strategy_version": "breakout-momentum-v1.6.0-silver-calibrated-24h",
-      "asset": "SILVER",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "CLOSE_NOT_ABOVE_BREAKOUT_HIGH, CLOSE_NOT_ABOVE_MA200, RSI_NOT_MOMENTUM_SUPPORTIVE",
       "candle_timestamp": "2026-07-22T04:00:00+00:00"
     }
   ]
