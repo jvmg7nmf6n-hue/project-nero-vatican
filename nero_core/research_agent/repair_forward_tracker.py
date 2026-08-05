@@ -61,8 +61,8 @@ DEFAULT_FORWARD_TRACKING_DB_PATH = REPO_ROOT / "data" / "repair_lab_forward_trac
 FORWARD_STRATEGY_PREFIX = "REPAIR_LAB_ATTEMPT"
 
 
-def _strategy_key(attempt_id: str) -> str:
-    return f"{FORWARD_STRATEGY_PREFIX}:{attempt_id}"
+def _strategy_key(attempt_id: str, strategy_prefix: str = FORWARD_STRATEGY_PREFIX) -> str:
+    return f"{strategy_prefix}:{attempt_id}"
 
 
 @dataclass(frozen=True)
@@ -72,14 +72,14 @@ class ForwardTickResult:
     exit_event: ExitEvent | None = None
 
 
-def _reconstruct_open_trade(attempt_id: str, db_path: Path) -> OpenTrade | None:
+def _reconstruct_open_trade(attempt_id: str, db_path: Path, strategy_prefix: str = FORWARD_STRATEGY_PREFIX) -> OpenTrade | None:
     """Mirrors live_scheduler._reconstruct_open_position's own "read the
     last logged row back, don't rebuild state from a data series that
     doesn't exist" approach -- there is nothing to replay here either (a
     forward-tracked attempt's own history IS its own log). None if the
     attempt has never logged anything, or if its most recent logged signal
     is an EXIT (position already closed)."""
-    rows: list[ExecutionLogRow] = list_execution_log(db_path=db_path, strategy=_strategy_key(attempt_id))
+    rows: list[ExecutionLogRow] = list_execution_log(db_path=db_path, strategy=_strategy_key(attempt_id, strategy_prefix))
     if not rows:
         return None
     last = rows[-1]
@@ -95,6 +95,7 @@ def evaluate_forward_tick(
     now: datetime,
     params: MeanReversionParameters | None = None,
     db_path: Path = DEFAULT_FORWARD_TRACKING_DB_PATH,
+    strategy_prefix: str = FORWARD_STRATEGY_PREFIX,
 ) -> ForwardTickResult:
     """ONE tick: `recent_candles` is enough trailing history (already
     closed candles only -- the caller's responsibility, matching every
@@ -107,7 +108,22 @@ def evaluate_forward_tick(
     the same candle twice is a no-op (execution_log's own UNIQUE constraint
     on (asset, strategy, strategy_version, candle_timestamp, signal_type)),
     matching ORDERFLOW_IMBALANCE's own "already processed, don't retry"
-    convention."""
+    convention.
+
+    `strategy_prefix` (CC-1 directive item 4, added 2026-08-05): defaults to
+    FORWARD_STRATEGY_PREFIX ("REPAIR_LAB_ATTEMPT"), so every existing
+    Repair Lab caller/test is byte-identical to before. nero_core.
+    research_agent.trial (item 4's fresh/non-repair Trial admissions) is the
+    one other caller, passing strategy_prefix="TRIAL" against the SAME
+    execution_log mechanism and (by default) the SAME db_path -- reusing
+    this proven single-tick pattern rather than inventing a second one, per
+    docs/investigations/factory_loop_specification.md's own B1
+    recommendation. The `attempt_id` parameter name is unchanged (a rename
+    would touch every existing call site for a clarity-only gain); for a
+    Trial caller it holds that Trial's own trial_id instead of a repair
+    attempt_id -- the prefix, not this parameter's name, is what keeps the
+    two forward-tracked populations from colliding in execution_log's own
+    `strategy` column."""
     params = params or MeanReversionParameters()
     if recent_candles.empty:
         return ForwardTickResult("NO_TRADE")
@@ -120,7 +136,7 @@ def evaluate_forward_tick(
     candle = frame.iloc[idx]
     candle_time = int(candle["close_time"])
     asset = str(hypothesis.get("asset", ""))
-    strategy_key = _strategy_key(attempt_id)
+    strategy_key = _strategy_key(attempt_id, strategy_prefix)
     run_id = f"repair-lab-forward-{now.date().isoformat()}"
 
     # Idempotency, EXIT side (Phase 2 Fix J, docs/investigations/
@@ -145,7 +161,7 @@ def evaluate_forward_tick(
         return ForwardTickResult("NO_TRADE")
 
     exit_plan = parse_exit_plan(hypothesis.get("structured_exit_plan"))
-    open_trade = _reconstruct_open_trade(attempt_id, db_path)
+    open_trade = _reconstruct_open_trade(attempt_id, db_path, strategy_prefix)
     state = MeanReversionState(equity=params.initial_equity, open_trade=open_trade)
 
     if open_trade is not None:
@@ -182,21 +198,24 @@ def evaluate_forward_tick(
     return ForwardTickResult("ENTRY", trade=trade)
 
 
-def resolved_trade_count(attempt_id: str, db_path: Path = DEFAULT_FORWARD_TRACKING_DB_PATH) -> int:
-    rows = list_execution_log(db_path=db_path, strategy=_strategy_key(attempt_id))
+def resolved_trade_count(attempt_id: str, db_path: Path = DEFAULT_FORWARD_TRACKING_DB_PATH, strategy_prefix: str = FORWARD_STRATEGY_PREFIX) -> int:
+    rows = list_execution_log(db_path=db_path, strategy=_strategy_key(attempt_id, strategy_prefix))
     return sum(1 for r in rows if r.signal_type == "EXIT")
 
 
 def compute_forward_verdict(
     attempt_id: str, db_path: Path = DEFAULT_FORWARD_TRACKING_DB_PATH, min_sample_size: int = MIN_SAMPLE_SIZE,
+    strategy_prefix: str = FORWARD_STRATEGY_PREFIX,
 ) -> dict | None:
     """None (never a fabricated in-progress verdict) until at least
     2*min_sample_size trades have resolved -- the caller reports
     PENDING_FORWARD_DATA in that case. Once enough have accrued, splits
     chronologically into train/test halves and classifies via the SAME
     classify_verdict/bootstrap_mean_r_ci this project's historical path
-    already uses -- one verdict semantics, not a second invented one."""
-    rows = list_execution_log(db_path=db_path, strategy=_strategy_key(attempt_id))
+    already uses -- one verdict semantics, not a second invented one.
+    `strategy_prefix`: see evaluate_forward_tick's own docstring -- same
+    default, same reuse-not-reinvent reasoning for item 4's Trial caller."""
+    rows = list_execution_log(db_path=db_path, strategy=_strategy_key(attempt_id, strategy_prefix))
     exits = [r for r in rows if r.signal_type == "EXIT"]
     if len(exits) < 2 * min_sample_size:
         return None

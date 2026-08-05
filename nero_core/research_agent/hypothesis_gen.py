@@ -633,7 +633,10 @@ def check_graveyard_match(hypothesis_name: str, mechanism: str, failure_patterns
     )
 
 
-def _build_record(finding: ScanFinding, data: dict, cost_usd: float, now: datetime, failure_patterns: list[dict]) -> dict:
+def _build_record(
+    finding: ScanFinding, data: dict, cost_usd: float, now: datetime, failure_patterns: list[dict],
+    run_id: str | None = None,
+) -> dict:
     hypothesis_name = str(data.get("hypothesis_name", "")).strip()
     mechanism = str(data.get("mechanism", "")).strip()
     graveyard_check = check_graveyard_match(hypothesis_name, mechanism, failure_patterns)
@@ -655,6 +658,15 @@ def _build_record(finding: ScanFinding, data: dict, cost_usd: float, now: dateti
         "cost_usd": cost_usd,
         "source": "claude",
         "discovery_channel": "scanner",
+        # CC-1 directive, items 1+2: run_id ties this record back to the
+        # specific run_pipeline() invocation that produced it (minted once per
+        # call, see pipeline.py) -- Eve's own records have carried the
+        # analogous session_id since inception; Adam's never did until now.
+        # origin_agent is a fixed literal here, not inferred -- see
+        # nero_core.eve.hypothesis_shapes's "eve" counterpart.
+        "run_id": run_id,
+        "origin_agent": "adam",
+        "origin_chain": None,
         "graveyard_check": {
             "is_likely_repeat": graveyard_check.is_likely_repeat,
             "method": graveyard_check.method,
@@ -699,12 +711,16 @@ def generate_hypotheses(
     max_calls_per_run: int = DEFAULT_MAX_CALLS_PER_RUN,
     now: datetime | None = None,
     params: HypothesisGenParameters = DEFAULT_PARAMETERS,
+    run_id: str | None = None,
 ) -> GenerationRunResult:
     """One hypothesis per scan finding, in order, skipping duplicates and
     stopping at `max_calls_per_run`. `existing_hypotheses` seeds duplicate
     detection against prior runs; hypotheses generated earlier in THIS run are
     also added to that same pool as they're produced, so a run never
-    duplicates itself internally either."""
+    duplicates itself internally either. `run_id` (CC-1 directive items 1+2,
+    added 2026-08-05): the UUID pipeline.run_pipeline mints once per call,
+    stamped on every record this call produces -- None for any direct caller
+    that doesn't supply one (e.g. an existing test), never fabricated here."""
     now = now or datetime.now(timezone.utc)
     known = list(existing_hypotheses or [])
     hypotheses: list[dict] = []
@@ -788,7 +804,7 @@ def generate_hypotheses(
         calls_made += 1
         cost = _call_cost_usd(usage, params)
         total_cost += cost
-        record = _build_record(finding, data, cost, now, failure_patterns)
+        record = _build_record(finding, data, cost, now, failure_patterns, run_id=run_id)
         hypotheses.append(record)
         known.append(record)
 
@@ -957,12 +973,16 @@ class WebHypothesisResult:
     skip_reason: str | None = None
 
 
-def _build_web_record(data: dict, cost_usd: float, now: datetime, failure_patterns: list[dict]) -> WebHypothesisResult:
+def _build_web_record(
+    data: dict, cost_usd: float, now: datetime, failure_patterns: list[dict], run_id: str | None = None,
+) -> WebHypothesisResult:
     """Mirrors _build_record's field-building discipline, but for the
     web-sourced schema (Rule 2/3 fields added, no ScanFinding to fall back to
     for asset/timeframe -- an LLM that omits them gets an empty string, which
     honestly fails no_candles_available downstream rather than fabricating a
-    default asset)."""
+    default asset). `run_id`: see _build_record's own docstring -- same
+    per-pipeline-call UUID, threaded through this channel too so a
+    web-sourced hypothesis is equally traceable to the run that produced it."""
     if data.get("skipped"):
         return WebHypothesisResult(None, True, str(data.get("skip_reason", "")).strip() or "no reason given")
 
@@ -997,6 +1017,9 @@ def _build_web_record(data: dict, cost_usd: float, now: datetime, failure_patter
         "source_description": str(data.get("source_description", "")).strip(),
         "source_tier": source_tier,
         "paraphrase_confirmed": bool(data.get("paraphrase_confirmed", False)),
+        "run_id": run_id,
+        "origin_agent": "adam",
+        "origin_chain": None,
         "graveyard_check": {
             "is_likely_repeat": graveyard_check.is_likely_repeat,
             "method": graveyard_check.method,
@@ -1014,6 +1037,7 @@ def generate_web_hypotheses(
     max_calls_per_run: int = DEFAULT_WEB_MAX_CALLS_PER_RUN,
     now: datetime | None = None,
     params: HypothesisGenParameters = DEFAULT_PARAMETERS,
+    run_id: str | None = None,
 ) -> GenerationRunResult:
     """Web-search-based discovery -- an INDEPENDENT, parallel channel from
     generate_hypotheses (the scanner path), per this project's own approved
@@ -1116,7 +1140,7 @@ def generate_web_hypotheses(
         calls_made += 1
         cost = _web_call_cost_usd(usage, params)
         total_cost += cost
-        result = _build_web_record(data, cost, now, failure_patterns)
+        result = _build_web_record(data, cost, now, failure_patterns, run_id=run_id)
         if result.skipped:
             errors.append({
                 "scan_finding": "(web search)",

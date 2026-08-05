@@ -477,3 +477,42 @@ export interface AgentPerformanceExport {
   runs: AgentPerformanceRun[];
   corrections?: AgentPerformanceCorrection[];
 }
+
+// CC-1 Factory Loop directive, item 9 -- docs/site_data/factory_loop_status.json,
+// written by tools/factory_loop_status_summary.py, following
+// tools/research_agent_run_summary.py's exact "compute -> print -> commit"
+// convention. `forward_trial` (NOT "trial") per item 8c's locked naming
+// decision -- the site's EXISTING public "Under Trial" roster tier
+// (see lib/tier.ts, 17 live configs as of 2026-08) is a completely different,
+// unrelated concept from this new one; the new concept is called
+// "Forward Trial" everywhere on this site so the two are never confused
+// under the same word.
+export interface FactoryLoopForwardTrialStatus {
+  count: number;
+  by_origin: { adam: number; eve: number; repaired: number };
+  // item 4b/9b: how many OPEN entries project beyond the 2-year visibility
+  // horizon (nero_core.research_agent.trial.UNMEASURABLE_HORIZON_YEARS) --
+  // surfaced explicitly so a healthy-looking count is never silently mostly
+  // unmeasurable entries.
+  unmeasurable_count: number;
+}
+
+export interface FactoryLoopGraveyardStatus {
+  count: number;
+  distilled_this_period: number;
+  pending_review: number;
+}
+
+export interface FactoryLoopRepairStatus {
+  count: number;
+  open_chains: number;
+  resolved_chains: number;
+}
+
+export interface FactoryLoopStatusExport {
+  schema_version: number;
+  last_updated: string;
+  forward_trial: FactoryLoopForwardTrialStatus;
+  graveyard: FactoryLoopGraveyardStatus;
+  repair: FactoryLoopRepairStatus;
+}

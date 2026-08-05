@@ -64,7 +64,11 @@ export default async function LabPage() {
       </section>
 
       <section>
-        <h2 className="font-serif text-2xl text-parchment mb-4">Repair Workbench</h2>
+        {/* CC-1 directive item 8a: renamed from "Repair Workbench" -- that name
+            now belongs to item 5's real repair_lab.py-driven Repair->Trial
+            pipeline (see /factory-loop), and this section is the small,
+            hand-curated repair_candidates.json list, matching its own file name. */}
+        <h2 className="font-serif text-2xl text-parchment mb-4">Repair Candidates</h2>
         <RepairWorkbench candidates={repairCandidates ?? []} />
       </section>
 

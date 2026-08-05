@@ -38,11 +38,11 @@ jobs:
         # again exist only in this job's own log/artifact.
         run: python tools/research_agent_run_summary.py
 
-      # STILL no commit/push for the three RAW files below on purpose: this
-      # run's own hypothesis output must not become part of the record until
-      # a human has inspected it (agent_hypotheses.json is append-only, so a
-      # bad entry can't be cleanly removed later). Uploaded as a downloadable
-      # artifact instead, unchanged from before.
+      # STILL no commit/push for agent_hypotheses.json on purpose: this run's
+      # own hypothesis PROPOSAL TEXT (LLM-authored mechanism/entry-rule prose)
+      # must not become part of the record until a human has inspected it
+      # (the file is append-only, so a bad entry can't be cleanly removed
+      # later). Uploaded as a downloadable artifact instead, unchanged.
       - name: Upload run output as artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -54,6 +54,33 @@ jobs:
             docs/site_data/agent_performance.json
           if-no-files-found: warn
           retention-days: 30
+
+      # CC-1 directive item 1a: agent_test_results.json IS now committed on
+      # every real run, unlike agent_hypotheses.json above -- a TestResult
+      # record is a deterministic statistical computation (verdict, p-value,
+      # trade stats) derived FROM an already-recorded hypothesis, not
+      # freeform LLM proposal text, so it doesn't carry the same "unreviewed
+      # bad proposal, can't be undone" risk the no-commit rule above exists
+      # to guard against. Without this, item 6's graveyard distillation
+      # (which reads DIED records to trigger a distillation draft) could only
+      # ever see Eve's DIED records, never Adam's -- confirmed gap, see
+      # docs/investigations/factory_loop_implementation_report.md.
+      - name: Commit test results
+        if: always()
+        run: |
+          git config user.name "nero-research-agent-summary"
+          git config user.email "actions@users.noreply.github.com"
+          git pull --rebase origin main || git rebase --abort || true
+          if [ -f docs/site_data/agent_test_results.json ]; then
+            git add -f docs/site_data/agent_test_results.json
+          fi
+          if git diff --cached --quiet; then
+            echo "no test result changes"
+            exit 0
+          fi
+          git commit -m "Record Research Agent test results"
+          git pull --rebase origin main || git rebase --abort || true
+          git push || echo "test results push skipped; next run will retry"
 
       # docs/site_data/agent_run_summaries.json IS committed automatically,
       # unlike the three files above -- it carries only AGGREGATE, DERIVED
@@ -77,3 +104,37 @@ jobs:
           git commit -m "Record Research Agent run summary"
           git pull --rebase origin main || git rebase --abort || true
           git push || echo "run summary push skipped; next run will retry"
+
+      # CC-1 directive item 9c: regenerates docs/site_data/factory_loop_status.json
+      # every time this workflow runs. HONEST LIMITATION, stated plainly rather
+      # than implied otherwise: as of this directive, nothing in this repo
+      # AUTOMATICALLY calls admit_to_trial/admit_repair_to_trial/commit_
+      # graveyard_entry (items 4/5/6 are all deliberately human-invoked only,
+      # matching repair_lab.py's own "never auto-wired" discipline) -- so most
+      # re-runs of this step will simply recompute the SAME snapshot from
+      # docs/site_data/forward_trial.json / graveyard.json / repair_attempts.json
+      # as before, unless a human has separately run one of those admission
+      # functions since the last run. This step exists so the export is never
+      # STALE relative to whatever the current committed state of those three
+      # files is, on every occasion this workflow runs -- not to claim a full
+      # automation pipeline exists where one does not yet.
+      - name: Regenerate Factory Loop status
+        if: always()
+        run: python -m tools.factory_loop_status_summary
+
+      - name: Commit Factory Loop status
+        if: always()
+        run: |
+          git config user.name "nero-research-agent-summary"
+          git config user.email "actions@users.noreply.github.com"
+          git pull --rebase origin main || git rebase --abort || true
+          if [ -f docs/site_data/factory_loop_status.json ]; then
+            git add -f docs/site_data/factory_loop_status.json
+          fi
+          if git diff --cached --quiet; then
+            echo "no factory loop status changes"
+            exit 0
+          fi
+          git commit -m "Record Factory Loop status"
+          git pull --rebase origin main || git rebase --abort || true
+          git push || echo "factory loop status push skipped; next run will retry"

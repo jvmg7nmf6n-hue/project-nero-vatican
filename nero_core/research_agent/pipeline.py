@@ -36,6 +36,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -186,6 +187,10 @@ class PipelineRunResult:
     enabled: bool
     reason: str = ""
     status: str = STATUS_CLEAN
+    # CC-1 directive, items 1+2: minted once per run_pipeline() call (see
+    # below), stamped on every hypothesis record this run produces -- "" on
+    # the disabled path (no run happened at all, not even an unused UUID).
+    run_id: str = ""
     errors: list = field(default_factory=list)
     scan_result: ScanResult | None = None
     hypotheses_generated: int = 0
@@ -247,6 +252,13 @@ def run_pipeline(
         )
 
     now = now or datetime.now(timezone.utc)
+    # CC-1 directive, items 1+2: one UUID per run_pipeline() invocation,
+    # analogous to Eve's own session_id (nero_core.eve.session) -- stamped on
+    # every hypothesis record (both channels) this run produces, so an
+    # Adam-sourced Trial entry (item 4) can always be traced back to the run
+    # that produced it. Previously Adam's records carried no run identifier
+    # at all (docs/investigations/factory_loop_specification.md, B1).
+    run_id = str(uuid.uuid4())
 
     scan_result = scanner.run_scan(now=now)
     all_findings: list[ScanFinding] = (
@@ -277,7 +289,8 @@ def run_pipeline(
     failure_patterns = _load_failure_patterns(DEFAULT_FAILURE_PATTERNS_PATH)
     existing_hypotheses = hypothesis_gen.load_existing_hypotheses()
     generation = hypothesis_gen.generate_hypotheses(
-        scoreable_findings, failure_patterns, api_key, existing_hypotheses, max_calls_per_run, now
+        scoreable_findings, failure_patterns, api_key, existing_hypotheses, max_calls_per_run, now,
+        run_id=run_id,
     )
     hypothesis_gen.persist_hypotheses(generation.hypotheses)
 
@@ -305,7 +318,8 @@ def run_pipeline(
     # honestly rather than silently dropping it.
     tracked_pairs = sorted(APPROVED_RESEARCH_UNIVERSE)
     web_generation = hypothesis_gen.generate_web_hypotheses(
-        existing_hypotheses + generation.hypotheses, failure_patterns, api_key, tracked_pairs, web_max_calls_per_run, now
+        existing_hypotheses + generation.hypotheses, failure_patterns, api_key, tracked_pairs, web_max_calls_per_run, now,
+        run_id=run_id,
     )
     hypothesis_gen.persist_hypotheses(web_generation.hypotheses)
 
@@ -372,6 +386,7 @@ def run_pipeline(
     result = PipelineRunResult(
         enabled=True,
         status=status,
+        run_id=run_id,
         errors=errors,
         scan_result=scan_result,
         hypotheses_generated=len(all_hypotheses),
@@ -412,7 +427,7 @@ def main() -> None:
     # "clean" (ran fully with no failures; hypotheses_generated/duplicates_
     # skipped/etc. above already say whether anything INTERESTING happened --
     # a clean run that found nothing is not the same claim as a failed run).
-    print(f"status={result.status} enabled={result.enabled} reason={result.reason!r}")
+    print(f"status={result.status} enabled={result.enabled} reason={result.reason!r} run_id={result.run_id}")
     print(f"hypotheses_generated={result.hypotheses_generated} duplicates_skipped={result.duplicates_skipped}")
     print(f"llm_calls_made={result.llm_calls_made} total_llm_cost_usd={result.total_llm_cost_usd:.6f} cost_limit_hit={result.cost_limit_hit}")
     if result.calls_with_unknown_cost:

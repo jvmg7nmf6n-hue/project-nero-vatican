@@ -20,8 +20,54 @@ class RegistryShapeTest(unittest.TestCase):
 
     def test_pre_registration_bar_is_unchanged_from_its_own_stated_numbers(self) -> None:
         pre_reg = self.registry["pre_registration"]
-        self.assertEqual(pre_reg["eve_must_clear"], "5% OOS survival, FDR-corrected, across the full cross-asset family")
+        # CC-1 directive item 3 (2026-08-05): truth-in-labeling reframe --
+        # the original phrase was genuinely ambiguous between "each session's
+        # own family, corrected independently" (what apply_fdr_correction
+        # actually does, confirmed at its nero_core/eve/pipeline.py call
+        # site) and "one family spanning all 8 sessions" (the more natural
+        # reading). eve_must_clear now states the per-session reality
+        # plainly; the original wording is preserved byte-identical below,
+        # never silently lost.
+        self.assertEqual(
+            pre_reg["eve_must_clear"],
+            "5% OOS survival, FDR-corrected PER SESSION (each of the 8 pre-registered sessions independently "
+            "clears its own 5%-FDR-corrected bar -- this is NOT one pooled correction spanning all 8 sessions' "
+            "hypotheses together)",
+        )
+        self.assertEqual(
+            pre_reg["eve_must_clear_original_wording"],
+            "5% OOS survival, FDR-corrected, across the full cross-asset family",
+        )
         self.assertIn("8", pre_reg["sessions_budgeted"])
+
+    def test_fdr_reframe_provenance_is_recorded_with_real_not_stale_numbers(self) -> None:
+        # Item 3a: the provenance note must cite REAL re-derived counts, not
+        # a remembered/stale "0/0" -- see docs/investigations/
+        # factory_loop_implementation_report.md for full sourcing.
+        provenance = self.registry["pre_registration"]["eve_must_clear_reframe_provenance"]
+        self.assertTrue(provenance["reason"])
+        counts = provenance["real_counts_at_time_of_reframe"]
+        self.assertEqual(counts["adam_survived_combined"], 0)
+        self.assertEqual(counts["adam_promising_watchlist_combined"], 0)
+        self.assertEqual(counts["eve_survived_combined"], 0)
+        self.assertEqual(counts["eve_promising_watchlist_combined"], 0)
+        self.assertIn("BTC_VOL_EXPANSION_BREAKOUT", counts["eve_note"])
+        baseline = counts["random_baseline_k200_promising_watchlist"]
+        self.assertEqual(baseline["ETH_4h"], 3)
+        self.assertEqual(baseline["PAXG_4h"], 8)
+
+    def test_no_session_reason_asserts_the_stale_pooled_fdr_claim(self) -> None:
+        # Regression guard: the ambiguous "evaluated across all 8 sessions
+        # together, not session-by-session" phrasing must never reappear in
+        # a session's own reason text -- apply_fdr_correction has always
+        # been per-session (0d), so a session record asserting the pooled
+        # reading would misstate the code's real behavior.
+        for entry in self.registry["sessions"]:
+            self.assertNotIn(
+                "evaluated across all 8 sessions together, not session-by-session",
+                entry.get("reason", ""),
+                f"{entry['session_id']}'s reason text still asserts the stale pooled-FDR-family claim",
+            )
 
     def test_every_session_entry_has_a_counts_flag_and_a_reason(self) -> None:
         for entry in self.registry["sessions"]:

@@ -192,20 +192,51 @@ def _load_eve_history_excluding_session(session_id: str) -> list[dict]:
     ]
 
 
-def _persist_session_record_amendments(session_record: dict, lookahead_flags: list[dict], n_self_derivative: int) -> dict:
+def _parse_session_started_at(session_record: dict) -> datetime | None:
+    """The reference clock for item 7's binding freshness check -- the
+    session's own started_at, NOT wall-clock now (this scoring pass can run
+    well after the session itself, e.g. a re-score). None (never a
+    fabricated fallback) if started_at is missing/unparseable -- the caller
+    treats that as "cannot evaluate this rule for this session" rather than
+    guessing a reference point."""
+    started_at = session_record.get("started_at")
+    if not isinstance(started_at, str):
+        return None
+    try:
+        return datetime.fromisoformat(started_at)
+    except ValueError:
+        return None
+
+
+def _persist_session_record_amendments(
+    session_record: dict, lookahead_flags: list[dict], n_self_derivative: int,
+    freshness_flags: list | None = None, entire_session_disqualified: bool = False,
+) -> dict:
     """Amends the already-persisted session record with everything only
-    knowable AFTER scoring runs -- lookahead-risk flags (spec 3.5) and the
+    knowable AFTER scoring runs -- lookahead-risk flags (spec 3.5), the
     self-derivative count (CC-1 review item 1d, 'record the per-session
-    count in ablation metadata'). Scoring is a completely separate pass
-    after session.run_session returns (see session.py's own module
-    docstring), so neither of these can be known at the point session.py
-    writes its own record. ONE combined atomic write, not two separate
-    ones -- two independent read-modify-write calls against the same file
-    would let the second silently clobber the first's amendment. Always
-    writes (a lookahead_flags empty list and a self-derivative count of 0
-    are both meaningful facts, not absence of data)."""
-    updated_ablation = {**(session_record.get("ablation_metadata") or {}), "n_self_derivative_hypotheses": n_self_derivative}
-    updated = {**session_record, "lookahead_risk_flags": lookahead_flags, "ablation_metadata": updated_ablation}
+    count in ablation metadata'), and (CC-1 directive item 7a/7b, added
+    2026-08-05) the binding freshness-disqualification flags plus the
+    100%-disqualified fail-loud marker. Scoring is a completely separate
+    pass after session.run_session returns (see session.py's own module
+    docstring), so none of these can be known at the point session.py
+    writes its own record. ONE combined atomic write, not several separate
+    ones -- independent read-modify-write calls against the same file would
+    let a later one silently clobber an earlier amendment. Always writes
+    (an empty flags list, a zero count, and disqualified=False are all
+    meaningful facts, not absence of data)."""
+    updated_ablation = {
+        **(session_record.get("ablation_metadata") or {}),
+        "n_self_derivative_hypotheses": n_self_derivative,
+        "n_freshness_disqualification_flags": len(freshness_flags or []),
+    }
+    updated = {
+        **session_record,
+        "lookahead_risk_flags": lookahead_flags,
+        "freshness_disqualification_flags": freshness_flags or [],
+        "freshness_disqualified_entire_session": entire_session_disqualified,
+        "ablation_metadata": updated_ablation,
+    }
     storage.atomic_write_json_dict(storage.session_record_path(session_record["session_id"]), updated)
     return updated
 
@@ -271,6 +302,17 @@ def run_pipeline(
         # already be attached by the time it runs.
         scored = scoring.apply_derivative_tags(scored, adam_history=adam_history)
         scored = scoring.apply_self_derivative_tags(scored, eve_history=eve_history)
+        # CC-1 directive item 7: binding freshness disqualification MUST run
+        # before apply_fdr_correction (same ordering requirement as the
+        # self-derivative tags above -- see apply_fdr_correction's own
+        # docstring) so a disqualified record is excluded from the FDR
+        # family, not just flagged after the fact.
+        session_started_at = _parse_session_started_at(result.record)
+        freshness_flags = (
+            scoring.check_freshness_disqualification(result.record, session_started_at)
+            if session_started_at is not None else []
+        )
+        scored = scoring.apply_freshness_disqualification(scored, freshness_flags)
         scored = scoring.apply_fdr_correction(scored, field="p_value_oos")
         scored = scoring.apply_fdr_correction(scored, field="p_value_is")
         _persist_scored_hypotheses(scored)
@@ -278,7 +320,26 @@ def run_pipeline(
         n_self_derivative = sum(1 for r in scored if scoring.is_self_derivative(r))
         window_start = _compute_backtest_window_start(scored, candles_provider)
         lookahead_flags = scoring.tag_lookahead_risk(result.record, window_start) if window_start is not None else []
-        _persist_session_record_amendments(result.record, lookahead_flags, n_self_derivative)
+        # Item 7b -- FAIL LOUD: a session whose real hypothesis count is
+        # nonzero but every single one was freshness-disqualified must be
+        # surfaced prominently, not buried -- "a rule that silently zeroes a
+        # session is the same failure class we have spent this week
+        # eliminating" (directive's own words). Computed against `scored`
+        # (the real testable population), not the raw proposal count, since
+        # a hypothesis dropped pre-scoring for an unrelated reason should
+        # not inflate this ratio.
+        entire_session_disqualified = bool(scored) and all(scoring.is_freshness_disqualified(r) for r in scored)
+        if entire_session_disqualified:
+            print(
+                f"WARNING: session {result.session_id} -- 100% of its {len(scored)} hypothesis(es) were "
+                f"freshness-disqualified (item 7, Variant C, {scoring.FRESHNESS_DISQUALIFICATION_WINDOW_DAYS}-day "
+                f"window) -- this session contributes ZERO admissible data points this run.",
+                file=sys.stderr,
+            )
+        _persist_session_record_amendments(
+            result.record, lookahead_flags, n_self_derivative,
+            freshness_flags=freshness_flags, entire_session_disqualified=entire_session_disqualified,
+        )
     except Exception as exc:
         eve_notify.send_failure(reason=f"crash: {exc.__class__.__name__}: {exc}")
         raise

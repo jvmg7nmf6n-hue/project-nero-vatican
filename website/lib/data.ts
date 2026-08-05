@@ -4,6 +4,7 @@ import type {
   AgentHypothesis,
   AgentPerformanceExport,
   AgentTestResult,
+  FactoryLoopStatusExport,
   FailurePatternEntry,
   GraveyardEntry,
   HeartbeatStatus,
@@ -119,6 +120,15 @@ export function fetchAgentTestResults(): Promise<AgentTestResult[] | null> {
 // nero_core.research_agent.performance after every enabled pipeline run.
 export function fetchAgentPerformance(): Promise<AgentPerformanceExport | null> {
   return fetchJson<AgentPerformanceExport>("agent_performance.json");
+}
+
+// CC-1 Factory Loop directive, item 9 -- written by
+// tools/factory_loop_status_summary.py. null (not an error) until that
+// script has run at least once, same convention as fetchHeartbeat/
+// fetchAgentPerformance -- callers must render an honest "not yet running"
+// fallback, never treat null as "down."
+export function fetchFactoryLoopStatus(): Promise<FactoryLoopStatusExport | null> {
+  return fetchJson<FactoryLoopStatusExport>("factory_loop_status.json");
 }
 
 export type CandleFetchResult =

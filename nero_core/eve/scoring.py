@@ -345,6 +345,43 @@ def is_self_derivative(record: dict) -> bool:
     return any(t.get("tag") == SELF_DERIVATIVE_TAG_NAME for t in (record.get("contamination_tags") or []))
 
 
+def is_freshness_disqualified(record: dict) -> bool:
+    """True iff `record` was disqualified by check_freshness_disqualification
+    (CC-1 directive item 7, see apply_freshness_disqualification below).
+    Public for the same reason is_self_derivative is: apply_fdr_correction
+    uses it to exclude a disqualified record from the FDR family (item 7c),
+    and callers elsewhere can check it without re-scanning the record's
+    raw flag list."""
+    return bool(record.get("freshness_disqualified", False))
+
+
+def apply_freshness_disqualification(scored_records: list[dict], session_flags: list[dict]) -> list[dict]:
+    """CC-1 directive item 7: applies check_freshness_disqualification's
+    session-level flags to every record in `scored_records` -- see that
+    function's own PER-HYPOTHESIS ATTRIBUTION LIMITATION docstring section
+    for why this is session-wide, not selective. ALWAYS sets
+    freshness_disqualified explicitly (True or False, never left absent) so
+    a reader can distinguish "checked, found clean" from "never checked."
+    Item 7a's audit fields are stamped per-record via
+    freshness_disqualification_reason, with hypothesis_name filled in from
+    each record's own raw_hypothesis (session_flags themselves carry
+    hypothesis_name=None, since check_freshness_disqualification cannot know
+    which specific hypothesis a search result informed).
+
+    Callers MUST run this BEFORE apply_fdr_correction, exactly like
+    apply_self_derivative_tags -- a record not yet checked is (correctly,
+    conservatively) treated as NOT disqualified, never fabricated as
+    disqualified."""
+    updated = []
+    for r in scored_records:
+        raw = r.get("raw_hypothesis") if isinstance(r.get("raw_hypothesis"), dict) else {}
+        hypothesis_name = raw.get("hypothesis_name")
+        disqualified = bool(session_flags)
+        reason = [dict(flag, hypothesis_name=hypothesis_name) for flag in session_flags] if disqualified else None
+        updated.append({**r, "freshness_disqualified": disqualified, "freshness_disqualification_reason": reason})
+    return updated
+
+
 def apply_fdr_correction(scored_records: list[dict], alpha: float = DEFAULT_FDR_ALPHA, field: str = "p_value_oos") -> list[dict]:
     """Spec 3.3: 'Report both everywhere. Never report verdict_is alone.'
     -- but the FDR-corrected HEADLINE number (spec 3.4) is the
@@ -365,11 +402,24 @@ def apply_fdr_correction(scored_records: list[dict], alpha: float = DEFAULT_FDR_
     an unrelated reason" (e.g. INSUFFICIENT_SAMPLE). Callers MUST run
     apply_self_derivative_tags (and apply_derivative_tags, though that one
     does not affect FDR membership) BEFORE this function, or every record
-    is (correctly, conservatively) treated as NOT self-derivative."""
+    is (correctly, conservatively) treated as NOT self-derivative.
+
+    FRESHNESS-DISQUALIFICATION EXCLUSION (CC-1 directive item 7c, added
+    2026-08-05): a freshness-disqualified record (see
+    is_freshness_disqualified/apply_freshness_disqualification above) is
+    excluded from the FDR family for the same reason a self-derivative one
+    is -- disqualification is about admission to Trial and to this
+    statistical family, never about hiding the result itself (item 7c's own
+    words: "disqualification excludes it from Trial admission and the FDR
+    family, it does not delete it"). Callers MUST run
+    apply_freshness_disqualification BEFORE this function too, same
+    ordering requirement as the self-derivative tags above. A record that
+    is BOTH self-derivative AND freshness-disqualified gets both reasons
+    recorded (never silently picks one)."""
     result_field = "fdr_survives_oos" if field == "p_value_oos" else "fdr_survives_is"
     indices_with_p = [
         i for i, r in enumerate(scored_records)
-        if r.get(field) is not None and not is_self_derivative(r)
+        if r.get(field) is not None and not is_self_derivative(r) and not is_freshness_disqualified(r)
     ]
     p_values = [scored_records[i][field] for i in indices_with_p]
     survives = benjamini_hochberg(p_values, alpha=alpha)
@@ -377,8 +427,14 @@ def apply_fdr_correction(scored_records: list[dict], alpha: float = DEFAULT_FDR_
     updated = [dict(r) for r in scored_records]
     for r in updated:
         r.setdefault(result_field, None)
-        if is_self_derivative(r) and r.get(field) is not None:
-            r["excluded_from_fdr_family_reason"] = "self_derivative"
+        if r.get(field) is not None:
+            reasons = []
+            if is_self_derivative(r):
+                reasons.append("self_derivative")
+            if is_freshness_disqualified(r):
+                reasons.append("freshness_disqualified")
+            if reasons:
+                r["excluded_from_fdr_family_reason"] = "+".join(reasons)
     for pos, idx in enumerate(indices_with_p):
         updated[idx][result_field] = survives[pos]
     return updated
@@ -531,6 +587,46 @@ def _parse_loose_date(raw: object, reference: datetime | None = None) -> datetim
     return None
 
 
+def _session_relative_reference(session_record: dict) -> datetime | None:
+    """The point in time relative-format page_age values ("3 days ago") are
+    measured from -- the session's own started_at, NOT wall-clock now (which
+    could be arbitrarily later, e.g. this scoring re-run against an old
+    session file). None if started_at is missing/unparseable."""
+    started_at = session_record.get("started_at")
+    if isinstance(started_at, str):
+        try:
+            return datetime.fromisoformat(started_at)
+        except ValueError:
+            return None
+    return None
+
+
+def _iter_web_search_results(session_record: dict, reference: datetime | None) -> list[dict]:
+    """Every web_search_tool_result entry across the whole session's turns,
+    as {turn_index, url, page_age, pub_date (parsed, may be None)} -- the
+    shared traversal both tag_lookahead_risk and
+    check_freshness_disqualification below scan, so the two checks can never
+    silently drift apart on WHAT counts as a search result even though they
+    apply different threshold logic to the parsed dates."""
+    results = []
+    for turn in session_record.get("turns", []):
+        raw_response = turn.get("raw_response") or {}
+        for block in raw_response.get("content", []) or []:
+            if not isinstance(block, dict) or block.get("type") != "web_search_tool_result":
+                continue
+            for result in block.get("content", []) or []:
+                if not isinstance(result, dict):
+                    continue
+                page_age = result.get("page_age")
+                results.append({
+                    "turn_index": turn.get("turn_index"),
+                    "url": result.get("url"),
+                    "page_age": page_age,
+                    "pub_date": _parse_loose_date(page_age, reference),
+                })
+    return results
+
+
 def tag_lookahead_risk(session_record: dict, backtest_window_start: datetime) -> list[dict]:
     """SESSION-LEVEL (flagged design decision, see closing report): scans
     every web_search_tool_result block across the whole session's turns for
@@ -541,40 +637,84 @@ def tag_lookahead_risk(session_record: dict, backtest_window_start: datetime) ->
     attribution would require inferring that link, which this module
     declines to guess at. FLAG, NEVER DISCARD (spec 3.5's own words) -- this
     returns tags for a human to review, never removes or downgrades
-    anything."""
-    # Relative page_age values ("3 days ago") are relative to when Eve's
-    # search ran, i.e. this session's own started_at -- NOT wall-clock now,
-    # which could be arbitrarily later than the session (e.g. this scoring
-    # function re-run against an old session file).
-    reference = None
-    started_at = session_record.get("started_at")
-    if isinstance(started_at, str):
-        try:
-            reference = datetime.fromisoformat(started_at)
-        except ValueError:
-            reference = None
-
+    anything. INFORMATIONAL ONLY -- see check_freshness_disqualification
+    below (CC-1 directive item 7) for the BINDING sibling check added
+    2026-08-05, which uses a different, fixed-recency threshold rather than
+    this function's backtest_window_start."""
+    reference = _session_relative_reference(session_record)
     flags = []
-    for turn in session_record.get("turns", []):
-        raw_response = turn.get("raw_response") or {}
-        for block in raw_response.get("content", []) or []:
-            if not isinstance(block, dict) or block.get("type") != "web_search_tool_result":
-                continue
-            for result in block.get("content", []) or []:
-                if not isinstance(result, dict):
-                    continue
-                page_age = result.get("page_age")
-                pub_date = _parse_loose_date(page_age, reference)
-                if pub_date is not None and pub_date >= backtest_window_start:
-                    flags.append({
-                        "tag": "LOOKAHEAD_RISK",
-                        "turn_index": turn.get("turn_index"),
-                        "url": result.get("url"),
-                        "publication_date": page_age,
-                        "reason": (
-                            f"source dated {page_age!r} does not pre-date the backtest window start "
-                            f"({backtest_window_start.date().isoformat()}) -- Eve searching after the "
-                            f"window may have found a writeup describing what already happened in it"
-                        ),
-                    })
+    for result in _iter_web_search_results(session_record, reference):
+        pub_date = result["pub_date"]
+        if pub_date is not None and pub_date >= backtest_window_start:
+            flags.append({
+                "tag": "LOOKAHEAD_RISK",
+                "turn_index": result["turn_index"],
+                "url": result["url"],
+                "publication_date": result["page_age"],
+                "reason": (
+                    f"source dated {result['page_age']!r} does not pre-date the backtest window start "
+                    f"({backtest_window_start.date().isoformat()}) -- Eve searching after the "
+                    f"window may have found a writeup describing what already happened in it"
+                ),
+            })
+    return flags
+
+
+# CC-1 directive, item 7 -- SEARCH FRESHNESS, Variant C, BINDING (unlike
+# tag_lookahead_risk above, which stays informational-only/unchanged). A
+# starting point derived from ONE real session's data (Session 1,
+# eve-20260804T020749Z-4cf6e4c9: 2 of 4 real web-search sources flagged
+# under this exact rule -- see item 7d's re-score in
+# docs/investigations/factory_loop_implementation_report.md), expected to be
+# recalibrated as more sessions accumulate real search-date data, NOT a
+# principled fixed constant.
+FRESHNESS_DISQUALIFICATION_WINDOW_DAYS = 30
+FRESHNESS_DISQUALIFICATION_RULE = "variant_c_30day"
+
+
+def check_freshness_disqualification(session_record: dict, session_started_at: datetime) -> list[dict]:
+    """BINDING (CC-1 directive item 7): a source read during this session and
+    published within FRESHNESS_DISQUALIFICATION_WINDOW_DAYS of the session's
+    own start disqualifies from Trial admission (item 4e, nero_core.
+    research_agent.trial.admit_to_trial) and the FDR family (item 7c) --
+    NEVER deleted or hidden; the hypothesis stays fully recorded with its
+    real verdict (item 7c's own words). Variant C per spec B6's own
+    real-data comparison of three candidate rules (A: window-start, B:
+    OOS-half-start, C: fixed recency) -- C was the only one that
+    discriminated within Session 1's real 4-source sample rather than
+    flagging everything or nothing.
+
+    PER-HYPOTHESIS ATTRIBUTION LIMITATION (documented, not silently
+    narrowed): exactly like tag_lookahead_risk above, this session's own log
+    does not link a specific search result to the specific propose_hypothesis
+    call it may have informed. Every flag returned here is therefore applied
+    by the caller (nero_core.eve.pipeline.run_pipeline) to EVERY hypothesis
+    this session proposed, not just the one downstream of that particular
+    search -- the data does not support finer attribution, and this
+    project's discipline is to state a check's real scope rather than
+    silently narrow it beyond what the data supports (see item 7b's
+    fail-loud rule for the 100%-of-session consequence of this choice).
+
+    Each returned dict carries hypothesis_name=None (filled in by the
+    caller, once per disqualified hypothesis) plus the audit fields item 7a
+    requires: offending_source_url, parsed_pub_date, rule_fired."""
+    cutoff = session_started_at - timedelta(days=FRESHNESS_DISQUALIFICATION_WINDOW_DAYS)
+    reference = _session_relative_reference(session_record) or session_started_at
+    flags = []
+    for result in _iter_web_search_results(session_record, reference):
+        pub_date = result["pub_date"]
+        if pub_date is not None and pub_date >= cutoff:
+            flags.append({
+                "tag": "FRESHNESS_DISQUALIFIED",
+                "hypothesis_name": None,
+                "turn_index": result["turn_index"],
+                "offending_source_url": result["url"],
+                "parsed_pub_date": pub_date.isoformat(),
+                "rule_fired": FRESHNESS_DISQUALIFICATION_RULE,
+                "reason": (
+                    f"source dated {result['page_age']!r} (parsed {pub_date.date().isoformat()}) is within "
+                    f"{FRESHNESS_DISQUALIFICATION_WINDOW_DAYS} days of this session's own start "
+                    f"({session_started_at.date().isoformat()}) -- Variant C binding disqualification"
+                ),
+            })
     return flags

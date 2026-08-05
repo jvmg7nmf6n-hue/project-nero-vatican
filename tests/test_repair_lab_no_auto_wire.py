@@ -43,7 +43,18 @@ from nero_core.research_agent.repair_lab import (
 from nero_core.strategies.registry import default_registry
 from tests.test_research_agent_no_auto_wire import RESEARCH_AGENT_DIR, _forbidden_references
 
-NEW_REPAIR_LAB_FILES = ("repair_lab.py", "repair_forward_tracker.py", "repair_historical_reservation.py")
+# CC-1 directive item 5c (2026-08-05): trial.py/repair_to_trial.py added
+# here, extending the SAME static check every original Repair Lab file
+# already gets -- the narrowed boundary that survives item 5 is "repair_lab
+# never auto-invokes itself" (still true, still checked below), NOT
+# "nothing ever calls repair_lab" (repair_to_trial.admit_repair_to_trial now
+# legitimately does, but only when a human/human-invoked script calls IT --
+# see tests/test_repair_to_trial.py's own RepairToTrialNoAutoWireTest for
+# the grep-based confirmation that no workflow/scheduler file references it).
+NEW_REPAIR_LAB_FILES = (
+    "repair_lab.py", "repair_forward_tracker.py", "repair_historical_reservation.py",
+    "trial.py", "repair_to_trial.py",
+)
 NOW = datetime(2026, 8, 15, tzinfo=timezone.utc)
 
 

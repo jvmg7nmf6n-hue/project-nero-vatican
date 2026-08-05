@@ -181,3 +181,35 @@ same regression test), `fixable`, `source_doc`. The reverse is not required —
 `failure_patterns.json` may carry an entry with no `graveyard.json` counterpart (e.g.
 `RANGE_MEAN_REVERSION`, a still-open repair candidate per `repair_candidates.json`
 rather than a permanently-closed family).
+
+### Automated distillation (added 2026-08-05, CC-1 Factory Loop directive item 6)
+
+Both files above are still described as hand-curated because that was true when this
+section was first written (2026-07-18) — as of item 6,
+`nero_core/research_agent/graveyard_distillation.py` is now the FIRST code path that
+writes either file, but it does not replace hand-authoring; it automates the exact same
+"human writes an investigation writeup, then a JSON entry" process. Once a mechanism
+`family` (matched via the same `check_graveyard_match` overlap-based function
+`hypothesis_gen.py` already uses at generation time) accumulates
+`DIED_COUNT_TRIGGER` (3) DIED verdicts across Adam and Eve combined, an LLM drafts a
+`failure_patterns.json`-shaped entry from AGGREGATE stats only (never raw per-trade
+data) and the draft sits at `review_status: "pending_human_approval"` until a human
+approves it — nothing is committed automatically. `commit_graveyard_entry` then writes
+to BOTH files in one operation, same as the manual process always required, and
+structurally REFUSES (raises `EntryNotApprovedError`) to write anything still pending.
+
+**The uncapped/capped division:** `graveyard.json` remains the uncapped full record —
+every distilled hypothesis name gets its own entry there, forever. `failure_patterns.json`
+is capped at `FAILURE_PATTERNS_CAP` (30 entries, chosen against the real committed count
+at the time — see `docs/investigations/factory_loop_implementation_report.md` item 6b
+for the exact entry counts this was sized against) — it is the DISTILLED READING
+SURFACE Adam and Eve actually consume every session, and an unbounded read there stops
+being learning material and becomes context noise. Once the cap is reached, the next
+distillation MERGES into an existing same-`family` entry (extending its `covers` list
+and summing `origin_agent_breakdown`) instead of appending a new one — this is why
+`tests/test_graveyard_failure_pattern_sync.py`'s sync check asserts COVERAGE (every
+`graveyard.json` name covered by exactly one `failure_patterns.json` entry, via that
+entry's own `covers` field, defaulting to `[name]` when absent) rather than a strict
+1:1 name mapping. If `commit_graveyard_entry` is asked to merge at the cap and no
+existing entry shares the new draft's `family`, it raises rather than guessing an
+unrelated merge target — a human must pick one manually in that case.

@@ -1,29 +1,39 @@
-"""CC-1 follow-up (urgent items, item 1): regression guard against
-docs/site_data/graveyard.json (public /graveyard page, read by nothing in
-nero_core/) and docs/site_data/failure_patterns.json (the file Adam and Eve
-actually read as graveyard context -- see nero_core.eve.context and
-nero_core.research_agent.hypothesis_gen/pipeline) silently re-diverging.
+"""CC-1 follow-up (urgent items, item 1) + CC-1 Factory Loop directive item
+6c: regression guard against docs/site_data/graveyard.json (public
+/graveyard page, the uncapped full record) and docs/site_data/
+failure_patterns.json (the file Adam and Eve actually read as graveyard
+context, capped at graveyard_distillation.FAILURE_PATTERNS_CAP -- see
+nero_core.eve.context and nero_core.research_agent.hypothesis_gen/pipeline)
+silently re-diverging.
 
-Both files are 100% hand-curated -- no code anywhere writes either one (a
-human writes an investigation markdown doc, then hand-types a JSON entry).
-As of 2026-08-04, 9 real graveyard.json entries (FVG_REVERSION cross-asset
-extension; all 4 MACRO_RISK_ON extensions; REGIME_TRANSITION; RANGE_MATURITY
-gate; REGIME_ALLOCATOR; the RMR EUR/USD-4h/ETH-4h variant experiments) had
-never been distilled into failure_patterns.json -- meaning Adam and Eve were
-reasoning, on every real session, with zero knowledge of 9 already-diagnosed
-failures, and hypothesis_gen.check_graveyard_match's own duplicate-detection
-could never flag a new hypothesis resembling any of them either, since that
-function only ever compares against failure_patterns.json's own entries.
+Until item 6 (nero_core.research_agent.graveyard_distillation) landed, both
+files were 100% hand-curated -- no code wrote either one. As of 2026-08-04,
+9 real graveyard.json entries had never been distilled into failure_
+patterns.json at all. Since item 6 landed, graveyard_distillation.
+commit_graveyard_entry is the only writer, and it writes to both files in
+one operation -- but the same divergence risk exists any time either file
+is hand-edited outside that path, so this test still enforces it directly
+against the real committed files, not just against the writer's own logic.
 
-This test enforces the ONE direction that actually matters for that harm:
-every graveyard.json name must be represented in failure_patterns.json.
-The reverse is NOT enforced here -- failure_patterns.json legitimately
-carries at least one entry (RANGE_MEAN_REVERSION) that has no graveyard.json
-counterpart by that exact name, because it represents a still-open repair
-candidate (see docs/site_data/repair_candidates.json's own
-RMR_CONFIRMATION_METALS_WEEKLY entry) rather than a permanently-closed
-graveyard.json family -- a real, legitimate scope difference between the two
-files, not a bug."""
+COVERAGE, NOT ONE-TO-ONE EQUALITY (item 6c, locked decision): once
+failure_patterns.json is capped, a distillation MERGES entries rather than
+appending, which is a real, intentional divergence from a 1:1 name mapping.
+The invariant that survives the cap is coverage: every graveyard.json name
+must be covered by EXACTLY ONE failure_patterns.json entry. An un-merged
+entry implicitly covers only its own `name` (no `covers` field needed on
+the 22 pre-item-6 hand-curated entries -- backward compatible, zero data
+changes required for existing entries). A merged entry explicitly lists the
+graveyard names it covers in its own `covers` field. A graveyard name
+covered by ZERO entries (not yet distilled) or by TWO OR MORE (an
+inconsistent double-cover) is a loud test failure either way.
+
+The reverse (every failure_patterns entry must correspond to a graveyard
+entry) is NOT enforced -- failure_patterns.json legitimately carries at
+least one entry (RANGE_MEAN_REVERSION) that has no graveyard.json
+counterpart, because it represents a still-open repair candidate (see
+docs/site_data/repair_candidates.json's own RMR_CONFIRMATION_METALS_WEEKLY
+entry) rather than a permanently-closed graveyard.json family -- a real,
+legitimate scope difference between the two files, not a bug."""
 from __future__ import annotations
 
 import json
@@ -58,6 +68,19 @@ class GraveyardFailurePatternSyncTest(unittest.TestCase):
         self.failure_patterns = json.loads(FAILURE_PATTERNS_PATH.read_text(encoding="utf-8"))
         self.failure_pattern_names = {e["name"] for e in self.failure_patterns}
 
+    def _coverage_counts(self) -> dict:
+        # Every failure_patterns entry covers itself by default (`covers`
+        # defaults to [entry["name"]] when absent -- the 22 pre-item-6
+        # hand-curated entries all take this default path, requiring zero
+        # data migration) plus whatever additional names an explicit
+        # `covers` list adds (a merged, capped-distillation entry).
+        counts: dict[str, int] = {}
+        for entry in self.failure_patterns:
+            covers = entry.get("covers") or [entry["name"]]
+            for name in covers:
+                counts[name] = counts.get(name, 0) + 1
+        return counts
+
     def test_every_graveyard_entry_is_represented_in_failure_patterns(self) -> None:
         # The actual invariant that broke: Adam/Eve's own context (built
         # exclusively from failure_patterns.json) must never be missing a
@@ -69,6 +92,18 @@ class GraveyardFailurePatternSyncTest(unittest.TestCase):
             f"Adam and Eve are reasoning without this context and check_graveyard_match cannot catch "
             f"a duplicate of any of these: {missing}",
         )
+
+    def test_every_graveyard_entry_is_covered_by_exactly_one_failure_pattern_entry(self) -> None:
+        # Item 6c: coverage, not one-to-one equality -- survives item 6's
+        # cap-and-merge behavior. A name covered by 0 entries (silently
+        # never distilled) or 2+ entries (an inconsistent double-cover,
+        # e.g. a merge that duplicated a name into two different targets)
+        # is exactly the failure this test exists to catch.
+        counts = self._coverage_counts()
+        zero_covered = [e["name"] for e in self.graveyard if counts.get(e["name"], 0) == 0]
+        double_covered = [e["name"] for e in self.graveyard if counts.get(e["name"], 0) >= 2]
+        self.assertEqual(zero_covered, [], f"graveyard.json name(s) covered by ZERO failure_patterns.json entries: {zero_covered}")
+        self.assertEqual(double_covered, [], f"graveyard.json name(s) covered by 2+ failure_patterns.json entries (inconsistent merge): {double_covered}")
 
     def test_graveyard_and_failure_pattern_names_are_each_internally_unique(self) -> None:
         # A silent duplicate name in either file would make the membership

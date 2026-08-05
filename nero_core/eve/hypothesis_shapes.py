@@ -83,6 +83,14 @@ def build_hypothesis_record(raw_hypothesis: dict, session_id: str, turn_index: i
         "verdict_oos": None,
         "verdict_combined": None,
         "contamination_tags": [],
+        # CC-1 directive, items 1+2: origin_agent is a fixed literal (Eve's
+        # own records are never Adam-sourced) -- Adam's counterpart is
+        # nero_core.research_agent.hypothesis_gen._build_record. origin_chain
+        # stays None here; only a repair-lab-sourced Trial admission (item 5)
+        # ever populates it, and Eve's session loop never calls repair_lab
+        # (see test_eve_no_auto_wire.py).
+        "origin_agent": "eve",
+        "origin_chain": None,
     }
 
 
