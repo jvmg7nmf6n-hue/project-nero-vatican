@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-05T21:55:45.026231+00:00",
+  "last_updated": "2026-08-05T23:11:00.401883+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -264,12 +264,16 @@
       "expectancy_r": 0.1210982149502481,
       "avg_return_pct": 0.0680627227461862,
       "signal_counts": {
-        "ENTRY": 43,
+        "ENTRY": 44,
         "EXIT": 43,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null,
+      "open_position": {
+        "entry_price": 1906.86,
+        "entry_timestamp": "2026-08-05T23:10:56.875571+00:00",
+        "candle_timestamp": "2026-08-05T22:59:59.999000+00:00"
+      },
       "unverified_open_entries": 0
     },
     {
