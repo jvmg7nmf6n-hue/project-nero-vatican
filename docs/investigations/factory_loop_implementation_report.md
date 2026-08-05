@@ -647,7 +647,17 @@ integration test in `labPage.test.tsx` (item 4a's end-to-end wiring).
 
 ## git log origin/main --oneline -3
 
-**PUSH_LOG_PLACEHOLDER**
+Real, pasted output after `git fetch origin` following the push of this
+section's own commit:
+
+```
+9baf3ab CC-1 Factory Loop rollout closeout: nav link, /lab honesty fixes
+d8ba923 Merge remote-tracking branch 'origin/main'
+c7f4df9 CC-1: per-hypothesis freshness attribution via explicit source citation
+```
+
+Confirmed landed -- `9baf3ab` (this closeout's own commit) is at the top of
+`origin/main`, not just the local `main` branch.
 
 ## Stale figures found in this directive, and the real values
 
