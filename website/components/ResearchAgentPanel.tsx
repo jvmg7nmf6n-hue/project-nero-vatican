@@ -1,4 +1,10 @@
-import type { AgentHypothesis, AgentPerformanceExport, AgentPerformanceRun, AgentTestResult } from "@/lib/types";
+import type {
+  AgentHypothesis,
+  AgentPerformanceExport,
+  AgentPerformanceRun,
+  AgentRunSummary,
+  AgentTestResult,
+} from "@/lib/types";
 
 // Read-only, per the Research Agent branch's own spec: no approval button
 // anywhere on this panel. SURVIVED/PROMISING-WATCHLIST hypotheses show
@@ -17,17 +23,65 @@ export interface ResearchAgentPanelProps {
   hypotheses: AgentHypothesis[];
   testResults: AgentTestResult[];
   performance: AgentPerformanceExport | null;
+  // CC-1 Factory Loop closeout, item 4a: optional (not required) so every
+  // existing call site/test that doesn't pass it keeps compiling -- an
+  // absent/empty runSummaries list simply means the too_slow list below has
+  // nothing to add beyond whatever testResults itself carries.
+  runSummaries?: AgentRunSummary[];
 }
 
 function resultFor(hypothesisName: string, testResults: AgentTestResult[]): AgentTestResult | undefined {
   return testResults.find((r) => r.hypothesis_name === hypothesisName);
 }
 
-function Stat({ label, value }: { label: string; value: string | number }) {
+// CC-1 Factory Loop closeout, item 4a: agent_test_results.json (testResults)
+// is the ORIGINAL, richer source (carries a full human-readable `reason`,
+// e.g. months-to-30-trades) but is currently NOT committed by
+// research_agent_manual.yml at all (confirmed: zero git history for that
+// path) -- so today it never populates this panel. agent_run_summaries.json
+// (runSummaries) IS committed and already carries real hypothesis NAMES for
+// TOO_SLOW rejections (its own `too_slow` field), just with a thinner
+// measured-vs-claimed reason instead of the full one. Both sources are
+// merged here, deduplicated by hypothesis_name (testResults wins when a name
+// appears in both, since its reason text is richer) -- this fixes today's
+// empty panel without silently discarding agent_test_results.json the day
+// it starts being committed successfully.
+interface TooSlowRow {
+  hypothesis_name: string;
+  reasonText: string;
+}
+
+function mergedTooSlowRows(testResults: AgentTestResult[], runSummaries: AgentRunSummary[]): TooSlowRow[] {
+  const fromTestResults = testResults
+    .filter((r) => r.frequency_classification === "TOO_SLOW")
+    .map((r): TooSlowRow => ({ hypothesis_name: r.hypothesis_name, reasonText: r.reason }));
+
+  const seen = new Set(fromTestResults.map((r) => r.hypothesis_name));
+  const fromRunSummaries: TooSlowRow[] = [];
+  for (const summary of runSummaries) {
+    for (const entry of summary.too_slow ?? []) {
+      if (seen.has(entry.hypothesis_name)) continue;
+      seen.add(entry.hypothesis_name);
+      fromRunSummaries.push({
+        hypothesis_name: entry.hypothesis_name,
+        reasonText: `measured ${entry.measured_trades_per_year.toFixed(2)} trades/year (claimed ${entry.llm_claimed_trades_per_year.toFixed(1)})`,
+      });
+    }
+  }
+
+  return [...fromTestResults, ...fromRunSummaries];
+}
+
+function Stat({ label, value, note }: { label: string; value: string | number; note?: string }) {
   return (
     <div data-testid="agent-performance-stat" className="rounded-lg border border-gold/30 bg-ink p-3">
       <div className="text-muted text-[10px] uppercase tracking-wide">{label}</div>
       <div className="text-parchment text-lg">{value}</div>
+      {note && (
+        <div data-testid="agent-cost-unknown-note" className="text-muted text-[10px] mt-1">
+          {note}
+        </div>
+      )}
     </div>
   );
 }
@@ -81,9 +135,14 @@ function RunRow({ run }: { run: AgentPerformanceRun }) {
   );
 }
 
-export default function ResearchAgentPanel({ hypotheses, testResults, performance }: ResearchAgentPanelProps) {
+export default function ResearchAgentPanel({
+  hypotheses,
+  testResults,
+  performance,
+  runSummaries = [],
+}: ResearchAgentPanelProps) {
   const cumulative = performance?.cumulative ?? null;
-  const tooSlowRejections = testResults.filter((r) => r.frequency_classification === "TOO_SLOW");
+  const tooSlowRejections = mergedTooSlowRows(testResults, runSummaries);
 
   return (
     <div data-testid="research-agent-panel" className="flex flex-col gap-8">
@@ -102,7 +161,22 @@ export default function ResearchAgentPanel({ hypotheses, testResults, performanc
               label="Survival rate"
               value={cumulative.survival_rate === null ? "n/a" : `${(cumulative.survival_rate * 100).toFixed(0)}%`}
             />
-            <Stat label="Cumulative API cost" value={`$${cumulative.total_llm_cost_usd.toFixed(2)}`} />
+            <Stat
+              label="Cumulative API cost"
+              value={`$${cumulative.total_llm_cost_usd.toFixed(2)} recorded`}
+              // CC-1 Factory Loop closeout, item 3: a timed-out call is
+              // recorded as UNKNOWN cost, never a fabricated $0 (see
+              // AgentPerformanceCumulative's own docstring in lib/types.ts)
+              // -- the recorded total above is therefore a LOWER BOUND, and
+              // this note is what keeps that visible rather than reading as
+              // complete. Omitted entirely when there is nothing unknown to
+              // report (0, missing, or a pre-instrumentation run).
+              note={
+                cumulative.calls_with_unknown_cost
+                  ? `${cumulative.calls_with_unknown_cost} call${cumulative.calls_with_unknown_cost === 1 ? "" : "s"} of unknown cost, not included above`
+                  : undefined
+              }
+            />
           </div>
         ) : (
           <p data-testid="agent-performance-empty" className="text-muted">
@@ -132,9 +206,28 @@ export default function ResearchAgentPanel({ hypotheses, testResults, performanc
       <div>
         <h3 className="font-serif text-lg text-parchment mb-2">Research Agent Findings</h3>
         {hypotheses.length === 0 ? (
-          <p data-testid="agent-hypotheses-empty" className="text-muted">
-            No hypotheses generated yet.
-          </p>
+          // CC-1 Factory Loop closeout, item 4b: agent_hypotheses.json (the
+          // raw proposal text this panel reads for `hypotheses`) is
+          // DELIBERATELY never committed -- research_agent_manual.yml
+          // uploads it as a workflow artifact only, pending human review
+          // (see that workflow's own comment). Under that correct, unchanged
+          // gate, `hypotheses.length === 0` is true EVERY run, whether or
+          // not anything was actually generated -- "No hypotheses generated
+          // yet" is therefore not stale, it is PERMANENTLY FALSE whenever a
+          // run did generate something. cumulative.hypotheses_generated (a
+          // committed, derived count -- never the raw text itself) is what
+          // distinguishes the three real states without violating the
+          // no-raw-text rule.
+          cumulative && cumulative.hypotheses_generated > 0 ? (
+            <p data-testid="agent-hypotheses-pending-review" className="text-muted">
+              {cumulative.hypotheses_generated} {cumulative.hypotheses_generated === 1 ? "hypothesis" : "hypotheses"}{" "}
+              generated so far, pending human review — raw proposal text is not published here until reviewed.
+            </p>
+          ) : (
+            <p data-testid="agent-hypotheses-empty" className="text-muted">
+              No hypotheses generated yet.
+            </p>
+          )
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {hypotheses.map((h) => {
@@ -189,7 +282,7 @@ export default function ResearchAgentPanel({ hypotheses, testResults, performanc
             {tooSlowRejections.map((r) => (
               <li key={r.hypothesis_name} data-testid="agent-too-slow-row" className="text-sm">
                 <span className="text-parchment">{r.hypothesis_name}</span>
-                <span className="text-muted"> — {r.reason}</span>
+                <span className="text-muted"> — {r.reasonText}</span>
               </li>
             ))}
           </ol>

@@ -418,6 +418,14 @@ export interface AgentPerformanceCumulative {
   llm_calls_made: number;
   total_llm_cost_usd: number;
   survival_rate: number | null;
+  // CC-1 Factory Loop closeout, item 3: a call that timed out (ReadTimeout)
+  // is recorded as UNKNOWN cost, never a fabricated $0 -- see
+  // nero_core.research_agent.hypothesis_gen's own RejectedBeforeTokenProcessingError
+  // vs "cost UNKNOWN, not confirmed $0" distinction. Optional: absent on the
+  // two pre-instrumentation 2026-07-29 runs, which predate this field
+  // existing at all -- absence must read as "not tracked yet," never as "0."
+  calls_with_unknown_cost?: number;
+  web_calls_with_unknown_cost?: number;
 }
 
 // STATUS_DISABLED / STATUS_ERROR / STATUS_CLEAN in
@@ -452,6 +460,38 @@ export interface AgentPerformanceRun {
   llm_calls_made: number;
   total_llm_cost_usd: number;
   cost_limit_hit: boolean;
+  calls_with_unknown_cost?: number;
+}
+
+// docs/site_data/agent_run_summaries.json -- written by
+// tools/research_agent_run_summary.py (CC-1 review item 2), committed on
+// every research_agent_manual.yml run (unlike agent_hypotheses.json/
+// agent_test_results.json, which stay artifact-only/uncommitted -- see that
+// workflow's own comments). Carries only AGGREGATE, DERIVED statistics --
+// counts, ratios, which hypothesis NAMES were TOO_SLOW -- never raw
+// hypothesis mechanism/entry-rule text, so committing it does not carry the
+// "un-reviewed bad proposal, can't be undone" risk that rule exists to guard
+// against.
+//
+// DELIBERATELY MINIMAL: the real committed file also carries run_aggregate
+// (by_channel breakdown), per_hypothesis, calibration, and a
+// backfilled/data_completeness shape for one 2026-08-03 entry whose
+// per-hypothesis names were never captured (see that entry's own
+// provenance_note) -- only the fields this site actually reads (too_slow
+// names, CC-1 Factory Loop closeout item 4a) are modeled here; TypeScript's
+// structural typing does not require every real JSON field to be declared.
+export interface AgentRunSummaryTooSlowEntry {
+  hypothesis_name: string;
+  measured_trades_per_year: number;
+  llm_claimed_trades_per_year: number;
+}
+
+export interface AgentRunSummary {
+  run_at: string;
+  // null (never []) on the one backfilled 2026-08-03 entry, whose
+  // per-hypothesis names are honestly unavailable (data_completeness:
+  // "aggregate_only") -- must not be treated as "zero TOO_SLOW that run."
+  too_slow: AgentRunSummaryTooSlowEntry[] | null;
 }
 
 // A correction record NEVER edits the run entry it applies to (see

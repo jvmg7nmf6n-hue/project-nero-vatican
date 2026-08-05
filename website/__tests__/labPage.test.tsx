@@ -4,6 +4,7 @@ import * as data from "@/lib/data";
 import type {
   AgentHypothesis,
   AgentPerformanceExport,
+  AgentRunSummary,
   AgentTestResult,
   FailurePatternEntry,
   GraveyardEntry,
@@ -24,6 +25,7 @@ const mockFetchRepairCandidates = jest.mocked(data.fetchRepairCandidates);
 const mockFetchAgentHypotheses = jest.mocked(data.fetchAgentHypotheses);
 const mockFetchAgentTestResults = jest.mocked(data.fetchAgentTestResults);
 const mockFetchAgentPerformance = jest.mocked(data.fetchAgentPerformance);
+const mockFetchAgentRunSummaries = jest.mocked(data.fetchAgentRunSummaries);
 
 function roster(overrides: Partial<StrategyRosterEntry> = {}): StrategyRosterEntry {
   return {
@@ -57,6 +59,7 @@ function setupMocks(options: {
   agentHypotheses?: AgentHypothesis[] | null;
   agentTestResults?: AgentTestResult[] | null;
   agentPerformance?: AgentPerformanceExport | null;
+  agentRunSummaries?: AgentRunSummary[] | null;
 }) {
   const strategiesExport: StrategiesExport = {
     schema_version: 1,
@@ -83,6 +86,9 @@ function setupMocks(options: {
     "agentTestResults" in options ? (options.agentTestResults as AgentTestResult[] | null) : []
   );
   mockFetchAgentPerformance.mockResolvedValue("agentPerformance" in options ? (options.agentPerformance ?? null) : null);
+  mockFetchAgentRunSummaries.mockResolvedValue(
+    "agentRunSummaries" in options ? (options.agentRunSummaries as AgentRunSummary[] | null) : []
+  );
 }
 
 describe("LabPage", () => {
@@ -186,5 +192,26 @@ describe("LabPage", () => {
     expect(screen.getByText("Research Agent")).toBeInTheDocument();
     expect(screen.getByText("ZSCORE_REVERSION_BTC_1H")).toBeInTheDocument();
     expect(screen.getByText(/Verdict: Promising — Watchlist/)).toBeInTheDocument();
+  });
+
+  // CC-1 Factory Loop closeout, item 4a: agent_run_summaries.json IS
+  // committed (unlike agent_test_results.json, which currently is not --
+  // see this directive's own closing report) and must reach the TOO_SLOW
+  // panel through LabPage's real fetch wiring, not just the component in
+  // isolation.
+  it("wires agent_run_summaries.json's TOO_SLOW names through to the panel", async () => {
+    setupMocks({
+      agentRunSummaries: [
+        {
+          run_at: "2026-08-04T11:19:56.922724+00:00",
+          too_slow: [
+            { hypothesis_name: "RSI2_TREND_PULLBACK_PAXG_4H", measured_trades_per_year: 0.5, llm_claimed_trades_per_year: 35.0 },
+          ],
+        },
+      ],
+    });
+    render(await LabPage());
+
+    expect(screen.getByTestId("agent-too-slow-row")).toHaveTextContent("RSI2_TREND_PULLBACK_PAXG_4H");
   });
 });

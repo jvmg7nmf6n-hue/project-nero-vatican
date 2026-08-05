@@ -4,6 +4,7 @@ import ResearchScoreboard from "@/components/ResearchScoreboard";
 import {
   fetchAgentHypotheses,
   fetchAgentPerformance,
+  fetchAgentRunSummaries,
   fetchAgentTestResults,
   fetchFailurePatterns,
   fetchGraveyard,
@@ -29,6 +30,7 @@ export default async function LabPage() {
     agentHypotheses,
     agentTestResults,
     agentPerformance,
+    agentRunSummaries,
   ] = await Promise.all([
     fetchStrategies(),
     fetchStats(),
@@ -38,6 +40,7 @@ export default async function LabPage() {
     fetchAgentHypotheses(),
     fetchAgentTestResults(),
     fetchAgentPerformance(),
+    fetchAgentRunSummaries(),
   ]);
 
   const rows = buildResearchScoreboard(
@@ -78,6 +81,7 @@ export default async function LabPage() {
           hypotheses={agentHypotheses ?? []}
           testResults={agentTestResults ?? []}
           performance={agentPerformance}
+          runSummaries={agentRunSummaries ?? []}
         />
       </section>
     </div>

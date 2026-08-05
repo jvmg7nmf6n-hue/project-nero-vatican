@@ -3,6 +3,7 @@ import type { CandleFile } from "./candleData";
 import type {
   AgentHypothesis,
   AgentPerformanceExport,
+  AgentRunSummary,
   AgentTestResult,
   FactoryLoopStatusExport,
   FailurePatternEntry,
@@ -120,6 +121,14 @@ export function fetchAgentTestResults(): Promise<AgentTestResult[] | null> {
 // nero_core.research_agent.performance after every enabled pipeline run.
 export function fetchAgentPerformance(): Promise<AgentPerformanceExport | null> {
   return fetchJson<AgentPerformanceExport>("agent_performance.json");
+}
+
+// CC-1 Factory Loop closeout, item 4a: committed on every research_agent_manual.yml
+// run (unlike agent_hypotheses.json above) -- see AgentRunSummary's own
+// docstring in lib/types.ts. null (not an error) until the workflow has run
+// at least once, same convention as the fetchers above.
+export function fetchAgentRunSummaries(): Promise<AgentRunSummary[] | null> {
+  return fetchJson<AgentRunSummary[]>("agent_run_summaries.json");
 }
 
 // CC-1 Factory Loop directive, item 9 -- written by

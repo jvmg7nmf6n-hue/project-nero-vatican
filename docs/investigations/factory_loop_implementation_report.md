@@ -263,3 +263,400 @@ No option in this correction — or anywhere in the original report above — is
 **Full suite, Python** (`python -m unittest discover -s tests`): **2491 tests, same 3 pre-existing errors (lxml/PSX, unrelated, unchanged), 0 failures.** Delta from the prior full-suite checkpoint (2488): **+3**, reconciling exactly: `test_trial_admission.py` net +2 (one test removed, one renamed in place net-zero, `AdmitToTrialNeverConsultsFreshnessTest` adds 3 → net −1+3 = +2), `test_eve_freshness_disqualification.py` net 0 (two tests rewritten in place, one class renamed, same count), `test_eve_session_registry.py` +1. Zero new failures.
 
 **Full suite, website** (`npx jest`): **598 tests, 596 passing, same 2 pre-existing failures** (`siteDataSchema.test.ts`, unrelated to this correction — this correction touched no website files, confirmed by `git diff --stat` showing zero website changes in this correction's own diff).
+---
+
+# CC-1 — Factory Loop Rollout Closeout (2026-08-05)
+
+Context: `61d78a8`, `3697e75`, and `c7f4df9` sat unpushed for two days before
+this directive; that gap is resolved and confirmed (see item 0). This
+section covers the four remaining items from the closeout directive: the
+missing nav link, Adam's web-search ReadTimeouts, unaccounted spend
+visibility, and the /lab panels that contradicted each other in public.
+
+## Item 0 — push verification
+
+Confirmed before starting: `git log origin/main --oneline -3` and
+`git log --oneline -3 main` both returned `d8ba923` at HEAD, with zero
+commits in either `main..origin/main` or `origin/main..main` -- local and
+remote were already in sync at the start of this directive (the prior
+session's merge-and-push had, in fact, landed). Every commit made in this
+directive is verified the same way below, real output pasted, not the
+commit step's own exit code.
+
+## Item 1 — Factory Loop nav link
+
+**FINDING:** the site nav is defined in exactly one place,
+`website/app/layout.tsx:22-44` (`RootLayout`'s `<nav>` block) -- confirmed
+by grep across the whole `website/` tree for `<nav`: one match, this file.
+There is no separate mobile-markup nav component anywhere (`components/`
+has no `Nav`/`Menu`/hamburger component; grepped for one and found none),
+so "confirm it renders on mobile as well as desktop" is satisfied
+structurally: the new link is inside the SAME markup both viewports render,
+not a second copy that could be missed. One real, pre-existing (not
+introduced by this change) limitation worth naming: the nav has no
+`flex-wrap`/scroll handling in `globals.css` (grepped, no matches), so on a
+narrow viewport all 8 links now sit in one non-wrapping flex row -- a
+pre-existing condition, not a regression from adding an 8th link, and out
+of this item's scope to redesign.
+
+**Existing-test check:** grepped `website/__tests__/` for any reference to
+`RootLayout` or `app/layout` -- zero matches. No test asserts the exact nav
+item list, so nothing needed updating (per the directive's own
+"check first" instruction).
+
+**Placement -- three options considered, not picked silently:**
+1. **Between Graveyard and Lab** (chosen). Groups the three
+   research-transparency pages narratively: Graveyard (dead mechanisms) ->
+   Factory Loop (the process that produces and repairs them) -> Lab (the
+   live workbench where Repair Candidates and the Research Agent panel
+   live). Matches the directive's own suggestion.
+2. Immediately after Lab. Ties it to the page it's most operationally
+   adjacent to (Lab's own "Repair Candidates" section is part of the same
+   loop), but breaks the Graveyard->Factory Loop narrative adjacency and
+   reads as an afterthought appended to an existing pair.
+3. At the end, before Pricing. Signals "newest/most experimental" but
+   isolates it from every other research-transparency page, which is the
+   opposite of what a reader trying to understand "what is this site
+   actually showing me" would want.
+
+**CONFIDENCE:** confirmed-from-code.
+
+**WHAT SHIPPED:** `website/app/layout.tsx` -- one `<Link href="/factory-loop">`
+inserted between the Graveyard and Lab links. **Live-URL verification:
+pending until after this section's own commit is pushed and confirmed
+landed (item 0) and the site's 300s ISR revalidation window has passed --
+see the verification note at the end of this section.**
+
+## Item 2 — Adam's web-search timeouts (investigation only, nothing implemented)
+
+### 2a — mechanism, confirmed from code
+
+- **Call site:** `nero_core/research_agent/hypothesis_gen.py:426-471`
+  (`_call_claude`) -- a single, shared, raw `requests.post` (line 448),
+  non-streaming (the full response is awaited as one JSON body via
+  `response.json()`, line 464), used by BOTH the scanner channel and the
+  web-search channel.
+- **Timeout shape:** `timeout=params.claude_timeout_seconds` (line 456),
+  where `claude_timeout_seconds: int = 180` (line 217) is a plain **scalar
+  int**, not a `(connect, read)` tuple. `requests` applies a scalar to both
+  the connect and read phases independently -- the real error text confirms
+  it is the READ phase that trips: `ReadTimeout: ...Read timed out. (read
+  timeout=90)` (verbatim from the live `/lab` data), which is specifically
+  "no bytes received within this many seconds," not "total request
+  duration capped at this many seconds." This is consistent with (not yet
+  proof beyond doubt of, but strongly corroborating) the idle-time-between-
+  bytes hypothesis: a scalar read-timeout fires on a silent gap, and
+  Anthropic's own error docs (cited in the directive) describe exactly that
+  gap for a long server-side operation on a non-streaming connection.
+- **Scanner vs. web-search channel:** confirmed these are the ONLY two
+  callers of `_call_claude`. The scanner channel calls it at line 772 with
+  no `tools` argument at all. The web-search channel calls it at line 1111
+  with `tools=[WEB_SEARCH_TOOL]`. This is the one structural difference
+  between the two, and it lines up exactly with the real data (only the
+  web-search channel has ever produced a `ReadTimeout` in this repo's
+  history) -- server-side search execution is the only thing that could
+  produce the long silent gap on one channel and not the other, since every
+  other part of the request (model, prompt, headers, timeout config) is
+  identical between them.
+- **Does Eve make the same class of call?** Yes, confirmed structurally
+  identical: `nero_core/eve/llm_client.py::call_turn` (lines 310-345 area)
+  makes a raw, non-streaming `requests.post` with
+  `timeout=params.claude_timeout_seconds` (a scalar int,
+  `claude_timeout_seconds: int = 180` in `LlmParameters`), and Eve's own
+  `default_tools()` (`nero_core/eve/tools_defs.py`) ALWAYS includes
+  `WEB_SEARCH_TOOL` in every turn's tool list -- there is no Eve call that
+  omits the search tool the way Adam's scanner channel does. Eve is **not
+  structurally immune**. She is also not merely theoretically at risk:
+  `docs/site_data/eve_session_registry.json`'s own crashed-session entries
+  record two real `ReadTimeout` crashes at the old 60s ceiling
+  (`eve-20260803T074058Z-df7df0f9`, `eve-20260803T075102Z-2b98a5f0`) and one
+  more at the 120s ceiling (`eve-20260804T015806Z-243d095f`) before 180s was
+  adopted -- the exact same failure mode Adam's web-search channel is
+  showing now, at lower ceilings. The honest read: 180s has not yet been
+  exceeded in Eve's real usage so far (her one real completed session,
+  Session 1, made only 2 real web searches, well under
+  `WEB_SEARCH_TOOL`'s own `max_uses=5` ceiling) -- "hasn't hit it yet," not
+  "immune."
+- **One more real-data point, not asked for but relevant to 2b:** the most
+  recent 180s run (2026-08-04T11:10:43) still had **1 ReadTimeout out of 3
+  calls**, not zero -- 180s reduced the failure rate (0->2 hypotheses
+  generated versus the 90s run's 0) but did not eliminate it. This
+  corroborates the "a larger timeout only moves the cliff" part of the
+  hypothesis with real, not hypothetical, data.
+
+**CONFIDENCE:** confirmed-from-code, confirmed-from-data.
+
+### 2b — options, not implemented
+
+1. **Streaming.** Structurally impossible for this failure mode (SSE events
+   arrive continuously during server-side search execution, so there is
+   never a multi-second gap with zero bytes for a scalar read-timeout to
+   trip on) -- the same standard this project already applied when it set
+   `thinking: {"type": "disabled"}` instead of merely raising a budget.
+   **Real cost, not estimated:** grepped every test that mocks the current
+   flat `requests.post` -> single-JSON-body shape --
+   `tests/test_research_agent_hypothesis_gen.py` (34 `requests.post`
+   references), `tests/test_research_agent_web_hypothesis_gen.py` (15), and
+   `tests/test_eve_llm_client.py` (6) -- roughly **55 real call sites**
+   across 3 files would need reworking from a single `_FakeResponse(payload)`
+   to a sequence of SSE events. Response assembly would need to accumulate
+   `content_block_start`/`content_block_delta`/`content_block_stop` events
+   into the same `content` array shape callers already expect; usage
+   extraction would need to combine `message_start`'s initial `usage` (input
+   tokens, cache fields) with `message_delta`'s final `usage` (output
+   tokens) instead of reading one flat `payload["usage"]`.
+2. **Message Batches API.** Removes the held connection (and its read-
+   timeout exposure) entirely -- poll for a result instead. Real structural
+   cost: Adam's run would no longer complete inside one synchronous
+   `python -m nero_core.research_agent.pipeline` invocation, which changes
+   `research_agent_manual.yml`'s own execution model (a single-job,
+   single-run workflow today) into something that must either poll within
+   the same job (adds real wall-clock job time, GitHub Actions jobs have
+   their own ceiling) or split into a submit step and a separate,
+   later-triggered ingest step.
+3. **Keep non-streaming, raise again with retry/backoff.** Cheapest change,
+   does not address the mechanism -- confirmed above that raising 90s->180s
+   reduced but did NOT eliminate the failure (1/3 calls still timed out on
+   the most recent 180s run). Confidence on a further specific number: LOW
+   -- the real sample is two error runs total (90s: 3/3 failed; 180s: 1/3
+   failed), not enough to fit a real distribution of server-side search
+   duration. Any next number would be a guess dressed as data.
+
+**Recommendation: streaming (option 1)**, for the same reason CC-2 chose a
+structural fix over a bigger budget for the thinking-token failure --
+option 3 has now been tried once (90s->180s) and already demonstrably
+did not fully solve it, and option 2 changes the workflow's execution
+model more than the goal requires. This is a recommendation, not an
+implementation -- nothing was changed.
+
+**Note on a tension in this directive's own instructions:** item 2b asks to
+"add a test that fails if the code silently reverts to a non-streaming long
+call," while the OUT OF SCOPE section separately states "implementing item
+2's chosen fix before it is confirmed" is out of scope. A regression test
+for a mechanism that does not exist in the code yet cannot be written
+without first building at least a stub of that mechanism -- doing so would
+itself be a form of implementing ahead of confirmation. Per the standing
+"report, do not implement" instruction (which is the more specific, more
+repeated rule throughout this directive), **that test is deferred alongside
+the implementation**, not written now. Flagged here explicitly rather than
+silently resolved in one direction.
+
+## Item 3 — unaccounted spend, made visible
+
+**FINDING, real totals (confirmed-from-data, `docs/site_data/agent_performance.json`,
+the real committed file):** `cumulative.calls_with_unknown_cost = 4`,
+`cumulative.total_llm_cost_usd = 0.55804` (~$0.56). Split across the two
+error runs, confirmed per-run: `2026-08-04T10:55:25` (90s ceiling) --
+3 calls of unknown cost, $0.0 recorded that run; `2026-08-04T11:10:43`
+(180s ceiling) -- 1 call of unknown cost, $0.55804 recorded that run.
+Matches the directive's own table exactly -- no stale figure found here.
+
+**Display component:** `website/components/ResearchAgentPanel.tsx`'s
+"Cumulative API cost" `Stat` tile. Confirmed (grep across `website/`) that
+`calls_with_unknown_cost` was referenced NOWHERE on the website side before
+this change -- not in `lib/types.ts`, not in any component -- so the gap
+described in the directive ("nothing surfaces the gap") was real and total,
+not partial.
+
+**WHAT SHIPPED:**
+- `website/lib/types.ts` -- `calls_with_unknown_cost`/`web_calls_with_unknown_cost`
+  added as optional fields on `AgentPerformanceCumulative` (and
+  `calls_with_unknown_cost` on `AgentPerformanceRun`) -- optional because
+  the two pre-instrumentation 2026-07-29 runs predate the field existing at
+  all; absence must read as "not tracked yet," never "0."
+- `website/components/ResearchAgentPanel.tsx` -- the stat's value changed
+  from `"$0.56"` to `"$0.56 recorded"`, with a conditional muted note
+  (`data-testid="agent-cost-unknown-note"`) reading `"N calls of unknown
+  cost, not included above"` whenever `calls_with_unknown_cost` is nonzero,
+  omitted entirely when it is zero/absent (so a genuinely complete run
+  never reads as incomplete).
+- Tests: `website/__tests__/ResearchAgentPanel.test.tsx` -- 2 new tests
+  (note shown when nonzero, note absent when zero/absent), plus the one
+  existing test asserting the old `"$0.15"` text updated to `"$0.15
+  recorded"`.
+
+**Proposed, NOT implemented, per the directive's own instruction --
+bounding the unknown, 2 options:**
+1. **Estimate from a comparable successful call's input-token count.**
+   Every web-search call in a run shares the same prompt-building function
+   (`_build_web_search_prompt`), so a successful call's own
+   `usage.input_tokens` from the SAME run (or, absent one, the most recent
+   prior successful web-search call) is a reasonable proxy for what the
+   timed-out call's input side cost, at the known `input_cost_per_mtok`
+   rate. The OUTPUT side has no comparable proxy at all (a timed-out call
+   never produced output) -- this can only ever bound the input-token
+   portion, and that must be labeled `estimated_cost_usd` (or similar) and
+   kept structurally separate from `total_llm_cost_usd`'s own append-only
+   ledger meaning, never summed into it.
+2. **Don't estimate a number at all; report a range using the run's own
+   max possible cost** (i.e., every unknown call assumed to be the same
+   size as the run's largest real call, as a stated upper bound) rather
+   than a false-precision point estimate. Cheaper to implement and harder
+   to over-trust than option 1's single number, at the cost of a wider,
+   less useful range.
+No recommendation is stated between these two -- per the directive, this
+item is report-only.
+
+## Item 4 — the /lab panels contradicted each other in public
+
+### 4a — TOO_SLOW panel: confirmed cause, confirmed fixable with real data
+
+**FINDING:** confirmed cause exactly as the directive suspected, from
+`.github/workflows/research_agent_manual.yml`:
+`agent_hypotheses.json` is uploaded as a workflow artifact only (lines
+41-56, deliberate human-review gate, unchanged and correct). But **one
+real, unplanned finding beyond what the directive assumed:**
+`agent_test_results.json` -- which the workflow's own "Commit test
+results" step (lines 58-83, CC-1 review item 1a) is SUPPOSED to commit on
+every run -- has **zero git history** (`git log --all --oneline --
+docs/site_data/agent_test_results.json` returns nothing) and is not
+currently tracked in this repo at all (`git ls-files` confirms). The
+intended commit step appears to have never successfully landed a commit;
+this is exactly the class of silent-push-failure this whole directive
+opened with (item 0), just on a different workflow. Flagged here plainly,
+not fixed (out of this item's scope -- item 4a is about wiring the panel
+to real committed data that already exists, and `agent_test_results.json`
+is not that).
+
+`agent_run_summaries.json` **is** committed (confirmed tracked in git) and
+its real, most recent entry (`run_at: "2026-08-04T11:19:56.922724+00:00"`)
+carries a `too_slow` array with two real names:
+`RSI2_TREND_PULLBACK_PAXG_4H` (measured 0.498 trades/year, claimed 35.0)
+and `ADX_REGIME_IGNITION_SOL_4H` (measured 16.94 trades/year, claimed 45.0)
+-- exactly the 2 that `agent_performance.json`'s own
+`cumulative.too_slow_rejected = 2` already counts (confirmed these two
+numbers reconcile, not just resemble each other).
+
+**One more honest limitation, confirmed from the same file and worth
+stating plainly rather than silently under-representing:** the file's
+FIRST entry (`run_at: "2026-08-03"`, explicitly marked `"backfilled": true`)
+carries `too_slow: null` with `"data_completeness": "aggregate_only --
+per-hypothesis names and individual claim/measured values are NOT
+available and are not fabricated here"` -- 9 additional real TOO_SLOW
+rejections happened on 2026-08-03 with NO hypothesis names ever captured
+anywhere, predating per-hypothesis tracking. Wiring this panel to real
+names surfaces 2 of at least 11 real TOO_SLOW rejections this platform has
+produced -- an improvement from 0, not a claim of completeness.
+
+**WHAT SHIPPED:**
+- `website/lib/types.ts` -- new `AgentRunSummaryTooSlowEntry`/
+  `AgentRunSummary` types (deliberately minimal: only the fields this site
+  reads, not the full real schema -- see that type's own comment).
+- `website/lib/data.ts` -- new `fetchAgentRunSummaries()`.
+- `website/app/lab/page.tsx` -- fetches it, passes as a new `runSummaries`
+  prop.
+- `website/components/ResearchAgentPanel.tsx` -- the TOO_SLOW panel now
+  merges `testResults`-sourced rows (richer `reason` text, currently
+  empty in practice since that file isn't committed -- see above) with
+  `runSummaries`-sourced rows (real names, thinner synthesized reason text),
+  deduplicated by `hypothesis_name`, testResults preferred on overlap --
+  this fixes the panel today AND keeps `agent_test_results.json` wired in
+  for the day its own commit step starts landing successfully.
+- Tests: 3 new tests in `ResearchAgentPanel.test.tsx` (populates from
+  runSummaries, null `too_slow` entry handled without crashing, dedup
+  prefers testResults) + 1 new integration test in `labPage.test.tsx`
+  wiring the real fetch end to end.
+
+### 4b — Findings panel: three real states, no raw text committed
+
+**FINDING:** confirmed the panel (`ResearchAgentPanel.tsx`'s "Research
+Agent Findings" section) reads `hypotheses` (from `agent_hypotheses.json`,
+artifact-only, never committed -- confirmed above). Under that correct,
+unchanged gate, `hypotheses.length === 0` is true on every single run
+regardless of what was generated -- "No hypotheses generated yet" is not
+stale copy, it is **permanently false** the moment any run generates
+something, exactly as the directive states.
+
+**WHAT SHIPPED:** the empty-state branch now checks
+`cumulative.hypotheses_generated` (a committed, DERIVED count from
+`agent_performance.json` -- never the raw proposal text itself, so the
+no-raw-text rule is not touched) to distinguish:
+- nothing generated (`agent-hypotheses-empty`, unchanged copy)
+- generated, pending review (`agent-hypotheses-pending-review`, new --
+  "N hypothesis(es) generated so far, pending human review — raw proposal
+  text is not published here until reviewed")
+- generated and published (existing hypothesis-card grid, unchanged,
+  reachable once `hypotheses.length > 0`)
+
+Tests: 3 new tests in `ResearchAgentPanel.test.tsx` covering all three
+states explicitly.
+
+## Out-of-scope confirmations
+
+- **No raw `agent_hypotheses.json` proposal text committed anywhere** --
+  confirmed: this directive's only Python-adjacent work was reading code
+  for item 2's investigation; zero Python files were touched (`git diff
+  --stat` for this directive's changes shows only `website/` files).
+- **Evidence-bar constants unchanged** -- zero Python files touched at all
+  this directive (confirmed via `git diff --stat`), so
+  `MIN_SAMPLE_SIZE`/`TARGET_RESOLVED_TRADES`/`FAST_MAX_MONTHS`/
+  `VIABLE_MAX_MONTHS`/`DEFAULT_FDR_ALPHA`/`FRESHNESS_DISQUALIFICATION_WINDOW_DAYS`
+  are structurally unchanged. The prior session's
+  `tests/test_eve_citation_freshness.py::ConstantsUncnhangedTest` (asserting
+  all six values) still exists and still passes -- re-run as part of this
+  directive's own full Python suite (see test counts below), not merely
+  assumed carried over.
+- **No binding freshness disqualification re-enabled** -- untouched;
+  `nero_core/research_agent/trial.py` and `nero_core/eve/scoring.py` were
+  not touched this directive.
+- **Eve's session/tool loop untouched** -- confirmed, zero changes to
+  `nero_core/eve/session.py` or any other Eve module this directive.
+- **Item 2's chosen fix (streaming) NOT implemented** -- report only, see
+  above.
+- **Item 3's estimation approach NOT implemented** -- report only, see
+  above.
+- **No change to page content, counts, or the Factory Loop diagram itself**
+  beyond what items 1/3/4 explicitly required (the nav link, the cost note,
+  the TOO_SLOW rows, the Findings copy) -- confirmed via `git diff --stat`
+  for this directive: `website/app/layout.tsx`, `website/app/lab/page.tsx`,
+  `website/components/ResearchAgentPanel.tsx`, `website/lib/data.ts`,
+  `website/lib/types.ts`, and the two test files. No `FactoryLoopDiagram.tsx`
+  or `factory-loop/page.tsx` change.
+
+## Test counts, this closeout
+
+**Python:** zero Python files touched this directive (confirmed via `git
+diff --stat`) -- before and after are the SAME real run, re-executed to
+confirm rather than assumed: `python -m unittest discover -s tests` ->
+**2521 tests, OK (0 failures, 0 errors)**, identical to the prior session's
+own final count.
+
+**Website, before this closeout:** 598 tests, 596 passing, 2 pre-existing
+failures (`siteDataSchema.test.ts`, unrelated -- `failure_patterns.json`
+schema gaps, untouched by this directive).
+
+**Website, after this closeout:** `npm test` -> **607 tests, 605 passing,
+the SAME 2 pre-existing failures** (identical failure output, confirmed).
+Delta: **+9**, reconciling exactly: 8 new tests in
+`ResearchAgentPanel.test.tsx` (2 for item 3's unknown-cost note, 3 for item
+4a's merged TOO_SLOW rows, 3 for item 4b's three Findings states) + 1 new
+integration test in `labPage.test.tsx` (item 4a's end-to-end wiring).
+
+## A2/A3 preservation, confirmed
+
+- **A2 (180s timeout)** -- confirmed unchanged:
+  `nero_core/research_agent/hypothesis_gen.py:217`,
+  `claude_timeout_seconds: int = 180`, read (not modified) for item 2's
+  investigation.
+- **A3 (UNKNOWN-cost honesty)** -- confirmed unchanged: `hypothesis_gen.py`'s
+  `RejectedBeforeTokenProcessingError`/`ResponseParseError` distinction and
+  `nero_core/research_agent/performance.py`'s own
+  `calls_with_unknown_cost` accounting were not touched. Item 3's website
+  change SURFACES that existing honest accounting for the first time; it
+  does not alter how the accounting itself works.
+
+## git log origin/main --oneline -3
+
+**PUSH_LOG_PLACEHOLDER**
+
+## Stale figures found in this directive, and the real values
+
+The directive's own item 2 table and item 3's "4 calls across the two
+error runs" figure were both checked against the real, current
+`docs/site_data/agent_performance.json` and matched exactly -- **no stale
+figure found in either.** One figure the directive did not state, but which
+this investigation surfaced as newly-relevant: `agent_test_results.json`'s
+own git history is currently **empty** (0 commits), which the directive
+did not know when it described `agent_run_summaries.json` as `agent_test_results.json`'s
+committed sibling -- both are real files, but only one of the two has ever
+actually landed a commit. See item 4a above.

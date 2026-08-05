@@ -1,6 +1,22 @@
 import { render, screen } from "@testing-library/react";
 import ResearchAgentPanel from "@/components/ResearchAgentPanel";
-import type { AgentHypothesis, AgentPerformanceExport, AgentPerformanceRun, AgentTestResult } from "@/lib/types";
+import type {
+  AgentHypothesis,
+  AgentPerformanceExport,
+  AgentPerformanceRun,
+  AgentRunSummary,
+  AgentTestResult,
+} from "@/lib/types";
+
+function runSummary(overrides: Partial<AgentRunSummary> = {}): AgentRunSummary {
+  return {
+    run_at: "2026-08-04T11:19:56.922724+00:00",
+    too_slow: [
+      { hypothesis_name: "RSI2_TREND_PULLBACK_PAXG_4H", measured_trades_per_year: 0.5, llm_claimed_trades_per_year: 35.0 },
+    ],
+    ...overrides,
+  };
+}
 
 function hypothesis(overrides: Partial<AgentHypothesis> = {}): AgentHypothesis {
   return {
@@ -101,7 +117,7 @@ describe("ResearchAgentPanel", () => {
   it("renders cumulative performance stats including a null-safe survival rate", () => {
     render(<ResearchAgentPanel hypotheses={[]} testResults={[]} performance={performance()} />);
     expect(screen.getByText("60%")).toBeInTheDocument();
-    expect(screen.getByText("$0.15")).toBeInTheDocument();
+    expect(screen.getByText("$0.15 recorded")).toBeInTheDocument();
   });
 
   it("renders 'n/a' survival rate when cumulative tested count is zero", () => {
@@ -196,5 +212,108 @@ describe("ResearchAgentPanel", () => {
       />
     );
     expect(screen.queryAllByRole("button")).toHaveLength(0);
+  });
+
+  // CC-1 Factory Loop closeout, item 3: a lower-bound cost total must never
+  // read as complete when calls of unknown cost exist.
+  it("shows an unknown-cost note when calls_with_unknown_cost is nonzero", () => {
+    render(
+      <ResearchAgentPanel
+        hypotheses={[]}
+        testResults={[]}
+        performance={performance({ cumulative: { ...performance().cumulative, calls_with_unknown_cost: 4 } })}
+      />
+    );
+    expect(screen.getByTestId("agent-cost-unknown-note")).toHaveTextContent("4 calls of unknown cost, not included above");
+  });
+
+  it("shows no unknown-cost note when calls_with_unknown_cost is absent or zero", () => {
+    render(<ResearchAgentPanel hypotheses={[]} testResults={[]} performance={performance()} />);
+    expect(screen.queryByTestId("agent-cost-unknown-note")).not.toBeInTheDocument();
+  });
+
+  // CC-1 Factory Loop closeout, item 4a: agent_run_summaries.json's own
+  // `too_slow` field already carries real hypothesis names -- the panel
+  // must read them even when agent_test_results.json (testResults) is empty.
+  it("populates TOO_SLOW rejections from runSummaries when testResults is empty", () => {
+    render(
+      <ResearchAgentPanel hypotheses={[]} testResults={[]} performance={null} runSummaries={[runSummary()]} />
+    );
+    const row = screen.getByTestId("agent-too-slow-row");
+    expect(row).toHaveTextContent("RSI2_TREND_PULLBACK_PAXG_4H");
+    expect(row).toHaveTextContent("measured 0.50 trades/year (claimed 35.0)");
+  });
+
+  it("treats a null too_slow entry (the backfilled, name-unavailable run) as contributing nothing, never crashing", () => {
+    render(
+      <ResearchAgentPanel
+        hypotheses={[]}
+        testResults={[]}
+        performance={null}
+        runSummaries={[runSummary({ too_slow: null })]}
+      />
+    );
+    expect(screen.getByTestId("agent-too-slow-empty")).toBeInTheDocument();
+  });
+
+  it("deduplicates a hypothesis name present in both testResults and runSummaries, preferring the richer testResults reason", () => {
+    const rejected = testResult({
+      hypothesis_name: "RSI2_TREND_PULLBACK_PAXG_4H",
+      verdict: "SKIPPED",
+      frequency_classification: "TOO_SLOW",
+      reason: "the richer, full testResults reason text",
+    });
+    render(
+      <ResearchAgentPanel
+        hypotheses={[]}
+        testResults={[rejected]}
+        performance={null}
+        runSummaries={[runSummary()]}
+      />
+    );
+    const rows = screen.getAllByTestId("agent-too-slow-row");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent("the richer, full testResults reason text");
+  });
+
+  // CC-1 Factory Loop closeout, item 4b: three distinguishable states --
+  // nothing generated, generated-but-pending-review, generated-and-published.
+  it("shows the plain empty state when nothing has ever been generated", () => {
+    render(
+      <ResearchAgentPanel
+        hypotheses={[]}
+        testResults={[]}
+        performance={performance({ cumulative: { ...performance().cumulative, hypotheses_generated: 0 } })}
+      />
+    );
+    expect(screen.getByTestId("agent-hypotheses-empty")).toHaveTextContent("No hypotheses generated yet.");
+    expect(screen.queryByTestId("agent-hypotheses-pending-review")).not.toBeInTheDocument();
+  });
+
+  it("shows a pending-review state, never raw text, when hypotheses were generated but not published", () => {
+    render(
+      <ResearchAgentPanel
+        hypotheses={[]}
+        testResults={[]}
+        performance={performance({ cumulative: { ...performance().cumulative, hypotheses_generated: 2 } })}
+      />
+    );
+    expect(screen.getByTestId("agent-hypotheses-pending-review")).toHaveTextContent(
+      "2 hypotheses generated so far, pending human review"
+    );
+    expect(screen.queryByTestId("agent-hypotheses-empty")).not.toBeInTheDocument();
+  });
+
+  it("shows real hypothesis cards (the published state) when hypotheses are actually present, regardless of cumulative count", () => {
+    render(
+      <ResearchAgentPanel
+        hypotheses={[hypothesis()]}
+        testResults={[]}
+        performance={performance({ cumulative: { ...performance().cumulative, hypotheses_generated: 2 } })}
+      />
+    );
+    expect(screen.getByTestId("agent-hypothesis-card")).toBeInTheDocument();
+    expect(screen.queryByTestId("agent-hypotheses-pending-review")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("agent-hypotheses-empty")).not.toBeInTheDocument();
   });
 });

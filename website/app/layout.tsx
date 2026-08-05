@@ -32,6 +32,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/graveyard" className="hover:text-parchment">
                 Graveyard
               </Link>
+              <Link href="/factory-loop" className="hover:text-parchment">
+                Factory Loop
+              </Link>
               <Link href="/lab" className="hover:text-parchment">
                 Lab
               </Link>
