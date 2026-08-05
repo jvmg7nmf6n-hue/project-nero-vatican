@@ -56,6 +56,13 @@ GRAVEYARD_PATH = REPO_ROOT / "docs" / "site_data" / "graveyard.json"
 FAILURE_PATTERNS_PATH = REPO_ROOT / "docs" / "site_data" / "failure_patterns.json"
 REPAIR_ATTEMPTS_PATH = REPO_ROOT / "docs" / "site_data" / "repair_attempts.json"
 STATUS_PATH = REPO_ROOT / "docs" / "site_data" / "factory_loop_status.json"
+# CC-1 Master Directive Phase 2: tools.factory_loop_run is the first writer
+# of this file (one drafted entry per family reaching DIED_COUNT_TRIGGER,
+# at review_status=REVIEW_PENDING) -- closes this module's own previously
+# documented KNOWN LIMITATION ("nothing persists a draft to disk before
+# approval"). Missing file -> [], same convention as every other JSON list
+# this project reads.
+DISTILLATION_DRAFTS_PATH = REPO_ROOT / "docs" / "site_data" / "graveyard_distillation_drafts.json"
 
 SCHEMA_VERSION = 1
 
@@ -97,10 +104,18 @@ def _forward_trial_summary(records: list[dict]) -> dict:
     return {"count": len(records), "by_origin": by_origin, "unmeasurable_count": unmeasurable}
 
 
-def _graveyard_summary(graveyard_entries: list[dict]) -> dict:
-    # See module docstring's KNOWN LIMITATION -- both derived fields are
-    # honestly 0 today, not fabricated from data that doesn't exist.
-    return {"count": len(graveyard_entries), "distilled_this_period": 0, "pending_review": 0}
+def _graveyard_summary(graveyard_entries: list[dict], distillation_drafts: list[dict] | None = None) -> dict:
+    # `distilled_this_period` stays honestly 0 -- no committed file tracks
+    # "distilled in the current period" as a durable, dated record; a real
+    # count here would require inventing a period boundary this codebase
+    # doesn't define anywhere else. `pending_review` is now real (CC-1
+    # Master Directive Phase 2): tools.factory_loop_run drafts entries at
+    # review_status=REVIEW_PENDING to DISTILLATION_DRAFTS_PATH, so this
+    # counts drafts still at that status -- 0 when the file is missing or
+    # every draft has since been approved/rejected, never fabricated.
+    drafts = distillation_drafts or []
+    pending = sum(1 for d in drafts if isinstance(d, dict) and d.get("review_status") == "pending_human_approval")
+    return {"count": len(graveyard_entries), "distilled_this_period": 0, "pending_review": pending}
 
 
 def _repair_summary(repair_events: list[dict]) -> dict:
@@ -122,13 +137,14 @@ def _repair_summary(repair_events: list[dict]) -> dict:
 
 def compute_summary_data(
     forward_trial_records: list[dict], graveyard_entries: list[dict], repair_events: list[dict],
+    distillation_drafts: list[dict] | None = None,
 ) -> dict:
     """THE ONE PLACE this snapshot's numbers are derived -- pure, no I/O,
     directly testable. main() and any future workflow step both read THIS
     function's output rather than re-deriving the same counts twice."""
     return {
         "forward_trial": _forward_trial_summary(forward_trial_records),
-        "graveyard": _graveyard_summary(graveyard_entries),
+        "graveyard": _graveyard_summary(graveyard_entries, distillation_drafts),
         "repair": _repair_summary(repair_events),
     }
 
@@ -166,8 +182,9 @@ def main() -> None:
     forward_trial_records = _read_json_list(FORWARD_TRIAL_PATH)
     graveyard_entries = _read_json_list(GRAVEYARD_PATH)
     repair_events = _read_json_list(REPAIR_ATTEMPTS_PATH)
+    distillation_drafts = _read_json_list(DISTILLATION_DRAFTS_PATH)
 
-    summary_data = compute_summary_data(forward_trial_records, graveyard_entries, repair_events)
+    summary_data = compute_summary_data(forward_trial_records, graveyard_entries, repair_events, distillation_drafts)
     status = {"schema_version": SCHEMA_VERSION, "last_updated": datetime.now(timezone.utc).isoformat(), **summary_data}
     print(build_summary(status))
 

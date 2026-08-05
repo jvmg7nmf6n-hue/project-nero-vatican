@@ -47,6 +47,23 @@ class GraveyardSummaryTest(unittest.TestCase):
         result = summary.compute_summary_data([], [{"name": "A"}, {"name": "B"}], [])
         self.assertEqual(result["graveyard"], {"count": 2, "distilled_this_period": 0, "pending_review": 0})
 
+    def test_pending_review_counts_real_drafts_at_review_pending(self) -> None:
+        # CC-1 Master Directive Phase 2: tools.factory_loop_run is now the
+        # first real writer of a distillation-drafts file -- this closes the
+        # module's own previously documented KNOWN LIMITATION (this field
+        # used to be a hardcoded 0 with no way to ever become non-zero).
+        drafts = [
+            {"name": "DRAFT_A", "review_status": "pending_human_approval"},
+            {"name": "DRAFT_B", "review_status": "pending_human_approval"},
+            {"name": "DRAFT_C", "review_status": "approved"},
+        ]
+        result = summary.compute_summary_data([], [], [], drafts)
+        self.assertEqual(result["graveyard"]["pending_review"], 2)
+
+    def test_missing_drafts_file_is_honestly_zero_not_fabricated(self) -> None:
+        result = summary.compute_summary_data([], [], [], None)
+        self.assertEqual(result["graveyard"]["pending_review"], 0)
+
 
 class RepairSummaryTest(unittest.TestCase):
     def test_open_and_resolved_chains_counted_correctly(self) -> None:
