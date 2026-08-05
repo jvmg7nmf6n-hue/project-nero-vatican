@@ -1213,6 +1213,11 @@ This section is new, appended after the prior "CC-1 Master Directive" (Phase
 1.1, 1.2, 2, 3 — commit `a36d75c` and its closing-report fixup `7b29f56`).
 Distinct directive, same initiative — prior sections above are left intact.
 
+**This closing report's own commit (item 0, filled in after push, matching
+this branch's own precedent): `f6ccd4c`.** Phase 1 shipped as `1d0bc45`,
+Phase 2 as `3fcd9c1` — both verified on `origin/main` via `git log
+origin/main --oneline` after each push, not assumed from `git commit` alone.
+
 ## PHASE 1 — Streaming fix
 
 **FINDING:** confirmed unchanged from the prior directive's own carried-forward
