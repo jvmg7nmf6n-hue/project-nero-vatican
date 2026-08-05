@@ -266,7 +266,7 @@ class ForwardTickOutcome:
 
 
 def advance_open_trials(
-    forward_trial_records: list[dict], now: datetime, live: bool,
+    forward_trial_records: list[dict], now: datetime, live: bool, hypothesis_lookup: dict[str, dict] | None = None,
 ) -> list[ForwardTickOutcome]:
     """Item 2's step 5. Every OPEN record gets exactly one forward tick.
     Dry-run never fetches candles or writes anything -- it only reports how
@@ -279,8 +279,24 @@ def advance_open_trials(
     docstring) until 2*MIN_SAMPLE_SIZE trades have resolved -- and, only once
     it returns a real verdict, updates the Trial's status via
     trial.update_trial_status (SURVIVED_TRIAL/PROMISING-WATCHLIST both map to
-    STATUS_SURVIVED_TRIAL; DIED maps to STATUS_FAILED_TRIAL)."""
+    STATUS_SURVIVED_TRIAL; DIED maps to STATUS_FAILED_TRIAL).
+
+    REAL BUG FOUND AND FIXED, 2026-08-06 (first --live run): a TrialRecord
+    (nero_core.research_agent.trial.TrialRecord.to_dict()) never carries a
+    "hypothesis" field -- only source_hypothesis_ref.hypothesis_name. The
+    first live run's dry-run prediction ("8 OPEN records, ready to tick") was
+    therefore wrong in a way dry-run mode itself could never catch (dry-run
+    never touches this code path at all -- see the `if not live` branch
+    below). Fixed by resolving each OPEN record's asset/timeframe/structured
+    fields via `hypothesis_lookup` (built by the caller from the SAME
+    Adam/Eve candidate sources load_adam_candidates/load_eve_candidates
+    already read) keyed by hypothesis_name, rather than expecting the
+    Trial record to carry its own copy. A repaired-origin record's real
+    hypothesis_name includes a `__REPAIR_<attempt_id>` suffix that will never
+    match either lookup -- reported as a real, scoped limitation (0 repaired
+    admissions exist yet to be affected by it), not silently papered over."""
     outcomes: list[ForwardTickOutcome] = []
+    hypothesis_lookup = hypothesis_lookup or {}
     open_records = [r for r in forward_trial_records if r.get("status") == trial.STATUS_OPEN]
     if not live:
         for r in open_records:
@@ -292,10 +308,14 @@ def advance_open_trials(
     for r in open_records:
         ref = r.get("source_hypothesis_ref") or {}
         name = ref.get("hypothesis_name", "")
-        hypothesis = r.get("hypothesis") if isinstance(r.get("hypothesis"), dict) else None
+        hypothesis = hypothesis_lookup.get(name)
         asset, timeframe = (hypothesis or {}).get("asset"), (hypothesis or {}).get("timeframe")
         if not asset or not timeframe:
-            outcomes.append(ForwardTickOutcome(r["trial_id"], name, False, "Trial record carries no asset/timeframe -- cannot fetch candles"))
+            outcomes.append(ForwardTickOutcome(
+                r["trial_id"], name, False,
+                f"no hypothesis record found for {name!r} in the current Adam/Eve candidate lookup -- cannot "
+                f"resolve asset/timeframe (repaired-origin lineage lookup is a known, real, not-yet-supported gap)",
+            ))
             continue
         try:
             candles, _method = fetch_timeframe_candles(client, asset, timeframe)
@@ -371,7 +391,8 @@ def main() -> None:
 
     new_records = [a.trial_record for a in fresh_attempts if a.admitted] + [a.trial_record for a in repair_attempts if a.admitted]
     tick_input_records = forward_trial_records + new_records if live else forward_trial_records
-    tick_outcomes = advance_open_trials(tick_input_records, now, live=live)
+    hypothesis_lookup = {c.hypothesis_name: c.hypothesis_record for c in candidates}
+    tick_outcomes = advance_open_trials(tick_input_records, now, live=live, hypothesis_lookup=hypothesis_lookup)
 
     print(build_report(fresh_attempts, repair_attempts, distillation_ready, tick_outcomes, live))
 
@@ -388,9 +409,20 @@ def main() -> None:
         if not api_key.strip():
             print("\nDistillation drafting skipped: ANTHROPIC_API_KEY not set (no call made, no cost incurred).")
         else:
-            drafts = draft_ready_distillations(failure_patterns, repair_events, api_key)
-            persist_distillation_drafts(drafts)
-            print(f"\n{len(drafts)} distillation draft(s) written to {DEFAULT_DISTILLATION_DRAFTS_PATH} at review_status=REVIEW_PENDING (human approval required before commit_graveyard_entry may write them).")
+            # REAL BUG FOUND AND FIXED, 2026-08-06 (first --live run): a
+            # rejected key (401 -- confirmed $0, never billed, per
+            # validate_api_key's own docstring) raised ApiKeyRejectedError
+            # uncaught here, crashing main() BEFORE the deterministic steps
+            # below (regenerating factory_loop_status.json) ever ran, even
+            # though those steps have nothing to do with whether the LLM
+            # call succeeded. Caught here so a drafting failure is reported,
+            # not silently fatal to the rest of a real run.
+            try:
+                drafts = draft_ready_distillations(failure_patterns, repair_events, api_key)
+                persist_distillation_drafts(drafts)
+                print(f"\n{len(drafts)} distillation draft(s) written to {DEFAULT_DISTILLATION_DRAFTS_PATH} at review_status=REVIEW_PENDING (human approval required before commit_graveyard_entry may write them).")
+            except graveyard_distillation.ApiKeyRejectedError as exc:
+                print(f"\nDistillation drafting failed: {exc} (confirmed $0 -- rejected before any token was processed; the rest of this run still completes).")
 
     final_forward_trial = read_json_list(trial.DEFAULT_FORWARD_TRIAL_PATH)
     graveyard_entries = read_json_list(graveyard_distillation.DEFAULT_GRAVEYARD_PATH)

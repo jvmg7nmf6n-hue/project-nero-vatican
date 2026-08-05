@@ -209,24 +209,41 @@ class AdvanceOpenTrialsTest(unittest.TestCase):
         self.assertEqual(outcomes, [])
 
     def test_live_tick_uses_real_fetch_layer_and_logs_outcome(self) -> None:
+        # Regression guard on the REAL bug found in this codebase's own
+        # first --live run (2026-08-06): a TrialRecord (trial.TrialRecord.
+        # to_dict()) never carries a "hypothesis" key -- only
+        # source_hypothesis_ref.hypothesis_name. This fixture deliberately
+        # matches that REAL shape (no "hypothesis" key on the record itself)
+        # and resolves asset/timeframe via hypothesis_lookup instead, the
+        # way a real caller (tools.factory_loop_run.main) now does.
         candles = pd.DataFrame({
             "date": pd.date_range("2026-01-01", periods=60, freq="4h", tz="UTC"),
             "open": [100.0] * 60, "high": [101.0] * 60, "low": [99.0] * 60, "close": [100.0] * 60, "volume": [10.0] * 60,
         })
-        records = [{
-            "trial_id": "t3", "status": trial.STATUS_OPEN,
-            "source_hypothesis_ref": {"hypothesis_name": "Z"},
-            "hypothesis": {"asset": "BTC", "timeframe": "4h", "structured_entry_rule": VALID_ENTRY, "structured_exit_plan": VALID_EXIT},
-        }]
+        records = [{"trial_id": "t3", "status": trial.STATUS_OPEN, "source_hypothesis_ref": {"hypothesis_name": "Z"}}]
+        hypothesis_lookup = {"Z": {"asset": "BTC", "timeframe": "4h", "structured_entry_rule": VALID_ENTRY, "structured_exit_plan": VALID_EXIT}}
         with patch("tools.factory_loop_run.fetch_timeframe_candles", return_value=(candles, "NATIVE: test")) as mock_fetch, \
              patch("nero_core.research_agent.trial.run_forward_tick") as mock_tick, \
              patch("nero_core.research_agent.trial.compute_forward_verdict", return_value=None):
             mock_tick.return_value = type("R", (), {"signal_type": "NO_TRADE"})()
-            outcomes = runner.advance_open_trials(records, NOW, live=True)
+            outcomes = runner.advance_open_trials(records, NOW, live=True, hypothesis_lookup=hypothesis_lookup)
 
         mock_fetch.assert_called_once()
         self.assertTrue(outcomes[0].ticked)
         self.assertIn("PENDING_FORWARD_DATA", outcomes[0].reason)
+
+    def test_hypothesis_not_in_lookup_is_reported_not_crashed(self) -> None:
+        # The exact real scenario the 2026-08-06 bug produced: 8 real,
+        # freshly-admitted OPEN records with no matching lookup entry (an
+        # empty/wrong lookup, e.g. the caller forgot to build it) must
+        # degrade to a clear per-record reason, never a crash or a silent
+        # skip.
+        records = [{"trial_id": "t4", "status": trial.STATUS_OPEN, "source_hypothesis_ref": {"hypothesis_name": "UNKNOWN_NAME"}}]
+        with patch("tools.factory_loop_run.fetch_timeframe_candles") as mock_fetch:
+            outcomes = runner.advance_open_trials(records, NOW, live=True, hypothesis_lookup={})
+        mock_fetch.assert_not_called()
+        self.assertFalse(outcomes[0].ticked)
+        self.assertIn("no hypothesis record found", outcomes[0].reason)
 
 
 class BuildReportTest(unittest.TestCase):

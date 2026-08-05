@@ -1,0 +1,178 @@
+[
+  {
+    "trial_id": "774476ca-8a12-453d-955b-52b8abfc294a",
+    "source_hypothesis_ref": {
+      "origin": "fresh",
+      "origin_agent": "adam",
+      "hypothesis_name": "RSI2_TREND_PULLBACK_PAXG_4H",
+      "session_id_or_run_ref": null
+    },
+    "entry_verdict": {
+      "verdict": "SKIPPED",
+      "review_status": "rejected_too_slow",
+      "frequency_classification": "TOO_SLOW",
+      "reason": "Measured 1 trigger(s) over 733 eligible days (0.50 trades/year) -> ~722.6 months to 30 resolved trades -> TOO_SLOW."
+    },
+    "measured_trades_per_year": 0.498181404864742,
+    "projected_time_to_min_sample_years": 40.14601870864704,
+    "projected_time_to_min_sample_label": "40.1 years at the currently measured rate (0.50 trades/year) -- EXCEEDS the 2-year visibility horizon (item 4b)",
+    "opened_at": "2026-08-05T23:04:59.453963+00:00",
+    "status": "OPEN",
+    "forward_tracking_db_ref": "C:\\Users\\HP\\Documents\\Codex\\project-nero-vatican\\data\\repair_lab_forward_tracking.db",
+    "attribution": "Explored by Adam, our research agent."
+  },
+  {
+    "trial_id": "bba49265-82d4-48cd-b67d-f66b77feb2c8",
+    "source_hypothesis_ref": {
+      "origin": "fresh",
+      "origin_agent": "adam",
+      "hypothesis_name": "ADX_REGIME_IGNITION_SOL_4H",
+      "session_id_or_run_ref": null
+    },
+    "entry_verdict": {
+      "verdict": "SKIPPED",
+      "review_status": "rejected_too_slow",
+      "frequency_classification": "TOO_SLOW",
+      "reason": "Measured 34 trigger(s) over 733 eligible days (16.94 trades/year) -> ~21.3 months to 30 resolved trades -> TOO_SLOW."
+    },
+    "measured_trades_per_year": 16.93816776540123,
+    "projected_time_to_min_sample_years": 1.1807652561366777,
+    "projected_time_to_min_sample_label": "1.2 years at the currently measured rate (16.94 trades/year)",
+    "opened_at": "2026-08-05T23:04:59.453963+00:00",
+    "status": "OPEN",
+    "forward_tracking_db_ref": "C:\\Users\\HP\\Documents\\Codex\\project-nero-vatican\\data\\repair_lab_forward_tracking.db",
+    "attribution": "Explored by Adam, our research agent."
+  },
+  {
+    "trial_id": "85e79a34-d6e3-4d9a-b6ac-857efdb95b94",
+    "source_hypothesis_ref": {
+      "origin": "fresh",
+      "origin_agent": "eve",
+      "hypothesis_name": "PAXG_PEG_REVERSION",
+      "session_id_or_run_ref": "eve-20260804T020749Z-4cf6e4c9"
+    },
+    "entry_verdict": {
+      "verdict": "DIED",
+      "verdict_is": "DIED",
+      "verdict_oos": "INSUFFICIENT_SAMPLE",
+      "frequency_classification": "VIABLE"
+    },
+    "measured_trades_per_year": 35.86906115026142,
+    "projected_time_to_min_sample_years": 0.5575835931756534,
+    "projected_time_to_min_sample_label": "0.6 years at the currently measured rate (35.87 trades/year)",
+    "opened_at": "2026-08-05T23:04:59.453963+00:00",
+    "status": "OPEN",
+    "forward_tracking_db_ref": "C:\\Users\\HP\\Documents\\Codex\\project-nero-vatican\\data\\repair_lab_forward_tracking.db",
+    "attribution": "Explored by Eve, our research agent."
+  },
+  {
+    "trial_id": "fc9e37b0-9f18-4d83-90b0-35f8fbd973c7",
+    "source_hypothesis_ref": {
+      "origin": "fresh",
+      "origin_agent": "eve",
+      "hypothesis_name": "BTC_VOL_EXPANSION_BREAKOUT",
+      "session_id_or_run_ref": "eve-20260804T020749Z-4cf6e4c9"
+    },
+    "entry_verdict": {
+      "verdict": "DIED",
+      "verdict_is": "PROMISING_WATCHLIST",
+      "verdict_oos": "DIED",
+      "frequency_classification": "VIABLE"
+    },
+    "measured_trades_per_year": 55.796317344851104,
+    "projected_time_to_min_sample_years": 0.35844659561292,
+    "projected_time_to_min_sample_label": "0.4 years at the currently measured rate (55.80 trades/year)",
+    "opened_at": "2026-08-05T23:04:59.453963+00:00",
+    "status": "OPEN",
+    "forward_tracking_db_ref": "C:\\Users\\HP\\Documents\\Codex\\project-nero-vatican\\data\\repair_lab_forward_tracking.db",
+    "attribution": "Explored by Eve, our research agent."
+  },
+  {
+    "trial_id": "4e046a6f-01d4-4be6-8c23-a69dea9139c8",
+    "source_hypothesis_ref": {
+      "origin": "fresh",
+      "origin_agent": "eve",
+      "hypothesis_name": "SOL_TREND_ALIGNED_PULLBACK",
+      "session_id_or_run_ref": "eve-20260804T020749Z-4cf6e4c9"
+    },
+    "entry_verdict": {
+      "verdict": "DIED",
+      "verdict_is": "DIED",
+      "verdict_oos": "DIED",
+      "frequency_classification": "FAST"
+    },
+    "measured_trades_per_year": 103.12355080700159,
+    "projected_time_to_min_sample_years": 0.19394211936544467,
+    "projected_time_to_min_sample_label": "0.2 years at the currently measured rate (103.12 trades/year)",
+    "opened_at": "2026-08-05T23:04:59.453963+00:00",
+    "status": "OPEN",
+    "forward_tracking_db_ref": "C:\\Users\\HP\\Documents\\Codex\\project-nero-vatican\\data\\repair_lab_forward_tracking.db",
+    "attribution": "Explored by Eve, our research agent."
+  },
+  {
+    "trial_id": "7f7c5980-1d11-4af2-be3a-802d84c17241",
+    "source_hypothesis_ref": {
+      "origin": "fresh",
+      "origin_agent": "eve",
+      "hypothesis_name": "ETH_BIDIRECTIONAL_ZSCORE_FADE",
+      "session_id_or_run_ref": "eve-20260804T020749Z-4cf6e4c9"
+    },
+    "entry_verdict": {
+      "verdict": "SKIPPED",
+      "verdict_is": null,
+      "verdict_oos": null,
+      "frequency_classification": "TOO_SLOW"
+    },
+    "measured_trades_per_year": 27.399977267560807,
+    "projected_time_to_min_sample_years": 0.7299276128844918,
+    "projected_time_to_min_sample_label": "0.7 years at the currently measured rate (27.40 trades/year)",
+    "opened_at": "2026-08-05T23:04:59.453963+00:00",
+    "status": "OPEN",
+    "forward_tracking_db_ref": "C:\\Users\\HP\\Documents\\Codex\\project-nero-vatican\\data\\repair_lab_forward_tracking.db",
+    "attribution": "Explored by Eve, our research agent."
+  },
+  {
+    "trial_id": "1bf4084d-675f-41ca-b57a-b9c30c753ee5",
+    "source_hypothesis_ref": {
+      "origin": "fresh",
+      "origin_agent": "eve",
+      "hypothesis_name": "BTC_MOMENTUM_IGNITION",
+      "session_id_or_run_ref": "eve-20260804T020749Z-4cf6e4c9"
+    },
+    "entry_verdict": {
+      "verdict": "DIED",
+      "verdict_is": "DIED",
+      "verdict_oos": "PROMISING_WATCHLIST",
+      "frequency_classification": "FAST"
+    },
+    "measured_trades_per_year": 77.218117754035,
+    "projected_time_to_min_sample_years": 0.25900657231385193,
+    "projected_time_to_min_sample_label": "0.3 years at the currently measured rate (77.22 trades/year)",
+    "opened_at": "2026-08-05T23:04:59.453963+00:00",
+    "status": "OPEN",
+    "forward_tracking_db_ref": "C:\\Users\\HP\\Documents\\Codex\\project-nero-vatican\\data\\repair_lab_forward_tracking.db",
+    "attribution": "Explored by Eve, our research agent."
+  },
+  {
+    "trial_id": "a9d56d23-21ca-47ea-b135-70ca447d8459",
+    "source_hypothesis_ref": {
+      "origin": "fresh",
+      "origin_agent": "eve",
+      "hypothesis_name": "PAXG_PREMIUM_FADE_DYNAMIC_EXIT",
+      "session_id_or_run_ref": "eve-20260804T020749Z-4cf6e4c9"
+    },
+    "entry_verdict": {
+      "verdict": "DIED",
+      "verdict_is": "PROMISING_WATCHLIST",
+      "verdict_oos": "DIED",
+      "frequency_classification": "FAST"
+    },
+    "measured_trades_per_year": 138.49443055239826,
+    "projected_time_to_min_sample_years": 0.14441013923973758,
+    "projected_time_to_min_sample_label": "0.1 years at the currently measured rate (138.49 trades/year)",
+    "opened_at": "2026-08-05T23:04:59.453963+00:00",
+    "status": "OPEN",
+    "forward_tracking_db_ref": "C:\\Users\\HP\\Documents\\Codex\\project-nero-vatican\\data\\repair_lab_forward_tracking.db",
+    "attribution": "Explored by Eve, our research agent."
+  }
+]
