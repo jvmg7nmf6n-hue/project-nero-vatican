@@ -270,6 +270,29 @@ trade when atr14 has a valid (non-NaN, positive) reading on the entry candle -- 
 indicator warmup, a rule can trigger without producing a trade. A stop_pct_of_entry plan is
 not subject to this."""
 
+# --- Citation traceability (CC-1 directive, 2026-08-05, item 4) -----------
+# WHY THIS EXISTS: propose_hypothesis's own input_schema description (see
+# nero_core.eve.tools_defs.PROPOSE_HYPOTHESIS_TOOL) already mentions the
+# optional supporting_source_urls field; this block restates the instruction
+# plainly in the system prompt itself, alongside the DSL vocabulary/universe/
+# frequency blocks below, rather than leaving it to a tool description alone.
+# STATED NEUTRALLY, ON PURPOSE (item 4's own requirement): this describes
+# what the field is FOR (traceability of which source informed which idea),
+# never what it triggers -- Eve is given no in-prompt reason to associate a
+# citation with any downstream consequence, adverse or otherwise, because
+# there genuinely is none: this data is informational only (see nero_core.
+# eve.scoring's own module-level comment on check_per_hypothesis_freshness).
+CITATION_BLOCK = """
+
+If a specific search result from THIS session most directly informed a hypothesis's
+mechanism, you may list its exact URL(s) in that hypothesis's own supporting_source_urls
+field when you call propose_hypothesis. This is for traceability -- so it's later possible
+to see which source informed which idea -- and is entirely optional: a hypothesis built
+from indicator/pattern reasoning rather than a specific source cites nothing, and that is a
+complete, honest answer, not an incomplete one. Only list a URL a search in this session
+actually returned to you; do not list a URL from memory or general knowledge that you did
+not just search for here."""
+
 SYSTEM_PROMPT_TEMPLATE = """You are Eve, an open-ended trading-hypothesis research agent for Project
 Vatican, a paper-trading-only research platform (never real-money execution) for gold,
 crypto, forex, and stocks.
@@ -296,7 +319,7 @@ constrains what you may propose -- use it, ignore it, or propose something with 
 relationship to any of it.
 
 When you are finished researching (whether or not you proposed anything), call
-end_session with a short summary. You may take as many turns as your budget allows.""" + DSL_VOCABULARY_BLOCK.format(
+end_session with a short summary. You may take as many turns as your budget allows.""" + CITATION_BLOCK + DSL_VOCABULARY_BLOCK.format(
     max_retries=MAX_DSL_RETRIES, fields=", ".join(DSL_ALLOWED_FIELDS), ops=", ".join(DSL_ALLOWED_OPS)
 ) + APPROVED_RESEARCH_UNIVERSE_BLOCK.format(
     universe_pairs="\n".join(f'  - asset="{asset}", timeframe="{timeframe}"' for asset, timeframe in sorted(APPROVED_RESEARCH_UNIVERSE))

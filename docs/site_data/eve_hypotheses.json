@@ -57,7 +57,14 @@
     "candle_data_source": null,
     "candle_row_count": null,
     "fdr_survives_oos": null,
-    "fdr_survives_is": null
+    "fdr_survives_is": null,
+    "supporting_source_urls_validated": null,
+    "supporting_source_urls_invalid": null,
+    "citation_status": "unscoreable_pre_citation",
+    "per_hypothesis_freshness": {
+      "result": "unscoreable_pre_citation",
+      "hypothesis_name": null
+    }
   },
   {
     "schema_version": 1,
@@ -118,7 +125,14 @@
     "candle_data_source": null,
     "candle_row_count": null,
     "fdr_survives_oos": null,
-    "fdr_survives_is": null
+    "fdr_survives_is": null,
+    "supporting_source_urls_validated": null,
+    "supporting_source_urls_invalid": null,
+    "citation_status": "unscoreable_pre_citation",
+    "per_hypothesis_freshness": {
+      "result": "unscoreable_pre_citation",
+      "hypothesis_name": null
+    }
   },
   {
     "schema_version": 1,
@@ -187,7 +201,14 @@
     "candle_data_source": null,
     "candle_row_count": null,
     "fdr_survives_oos": null,
-    "fdr_survives_is": null
+    "fdr_survives_is": null,
+    "supporting_source_urls_validated": null,
+    "supporting_source_urls_invalid": null,
+    "citation_status": "unscoreable_pre_citation",
+    "per_hypothesis_freshness": {
+      "result": "unscoreable_pre_citation",
+      "hypothesis_name": null
+    }
   },
   {
     "schema_version": 1,
@@ -250,7 +271,14 @@
     "candle_data_source": null,
     "candle_row_count": null,
     "fdr_survives_oos": null,
-    "fdr_survives_is": null
+    "fdr_survives_is": null,
+    "supporting_source_urls_validated": null,
+    "supporting_source_urls_invalid": null,
+    "citation_status": "unscoreable_pre_citation",
+    "per_hypothesis_freshness": {
+      "result": "unscoreable_pre_citation",
+      "hypothesis_name": null
+    }
   },
   {
     "schema_version": 1,
@@ -320,7 +348,14 @@
     "candle_data_source": "refused",
     "candle_row_count": null,
     "fdr_survives_oos": null,
-    "fdr_survives_is": null
+    "fdr_survives_is": null,
+    "supporting_source_urls_validated": null,
+    "supporting_source_urls_invalid": null,
+    "citation_status": "unscoreable_pre_citation",
+    "per_hypothesis_freshness": {
+      "result": "unscoreable_pre_citation",
+      "hypothesis_name": "ADX-Confirmed Volatility Breakout (BB Upper/Lower Break with Trend-Strength Filter)"
+    }
   },
   {
     "schema_version": 1,
@@ -371,7 +406,14 @@
     "candle_data_source": "refused",
     "candle_row_count": null,
     "fdr_survives_oos": null,
-    "fdr_survives_is": null
+    "fdr_survives_is": null,
+    "supporting_source_urls_validated": null,
+    "supporting_source_urls_invalid": null,
+    "citation_status": "unscoreable_pre_citation",
+    "per_hypothesis_freshness": {
+      "result": "unscoreable_pre_citation",
+      "hypothesis_name": "Weekly Precious-Metals Extreme Z-Score Reversion with RSI Confirmation"
+    }
   },
   {
     "schema_version": 1,
@@ -421,7 +463,14 @@
     "candle_data_source": "refused",
     "candle_row_count": null,
     "fdr_survives_oos": null,
-    "fdr_survives_is": null
+    "fdr_survives_is": null,
+    "supporting_source_urls_validated": null,
+    "supporting_source_urls_invalid": null,
+    "citation_status": "unscoreable_pre_citation",
+    "per_hypothesis_freshness": {
+      "result": "unscoreable_pre_citation",
+      "hypothesis_name": "Weekly Precious-Metals Extreme Z-Score Reversion with RSI Confirmation (corrected DSL syntax)"
+    }
   },
   {
     "schema_version": 1,
@@ -471,7 +520,14 @@
     "candle_data_source": "refused",
     "candle_row_count": null,
     "fdr_survives_oos": null,
-    "fdr_survives_is": null
+    "fdr_survives_is": null,
+    "supporting_source_urls_validated": null,
+    "supporting_source_urls_invalid": null,
+    "citation_status": "unscoreable_pre_citation",
+    "per_hypothesis_freshness": {
+      "result": "unscoreable_pre_citation",
+      "hypothesis_name": "Silver Weekly Extreme Z-Score Reversion with RSI Confirmation"
+    }
   },
   {
     "schema_version": 1,
@@ -526,7 +582,14 @@
     "candle_data_source": "refused",
     "candle_row_count": null,
     "fdr_survives_oos": null,
-    "fdr_survives_is": null
+    "fdr_survives_is": null,
+    "supporting_source_urls_validated": null,
+    "supporting_source_urls_invalid": null,
+    "citation_status": "unscoreable_pre_citation",
+    "per_hypothesis_freshness": {
+      "result": "unscoreable_pre_citation",
+      "hypothesis_name": "Overextended-Trend Exhaustion Fade on Mega-Cap Tech Daily Charts"
+    }
   },
   {
     "schema_version": 1,
@@ -596,7 +659,14 @@
     "candle_data_source": "refused",
     "candle_row_count": null,
     "fdr_survives_oos": null,
-    "fdr_survives_is": null
+    "fdr_survives_is": null,
+    "supporting_source_urls_validated": null,
+    "supporting_source_urls_invalid": null,
+    "citation_status": "unscoreable_pre_citation",
+    "per_hypothesis_freshness": {
+      "result": "unscoreable_pre_citation",
+      "hypothesis_name": "USD/JPY Daily MA-Stack Confluence Trend Continuation"
+    }
   },
   {
     "schema_version": 1,
@@ -645,7 +715,14 @@
     "candle_data_source": "research_export",
     "candle_row_count": 4400,
     "fdr_survives_oos": null,
-    "fdr_survives_is": false
+    "fdr_survives_is": false,
+    "supporting_source_urls_validated": null,
+    "supporting_source_urls_invalid": null,
+    "citation_status": "unscoreable_pre_citation",
+    "per_hypothesis_freshness": {
+      "result": "unscoreable_pre_citation",
+      "hypothesis_name": "PAXG_PEG_REVERSION"
+    }
   },
   {
     "schema_version": 1,
@@ -708,7 +785,14 @@
     "candle_row_count": 4400,
     "fdr_survives_oos": null,
     "excluded_from_fdr_family_reason": "self_derivative",
-    "fdr_survives_is": null
+    "fdr_survives_is": null,
+    "supporting_source_urls_validated": null,
+    "supporting_source_urls_invalid": null,
+    "citation_status": "unscoreable_pre_citation",
+    "per_hypothesis_freshness": {
+      "result": "unscoreable_pre_citation",
+      "hypothesis_name": "BTC_VOL_EXPANSION_BREAKOUT"
+    }
   },
   {
     "schema_version": 1,
@@ -765,7 +849,14 @@
     "candle_row_count": 4400,
     "fdr_survives_oos": null,
     "fdr_survives_is": null,
-    "excluded_from_fdr_family_reason": "self_derivative"
+    "excluded_from_fdr_family_reason": "self_derivative",
+    "supporting_source_urls_validated": null,
+    "supporting_source_urls_invalid": null,
+    "citation_status": "unscoreable_pre_citation",
+    "per_hypothesis_freshness": {
+      "result": "unscoreable_pre_citation",
+      "hypothesis_name": "SOL_TREND_ALIGNED_PULLBACK"
+    }
   },
   {
     "schema_version": 1,
@@ -828,7 +919,14 @@
     "candle_data_source": "research_export",
     "candle_row_count": 4400,
     "fdr_survives_oos": null,
-    "fdr_survives_is": null
+    "fdr_survives_is": null,
+    "supporting_source_urls_validated": null,
+    "supporting_source_urls_invalid": null,
+    "citation_status": "unscoreable_pre_citation",
+    "per_hypothesis_freshness": {
+      "result": "unscoreable_pre_citation",
+      "hypothesis_name": "ETH_BIDIRECTIONAL_ZSCORE_FADE"
+    }
   },
   {
     "schema_version": 1,
@@ -877,7 +975,14 @@
     "candle_data_source": "research_export",
     "candle_row_count": 4400,
     "fdr_survives_oos": false,
-    "fdr_survives_is": true
+    "fdr_survives_is": true,
+    "supporting_source_urls_validated": null,
+    "supporting_source_urls_invalid": null,
+    "citation_status": "unscoreable_pre_citation",
+    "per_hypothesis_freshness": {
+      "result": "unscoreable_pre_citation",
+      "hypothesis_name": "BTC_MOMENTUM_IGNITION"
+    }
   },
   {
     "schema_version": 1,
@@ -945,6 +1050,13 @@
     "candle_data_source": "research_export",
     "candle_row_count": 4400,
     "fdr_survives_oos": null,
-    "fdr_survives_is": false
+    "fdr_survives_is": false,
+    "supporting_source_urls_validated": null,
+    "supporting_source_urls_invalid": null,
+    "citation_status": "unscoreable_pre_citation",
+    "per_hypothesis_freshness": {
+      "result": "unscoreable_pre_citation",
+      "hypothesis_name": "PAXG_PREMIUM_FADE_DYNAMIC_EXIT"
+    }
   }
 ]

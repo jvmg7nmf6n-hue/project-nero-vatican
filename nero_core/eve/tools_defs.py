@@ -80,7 +80,12 @@ PROPOSE_HYPOTHESIS_TOOL: dict = {
         "with up to 2 chances to correct it before it's scored. If it doesn't fit that DSL at all, it "
         "is still recorded and scored honestly as untestable-by-DSL -- that is useful information "
         "about what this platform's current tooling can and can't check, not a penalty -- so describe "
-        "whatever shape actually captures your idea rather than forcing it into the DSL."
+        "whatever shape actually captures your idea rather than forcing it into the DSL. If you'd "
+        "like, include a 'supporting_source_urls' key (a list of URL strings) naming the specific "
+        "search-result URLs from this session's own web searches that most directly informed this "
+        "hypothesis's mechanism -- this is for traceability of which source informed which idea, "
+        "purely optional, and an empty or omitted list is a completely normal, honest answer for a "
+        "hypothesis built from indicator/pattern reasoning rather than a specific source."
     ),
     "input_schema": {
         "type": "object",

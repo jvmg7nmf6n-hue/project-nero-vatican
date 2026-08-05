@@ -719,3 +719,191 @@ def check_freshness_disqualification(session_record: dict, session_started_at: d
                 ),
             })
     return flags
+
+
+# CC-1 directive (2026-08-05), items 1+2 -- PER-HYPOTHESIS CITATION-BASED
+# FRESHNESS ATTRIBUTION. check_freshness_disqualification above stays exactly
+# as it was (session-wide, informational, item 7a's audit fields unchanged) --
+# this is a SIBLING, not a replacement, because check_freshness_
+# disqualification's own session log has no structural way to link a search
+# result to the specific propose_hypothesis call it may have informed (see
+# its own PER-HYPOTHESIS ATTRIBUTION LIMITATION docstring). The correction
+# directive's own finding: a causally-safe per-hypothesis rule ("a hypothesis
+# may only be affected by searches preceding it") still yields 100%, because
+# Eve front-loads all searching before proposing anything -- every hypothesis
+# in a search-then-propose session follows every search. Rather than
+# constrain Eve's research process to make ordering meaningful, this instead
+# has Eve explicitly DECLARE which of this session's own real search results
+# support each hypothesis (raw_hypothesis's optional `supporting_source_urls`,
+# see nero_core.eve.tools_defs.PROPOSE_HYPOTHESIS_TOOL and hypothesis_shapes.
+# build_hypothesis_record's own `supporting_source_urls` field) -- freshness
+# risk is then attributed ONLY to those cited sources, never to every search
+# the session happened to run.
+#
+# STRICTLY INFORMATIONAL, LIKE check_freshness_disqualification -- NEVER
+# CONSULTED by admit_to_trial (nero_core.research_agent.trial) or
+# apply_fdr_correction below. There is no code path from this section into
+# either. See the module docstring above and this branch's own closing
+# report for the documented incentive-problem analysis (the proposer and the
+# cited evidence are the same party) that is the reason this must stay
+# informational until a separate, deliberate decision reopens it.
+CITATION_STATUS_NO_SEARCHES = "no_searches_in_session"
+CITATION_STATUS_NO_SOURCES_CLAIMED = "no_sources_claimed"
+CITATION_STATUS_CITED = "cited"
+# ONLY EVER SET BY THE ONE-TIME BACKFILL MIGRATION (tools/backfill_eve_
+# pre_citation_status.py), directly on already-persisted eve_hypotheses.json
+# records that predate this whole mechanism -- classify_citation_status
+# below NEVER returns this value itself. Item 5's own requirement: a record
+# with no supporting_source_urls must not silently read as "checked, found
+# nothing to cite" (CITATION_STATUS_NO_SOURCES_CLAIMED) -- that would be a
+# false pass, indistinguishable from a hypothesis that genuinely had this
+# question put to it and answered honestly with nothing.
+CITATION_STATUS_UNSCOREABLE_PRE_CITATION = "unscoreable_pre_citation"
+
+PER_HYPOTHESIS_FRESHNESS_NOTHING_TO_CHECK = "nothing_to_check"
+PER_HYPOTHESIS_FRESHNESS_CHECKED_CLEAN = "checked_clean"
+PER_HYPOTHESIS_FRESHNESS_CHECKED_DISQUALIFIED = "checked_disqualified"
+PER_HYPOTHESIS_FRESHNESS_UNSCOREABLE_PRE_CITATION = "unscoreable_pre_citation"
+
+
+def _session_search_url_index(session_record: dict, reference: datetime | None) -> dict[str, dict]:
+    """First-seen {url: {turn_index, url, page_age, pub_date}} across the
+    whole session -- the set of URLs a citation is validated against (item
+    1: 'every cited URL must appear in this session's own web_search_tool_
+    result blocks'). Reuses _iter_web_search_results, the SAME traversal
+    check_freshness_disqualification/tag_lookahead_risk already use, so this
+    can never silently disagree with them on what counts as a real search
+    result."""
+    index: dict[str, dict] = {}
+    for result in _iter_web_search_results(session_record, reference):
+        url = result.get("url")
+        if url and url not in index:
+            index[url] = result
+    return index
+
+
+def validate_supporting_source_urls(
+    claimed_urls: list[str], session_record: dict, session_started_at: datetime,
+) -> tuple[list[str], list[str]]:
+    """Splits `claimed_urls` (a hypothesis record's own top-level
+    supporting_source_urls) into (valid, invalid) against this session's real
+    search results. A cited URL absent from the session's own web_search_
+    tool_result blocks is a HARD VALIDATION ERROR (item 1's own words), never
+    a silent pass -- returned in the second list so the caller can surface it
+    loudly (see nero_core.eve.pipeline's own fail-loud handling), not drop it
+    unnoticed."""
+    reference = _session_relative_reference(session_record) or session_started_at
+    index = _session_search_url_index(session_record, reference)
+    claimed = [u for u in (claimed_urls or []) if isinstance(u, str)]
+    valid = [u for u in claimed if u in index]
+    invalid = [u for u in claimed if u not in index]
+    return valid, invalid
+
+
+def classify_citation_status(record: dict, session_record: dict, session_started_at: datetime) -> dict:
+    """Item 1's three genuinely different situations, kept distinguishable:
+    CITATION_STATUS_NO_SEARCHES (the session performed no web searches at
+    all -- nothing was ever available to cite), CITATION_STATUS_NO_SOURCES_
+    CLAIMED (searches happened, but this hypothesis's own validated
+    supporting_source_urls is empty), or CITATION_STATUS_CITED (one or more
+    validated URLs). Never returns CITATION_STATUS_UNSCOREABLE_PRE_CITATION
+    -- that status exists only for the one-time backfill migration to stamp
+    directly onto already-persisted pre-mechanism records; a record scored
+    through this function by definition has the mechanism available to it."""
+    claimed = record.get("supporting_source_urls")
+    reference = _session_relative_reference(session_record) or session_started_at
+    index = _session_search_url_index(session_record, reference)
+    valid_urls, invalid_urls = validate_supporting_source_urls(claimed, session_record, session_started_at)
+    if not index:
+        status = CITATION_STATUS_NO_SEARCHES
+    elif not valid_urls:
+        status = CITATION_STATUS_NO_SOURCES_CLAIMED
+    else:
+        status = CITATION_STATUS_CITED
+    return {
+        "citation_status": status,
+        "supporting_source_urls_validated": valid_urls,
+        "supporting_source_urls_invalid": invalid_urls,
+    }
+
+
+def check_per_hypothesis_freshness(record: dict, session_record: dict, session_started_at: datetime) -> dict:
+    """CC-1 directive item 2: freshness risk attributed ONLY to `record`'s
+    own validated supporting_source_urls -- unlike check_freshness_
+    disqualification (session-wide), this can genuinely clear a hypothesis
+    that cited nothing risky even in a session where some OTHER search
+    result would trip the session-wide check. Reuses the exact same Variant C
+    rule (FRESHNESS_DISQUALIFICATION_WINDOW_DAYS/_RULE) against each cited
+    URL's own parsed publication date -- not a second, independently-tuned
+    threshold.
+
+    Where the hypothesis cites nothing (CITATION_STATUS_NO_SEARCHES or
+    CITATION_STATUS_NO_SOURCES_CLAIMED), the honest result is "nothing to
+    check" -- never reported as "clean" (which would imply a real check ran
+    and found no risk) and never silently absent.
+
+    STRICTLY INFORMATIONAL (see this section's own module-level comment
+    above) -- this result is never consulted by admit_to_trial or
+    apply_fdr_correction, exactly like check_freshness_disqualification's
+    own result."""
+    raw = record.get("raw_hypothesis") if isinstance(record.get("raw_hypothesis"), dict) else {}
+    hypothesis_name = raw.get("hypothesis_name")
+    citation = classify_citation_status(record, session_record, session_started_at)
+    status = citation["citation_status"]
+
+    if status in (CITATION_STATUS_NO_SEARCHES, CITATION_STATUS_NO_SOURCES_CLAIMED):
+        freshness = {"result": PER_HYPOTHESIS_FRESHNESS_NOTHING_TO_CHECK, "hypothesis_name": hypothesis_name}
+    else:
+        reference = _session_relative_reference(session_record) or session_started_at
+        index = _session_search_url_index(session_record, reference)
+        cutoff = session_started_at - timedelta(days=FRESHNESS_DISQUALIFICATION_WINDOW_DAYS)
+        offending = None
+        for url in citation["supporting_source_urls_validated"]:
+            entry = index.get(url)
+            pub_date = entry["pub_date"] if entry else None
+            if pub_date is not None and pub_date >= cutoff:
+                offending = {
+                    "offending_source_url": url,
+                    "parsed_pub_date": pub_date.isoformat(),
+                    "rule_fired": FRESHNESS_DISQUALIFICATION_RULE,
+                }
+                break
+        if offending is not None:
+            freshness = {"result": PER_HYPOTHESIS_FRESHNESS_CHECKED_DISQUALIFIED, "hypothesis_name": hypothesis_name, **offending}
+        else:
+            freshness = {"result": PER_HYPOTHESIS_FRESHNESS_CHECKED_CLEAN, "hypothesis_name": hypothesis_name}
+
+    return {**citation, "per_hypothesis_freshness": freshness}
+
+
+def apply_per_hypothesis_freshness(
+    scored_records: list[dict], session_record: dict, session_started_at: datetime | None,
+) -> list[dict]:
+    """Applies check_per_hypothesis_freshness to every record in
+    `scored_records` (all from the SAME session -- this is nero_core.eve.
+    pipeline's own per-session scoring pass, never a cross-session batch).
+    `session_started_at` is None (never a fabricated fallback) when the
+    session record's own started_at is missing/unparseable -- every record
+    gets an explicit "cannot evaluate" freshness result instead, the same
+    conservative-but-honest handling nero_core.eve.pipeline already applies
+    to check_freshness_disqualification for the same missing-clock case.
+    ALWAYS sets every field (never left absent), matching apply_freshness_
+    disqualification's own discipline."""
+    updated = []
+    for r in scored_records:
+        if session_started_at is None:
+            raw = r.get("raw_hypothesis") if isinstance(r.get("raw_hypothesis"), dict) else {}
+            attribution = {
+                "citation_status": None,
+                "supporting_source_urls_validated": [],
+                "supporting_source_urls_invalid": [],
+                "per_hypothesis_freshness": {
+                    "result": None,
+                    "hypothesis_name": raw.get("hypothesis_name"),
+                    "reason": "session_started_at missing/unparseable -- cannot evaluate",
+                },
+            }
+        else:
+            attribution = check_per_hypothesis_freshness(r, session_record, session_started_at)
+        updated.append({**r, **attribution})
+    return updated

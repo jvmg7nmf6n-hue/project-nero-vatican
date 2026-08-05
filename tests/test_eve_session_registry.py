@@ -108,6 +108,18 @@ class RegistryShapeTest(unittest.TestCase):
         self.assertTrue(provenance["any_countable_session_ran_while_binding_basis"])
         self.assertIn("homogeneous", provenance["homogeneity_confirmation"])
 
+    def test_per_hypothesis_citation_freshness_provenance_is_recorded(self) -> None:
+        # CC-1 directive (2026-08-05): per-hypothesis freshness attribution
+        # via explicit source citation. Mirrors the freshness_gate_reversal_
+        # provenance test's own style: this provenance entry must never
+        # silently disappear, and must state the mechanism stays strictly
+        # informational.
+        provenance = self.registry["pre_registration"]["per_hypothesis_citation_freshness_provenance"]
+        self.assertTrue(provenance["reason"])
+        self.assertIn("16", provenance["pre_citation_backfill"])
+        self.assertIn("unscoreable_pre_citation", provenance["pre_citation_backfill"])
+        self.assertIn("UNLEARNABLE", provenance["incentive_analysis"])
+
     def test_session_count_reconciliation_is_recorded_not_silently_changed(self) -> None:
         # 2026-08-03: the pre-registered session count was reconciled from an
         # earlier N=5 (docs/investigations/eve_engine_v1_report.md's original

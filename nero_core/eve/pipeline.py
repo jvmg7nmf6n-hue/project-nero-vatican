@@ -211,6 +211,7 @@ def _parse_session_started_at(session_record: dict) -> datetime | None:
 def _persist_session_record_amendments(
     session_record: dict, lookahead_flags: list[dict], n_self_derivative: int,
     freshness_flags: list | None = None, entire_session_disqualified: bool = False,
+    n_citation_validation_errors: int = 0,
 ) -> dict:
     """Amends the already-persisted session record with everything only
     knowable AFTER scoring runs -- lookahead-risk flags (spec 3.5), the
@@ -229,6 +230,12 @@ def _persist_session_record_amendments(
         **(session_record.get("ablation_metadata") or {}),
         "n_self_derivative_hypotheses": n_self_derivative,
         "n_freshness_disqualification_flags": len(freshness_flags or []),
+        # CC-1 directive (2026-08-05) item 1: count of hypotheses this
+        # session that cited at least one URL never actually returned by
+        # this session's own searches -- a hard validation error (item 1's
+        # own words), surfaced here (and via pipeline.run_pipeline's own
+        # stderr WARNING below) rather than silently dropped.
+        "n_citation_validation_errors": n_citation_validation_errors,
     }
     updated = {
         **session_record,
@@ -313,6 +320,13 @@ def run_pipeline(
             if session_started_at is not None else []
         )
         scored = scoring.apply_freshness_disqualification(scored, freshness_flags)
+        # CC-1 directive (2026-08-05) items 1+2: per-hypothesis citation-
+        # based freshness attribution -- a SIBLING to the session-wide check
+        # just above, not a replacement (see scoring.check_per_hypothesis_
+        # freshness's own module-level comment). Strictly informational,
+        # exactly like the session-wide check: never consulted by
+        # apply_fdr_correction below or by admit_to_trial.
+        scored = scoring.apply_per_hypothesis_freshness(scored, result.record, session_started_at)
         scored = scoring.apply_fdr_correction(scored, field="p_value_oos")
         scored = scoring.apply_fdr_correction(scored, field="p_value_is")
         _persist_scored_hypotheses(scored)
@@ -336,9 +350,27 @@ def run_pipeline(
                 f"window) -- this session contributes ZERO admissible data points this run.",
                 file=sys.stderr,
             )
+        # CC-1 directive (2026-08-05) item 1: FAIL LOUD on a citation that
+        # names a URL this session never actually searched -- a hard
+        # validation error, not a silent pass. One WARNING line per
+        # offending hypothesis, naming it and the exact invalid URL(s), so
+        # this is grep-able the same way item 7b's 100%-disqualified warning
+        # already is.
+        n_citation_validation_errors = sum(1 for r in scored if r.get("supporting_source_urls_invalid"))
+        for r in scored:
+            invalid_urls = r.get("supporting_source_urls_invalid")
+            if invalid_urls:
+                name = (r.get("raw_hypothesis") or {}).get("hypothesis_name")
+                print(
+                    f"WARNING: session {result.session_id} -- hypothesis {name!r} cited "
+                    f"supporting_source_urls not found in this session's own searches: {invalid_urls} "
+                    f"-- treated as a validation error, excluded from this hypothesis's validated citation list.",
+                    file=sys.stderr,
+                )
         _persist_session_record_amendments(
             result.record, lookahead_flags, n_self_derivative,
             freshness_flags=freshness_flags, entire_session_disqualified=entire_session_disqualified,
+            n_citation_validation_errors=n_citation_validation_errors,
         )
     except Exception as exc:
         eve_notify.send_failure(reason=f"crash: {exc.__class__.__name__}: {exc}")

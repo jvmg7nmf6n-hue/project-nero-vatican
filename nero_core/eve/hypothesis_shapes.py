@@ -69,6 +69,31 @@ def _inject_generated_at(raw_hypothesis: dict, now: datetime) -> dict:
     return {**raw_hypothesis, "generated_at": generated_at_iso}
 
 
+def _extract_supporting_source_urls(raw_hypothesis: dict) -> list[str]:
+    """CC-1 directive item 1: the record's own top-level, ALWAYS-PRESENT copy
+    of whatever `supporting_source_urls` Eve included inside her free-form
+    `hypothesis` object (nero_core.eve.tools_defs.PROPOSE_HYPOTHESIS_TOOL's
+    own description instructs her to, optionally). Deliberately NOT injected
+    into raw_hypothesis itself -- this module's own docstring already
+    documents generated_at as the ONE deliberate exception to "recorded
+    AS-IS," and a second silent exception there would quietly break that
+    guarantee (see test_eve_hypothesis_shapes.py's own verbatim-preservation
+    test). Normalizes Eve's omission of the key entirely (a hypothesis
+    derived purely from indicator/pattern reasoning cites nothing -- a
+    legitimate, common answer, not an error) to an empty list, and drops any
+    non-string entry rather than trusting an LLM-authored list's element
+    types blindly. Validating these URLs against this session's own real
+    search results (a hard requirement, not a suggestion) needs the WHOLE
+    session's search log, which isn't available at this per-turn,
+    per-hypothesis point -- see nero_core.eve.scoring.classify_citation_
+    status, run later as a separate pass, same convention as testability/
+    verdict_is below."""
+    urls = raw_hypothesis.get("supporting_source_urls")
+    if not isinstance(urls, list):
+        return []
+    return [u for u in urls if isinstance(u, str)]
+
+
 def build_hypothesis_record(raw_hypothesis: dict, session_id: str, turn_index: int, tool_use_id: str, now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     return {
@@ -83,6 +108,17 @@ def build_hypothesis_record(raw_hypothesis: dict, session_id: str, turn_index: i
         "verdict_oos": None,
         "verdict_combined": None,
         "contamination_tags": [],
+        # CC-1 directive items 1+2: Eve's own claimed sources (always a
+        # list, see _extract_supporting_source_urls above) plus the
+        # citation-validation/freshness-attribution fields that
+        # nero_core.eve.scoring fills in later, once this session's full
+        # search log is available -- start null/UNSCORED here, exactly like
+        # testability/verdict_is above, never faked before scoring runs.
+        "supporting_source_urls": _extract_supporting_source_urls(raw_hypothesis),
+        "citation_status": None,
+        "supporting_source_urls_validated": None,
+        "supporting_source_urls_invalid": None,
+        "per_hypothesis_freshness": None,
         # CC-1 directive, items 1+2: origin_agent is a fixed literal (Eve's
         # own records are never Adam-sourced) -- Adam's counterpart is
         # nero_core.research_agent.hypothesis_gen._build_record. origin_chain
