@@ -556,3 +556,62 @@ export interface FactoryLoopStatusExport {
   graveyard: FactoryLoopGraveyardStatus;
   repair: FactoryLoopRepairStatus;
 }
+
+// --- Eve (nero_core/eve/) -- CC-1 Master Directive Phase 2. All three files
+// below already live under docs/site_data/ (confirmed directly against
+// nero_core/eve/storage.py's own DEFAULT_HYPOTHESES_PATH/
+// DEFAULT_BUDGET_LEDGER_PATH/EVE_SESSIONS_DIR), so fetchJson reaches them
+// with no export step -- unlike eve_sessions/<id>.json (also under
+// docs/site_data/, but one file PER session, not a single list), which this
+// phase deliberately does not fetch: eve_session_registry.json's own
+// classification/reason text already carries everything Phase 2's Session
+// Health panel needs (see this branch's own closing report for the full
+// plumbing finding). Deliberately minimal -- only the fields this site
+// reads, not every real field these files carry.
+
+export interface EveRawHypothesis {
+  hypothesis_name?: string;
+  mechanism?: string;
+  asset?: string;
+  timeframe?: string;
+}
+
+export interface EveHypothesisRecord {
+  session_id: string;
+  raw_hypothesis: EveRawHypothesis;
+  testability: string;
+  verdict_combined: string | null;
+  frequency_classification: string | null;
+  measured_trades_per_year: number | null;
+  contamination_tags: Array<{ tag: string }>;
+}
+
+export interface EveSessionRegistryEntry {
+  session_id: string;
+  counts_toward_pre_registered_8: boolean;
+  classification: string;
+  reason: string;
+  session_label?: string;
+}
+
+export interface EveSessionRegistryPreRegistration {
+  sessions_budgeted: string;
+  eve_must_clear: string;
+  kill_criterion: string;
+}
+
+export interface EveSessionRegistryExport {
+  pre_registration: EveSessionRegistryPreRegistration;
+  sessions: EveSessionRegistryEntry[];
+  next_countable_session_number: number;
+}
+
+export interface EveBudgetLedgerEntry {
+  session_id: string;
+  status: "reserved" | "actual" | "released";
+  actual_cost_usd: number | null;
+  projected_cost_usd: number;
+  month: string;
+  crash_reason?: string;
+  crash_marked_at?: string;
+}

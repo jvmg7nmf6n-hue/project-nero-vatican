@@ -5,6 +5,9 @@ import type {
   AgentPerformanceExport,
   AgentRunSummary,
   AgentTestResult,
+  EveBudgetLedgerEntry,
+  EveHypothesisRecord,
+  EveSessionRegistryExport,
   FactoryLoopStatusExport,
   FailurePatternEntry,
   GraveyardEntry,
@@ -138,6 +141,22 @@ export function fetchAgentRunSummaries(): Promise<AgentRunSummary[] | null> {
 // fallback, never treat null as "down."
 export function fetchFactoryLoopStatus(): Promise<FactoryLoopStatusExport | null> {
   return fetchJson<FactoryLoopStatusExport>("factory_loop_status.json");
+}
+
+// CC-1 Master Directive, Phase 2.1: Eve's own three fetchable files -- see
+// EveHypothesisRecord/EveSessionRegistryExport/EveBudgetLedgerEntry's own
+// docstring in lib/types.ts for the plumbing finding (all three already
+// live under docs/site_data/, no export step needed).
+export function fetchEveHypotheses(): Promise<EveHypothesisRecord[] | null> {
+  return fetchJson<EveHypothesisRecord[]>("eve_hypotheses.json");
+}
+
+export function fetchEveSessionRegistry(): Promise<EveSessionRegistryExport | null> {
+  return fetchJson<EveSessionRegistryExport>("eve_session_registry.json");
+}
+
+export function fetchEveBudgetLedger(): Promise<EveBudgetLedgerEntry[] | null> {
+  return fetchJson<EveBudgetLedgerEntry[]>("eve_budget_ledger.json");
 }
 
 export type CandleFetchResult =
