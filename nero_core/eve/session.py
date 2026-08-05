@@ -88,6 +88,10 @@ MAX_DSL_RETRIES = 2
 TERMINATION_END_SESSION = "end_session_called"
 TERMINATION_MAX_TURNS = "max_turns_safety_cap_reached"
 TERMINATION_REJECTED_BEFORE_TOKEN_PROCESSING = "rejected_before_token_processing"
+# CC-1 Master Directive, Phase 1.1b: a mid-session crash (e.g. a ReadTimeout
+# escaping llm_client.call_turn -- see run_session's own outer try/except
+# below) that is NOT one of the two handled outcomes above.
+TERMINATION_CRASHED = "crashed_mid_session"
 
 # --- DSL vocabulary (spec item 2, post-Session-0 fix) -----------------------
 # REINLINED from nero_core.research_agent.rule_dsl.ALLOWED_FIELDS/ALLOWED_OPS
@@ -342,7 +346,12 @@ class SessionResult:
     record: dict
 
 
-def _new_session_id(now: datetime) -> str:
+def new_session_id(now: datetime) -> str:
+    """Public (renamed from _new_session_id, CC-1 Master Directive Phase
+    1.1d): nero_core.eve.pipeline now needs to mint a session_id BEFORE
+    calling run_session, so it can name the session in a crash notification
+    even when run_session itself never returns a SessionResult to read one
+    from (see pipeline.run_pipeline's own docstring update)."""
     return f"eve-{now.strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:8]}"
 
 
@@ -480,6 +489,7 @@ def run_session(
     stub: bool | None = None,
     max_turns: int = MAX_TURNS,
     llm_params: llm_client.LlmParameters = llm_client.DEFAULT_LLM_PARAMETERS,
+    session_id: str | None = None,
 ) -> SessionResult:
     """Runs one full Eve session end to end: builds context, loops turns
     (budget-checking every single one, per Phase 1), persists the reasoning
@@ -487,9 +497,16 @@ def run_session(
     check nero_core.eve.config.is_enabled() itself -- that is
     nero_core.eve.pipeline's job (matching Adam's own convention: the
     kill-switch check lives in the orchestrating entrypoint, not the
-    generation module it gates)."""
+    generation module it gates).
+
+    `session_id` (CC-1 Master Directive Phase 1.1d, added): optional --
+    None (the default, and every existing caller/test's behavior) mints a
+    fresh one via new_session_id(now), exactly as before. nero_core.eve.
+    pipeline now passes one in explicitly, minted BEFORE this call, so it
+    can name the session in a crash notification even in the case this
+    function never returns at all (see Phase 1.1b below)."""
     now = now or datetime.now(timezone.utc)
-    session_id = _new_session_id(now)
+    session_id = session_id or new_session_id(now)
 
     context = eve_context.load_context()
     system_blocks = llm_client.build_system_blocks(SYSTEM_PROMPT_TEMPLATE)
@@ -507,99 +524,180 @@ def run_session(
     last_usage: dict | None = None
     session_spent = 0.0
     terminated_because = TERMINATION_MAX_TURNS
+    # CC-1 Master Directive, Phase 1.1b: visible to the crash handler below
+    # even in the (never-realistic but defensive) case the loop never runs
+    # a single iteration.
+    turn_index = -1
 
-    for turn_index in range(max_turns):
-        new_turn_text = llm_client.extract_text(messages[-1]["content"])
-        current_history_tokens, estimation_method = llm_client.estimate_next_call_input_tokens(last_usage, new_turn_text)
-        projected_cost = bl.project_call_cost_usd(
-            current_history_tokens=current_history_tokens,
-            expected_tool_result_tokens=EXPECTED_TOOL_RESULT_TOKENS,
-            max_tokens=llm_params.claude_max_tokens,
-            max_searches_per_turn=MAX_SEARCHES_PER_TURN,
-        )
+    # CC-1 Master Directive, Phase 1.1b: wraps the ENTIRE turn loop. A
+    # `break` below (budget refusal, RejectedBeforeTokenProcessingError,
+    # end_session, max_turns) is normal, expected termination -- it is not
+    # an exception, so it falls through to the normal end-of-function record
+    # below untouched. This `except` is reached ONLY by a genuine escaping
+    # exception (a ReadTimeout from llm_client.call_turn is the confirmed
+    # real case -- see this branch's own closing report -- but this is
+    # deliberately broad, not narrowed to that one exception type, since any
+    # other unexpected mid-loop failure deserves the same visible artifact).
+    try:
+        for turn_index in range(max_turns):
+            new_turn_text = llm_client.extract_text(messages[-1]["content"])
+            current_history_tokens, estimation_method = llm_client.estimate_next_call_input_tokens(last_usage, new_turn_text)
+            projected_cost = bl.project_call_cost_usd(
+                current_history_tokens=current_history_tokens,
+                expected_tool_result_tokens=EXPECTED_TOOL_RESULT_TOKENS,
+                max_tokens=llm_params.claude_max_tokens,
+                max_searches_per_turn=MAX_SEARCHES_PER_TURN,
+            )
 
-        ledger_entries = bl.load_ledger()
-        check = bl.pre_call_check(ledger_entries, session_id=session_id, projected_cost_usd=projected_cost, now=now)
-        if not check.allowed:
-            terminated_because = bl.REASON_MONTH_EXHAUSTED if check.reason.startswith(bl.REASON_MONTH_EXHAUSTED) else bl.REASON_SESSION_EXHAUSTED
+            ledger_entries = bl.load_ledger()
+            check = bl.pre_call_check(ledger_entries, session_id=session_id, projected_cost_usd=projected_cost, now=now)
+            if not check.allowed:
+                terminated_because = bl.REASON_MONTH_EXHAUSTED if check.reason.startswith(bl.REASON_MONTH_EXHAUSTED) else bl.REASON_SESSION_EXHAUSTED
+                turns_log.append({
+                    "turn_index": turn_index,
+                    "refused": True,
+                    "reason": check.reason,
+                    "projected_cost_usd": projected_cost,
+                    "estimation_method": estimation_method,
+                })
+                break
+
+            reserved = bl.reserve_entry(session_id, turn_index, projected_cost, now=now)
+            bl.append_entry(reserved)
+
+            try:
+                result = llm_client.call_turn(messages, system_blocks, tools, api_key, llm_params, stub=stub, call_index=turn_index)
+            except llm_client.RejectedBeforeTokenProcessingError as exc:
+                # Confirmed $0 real cost (401/403/429 -- rejected before the
+                # model ever saw a token, see llm_client's own docstring) --
+                # RELEASE this reservation rather than leaving it "reserved"
+                # forever, which would otherwise permanently count a real-money
+                # projected cost against a call that spent nothing. Stop
+                # immediately rather than repeating the same doomed call on
+                # every remaining turn -- Adam hit this identical failure once
+                # already (commit 4189f6b: "3 doomed calls where 1 would have
+                # sufficed").
+                released = bl.release_entry(reserved, reason=f"HTTP {exc.status_code}: {exc}", now=now)
+                bl.update_entry(reserved["entry_id"], released)
+                terminated_because = TERMINATION_REJECTED_BEFORE_TOKEN_PROCESSING
+                turns_log.append({
+                    "turn_index": turn_index,
+                    "rejected_before_token_processing": True,
+                    "status_code": exc.status_code,
+                    "reason": str(exc),
+                    "projected_cost_usd": projected_cost,
+                    "reservation_released": True,
+                })
+                break
+            except Exception as exc:
+                # CC-1 Master Directive, Phase 1.1c: any OTHER failure
+                # (ReadTimeout, ConnectionError, a 5xx, ...) -- the real cost
+                # is genuinely UNKNOWN, so this must NEVER be released as a
+                # confirmed $0 (see budget_ledger.mark_entry_crashed's own
+                # docstring, and RELEASE, THE THIRD OUTCOME in budget_ledger.
+                # py's module docstring -- release_entry is reserved
+                # exclusively for a confirmed-$0 401/403/429 rejection). The
+                # reservation stays "reserved" (still conservatively counted
+                # against budget ceilings -- correct), but is now ANNOTATED
+                # with why, so a future orphaned reservation is
+                # self-documenting instead of a silent mystery (three real
+                # ones already exist in that silent shape -- see this
+                # branch's own closing report). Re-raises so the outer
+                # except below writes a visible partial session record, and
+                # so nero_core.eve.pipeline's own crash notification still
+                # fires.
+                marked = bl.mark_entry_crashed(reserved, reason=f"{exc.__class__.__name__}: {exc}", now=now)
+                bl.update_entry(reserved["entry_id"], marked)
+                raise
+
+            reconciled = bl.reconcile_entry(reserved, result.usage, now=now)
+            bl.update_entry(reserved["entry_id"], reconciled)
+            session_spent += reconciled["actual_cost_usd"]
+            real_turns_taken += 1
+            n_searches += web_search_count(result.usage)
+
+            turn_text = llm_client.extract_text(result.content_blocks)
+            if turn_text:
+                all_assistant_text_parts.append(turn_text)
+
+            proposed, dsl_tool_result_text = _process_proposed_hypotheses(
+                result.content_blocks, session_id, turn_index, dsl_retry_counts, dsl_correction_log, now
+            )
+            hypothesis_records.extend(proposed)
+            # CC-1 Master Directive, Phase 1.1a: persist THIS turn's
+            # newly-finalized hypotheses immediately, not once at the very
+            # end -- a crash on a LATER turn must not erase hypotheses this
+            # session already produced. storage.append_json_list is already
+            # a no-op on an empty list (see its own docstring), so this is
+            # skipped cleanly on a turn that proposed nothing. The
+            # corresponding end-of-function bulk write is REMOVED below --
+            # writing it twice would double the file's own entries on a
+            # normal, uncrashed completion.
+            if proposed:
+                storage.append_json_list(storage.DEFAULT_HYPOTHESES_PATH, proposed)
+
             turns_log.append({
                 "turn_index": turn_index,
-                "refused": True,
-                "reason": check.reason,
-                "projected_cost_usd": projected_cost,
                 "estimation_method": estimation_method,
-            })
-            break
-
-        reserved = bl.reserve_entry(session_id, turn_index, projected_cost, now=now)
-        bl.append_entry(reserved)
-
-        try:
-            result = llm_client.call_turn(messages, system_blocks, tools, api_key, llm_params, stub=stub, call_index=turn_index)
-        except llm_client.RejectedBeforeTokenProcessingError as exc:
-            # Confirmed $0 real cost (401/403/429 -- rejected before the
-            # model ever saw a token, see llm_client's own docstring) --
-            # RELEASE this reservation rather than leaving it "reserved"
-            # forever, which would otherwise permanently count a real-money
-            # projected cost against a call that spent nothing. Stop
-            # immediately rather than repeating the same doomed call on
-            # every remaining turn -- Adam hit this identical failure once
-            # already (commit 4189f6b: "3 doomed calls where 1 would have
-            # sufficed").
-            released = bl.release_entry(reserved, reason=f"HTTP {exc.status_code}: {exc}", now=now)
-            bl.update_entry(reserved["entry_id"], released)
-            terminated_because = TERMINATION_REJECTED_BEFORE_TOKEN_PROCESSING
-            turns_log.append({
-                "turn_index": turn_index,
-                "rejected_before_token_processing": True,
-                "status_code": exc.status_code,
-                "reason": str(exc),
                 "projected_cost_usd": projected_cost,
-                "reservation_released": True,
+                "actual_cost_usd": reconciled["actual_cost_usd"],
+                "usage": reconciled["usage"],
+                "stop_reason": result.stop_reason,
+                "raw_response": result.raw_response,
             })
-            break
 
-        reconciled = bl.reconcile_entry(reserved, result.usage, now=now)
-        bl.update_entry(reserved["entry_id"], reconciled)
-        session_spent += reconciled["actual_cost_usd"]
-        real_turns_taken += 1
-        n_searches += web_search_count(result.usage)
+            messages.append(llm_client.assistant_message_from_result(result))
+            last_usage = result.usage
 
-        turn_text = llm_client.extract_text(result.content_blocks)
-        if turn_text:
-            all_assistant_text_parts.append(turn_text)
+            if llm_client.extract_tool_uses(result.content_blocks, END_SESSION_TOOL_NAME):
+                terminated_because = TERMINATION_END_SESSION
+                break
 
-        proposed, dsl_tool_result_text = _process_proposed_hypotheses(
-            result.content_blocks, session_id, turn_index, dsl_retry_counts, dsl_correction_log, now
-        )
-        hypothesis_records.extend(proposed)
-
-        turns_log.append({
-            "turn_index": turn_index,
-            "estimation_method": estimation_method,
-            "projected_cost_usd": projected_cost,
-            "actual_cost_usd": reconciled["actual_cost_usd"],
-            "usage": reconciled["usage"],
-            "stop_reason": result.stop_reason,
-            "raw_response": result.raw_response,
-        })
-
-        messages.append(llm_client.assistant_message_from_result(result))
-        last_usage = result.usage
-
-        if llm_client.extract_tool_uses(result.content_blocks, END_SESSION_TOOL_NAME):
-            terminated_because = TERMINATION_END_SESSION
-            break
-
-        # Real incident, 2026-08-03: this project's first-ever real (non-stub)
-        # multi-turn session crashed with a 400 here -- propose_hypothesis is a
-        # CLIENT-defined tool (unlike web_search, which Anthropic resolves
-        # server-side within the same turn), so the Messages API requires a
-        # tool_result for every propose_hypothesis call in the VERY NEXT
-        # message, or the next call is rejected outright. See llm_client.
-        # build_next_user_message's own docstring.
-        pending_proposals = llm_client.extract_tool_uses(result.content_blocks, PROPOSE_HYPOTHESIS_TOOL_NAME)
-        messages.append(llm_client.build_next_user_message(pending_proposals, dsl_tool_result_text))
+            # Real incident, 2026-08-03: this project's first-ever real (non-stub)
+            # multi-turn session crashed with a 400 here -- propose_hypothesis is a
+            # CLIENT-defined tool (unlike web_search, which Anthropic resolves
+            # server-side within the same turn), so the Messages API requires a
+            # tool_result for every propose_hypothesis call in the VERY NEXT
+            # message, or the next call is rejected outright. See llm_client.
+            # build_next_user_message's own docstring.
+            pending_proposals = llm_client.extract_tool_uses(result.content_blocks, PROPOSE_HYPOTHESIS_TOOL_NAME)
+            messages.append(llm_client.build_next_user_message(pending_proposals, dsl_tool_result_text))
+    except Exception as exc:
+        # CC-1 Master Directive, Phase 1.1b: a crash must leave a visible
+        # artifact, not vanish. Writes a PARTIAL session record -- this
+        # session's own real progress up to the crash (which turn it
+        # reached, its full turns_log, why it crashed) -- to the SAME
+        # session_record_path a normal completion would use, then
+        # re-raises so nero_core.eve.pipeline's own crash notification
+        # still fires and the process still exits non-zero. Every
+        # hypothesis this session proposed before the crash is ALREADY
+        # persisted (Phase 1.1a, per-turn, above) -- hypothesis_records is
+        # embedded here too, for a single-file view of what this session
+        # produced, not as the only copy.
+        crash_ended_at = datetime.now(timezone.utc)
+        partial_record = {
+            "schema_version": storage.SCHEMA_VERSION,
+            "session_id": session_id,
+            "started_at": now.isoformat(),
+            "ended_at": crash_ended_at.isoformat(),
+            "terminated_because": TERMINATION_CRASHED,
+            "crash_reason": f"{exc.__class__.__name__}: {exc}",
+            "turn_reached": turn_index,
+            "model_id": llm_params.claude_model,
+            "context_supplied": {
+                "tracked_pairs": [list(p) for p in context.tracked_pairs],
+                "graveyard_count": len(context.graveyard),
+                "adam_history_count": len(context.adam_history),
+            },
+            "turns": turns_log,
+            "hypothesis_records": hypothesis_records,
+            "dsl_correction_log": dsl_correction_log,
+            "session_spent_usd": session_spent,
+            "stub_mode": llm_client.is_stub_mode() if stub is None else stub,
+            "partial": True,
+        }
+        storage.atomic_write_json_dict(storage.session_record_path(session_id), partial_record)
+        raise
 
     ended_at = datetime.now(timezone.utc)
     all_assistant_text = "\n".join(all_assistant_text_parts)
@@ -654,7 +752,13 @@ def run_session(
         "stub_mode": llm_client.is_stub_mode() if stub is None else stub,
     }
 
-    storage.append_json_list(storage.DEFAULT_HYPOTHESES_PATH, hypothesis_records)
+    # CC-1 Master Directive, Phase 1.1a: the bulk
+    # storage.append_json_list(storage.DEFAULT_HYPOTHESES_PATH, hypothesis_records)
+    # call that used to live here is REMOVED -- every hypothesis this
+    # session produced was already persisted per-turn, above, as it was
+    # produced. Writing the full list again here would double-write every
+    # entry into eve_hypotheses.json on every normal (non-crashed)
+    # completion.
     storage.atomic_write_json_dict(storage.session_record_path(session_id), record)
 
     return SessionResult(

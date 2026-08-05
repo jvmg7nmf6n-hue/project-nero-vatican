@@ -297,8 +297,18 @@ def run_pipeline(
             eve_notify.send_failure(reason=reason, cost_hint_usd=0.0)
             return PipelineRunResult(enabled=True, reason=reason, preflight_ok=False)
 
+    # CC-1 Master Directive, Phase 1.1d: minted HERE, before run_session is
+    # ever called, so the crash notification below can always name the
+    # session -- even when run_session itself never returns (a crash mid-
+    # loop propagates the exception without a SessionResult to read a
+    # session_id from). `now` is resolved to the SAME real clock value used
+    # both to mint this id and to pass into run_session, so the id's own
+    # embedded timestamp and the session record's own started_at can never
+    # disagree by re-resolving "now" a second time at a different instant.
+    now = now or datetime.now(timezone.utc)
+    session_id = session.new_session_id(now)
     try:
-        result = session.run_session(api_key=api_key, stub=stub, now=now)
+        result = session.run_session(api_key=api_key, stub=stub, now=now, session_id=session_id)
 
         adam_history = eve_context.load_adam_history_verdict_stripped()
         eve_history = _load_eve_history_excluding_session(result.session_id)
@@ -373,7 +383,10 @@ def run_pipeline(
             n_citation_validation_errors=n_citation_validation_errors,
         )
     except Exception as exc:
-        eve_notify.send_failure(reason=f"crash: {exc.__class__.__name__}: {exc}")
+        # CC-1 Master Directive, Phase 1.1d: session_id is now always known
+        # here (minted above, before run_session was ever called) -- no
+        # longer omitted just because `result` was never assigned.
+        eve_notify.send_failure(reason=f"crash: {exc.__class__.__name__}: {exc}", session_id=session_id)
         raise
 
     if result.n_turns == 0:

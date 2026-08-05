@@ -465,6 +465,26 @@ class CrashNotifyTest(_IsolatedStorageTestCase):
         self.assertIn("RuntimeError", message)
         self.assertIn("boom", message)
 
+    def test_the_crash_notification_names_the_real_session_id_not_just_a_generic_message(self) -> None:
+        # CC-1 Master Directive, Phase 1.1d: before this fix, send_failure
+        # was called with no session_id at all (result.session_id was never
+        # readable, since `result` was never assigned when session.run_session
+        # itself raised) -- build_failure_message's own fallback header,
+        # "Eve session FAILED (before a session id was assigned)", is
+        # misleading in this exact case: a session_id WAS in fact minted
+        # (nero_core.eve.pipeline.run_pipeline now mints it before calling
+        # session.run_session at all), it just wasn't threaded through to
+        # the notification. Confirms that fallback text no longer appears.
+        with patch("nero_core.eve.session.run_session", side_effect=RuntimeError("boom")), \
+             patch.dict("os.environ", {EVE_ENABLED_ENV_VAR: "true"}), \
+             patch.object(eve_notify, "send_ntfy_notification", return_value=True) as mock_notify:
+            with self.assertRaises(RuntimeError):
+                pipeline.run_pipeline(api_key="fake", stub=True, now=datetime(2026, 8, 15, tzinfo=timezone.utc))
+
+        (message,), _ = mock_notify.call_args
+        self.assertNotIn("before a session id was assigned", message)
+        self.assertIn("Eve session eve-20260815", message)
+
 
 class BudgetExhaustedAtZeroTurnsNotifyTest(_IsolatedStorageTestCase):
     """A session that never got even one real turn (ledger already exhausted

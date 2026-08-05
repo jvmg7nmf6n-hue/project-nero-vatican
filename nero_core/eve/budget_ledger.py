@@ -269,6 +269,40 @@ def release_entry(entry: dict, reason: str, now: datetime | None = None) -> dict
     }
 
 
+def mark_entry_crashed(entry: dict, reason: str, now: datetime | None = None) -> dict:
+    """CC-1 Master Directive, Phase 1.1c: returns a NEW entry dict with
+    status LEFT UNCHANGED (a still-"reserved" entry stays "reserved",
+    still counted at its projected cost by _entry_cost_usd -- see
+    RESERVE-THEN-RECONCILE above). This is NOT a fourth cost-outcome state
+    -- it is an ANNOTATION on the existing "reserved" outcome, for a
+    generic failure (ReadTimeout, ConnectionError, a 5xx -- anything that
+    is NOT a confirmed-$0 401/403/429 rejection) whose real cost stays
+    genuinely unknown. release_entry() must NEVER be called for this case
+    -- see RELEASE, THE THIRD OUTCOME above, which is explicit that
+    release_entry is reserved exclusively for
+    llm_client.RejectedBeforeTokenProcessingError; calling it here would
+    silently claim a confirmed $0 for a call whose real cost this project
+    cannot actually confirm, which is exactly the under-counting direction
+    this module's own docstring says must never happen.
+
+    Before this function existed, an entry like this stayed "reserved"
+    forever with NO explanation attached anywhere -- correct in its cost
+    treatment, but silently unexplained (three real entries already exist
+    in this shape, orphaned by real ReadTimeout crashes -- see this
+    branch's own closing report for the reconciliation proposal). This
+    keeps the correct conservative accounting AND adds the missing
+    explanation, so a future reader can tell "still reserved, actively in
+    flight" from "still reserved because a crash left it here, and here's
+    why." Never mutates `entry` in place, matching reconcile_entry's/
+    release_entry's own convention."""
+    now = now or datetime.now(timezone.utc)
+    return {
+        **entry,
+        "crash_marked_at": now.isoformat(),
+        "crash_reason": reason,
+    }
+
+
 def load_ledger(path: Path | None = None) -> list[dict]:
     # `path` resolves storage.DEFAULT_BUDGET_LEDGER_PATH at CALL time, not at
     # function-definition time -- a `path: Path = storage.DEFAULT_...`

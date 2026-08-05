@@ -163,6 +163,32 @@ class RegistryMatchesRealLedgerTest(unittest.TestCase):
                 f"{session_id}'s own file and the registry disagree on whether it counts",
             )
 
+    def test_every_countable_session_has_at_least_one_hypothesis_record(self) -> None:
+        # CC-1 Master Directive, Phase 1.1e: the registry's own counting_rule
+        # field is prose in a hand-maintained JSON file -- "a session counts
+        # only once it produces at least one hypothesis that was actually
+        # eligible to be scored against real data." Nothing before this test
+        # code-enforced that rule; a human could type
+        # counts_toward_pre_registered_8=true for a session with zero real
+        # hypothesis records and nothing would catch it. This cross-checks
+        # every registry entry marked true against the REAL, committed
+        # docs/site_data/eve_hypotheses.json -- not the registry's own
+        # prose, and not the (possibly crashed, possibly file-less)
+        # eve_sessions/*.json record.
+        registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+        hypotheses = json.loads(storage.DEFAULT_HYPOTHESES_PATH.read_text(encoding="utf-8"))
+        hypothesis_session_ids = {r.get("session_id") for r in hypotheses if isinstance(r, dict)}
+
+        for entry in registry["sessions"]:
+            if entry.get("counts_toward_pre_registered_8"):
+                self.assertIn(
+                    entry["session_id"],
+                    hypothesis_session_ids,
+                    f"{entry['session_id']} is marked counts_toward_pre_registered_8=true but has "
+                    f"ZERO hypothesis records under that session_id in {storage.DEFAULT_HYPOTHESES_PATH} "
+                    f"-- a countable session must have produced at least one real, scoreable data point.",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

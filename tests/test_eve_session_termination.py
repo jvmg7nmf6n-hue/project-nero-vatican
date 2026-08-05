@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
+
+import requests
 
 from nero_core.eve import budget_ledger as bl
 from nero_core.eve import llm_client, session, storage
@@ -108,20 +111,19 @@ class BudgetRefusalTerminationTest(_IsolatedStorageTestCase):
 
     def test_session_stops_immediately_when_session_budget_already_exhausted(self) -> None:
         now = datetime(2026, 8, 15, tzinfo=timezone.utc)
-        session_id = session._new_session_id(now)
+        session_id = session.new_session_id(now)
         exhausting_entry = bl.reserve_entry(session_id=session_id, turn_index=0, projected_cost_usd=bl.DEFAULT_SESSION_BUDGET_USD, now=now)
         reconciled = bl.reconcile_entry(exhausting_entry, {"input_tokens": 1, "output_tokens": 1}, now=now)
         reconciled["actual_cost_usd"] = bl.DEFAULT_SESSION_BUDGET_USD
         bl.append_entry(reconciled, path=self.ledger_path)
 
-        # run_session mints its OWN session_id internally, so we can't force
-        # a collision directly -- instead, seed a ledger entry with a huge
-        # month-wide spend under a DIFFERENT unrelated session id AND leave
-        # the session's own budget comfortably free; this test instead
-        # verifies the session-budget branch via a monkeypatched session id
-        # generator so the pre-seeded entry actually matches.
-        with patch("nero_core.eve.session._new_session_id", return_value=session_id):
-            result = session.run_session(api_key="fake-key", stub=True, now=now)
+        # Seed a ledger entry with a huge session-wide spend under a
+        # pre-minted session_id, then pass that SAME session_id into
+        # run_session explicitly (CC-1 Master Directive Phase 1.1d added
+        # this parameter) so the pre-seeded entry actually matches -- no
+        # monkeypatching needed now that run_session accepts session_id
+        # directly.
+        result = session.run_session(api_key="fake-key", stub=True, now=now, session_id=session_id)
 
         self.assertEqual(result.terminated_because, bl.REASON_SESSION_EXHAUSTED)
         self.assertEqual(result.n_turns, 0)
@@ -185,6 +187,119 @@ class RejectedBeforeTokenProcessingTerminationTest(_IsolatedStorageTestCase):
 
         ledger_entries = bl.load_ledger(path=self.ledger_path)
         self.assertEqual(len(ledger_entries), 1)
+
+
+class CrashSafetyTest(_IsolatedStorageTestCase):
+    """CC-1 Master Directive, Phase 1.1: a mid-session ReadTimeout (or any
+    other exception escaping llm_client.call_turn that is NOT
+    RejectedBeforeTokenProcessingError) must not destroy the whole session.
+    Three real sessions were lost this exact way before this fix:
+    eve-20260803T074058Z-df7df0f9, eve-20260803T075102Z-2b98a5f0,
+    eve-20260804T015806Z-243d095f."""
+
+    def _successful_turn_result(self, tool_use_id: str, hypothesis_name: str) -> llm_client.LlmTurnResult:
+        content_blocks = [
+            {"type": "text", "text": "Proposing a hypothesis."},
+            {
+                "type": "tool_use",
+                "id": tool_use_id,
+                "name": "propose_hypothesis",
+                "input": {
+                    "hypothesis": {
+                        "hypothesis_name": hypothesis_name,
+                        "mechanism": "test fixture",
+                        "asset": "BTC",
+                        "timeframe": "1h",
+                        "structured_entry_rule": {"conditions": [{"field": "zscore20", "op": "lt", "value": -2.0}]},
+                        "structured_exit_plan": {"stop_atr_multiple": 1.5, "target_r_multiple": 2.0, "max_holding_hours": 24.0},
+                    }
+                },
+            },
+        ]
+        return llm_client.LlmTurnResult(
+            content_blocks=content_blocks,
+            usage={"input_tokens": 500, "output_tokens": 100},
+            stop_reason="tool_use",
+            raw_response={"content": content_blocks, "usage": {"input_tokens": 500, "output_tokens": 100}},
+        )
+
+    def test_hypotheses_from_earlier_successful_turns_survive_a_later_crash(self) -> None:
+        now = datetime(2026, 8, 15, tzinfo=timezone.utc)
+        turn0 = self._successful_turn_result("toolu_1", "SURVIVES_THE_CRASH")
+        timeout = requests.exceptions.ReadTimeout("Read timed out. (read timeout=180)")
+
+        with patch("nero_core.eve.session.llm_client.call_turn", side_effect=[turn0, timeout]):
+            with self.assertRaises(requests.exceptions.ReadTimeout):
+                session.run_session(api_key="fake-key", stub=False, now=now)
+
+        # Phase 1.1a: turn 0's hypothesis was persisted immediately, not
+        # lost when turn 1 crashed.
+        persisted = json.loads(self.hypotheses_path.read_text(encoding="utf-8"))
+        self.assertEqual(len(persisted), 1)
+        self.assertEqual(persisted[0]["raw_hypothesis"]["hypothesis_name"], "SURVIVES_THE_CRASH")
+
+    def test_a_partial_session_record_is_written_on_crash(self) -> None:
+        now = datetime(2026, 8, 15, tzinfo=timezone.utc)
+        turn0 = self._successful_turn_result("toolu_1", "SURVIVES_THE_CRASH")
+        timeout = requests.exceptions.ReadTimeout("Read timed out. (read timeout=180)")
+
+        session_id = "eve-crash-test-session"
+
+        def _call_turn_side_effect(*args, **kwargs):
+            if kwargs.get("call_index") == 0:
+                return turn0
+            raise timeout
+
+        with patch("nero_core.eve.session.new_session_id", return_value=session_id):
+            with patch("nero_core.eve.session.llm_client.call_turn", side_effect=_call_turn_side_effect):
+                with self.assertRaises(requests.exceptions.ReadTimeout):
+                    session.run_session(api_key="fake-key", stub=False, now=now)
+
+        session_file = storage.session_record_path(session_id)
+        self.assertTrue(session_file.exists(), "a crashed session must leave a visible artifact, not vanish")
+
+        partial = json.loads(session_file.read_text(encoding="utf-8"))
+        self.assertEqual(partial["session_id"], session_id)
+        self.assertEqual(partial["terminated_because"], session.TERMINATION_CRASHED)
+        self.assertIn("ReadTimeout", partial["crash_reason"])
+        self.assertEqual(partial["turn_reached"], 1)
+        self.assertTrue(partial["partial"])
+        self.assertEqual(len(partial["hypothesis_records"]), 1)
+        self.assertEqual(partial["hypothesis_records"][0]["raw_hypothesis"]["hypothesis_name"], "SURVIVES_THE_CRASH")
+
+    def test_the_crashed_turns_reservation_is_marked_not_released(self) -> None:
+        # Phase 1.1c: a ReadTimeout's real cost is genuinely UNKNOWN -- the
+        # reservation must stay "reserved" (still conservatively counted),
+        # never flipped to "released" (a confirmed $0 claim this project
+        # cannot actually make). It must, however, be ANNOTATED with why,
+        # so it is no longer a silent, unexplained orphan.
+        now = datetime(2026, 8, 15, tzinfo=timezone.utc)
+        timeout = requests.exceptions.ReadTimeout("Read timed out. (read timeout=180)")
+
+        with patch("nero_core.eve.session.llm_client.call_turn", side_effect=timeout):
+            with self.assertRaises(requests.exceptions.ReadTimeout):
+                session.run_session(api_key="fake-key", stub=False, now=now)
+
+        ledger_entries = bl.load_ledger(path=self.ledger_path)
+        self.assertEqual(len(ledger_entries), 1)
+        self.assertEqual(ledger_entries[0]["status"], bl.STATUS_RESERVED, "must NOT be released -- cost is unknown, not confirmed $0")
+        self.assertIn("ReadTimeout", ledger_entries[0]["crash_reason"])
+        self.assertIsNotNone(ledger_entries[0]["crash_marked_at"])
+
+        # And critically, the OPPOSITE of the RejectedBeforeTokenProcessing
+        # case: this must still count as real (projected) spend against a
+        # later session's budget check, since the true cost is unknown, not
+        # confirmed zero.
+        check = bl.pre_call_check(ledger_entries, session_id="a-later-session", projected_cost_usd=bl.MONTH_CEILING_USD, now=now)
+        self.assertFalse(check.allowed)
+
+    def test_normal_completion_does_not_double_write_hypotheses(self) -> None:
+        # Phase 1.1a: per-turn persistence must not ALSO be written again in
+        # bulk at the end of a normal (uncrashed) completion.
+        result = session.run_session(api_key="fake-key", stub=True, now=datetime(2026, 8, 15, tzinfo=timezone.utc))
+        persisted = json.loads(self.hypotheses_path.read_text(encoding="utf-8"))
+        self.assertEqual(len(persisted), 1, "the stub script proposes exactly one hypothesis -- must appear exactly once, not twice")
+        self.assertEqual(len(result.hypothesis_records), 1)
 
 
 class ToolResultProtocolTest(_IsolatedStorageTestCase):
