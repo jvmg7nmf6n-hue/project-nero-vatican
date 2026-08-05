@@ -404,22 +404,29 @@ def apply_fdr_correction(scored_records: list[dict], alpha: float = DEFAULT_FDR_
     does not affect FDR membership) BEFORE this function, or every record
     is (correctly, conservatively) treated as NOT self-derivative.
 
-    FRESHNESS-DISQUALIFICATION EXCLUSION (CC-1 directive item 7c, added
-    2026-08-05): a freshness-disqualified record (see
-    is_freshness_disqualified/apply_freshness_disqualification above) is
-    excluded from the FDR family for the same reason a self-derivative one
-    is -- disqualification is about admission to Trial and to this
-    statistical family, never about hiding the result itself (item 7c's own
-    words: "disqualification excludes it from Trial admission and the FDR
-    family, it does not delete it"). Callers MUST run
-    apply_freshness_disqualification BEFORE this function too, same
-    ordering requirement as the self-derivative tags above. A record that
-    is BOTH self-derivative AND freshness-disqualified gets both reasons
-    recorded (never silently picks one)."""
+    FRESHNESS-DISQUALIFICATION EXCLUSION -- ADDED 2026-08-05, REVERTED
+    2026-08-05 (CC-1 correction directive): item 7's binding freshness gate
+    briefly excluded a freshness-disqualified record from the FDR family
+    here, for the same stated reason the self-derivative exclusion above
+    exists. It was reverted because check_freshness_disqualification is
+    necessarily SESSION-WIDE (see that function's own PER-HYPOTHESIS
+    ATTRIBUTION LIMITATION docstring) -- one qualifying search result
+    disqualifies every hypothesis in the session, which in the one real
+    session tested (Eve Session 1) emptied `indices_with_p` entirely,
+    making the pre-registered "5% OOS survival, FDR-corrected per session"
+    criterion unsatisfiable by construction rather than by result. See
+    docs/site_data/eve_session_registry.json's own
+    freshness_gate_reversal_provenance field for the full record. Freshness
+    disqualification is now informational-only again, exactly like
+    is_self_derivative was before the CC-1 review's own item 1 made THAT
+    one binding here -- is_freshness_disqualified/apply_freshness_
+    disqualification/the item 7a audit fields/item 7b's fail-loud warning
+    all still compute and record exactly as before; only this exclusion
+    was removed."""
     result_field = "fdr_survives_oos" if field == "p_value_oos" else "fdr_survives_is"
     indices_with_p = [
         i for i, r in enumerate(scored_records)
-        if r.get(field) is not None and not is_self_derivative(r) and not is_freshness_disqualified(r)
+        if r.get(field) is not None and not is_self_derivative(r)
     ]
     p_values = [scored_records[i][field] for i in indices_with_p]
     survives = benjamini_hochberg(p_values, alpha=alpha)
@@ -427,14 +434,8 @@ def apply_fdr_correction(scored_records: list[dict], alpha: float = DEFAULT_FDR_
     updated = [dict(r) for r in scored_records]
     for r in updated:
         r.setdefault(result_field, None)
-        if r.get(field) is not None:
-            reasons = []
-            if is_self_derivative(r):
-                reasons.append("self_derivative")
-            if is_freshness_disqualified(r):
-                reasons.append("freshness_disqualified")
-            if reasons:
-                r["excluded_from_fdr_family_reason"] = "+".join(reasons)
+        if is_self_derivative(r) and r.get(field) is not None:
+            r["excluded_from_fdr_family_reason"] = "self_derivative"
     for pos, idx in enumerate(indices_with_p):
         updated[idx][result_field] = survives[pos]
     return updated

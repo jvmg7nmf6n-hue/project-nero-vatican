@@ -1,13 +1,26 @@
 """CC-1 Factory Loop directive, item 4: TEST -> TRIAL (core).
 
-Covers: the real admission gate (DSL-valid AND NOT freshness-disqualified --
-the backtest verdict is NEVER a condition), item 4a's mandatory projected-
-time fields, item 4b's queue health, item 4c's attribution string, and the
-forward-tracking reuse via repair_forward_tracker's new strategy_prefix
-parameter (verified it never collides with a real Repair Lab attempt_id in
-the same execution_log table)."""
+Covers: the real admission gate (DSL-validity -- the backtest verdict is
+NEVER a condition), item 4a's mandatory projected-time fields, item 4b's
+queue health, item 4c's attribution string, and the forward-tracking reuse
+via repair_forward_tracker's new strategy_prefix parameter (verified it
+never collides with a real Repair Lab attempt_id in the same execution_log
+table).
+
+FRESHNESS DISQUALIFICATION IS NOT PART OF THIS GATE (CC-1 correction
+directive, 2026-08-05): item 4e originally gated admission on DSL-validity
+AND NOT freshness-disqualified (item 7's binding Variant C check), shipped
+in commit `61d78a8`. Reverted the same day once item 7d's real Session 1
+re-score showed the check is necessarily session-wide -- one qualifying
+search result would disqualify an entire session's hypotheses, and the
+resulting FDR-family exclusion made the pre-registered per-session bar
+unsatisfiable by construction, not by result. See docs/site_data/
+eve_session_registry.json's own freshness_gate_reversal_provenance field.
+AdmitToTrialNeverConsultsFreshnessTest below is the standing regression
+guard against silently re-enabling this."""
 from __future__ import annotations
 
+import inspect
 import shutil
 import tempfile
 import unittest
@@ -16,6 +29,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from nero_core.eve import scoring as eve_scoring
 from nero_core.research_agent import repair_forward_tracker, trial
 from tools.backtest_statistics import MIN_SAMPLE_SIZE
 
@@ -86,17 +100,6 @@ class AdmitToTrialTest(unittest.TestCase):
         self.assertIsNone(result.trial_record)
         self.assertIn("DSL-invalid", result.reason)
 
-    def test_freshness_disqualified_hypothesis_is_rejected_even_if_dsl_valid(self) -> None:
-        result = trial.admit_to_trial(
-            VALID_HYPOTHESIS, {"verdict": "SURVIVED"},
-            origin="fresh", origin_agent="eve", hypothesis_name="X",
-            session_id_or_run_ref="eve-session-1", measured_trades_per_year=15.0,
-            freshness_disqualified=True,
-        )
-        self.assertFalse(result.admitted)
-        self.assertIsNone(result.trial_record)
-        self.assertIn("freshness-disqualified", result.reason)
-
     def test_dsl_valid_and_not_disqualified_admitted_regardless_of_verdict_quality(self) -> None:
         # "measure, never gate" (directive's own framing): a DIED
         # hypothesis is still admitted to Trial -- the verdict is advisory.
@@ -120,7 +123,10 @@ class AdmitToTrialTest(unittest.TestCase):
         self.assertIn("UNMEASURABLE", result.trial_record.projected_time_to_min_sample_label)
         self.assertIsNone(result.trial_record.measured_trades_per_year)
 
-    def test_freshness_flag_defaults_to_false_so_admission_works_without_item_7_wired(self) -> None:
+    def test_dsl_valid_hypothesis_is_admitted_with_no_freshness_argument_at_all(self) -> None:
+        # CC-1 correction directive (reverting item 4e/7c, 2026-08-05):
+        # admit_to_trial no longer accepts a freshness_disqualified argument
+        # at all -- admission depends on DSL-validity only.
         result = trial.admit_to_trial(
             VALID_HYPOTHESIS, {"verdict": "DIED"},
             origin="fresh", origin_agent="adam", hypothesis_name="X",
@@ -268,6 +274,57 @@ class ForwardTrackingReuseTest(unittest.TestCase):
         # Explicit design choice (module docstring): reuse the SAME SQLite
         # file, distinguished only by strategy_prefix -- not a second file.
         self.assertEqual(trial.DEFAULT_FORWARD_TRACKING_DB_PATH, repair_forward_tracker.DEFAULT_FORWARD_TRACKING_DB_PATH)
+
+
+class AdmitToTrialNeverConsultsFreshnessTest(unittest.TestCase):
+    """CC-1 correction directive (2026-08-05): the standing regression guard
+    against silently re-enabling binding freshness disqualification.
+    admit_to_trial's real signature has NO freshness_disqualified parameter
+    at all (removed, not merely defaulted off) -- a future edit that wants
+    to gate on it again must add a new, visible parameter, which this test
+    would immediately flag as a signature change to review."""
+
+    def test_signature_has_no_freshness_parameter(self) -> None:
+        params = inspect.signature(trial.admit_to_trial).parameters
+        self.assertNotIn("freshness_disqualified", params)
+
+    def test_passing_freshness_disqualified_raises_type_error(self) -> None:
+        with self.assertRaises(TypeError):
+            trial.admit_to_trial(
+                VALID_HYPOTHESIS, {"verdict": "DIED"},
+                origin="fresh", origin_agent="adam", hypothesis_name="X",
+                session_id_or_run_ref="run-1", measured_trades_per_year=10.0,
+                freshness_disqualified=True,
+            )
+
+    def test_a_hypothesis_flagged_freshness_disqualified_by_the_informational_check_is_still_admitted(self) -> None:
+        # End-to-end proof, not just a signature check: run the REAL
+        # informational item 7 machinery (nero_core.eve.scoring) to
+        # actually produce a freshness_disqualified=True record, then admit
+        # it to Trial -- admission must succeed regardless, since
+        # admit_to_trial has no way to see that field at all.
+        session_record = {
+            "started_at": "2026-08-05T00:00:00+00:00",
+            "turns": [{
+                "turn_index": 0,
+                "raw_response": {"content": [{
+                    "type": "web_search_tool_result", "tool_use_id": "t1",
+                    "content": [{"type": "web_search_result", "url": "https://example.com/a", "title": "A", "page_age": "3 weeks ago"}],
+                }]},
+            }],
+        }
+        flags = eve_scoring.check_freshness_disqualification(session_record, session_started_at=datetime(2026, 8, 5, tzinfo=timezone.utc))
+        self.assertTrue(flags)  # sanity: the informational check DOES fire on this fixture
+        scored = eve_scoring.apply_freshness_disqualification([{"raw_hypothesis": {"hypothesis_name": "X"}}], flags)
+        self.assertTrue(scored[0]["freshness_disqualified"])  # informational field still populated
+
+        result = trial.admit_to_trial(
+            VALID_HYPOTHESIS, {"verdict": "DIED"},
+            origin="fresh", origin_agent="adam", hypothesis_name="X",
+            session_id_or_run_ref="run-1", measured_trades_per_year=10.0,
+        )
+        self.assertTrue(result.admitted, "a DSL-valid hypothesis must be admitted even though the informational "
+                                          "freshness check flagged it -- admit_to_trial never sees that flag")
 
 
 if __name__ == "__main__":

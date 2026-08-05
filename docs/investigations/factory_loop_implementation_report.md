@@ -1,6 +1,8 @@
 # Factory Loop Implementation Report (CC-1 directive, final)
 
-**Status: implementation complete.** All 9 numbered items shipped. No verdict, threshold, or gate value changed anywhere in this work — the sole exception is item 7 adding a NEW binding gate (Variant C freshness disqualification), which did not exist before this directive and is explicitly scoped as new machinery, not a change to an existing one. `EVE_ENABLED` and `RESEARCH_AGENT_ENABLED` remain exactly as they were (see the confirmation section below).
+**CORRECTION NOTICE (2026-08-05, same day as original ship, commit `61d78a8`):** item 7's binding freshness-disqualification gate (described below in the original items 4/7 sections exactly as it shipped) was **reverted to informational-only** the same day, per a separate CC-1 correction directive. The sections below are left byte-identical to the original report — they are the accurate historical record of what shipped in `61d78a8` — but they no longer describe current behavior where they discuss binding freshness disqualification. **See the "CC-1 CORRECTION" section near the end of this document for the full reversal record, the required revert-verification results, and the root-cause investigation into per-hypothesis attribution.** Read that section before relying on anything below regarding item 4e's admission gate or item 7c's FDR exclusion.
+
+**Status: implementation complete, later partially corrected (see above).** All 9 numbered items shipped. No verdict, threshold, or gate value changed anywhere in the ORIGINAL work — the sole exception was item 7 adding a NEW binding gate (Variant C freshness disqualification), which did not exist before this directive and was explicitly scoped as new machinery, not a change to an existing one. That new gate was itself reverted the same day (see the correction section). `EVE_ENABLED` and `RESEARCH_AGENT_ENABLED` remain exactly as they were throughout (see the confirmation section below).
 
 Format per item, as requested: **FINDING** (file+line/function/grep/commit) → **CONFIDENCE** → **WHAT SHIPPED**.
 
@@ -53,6 +55,8 @@ Also checked (grep, repo-wide) for the same phrase in `docs/investigations/eve_e
 
 ## Item 4 — TEST → TRIAL (core)
 
+**[CORRECTED 2026-08-05 — see the "CC-1 CORRECTION" section near the end of this document.]** Item 4e's gate as described below (DSL-valid AND NOT freshness-disqualified) is the ORIGINAL, now-reverted behavior. The gate is currently DSL-validity only.
+
 **FINDING:** No "Trial" concept existed anywhere in this codebase; a SURVIVED/PROMISING-WATCHLIST verdict meant only `review_status="pending_human_approval"` on a `TestResult`, with nothing forward-tracking it (`factory_loop_specification.md`'s own B1, re-confirmed directly against `nero_core/research_agent/auto_tester.py`). **CONFIDENCE:** confirmed-from-code.
 
 **WHAT SHIPPED:** New `nero_core/research_agent/trial.py` — `TrialRecord`, `admit_to_trial` (the real gate is **DSL-valid AND NOT freshness-disqualified**; the backtest verdict travels as an advisory `entry_verdict` tag only, never a condition for admission — a DIED hypothesis is admitted exactly like a SURVIVED one, per the directive's own "measure, never gate" framing), `compute_projected_time_to_min_sample` (item 4a — always populated, `None`/"UNMEASURABLE" labeled rather than omitted when unmeasurable), `queue_health` (item 4b), an `attribution` string computed once per record (item 4c: `"Explored by Adam/Eve, our research agent."`). Forward-tracking reuses `repair_forward_tracker.evaluate_forward_tick` unmodified in its core logic — extended with a new optional `strategy_prefix` parameter (default unchanged, so every pre-existing Repair Lab call site/test is byte-identical to before) so Trial's own population (`TRIAL_STRATEGY_PREFIX = "TRIAL"`) shares the SAME `data/repair_lab_forward_tracking.db` file without colliding with repair attempts, even under an identical literal id (tested explicitly). Persistence: `docs/site_data/forward_trial.json`.
@@ -103,6 +107,8 @@ Also checked (grep, repo-wide) for the same phrase in `docs/investigations/eve_e
 ---
 
 ## Item 7 — search freshness, Variant C, BINDING
+
+**[CORRECTED 2026-08-05 — see the "CC-1 CORRECTION" section near the end of this document.]** The word "BINDING" in this section's own title reflects the ORIGINAL, now-reverted state. `check_freshness_disqualification` and its supporting machinery are informational-only again as of the correction.
 
 **FINDING:** `tag_lookahead_risk` (`nero_core/eve/scoring.py`) was informational-only, session-scoped, keyed off `backtest_window_start`. **CONFIDENCE:** confirmed-from-code.
 
@@ -167,7 +173,7 @@ Total new Python test functions added this session, across 6 new files and 3 mod
 - **No verdict, threshold, or gate value changed.** `apply_fdr_correction`'s mechanism and per-session scope: unchanged (item 3 is prose-only). `classify_verdict`, `MIN_SAMPLE_SIZE`, `benjamini_hochberg`, frequency-gate thresholds: untouched. The only NEW gate in this entire directive is item 7's freshness check, which did not exist before and is additive, not a modification of an existing threshold.
 - **`EVE_ENABLED` remains `False`** (never set to a truthy value in any committed workflow — confirmed by `grep -rn "EVE_ENABLED" .github/workflows/*.yml`, zero matches for the flag being set).
 - **`RESEARCH_AGENT_ENABLED`** remains exactly as before — set to `"true"` only inline in `research_agent_manual.yml`'s one existing job step, unchanged in scope or location.
-- **Untracked-file accounting:** the pre-existing untracked debris noted in this session's own initial `git status` (`check_news*.py`, `check_pead*.py`, `check_ns.py`, `check_results.py`, `daily_check.bat`, `data/funding_cache/`, `data/macro_cache/`, `docs/site_data/agent_hypotheses.json`, `docs/site_data/agent_test_results.json`, `tests/fixtures/frozen_candles/backward_compat_baseline_after.json`, `tests/fixtures/frozen_candles/baseline_before_run.log.err`) is unchanged and untouched by this work — confirmed unrelated to the Factory Loop by the background research pass. This session's OWN new untracked additions are exactly the new files listed throughout this report (7 new Python modules/tools, 6 new Python test files, 3 new website files, 1 new committed JSON export) — nothing was committed to git during this session; that remains the user's decision to make.
+- **Untracked-file accounting:** the pre-existing untracked debris noted in this session's own initial `git status` (`check_news*.py`, `check_pead*.py`, `check_ns.py`, `check_results.py`, `daily_check.bat`, `data/funding_cache/`, `data/macro_cache/`, `docs/site_data/agent_hypotheses.json`, `docs/site_data/agent_test_results.json`, `tests/fixtures/frozen_candles/backward_compat_baseline_after.json`, `tests/fixtures/frozen_candles/baseline_before_run.log.err`) is unchanged and untouched by this work — confirmed unrelated to the Factory Loop by the background research pass. This session's OWN new/modified files (7 new Python modules/tools, 6 new Python test files, 3 new website files, 1 new committed JSON export, 15 modified files) were committed as `61d78a8` after explicit user confirmation. **[Update, same day]** The freshness-gate revert described in the CC-1 CORRECTION section below is a separate, later commit — see that section for its own commit reference.
 
 ## What the Factory Loop still cannot do
 
@@ -177,4 +183,83 @@ It cannot yet run itself. Every admission/distillation function built in items 4
 
 1. `factory_loop_specification.md`'s "13 entries" for `failure_patterns.json` → real count is **22** (9 backfilled in commit `a55059a`, after that doc was written).
 2. The directive's own drafted item 3a provenance figure ("0/0 SURVIVED or PROMISING-WATCHLIST across every committed run") → still technically true at the combined-verdict level, but incomplete without the sub-verdict and random-baseline context reported in full above.
-3. The directive's own ~33% expectation for item 7d's real disqualification rate → real rate is **100%**, for the structural reason (session-wide attribution) explained above, not a bug in the implementation.
+3. The directive's own ~33% expectation for item 7d's real disqualification rate → real rate is **100%**, for the structural reason (session-wide attribution) explained above, not a bug in the implementation. **This same 100% finding is what triggered the correction below.**
+
+---
+
+# CC-1 CORRECTION — Item 7's freshness gate reverted to informational-only (2026-08-05, same day)
+
+**Context, stated plainly:** item 7d did exactly what it was supposed to — it found the binding gate disqualifies 100% of Session 1's hypotheses rather than the ~33% expected, stopped, and asked. The answer that came back at the time, "Ship it live," was accepted under a `/goal continue without stopping` instruction rather than as deliberate human review of the tradeoff. That was identified as a mistake on the human side, and this correction directive reverted it the same day. The finding itself (item 7d, above) was correct and is NOT being retracted — only the decision made in response to it is.
+
+Format per item, as required: **FINDING** → **CONFIDENCE** → **WHAT WAS REVERTED / WHAT WAS FOUND**.
+
+## 1. Revert — binding back to informational-only
+
+**FINDING:** `nero_core/research_agent/trial.py::admit_to_trial` gated admission on `DSL-valid AND NOT freshness_disqualified`; `nero_core/eve/scoring.py::apply_fdr_correction` excluded freshness-disqualified records from the FDR family alongside self-derivative ones. Both shipped in commit `61d78a8`. **CONFIDENCE:** confirmed-from-code (direct diff review of both functions before reverting).
+
+**WHAT WAS REVERTED:**
+- `admit_to_trial`'s `freshness_disqualified` parameter was **removed from the function signature entirely** (not merely defaulted to `False`) — calling it with that keyword now raises `TypeError`. The gate is DSL-validity alone. This was a deliberate choice, not the minimal one: leaving a dead, ignored parameter would let a future edit silently re-enable gating by adding back two lines; removing the parameter forces a visible signature change and a new decision.
+- `apply_fdr_correction`'s freshness exclusion was removed from both the `indices_with_p` filter and the `excluded_from_fdr_family_reason` construction — its `is_self_derivative` exclusion is untouched, byte-identical to the code before item 7 ever existed.
+- **Kept exactly as before, per explicit instruction:** `check_freshness_disqualification`, `apply_freshness_disqualification`, `is_freshness_disqualified`, the item 7a audit fields (`freshness_disqualified`, `freshness_disqualification_reason`, `offending_source_url`, `parsed_pub_date`, `rule_fired`), and item 7b's fail-loud `freshness_disqualified_entire_session` warning all still compute, record, and fire exactly as they did before this correction. Verified directly: re-running the real Session 1 file through the informational machinery still produces `freshness_disqualified=True` on all 6 records and 4 real audit flags — only the two BINDING consequences were removed.
+
+**Tests — rewritten, not deleted:**
+- `tests/test_trial_admission.py`: removed `test_freshness_disqualified_hypothesis_is_rejected_even_if_dsl_valid` (asserted the reverted behavior) and rewrote `test_freshness_flag_defaults_to_false_so_admission_works_without_item_7_wired` → `test_dsl_valid_hypothesis_is_admitted_with_no_freshness_argument_at_all`. Added a new `AdmitToTrialNeverConsultsFreshnessTest` class (3 tests): the signature genuinely has no `freshness_disqualified` parameter; passing it raises `TypeError`; and an end-to-end proof that runs the REAL informational item 7 machinery to produce a `freshness_disqualified=True` record, then confirms `admit_to_trial` still admits it.
+- `tests/test_eve_freshness_disqualification.py`: `FreshnessExcludedFromFdrFamilyTest` renamed to `FreshnessDisqualificationNoLongerAffectsFdrFamilyTest` (not deleted — the rename itself is part of the visible record) and rewritten to assert a freshness-disqualified record now participates in the FDR family normally, and that combining self-derivative + freshness-disqualified only ever produces the `"self_derivative"` reason, never a freshness one.
+- Both files' module docstrings updated to state the reversal and point to this section and to `eve_session_registry.json`'s own provenance field.
+- All 134 tests across `test_trial_admission.py`, `test_eve_freshness_disqualification.py`, `test_eve_scoring_fdr.py`, `test_eve_contamination_tags.py`, `test_eve_pipeline.py`, `test_repair_to_trial.py` pass after the revert.
+
+**Verification of the revert (required — both checks run against the real Session 1 file, `eve-20260804T020749Z-4cf6e4c9`, 2026-08-05):**
+
+(a) **FDR family populated again — confirmed.** Re-scoring Session 1's 6 real records through the reverted `apply_freshness_disqualification` → `apply_fdr_correction` pipeline: `indices_with_p` (real p-values, post self-derivative exclusion) = 2 records; their `fdr_survives_oos` values = `[None, False]` — **not all `None`**. `BTC_MOMENTUM_IGNITION` gets a real `fdr_survives_oos=False`, proving the family is genuinely populated, not degenerately empty.
+
+(b) **No verdict/p-value/status differs from Session 1's committed record — confirmed, zero diffs.** Compared every one of `verdict_combined`, `verdict_is`, `verdict_oos`, `p_value_is`, `p_value_oos`, `fdr_survives_oos`, `fdr_survives_is` between the post-revert re-score and the currently-committed `docs/site_data/eve_hypotheses.json` records for all 6 Session 1 hypotheses: **zero differences.** This was expected but confirmed rather than assumed — the committed file was never touched by any binding-gate code in the first place (see item 2 below), so this check also serves as independent proof that item 2's "none found" finding is consistent with the actual data.
+
+No difference in (b) means no stop-and-report was triggered by this step.
+
+## 2. Data written under the binding rule while it was live
+
+**FINDING:** searched every location a binding-rule effect could have been written. **CONFIDENCE:** confirmed-from-data (direct inspection, not inferred).
+
+**WHAT WAS FOUND: none.**
+- `docs/site_data/eve_hypotheses.json` (16 records): zero with `freshness_disqualified: true`; zero with `excluded_from_fdr_family_reason` containing `"freshness_disqualified"`.
+- All 3 real files under `docs/site_data/eve_sessions/` (`eve-20260803T095520Z-394385c7.json`, `eve-20260803T142519Z-718833c9.json`, `eve-20260804T020749Z-4cf6e4c9.json`) predate commit `61d78a8` and carry no `freshness_disqualified_entire_session` or `freshness_disqualification_flags` field at all — the informational machinery had never even been run against any of them.
+- `docs/site_data/forward_trial.json` does not exist on disk — nothing has ever been admitted to or rejected from Trial under any rule, binding or informational.
+
+No records were modified during this search (identification only, per the directive's own instruction). This is the expected finding: `EVE_ENABLED=False` throughout, so no real Eve session ran between the gate shipping and being reverted, both the same day.
+
+## 3. Reversal recorded in the pre-registration, dated
+
+**WHAT SHIPPED:** `docs/site_data/eve_session_registry.json`'s `pre_registration` now carries a new `freshness_gate_reversal_provenance` object: `enabled_dated: "2026-08-05"`, `enabled_commit: "61d78a8"`, `reverted_dated: "2026-08-05"`, a full `reason` field stating the session-scoped-attribution root cause and the unsatisfiable-per-session-bar consequence, `any_countable_session_ran_while_binding: false` with its own `_basis` field citing the exact data checked (the same search as item 2 above), and a `homogeneity_confirmation` field.
+
+**Homogeneity — confirmed from data, not asserted:** because no countable session ran between the gate shipping and being reverted (both the same day), Session 1 (the only countable session to date) and Sessions 2–8 (not yet run) will all run under the identical rule set — informational-only freshness disqualification, DSL-validity-only Trial admission, self-derivative-only FDR exclusion. The 8-session pre-registered experiment remains homogeneous.
+
+**Test:** `tests/test_eve_session_registry.py::test_freshness_gate_reversal_is_recorded_with_dates_and_confirmed_homogeneity` — asserts the commit reference, the dates, that the reason text names the real root cause (`"SESSION-SCOPED"`, `"unsatisfiable"`), and that homogeneity is confirmed. Passes.
+
+## 4. Root cause — is per-hypothesis attribution derivable?
+
+**FINDING: yes, structurally derivable — both sides of the comparison already exist in committed data.** **CONFIDENCE:** confirmed-from-data (direct inspection of the real Session 1 session file and its corresponding `eve_hypotheses.json` records).
+
+- Every Eve hypothesis record already carries a real, distinct `turn_index` (`nero_core.eve.hypothesis_shapes.build_hypothesis_record`'s own field) — Session 1's 6 hypotheses have `turn_index` 0 through 5, one per proposal, in order.
+- `_iter_web_search_results` (the shared helper `tag_lookahead_risk` and `check_freshness_disqualification` both already use) already captures `turn_index` per search result.
+- Real check: all 16 web-search results in Session 1 occur at `turn_index=0`.
+- **Deeper check, beyond turn-level granularity:** turn 0's own `raw_response.content` array was inspected block-by-block. Every `web_search_tool_result` block (array indices 6, 7, 10, 14, 19, 20) appears **before** the `propose_hypothesis` tool-use block for `PAXG_PEG_REVERSION` (index 27) — the very first hypothesis of the session, nominally at the "same" `turn_index=0` as the searches. Confirmed directly, not inferred: even the earliest hypothesis was causally proposed after every real search, at the content-block level.
+
+**Applying the directive's own specified rule** ("a hypothesis proposed at turn K may have been informed by any search at turn ≤ K" — over-inclusive, never under-inclusive, the causally safe direction): **all 6 of Session 1's hypotheses would still be attributed to the 2 disqualifying sources.** Real per-hypothesis disqualification rate under this rule: **100%, identical to the session-wide rate** — not because finer attribution is impossible, but because Eve's real behavior in this one session was to front-load all web searching in the first turn, then propose all 6 hypotheses sequentially afterward. Every hypothesis genuinely comes causally after every search in this session's real transcript.
+
+**This is not evidence that per-hypothesis attribution is worthless — it is evidence that this ONE real session cannot distinguish it from session-wide scoping.** Attribution would diverge from session-wide in a session with an interleaved search → propose → search → propose pattern (an earlier hypothesis legitimately excluded from a later search's disqualification). Session 1 has zero such interleaving. **No alternative is proposed** — the directive's "propose 1–2 alternatives" instruction applied only to the not-derivable branch, and attribution was found to be derivable. **Nothing was implemented or enabled** — this is a report-only finding, per item 5.
+
+## 5. No binding re-enable
+
+Confirmed: nothing in this correction re-enables binding disqualification anywhere. `admit_to_trial` has no code path that can consult `freshness_disqualified` (the parameter does not exist). `apply_fdr_correction` has no code path that references `is_freshness_disqualified`. Item 4's attribution finding was implemented nowhere — it exists only as an analysis in this report and in the scratch investigation that produced it.
+
+## 6. Process note, applied to this document
+
+No option in this correction — or anywhere in the original report above — is labeled "(Recommended)." Where a decision remains open (there is none remaining in this correction; item 4 found no binding action was proposed to begin with), findings are reported with their real consequences and no default is pre-selected.
+
+## Test counts, this correction
+
+**Python, targeted:** 134 tests across the 6 directly-affected files (`test_trial_admission.py`, `test_eve_freshness_disqualification.py`, `test_eve_scoring_fdr.py`, `test_eve_contamination_tags.py`, `test_eve_pipeline.py`, `test_repair_to_trial.py`) — all pass. Net test count change: `test_trial_admission.py` +3 (one test removed, one renamed in place, three added — net `AdmitToTrialNeverConsultsFreshnessTest` adds 3), `test_eve_freshness_disqualification.py` net unchanged (2 tests rewritten in place, one class renamed), `test_eve_session_registry.py` +1 (`test_freshness_gate_reversal_is_recorded_with_dates_and_confirmed_homogeneity`).
+
+**Full suite, Python** (`python -m unittest discover -s tests`): **2491 tests, same 3 pre-existing errors (lxml/PSX, unrelated, unchanged), 0 failures.** Delta from the prior full-suite checkpoint (2488): **+3**, reconciling exactly: `test_trial_admission.py` net +2 (one test removed, one renamed in place net-zero, `AdmitToTrialNeverConsultsFreshnessTest` adds 3 → net −1+3 = +2), `test_eve_freshness_disqualification.py` net 0 (two tests rewritten in place, one class renamed, same count), `test_eve_session_registry.py` +1. Zero new failures.
+
+**Full suite, website** (`npx jest`): **598 tests, 596 passing, same 2 pre-existing failures** (`siteDataSchema.test.ts`, unrelated to this correction — this correction touched no website files, confirmed by `git diff --stat` showing zero website changes in this correction's own diff).

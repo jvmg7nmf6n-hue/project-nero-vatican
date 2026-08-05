@@ -86,6 +86,28 @@ class RegistryShapeTest(unittest.TestCase):
         self.assertEqual(counting[0]["session_id"], "eve-20260804T020749Z-4cf6e4c9")
         self.assertEqual(self.registry["next_countable_session_number"], 2)
 
+    def test_freshness_gate_reversal_is_recorded_with_dates_and_confirmed_homogeneity(self) -> None:
+        # CC-1 correction directive (2026-08-05): the binding freshness gate
+        # (item 4e/7c, shipped in commit 61d78a8) was reverted to
+        # informational-only the same day. This provenance entry must never
+        # silently disappear -- mirrors test_fdr_reframe_provenance_is_
+        # recorded_with_real_not_stale_numbers's own style for item 3a.
+        provenance = self.registry["pre_registration"]["freshness_gate_reversal_provenance"]
+        self.assertEqual(provenance["enabled_commit"], "61d78a8")
+        self.assertEqual(provenance["enabled_dated"], "2026-08-05")
+        self.assertTrue(provenance["reverted_dated"])
+        self.assertTrue(provenance["reason"])
+        # The reason must state the REAL cause (session-scoped attribution),
+        # not just "it disqualified too much" -- a future reader must be
+        # able to see WHY retuning the window would not have fixed it.
+        self.assertIn("SESSION-SCOPED", provenance["reason"])
+        self.assertIn("unsatisfiable", provenance["reason"])
+        # Homogeneity must be a CONFIRMED fact, not an assumption -- see the
+        # provenance's own basis field for how this was derived from data.
+        self.assertFalse(provenance["any_countable_session_ran_while_binding"])
+        self.assertTrue(provenance["any_countable_session_ran_while_binding_basis"])
+        self.assertIn("homogeneous", provenance["homogeneity_confirmation"])
+
     def test_session_count_reconciliation_is_recorded_not_silently_changed(self) -> None:
         # 2026-08-03: the pre-registered session count was reconciled from an
         # earlier N=5 (docs/investigations/eve_engine_v1_report.md's original

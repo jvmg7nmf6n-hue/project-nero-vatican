@@ -12,22 +12,30 @@ parameter, added alongside this module) -- not a second, separately
 invented forward-tracking scheme (docs/investigations/
 factory_loop_specification.md's own B1 recommendation).
 
-THE ADMISSION GATE (item 4e): DSL-validity is the gate, NOT the backtest
-verdict. Any hypothesis whose structured_entry_rule/structured_exit_plan
-parse via rule_dsl (the SAME parser frequency_gate.py/auto_tester.py/
-nero_core.eve.scoring already use for testability -- re-implemented here in
-5 lines rather than imported across the eve/research_agent boundary, matching
-this project's own "re-inline a small helper, don't import a private one"
+THE ADMISSION GATE: DSL-validity is the gate, NOT the backtest verdict. Any
+hypothesis whose structured_entry_rule/structured_exit_plan parse via
+rule_dsl (the SAME parser frequency_gate.py/auto_tester.py/nero_core.eve.
+scoring already use for testability -- re-implemented here in 5 lines
+rather than imported across the eve/research_agent boundary, matching this
+project's own "re-inline a small helper, don't import a private one"
 precedent) is admitted, REGARDLESS of whether it SURVIVED, DIED, or landed
 anywhere in between -- the backtest verdict becomes an advisory tag on the
-Trial record (entry_verdict), never a condition for admission. The REAL
-gate, per item 4e, is: DSL-valid AND NOT freshness-disqualified (item 7's
-binding Variant-C check, nero_core.eve.scoring.check_freshness_
-disqualification) -- implemented as a plain bool parameter here so this
-module has no import-time dependency on nero_core/eve/ at all, matching
-this codebase's existing isolation discipline (nero_core/eve/ is the one
-side of that boundary that reaches into nero_core/research_agent/, never
-the reverse -- see nero_core.eve.scoring's own module docstring).
+Trial record (entry_verdict), never a condition for admission.
+
+FRESHNESS DISQUALIFICATION IS NOT PART OF THIS GATE (CC-1 correction
+directive, 2026-08-05): item 4e originally specified DSL-valid AND NOT
+freshness-disqualified (item 7's Variant C check). That was shipped in
+commit `61d78a8`, then reverted the same day: item 7d's real re-score of
+Eve Session 1 showed the check is necessarily session-wide (one qualifying
+web search disqualifies every hypothesis in the session, not just the ones
+it might have actually informed -- see nero_core.eve.scoring.
+check_freshness_disqualification's own PER-HYPOTHESIS ATTRIBUTION
+LIMITATION docstring), which combined with the FDR-family exclusion this
+gate used to trigger made the pre-registered per-session 5%-FDR-corrected
+bar unsatisfiable by construction. `admit_to_trial` below now consults
+DSL-validity only -- see its own docstring for the full reversal record,
+and docs/site_data/eve_session_registry.json's `freshness_gate_reversal_
+provenance` field for the dated, provenance-tracked account.
 """
 from __future__ import annotations
 
@@ -164,19 +172,36 @@ def admit_to_trial(
     hypothesis_name: str,
     session_id_or_run_ref: str | None,
     measured_trades_per_year: float | None,
-    freshness_disqualified: bool = False,
     repair_chain_id: str | None = None,
     attempt_id: str | None = None,
     now: datetime | None = None,
     forward_tracking_db_ref: Path = DEFAULT_FORWARD_TRACKING_DB_PATH,
 ) -> AdmissionResult:
-    """item 4e's real gate: DSL-valid AND NOT freshness-disqualified. The
-    backtest verdict (`entry_verdict`) is NEVER a condition here -- an
-    advisory tag, stored as-is on the resulting record. `freshness_
-    disqualified` defaults to False so this function works identically
-    whether or not item 7 has been wired into the caller yet (the directive's
-    own instruction: "write the check against a flag that defaults to
-    false, so no rebuild is needed when item 7 lands").
+    """The real gate is DSL-validity alone. The backtest verdict
+    (`entry_verdict`) is NEVER a condition here either -- an advisory tag,
+    stored as-is on the resulting record.
+
+    FRESHNESS DISQUALIFICATION -- NOT CONSULTED HERE, DELIBERATELY (CC-1
+    correction directive, reverting item 4e/7c): a `freshness_disqualified`
+    parameter briefly gated admission here (2026-08-05, commit `61d78a8`),
+    then was reverted the same day once item 7d's real Session 1 re-score
+    showed the check is necessarily session-wide (nero_core.eve.scoring.
+    check_freshness_disqualification's own PER-HYPOTHESIS ATTRIBUTION
+    LIMITATION) -- one qualifying search result disqualifies an entire
+    session's hypotheses, which made the pre-registered per-session FDR bar
+    unsatisfiable by construction. This parameter was REMOVED from this
+    signature entirely, not merely defaulted off, specifically so a future
+    edit cannot silently re-enable binding disqualification by flipping a
+    default -- re-adding it requires a new, visible parameter and a
+    deliberate human decision outside any "continue without stopping"
+    context. See docs/site_data/eve_session_registry.json's own
+    freshness_gate_reversal_provenance field and tests/test_trial_admission.
+    py's own AdmitToTrialNeverConsultsFreshnessTest for the standing
+    regression guard. nero_core.eve.scoring.check_freshness_
+    disqualification/apply_freshness_disqualification/is_freshness_
+    disqualified and item 7b's fail-loud warning are UNCHANGED and continue
+    to compute and record freshness disqualification -- only this
+    function's use of that result was reverted.
 
     `origin` must be "fresh" (a direct Adam/Eve hypothesis) or "repaired" --
     item 5's admit_repair_to_trial is the ONLY caller that should ever pass
@@ -187,13 +212,6 @@ def admit_to_trial(
     dsl_valid, dsl_reason = is_dsl_valid(hypothesis_record)
     if not dsl_valid:
         return AdmissionResult(None, False, f"DSL-invalid -- not admitted to Trial: {dsl_reason}")
-    if freshness_disqualified:
-        return AdmissionResult(
-            None, False,
-            "freshness-disqualified (item 7, Variant C binding rule) -- excluded from Trial admission per "
-            "item 4e/7c; the hypothesis stays fully recorded with its real verdict, it is only excluded from "
-            "Trial and the FDR family, never deleted",
-        )
 
     now = now or datetime.now(timezone.utc)
     source_ref = {

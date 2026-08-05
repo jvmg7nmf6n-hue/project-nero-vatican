@@ -1,12 +1,26 @@
-"""CC-1 Factory Loop directive, item 7: search freshness, Variant C, BINDING.
+"""CC-1 Factory Loop directive, item 7: search freshness, Variant C.
 
 Extends tag_lookahead_risk (informational only, unchanged -- see
-tests/test_eve_contamination_tags.py) with a binding sibling,
-check_freshness_disqualification, that actually excludes a hypothesis from
-Trial admission (item 4e) and the FDR family (item 7c). Variant C:
-pub_date >= session_started_at - 30 days disqualifies -- the only one of
-three candidate rules (spec B6) that discriminated within Session 1's real
-4-source sample instead of flagging everything or nothing."""
+tests/test_eve_contamination_tags.py) with a sibling, check_freshness_
+disqualification. Variant C: pub_date >= session_started_at - 30 days
+disqualifies -- the only one of three candidate rules (spec B6) that
+discriminated within Session 1's real 4-source sample instead of flagging
+everything or nothing.
+
+INFORMATIONAL ONLY, NOT BINDING (CC-1 correction directive, 2026-08-05):
+this check briefly excluded a hypothesis from Trial admission (item 4e) and
+the FDR family (item 7c), shipped in commit `61d78a8`. Reverted the same
+day: because the check is necessarily session-wide (see check_freshness_
+disqualification's own PER-HYPOTHESIS ATTRIBUTION LIMITATION docstring),
+one qualifying search result disqualified an entire session, which in the
+one real session tested (Eve Session 1) emptied the FDR family entirely and
+made the pre-registered per-session bar unsatisfiable by construction. The
+check still computes and records exactly as before (freshness_disqualified,
+freshness_disqualification_reason, item 7b's fail-loud warning) -- it is
+simply never consulted by admit_to_trial or apply_fdr_correction anymore.
+See docs/site_data/eve_session_registry.json's own freshness_gate_
+reversal_provenance field and nero_core.research_agent.trial's own
+AdmitToTrialNeverConsultsFreshnessTest for the standing regression guard."""
 from __future__ import annotations
 
 import tempfile
@@ -124,29 +138,40 @@ class ApplyFreshnessDisqualificationTest(unittest.TestCase):
         self.assertNotIn("freshness_disqualified", records[0])
 
 
-class FreshnessExcludedFromFdrFamilyTest(unittest.TestCase):
-    def test_disqualified_record_excluded_from_fdr_even_with_significant_p_value(self) -> None:
+class FreshnessDisqualificationNoLongerAffectsFdrFamilyTest(unittest.TestCase):
+    """CC-1 correction directive (2026-08-05): item 7c's FDR-family exclusion
+    was reverted alongside item 4e's admission gate -- freshness_
+    disqualified=True is now purely informational and must NEVER exclude a
+    record from apply_fdr_correction's family. Renamed from
+    FreshnessExcludedFromFdrFamilyTest (which asserted the now-reverted
+    behavior) rather than deleted, so the reversal is visible in the test
+    history, not silently erased."""
+
+    def test_disqualified_record_still_participates_in_the_fdr_family(self) -> None:
         records = [
             {"p_value_oos": 0.001, "freshness_disqualified": True, "raw_hypothesis": {"hypothesis_name": "A"}},
             {"p_value_oos": 0.5, "freshness_disqualified": False, "raw_hypothesis": {"hypothesis_name": "B"}},
         ]
         updated = scoring.apply_fdr_correction(records, field="p_value_oos")
-        self.assertIsNone(updated[0]["fdr_survives_oos"])
-        self.assertEqual(updated[0]["excluded_from_fdr_family_reason"], "freshness_disqualified")
+        self.assertIsNotNone(updated[0]["fdr_survives_oos"])
+        self.assertNotIn("excluded_from_fdr_family_reason", updated[0])
 
-    def test_both_self_derivative_and_freshness_disqualified_records_both_reasons(self) -> None:
+    def test_freshness_disqualified_flag_never_produces_an_exclusion_reason_even_combined_with_self_derivative(self) -> None:
+        # A record that is BOTH self-derivative and freshness-disqualified
+        # is still excluded for self_derivative (untouched, unrelated
+        # exclusion) but the reason string must never mention freshness.
         record = {
             "p_value_oos": 0.001, "freshness_disqualified": True,
             "contamination_tags": [{"tag": "SELF_DERIVATIVE"}],
         }
         updated = scoring.apply_fdr_correction([record], field="p_value_oos")
-        self.assertIn("self_derivative", updated[0]["excluded_from_fdr_family_reason"])
-        self.assertIn("freshness_disqualified", updated[0]["excluded_from_fdr_family_reason"])
+        self.assertEqual(updated[0]["excluded_from_fdr_family_reason"], "self_derivative")
 
     def test_clean_record_still_gets_the_plain_self_derivative_string(self) -> None:
         # Regression guard: existing callers/tests assert the EXACT string
-        # "self_derivative" (see test_eve_scoring_fdr.py) -- confirms the
-        # "+".join behavior is backward compatible for the single-reason case.
+        # "self_derivative" (see test_eve_scoring_fdr.py) -- confirms
+        # apply_fdr_correction's self-derivative exclusion is untouched by
+        # this reversal.
         record = {"p_value_oos": 0.001, "contamination_tags": [{"tag": "SELF_DERIVATIVE"}], "freshness_disqualified": False}
         updated = scoring.apply_fdr_correction([record], field="p_value_oos")
         self.assertEqual(updated[0]["excluded_from_fdr_family_reason"], "self_derivative")
