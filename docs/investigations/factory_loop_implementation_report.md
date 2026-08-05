@@ -710,7 +710,13 @@ then verified against `origin/main` directly:
    4ae7c49 CC-1 Master Directive Phase 1.1: Eve crash-safety
    f8e98a2 Update live scheduler execution log
    ```
-3. **This report** (below, its own commit hash pasted after push).
+3. **This report** — committed `a36d75c`, pushed with no divergence,
+   confirmed via `git fetch origin && git log origin/main --oneline -3`:
+   ```
+   a36d75c CC-1 Master Directive: closing report (Phase 1.1, 1.2, 2, 3)
+   162b20b CC-1 Master Directive Phase 2: the Agents tab
+   4ae7c49 CC-1 Master Directive Phase 1.1: Eve crash-safety
+   ```
 
 **CONFIDENCE:** confirmed-from-data (real `git log origin/main` output,
 not the commit/push step's own exit code, per the standing rule).
