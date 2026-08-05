@@ -1205,3 +1205,497 @@ streaming fix addresses that.
    measured rates, the graveyard's 21 entries, Eve's Session 1 6→6→5→0
    funnel with 1 TOO_SLOW at 27.4/yr and 2 SELF_DERIVATIVE) matched the
    directive's own stated numbers exactly — no other staleness found.
+---
+
+# CC-1 MASTER DIRECTIVE v2 — "Automate the Factory, and Show the Work" (2026-08-05)
+
+This section is new, appended after the prior "CC-1 Master Directive" (Phase
+1.1, 1.2, 2, 3 — commit `a36d75c` and its closing-report fixup `7b29f56`).
+Distinct directive, same initiative — prior sections above are left intact.
+
+## PHASE 1 — Streaming fix
+
+**FINDING:** confirmed unchanged from the prior directive's own carried-forward
+note (section 3.4 above): `nero_core/eve/llm_client.py::call_turn` and the
+shared `nero_core.research_agent.hypothesis_gen._call_claude` (used by BOTH
+the scanner path and `generate_web_hypotheses`'s web-search path) both issued
+a plain, non-streaming `requests.post` with a scalar `timeout`. **CONFIDENCE:**
+confirmed-from-code.
+
+**WHAT SHIPPED:**
+- Both functions now issue `stream=True` requests and assemble the real SSE
+  event sequence (`message_start` → `content_block_start`/`content_block_delta`*/
+  `content_block_stop` per block → `message_delta`* → `message_stop`, `ping`
+  interleaved) into the exact same `{"content": [...], "usage": {...},
+  "stop_reason": ...}` shape the old `response.json()` call used to hand back
+  directly — every downstream consumer (`extract_text`, `extract_tool_uses`,
+  `nero_core.eve.scoring`'s `raw_response["content"]` web-search-result scan)
+  is byte-for-byte unchanged.
+- **Verified against Anthropic's own current, live streaming documentation**
+  (fetched this directive, not assumed from memory —
+  `https://platform.claude.com/docs/en/docs/build-with-claude/streaming`):
+  confirmed the exact event names/shapes above, confirmed `usage` is
+  cumulative across `message_delta` events (their own explicit warning),
+  confirmed a real web-search trace shows `content_block_delta`/`ping` events
+  continuing to arrive *during* the server-side search and that
+  `server_tool_use.web_search_requests` only appears on the FINAL
+  `message_delta` — both directly informed `_assemble_streamed_response`'s
+  merge-in-arrival-order design.
+- **Deliberate scope decision:** `_call_claude` is one shared function for
+  both the scanner path and the web-search path the directive names — there
+  is no separate non-streaming variant to keep, so converting it fixes both.
+  This is a strict improvement for the scanner path too (never a regression),
+  recorded here as a decision, not a silent side effect.
+- **Item 1e preserved exactly, confirmed by test:** a mid-stream
+  `event: error` (Anthropic's own documented `overloaded_error` example) is
+  raised as `nero_core.eve.llm_client.StreamError` (Eve) /
+  `requests.exceptions.HTTPError` (Adam, already a `RequestException`
+  subclass caught by the existing broad handler) — never a confirmed `$0`,
+  landing in the same `calls_with_unknown_cost` bucket a ReadTimeout does.
+  `claude_timeout_seconds` stays `180` (A2's fallback), documented in
+  `llm_client.py`'s own updated docstring as now meaning "idle gap between
+  SSE lines," not "whole-call ceiling."
+- **Item 1c — the real file count is 6, not 3, confirmed the hard way:**
+  the prior directive's carried-forward estimate ("~55 test call sites
+  across 3 files") undercounted — `grep`-ing every test file that patches
+  `hypothesis_gen.requests.post`/`llm_client.requests.post` found **6**
+  files, each with its OWN independent `_FakeResponse`-shaped fixture class:
+  `test_research_agent_hypothesis_gen.py`, `test_research_agent_web_
+  hypothesis_gen.py`, `test_eve_llm_client.py` (the original 3), plus
+  `test_factory_loop_provenance.py`, `test_repair_lab_diagnosis_boundary.py`,
+  and `test_research_agent_secret_handling.py` (3 more, missed by the
+  original estimate). **This was caught by actually running the full suite,
+  not assumed clean from the 3 files edited first:** the first full-suite
+  run after Phase 1/2's initial changes came back with real errors —
+  `AttributeError: '_FakeResponse' object has no attribute 'iter_lines'` —
+  in exactly those 3 additional files. Each got the same one-method fix
+  (`iter_lines()` encoding the fixture's existing `{"content": [...],
+  "usage": {...}}` payload as real SSE lines, reinlined per-file rather than
+  imported, matching this codebase's own established convention for small
+  test-only helpers). Zero of the ~55+ individual test bodies across all 6
+  files were touched — only each file's one shared fixture class.
+  `test_eve_llm_client.py`'s existing (pre-this-directive) 6 call sites
+  were confirmed genuinely unaffected either way: all error-path tests
+  where `raise_for_status` fails before any streaming code runs.
+- **Item 1d — new anti-regression tests, one per file:**
+  `StreamingRequestTest`/`WebSearchToolDeclarationTest.test_real_call_declares_streaming_but_preflight_does_not`
+  (Adam, both paths) and `RealCallStreamingTest.test_request_declares_streaming`
+  (Eve) assert `stream=True` on both the request body AND the `requests.post`
+  kwarg — a silent revert to non-streaming fails these immediately. Additional
+  new tests cover: mid-stream error → unknown cost (both agents), and full
+  reassembly of a realistic multi-block web-search turn (`server_tool_use` →
+  `web_search_tool_result` → final text, Adam; plus a client `propose_hypothesis`
+  tool_use block, Eve) — exercising every branch the streaming assembler has,
+  not just plain text.
+
+**Before/after failure behavior — real reproduction not run, and here is why,
+stated plainly rather than glossed over:** demonstrating the ORIGINAL
+ReadTimeout crash live would require making a real, long-running,
+web-search-enabled Anthropic API call against this project's own key — real
+money, and the crash is a timing race (60s/90s/120s previously, 180s now) not
+guaranteed to reproduce on demand. Streaming's fix is instead demonstrated
+three ways, all real: (1) Anthropic's own live documentation, fetched this
+session, confirming `content_block_delta`/`ping` events arrive throughout a
+web-search-including turn, which is the literal mechanism that keeps a
+streamed connection non-idle where the old non-streamed call was idle for the
+whole search; (2) full test coverage of the exact production assembly code
+against a realistic multi-block web-search SSE trace; (3) the anti-regression
+tests above, which would have caught a silent revert to the old crash-prone
+shape.
+
+## PHASE 2 — The Factory Loop runner
+
+**FINDING:** confirmed exactly as the directive states — `admit_to_trial`,
+`admit_repair_to_trial`, and `commit_graveyard_entry` are all built and
+tested, called by nothing in production. **CONFIDENCE:** confirmed-from-code
+(re-verified: zero non-test callers of any of the three before this
+directive).
+
+**WHAT SHIPPED:** `tools/factory_loop_run.py` — one script performing the
+6 steps in order: (1) load every hypothesis with a real verdict from Adam's
+(`agent_test_results.json` joined against `agent_hypotheses.json`) and Eve's
+(`eve_hypotheses.json`, `verdict_combined is not None`) stores; (2)
+`admit_to_trial` for each not already in `forward_trial.json`; (3)
+`admit_repair_to_trial` for any repair attempt resolved SURVIVED/
+PROMISING-WATCHLIST not already admitted; (4) the graveyard-distillation
+family-DIED-count trigger check, drafting entries to a NEW file,
+`docs/site_data/graveyard_distillation_drafts.json`, at `review_status=
+pending_human_approval` — this also closes `factory_loop_status_summary.py`'s
+own previously-documented KNOWN LIMITATION ("nothing persists a draft to disk
+before approval"; its `pending_review` field now reads this real file instead
+of a hardcoded `0`); (5) one forward tick per OPEN Trial record, via the real
+live fetch layer (`tools.timeframe_data.fetch_timeframe_candles` — no
+synthetic candle substitute); (6) regenerate `factory_loop_status.json`.
+
+**2b — dry-run is the default,** confirmed by the flag design: no flag =
+report-only, nothing written anywhere; `--live` is required for any write,
+and is the ONLY thing in this script that spends real money (one
+`draft_distillation_entry` LLM call per family at trigger — skipped with a
+plain message, no call made, if `ANTHROPIC_API_KEY` is unset). **2d** — this
+script never calls `commit_graveyard_entry` at all; a drafted entry sits at
+`REVIEW_PENDING` until a human edits `review_status` by hand (or a future
+Operator Panel does, per Phase 3).
+
+### 2c — real first-run numbers (dry-run, executed this directive, output below verbatim)
+
+```
+Fresh admissions: 8 admitted, 0 not admitted, out of 8 candidates considered.
+  [ADMITTED] RSI2_TREND_PULLBACK_PAXG_4H (adam): admitted: DSL-valid and not freshness-disqualified
+    projected_time_to_min_sample: 40.1 years at the currently measured rate (0.50 trades/year) -- EXCEEDS the 2-year visibility horizon (item 4b)
+  [ADMITTED] ADX_REGIME_IGNITION_SOL_4H (adam): admitted: DSL-valid and not freshness-disqualified
+    projected_time_to_min_sample: 1.2 years at the currently measured rate (16.94 trades/year)
+  [ADMITTED] PAXG_PEG_REVERSION (eve): projected_time_to_min_sample: 0.6 years (35.87 trades/year)
+  [ADMITTED] BTC_VOL_EXPANSION_BREAKOUT (eve): projected_time_to_min_sample: 0.4 years (55.80 trades/year)
+  [ADMITTED] SOL_TREND_ALIGNED_PULLBACK (eve): projected_time_to_min_sample: 0.2 years (103.12 trades/year)
+  [ADMITTED] ETH_BIDIRECTIONAL_ZSCORE_FADE (eve): projected_time_to_min_sample: 0.7 years (27.40 trades/year)
+  [ADMITTED] BTC_MOMENTUM_IGNITION (eve): projected_time_to_min_sample: 0.3 years (77.22 trades/year)
+  [ADMITTED] PAXG_PREMIUM_FADE_DYNAMIC_EXIT (eve): projected_time_to_min_sample: 0.1 years (138.49 trades/year)
+
+Repair admissions: 0 admitted, out of 0 resolved-passing attempts found.
+Graveyard distillation: 1 family/families at or past the trigger:
+  Range Mean Reversion: 4 DIED
+Forward Trial ticks: 0 OPEN record(s).
+```
+
+**Adam's two known hypotheses ARE admissible, confirmed directly, not
+inferred:** `RSI2_TREND_PULLBACK_PAXG_4H` (measured 0.50/yr, claimed 35.0) and
+`ADX_REGIME_IGNITION_SOL_4H` (measured 16.94/yr, claimed 45.0) both pass
+`is_dsl_valid` and are admitted, each visibly labeled with its real projected
+time — 40.1 years (past the 2-year visibility horizon) and 1.2 years
+respectively — never excluded, never silently hidden.
+
+**The design conflict the directive asked to be surfaced, confirmed real:**
+both hypotheses are recorded with `verdict: SKIPPED` / `frequency_classification:
+TOO_SLOW` in `agent_test_results.json` — the frequency gate rejected them
+BEFORE a real backtest verdict ever existed (auto_tester's own upstream SKIP,
+`review_status: rejected_too_slow`). Trial admission's gate is DSL-validity
+alone and does NOT consult that upstream SKIP at all — so both are admitted
+to Trial carrying a SKIPPED entry_verdict as an honest advisory tag, exactly
+as `admit_to_trial`'s own docstring specifies ("the backtest verdict is
+NEVER a condition"). This is real and by design, not a bug: it means Trial
+can hold entries the frequency gate already flagged as impractically slow to
+ever measure — visible via `projected_time_to_min_sample_label`'s own
+"EXCEEDS the 2-year visibility horizon" text, not silently indistinguishable
+from a viable one. Nothing was changed to resolve this tension; it is
+reported, per the directive's own instruction, as a design conflict worth
+surfacing.
+
+**Real distillation candidate found:** the "Range Mean Reversion" family has
+4 DIED hypotheses (`>=` `DIED_COUNT_TRIGGER=3`) — a real, live-computed
+result (`graveyard_distillation.find_families_ready_for_distillation`,
+unchanged), not a fixture. A `--live` run would spend one real LLM call
+drafting this family's distillation entry.
+
+**Tests:** `tests/test_factory_loop_run.py` (17 new tests: candidate
+loading/joining, DSL-gate admission with re-admission dedup, repair-chain
+admission with DIED attempts never becoming candidates, distillation
+trigger detection, dry-run-never-fetches / live-uses-real-fetch-layer for
+forward ticks) + 2 new tests in `tests/test_factory_loop_status_summary.py`
+for the real `pending_review` count. All pass.
+
+## PHASE 3 — Local Operator Panel (report only, per the directive's own instruction)
+
+### 3a — implementation options
+
+**Recommended: a small standalone FastAPI app under a NEW `tools/operator_panel/`
+directory (NOT under `website/`), plus one static HTML+vanilla-JS page it
+serves — run locally via `uvicorn`, calling directly into existing `nero_core`
+functions and `tools/factory_loop_run.py`'s own pure functions as normal
+Python imports (no subprocess, no new write path).**
+
+1. **FastAPI (recommended).** *Effort:* one new dependency
+   (`fastapi`+`uvicorn`, best kept in a separate `requirements-operator-panel.txt`
+   so CI/the public site's own dependency surface never needs it). Built-in
+   `StreamingResponse`/SSE support covers 3b's "stream output live"
+   requirement for Adam/Eve runs with little boilerplate; automatic request
+   validation via Pydantic models matches this project's own existing
+   Pydantic-model discipline (`CLAUDE.md`). *Maintenance:* low — one file,
+   one process, no build step, no auth needed (see 3d).
+2. **Flask.** *Effort:* comparable for the basic routes, but live-streaming
+   output needs an extra library (`flask-sse`) or manual threading/
+   generator wiring FastAPI gets for free. *Maintenance:* similar to option 1
+   otherwise; chosen only if this codebase already leaned on Flask elsewhere
+   (it does not — confirmed, zero Flask imports anywhere in `nero_core`/
+   `tools`).
+3. **A local-only Next.js API route inside the existing `website/` app.**
+   *Effort:* lowest incremental code (reuses the site's existing
+   styling/tooling). *Security/isolation — the reason this is NOT
+   recommended:* item 3d requires a hard guard that this panel can NEVER
+   ship in the public site bundle. Proving that is trivial when the panel
+   is a physically separate directory/process (a test can assert
+   `website/` contains zero references to `tools/operator_panel/`); proving
+   it when the panel's OWN code lives inside `website/`'s own build tree
+   requires trusting a build-config exclusion instead of a directory
+   boundary — a strictly weaker guarantee for something explicitly
+   forbidden from ever being public.
+
+**Recommendation: option 1.** Lowest risk for the one requirement (3d) that
+matters most (never public), acceptable one-time dependency cost, and its
+streaming support is a direct fit for 3b's two "stream output live" runs.
+
+### 3b/3c/3d — not built this directive
+
+**Per the directive's own explicit sequencing note** ("If time runs short,
+Phases 1 and 2 are the ones that matter") **and its own instruction that
+Phase 3 is report-first:** the actual panel (approval queue, budget meter,
+kill switch, repair-chain launch, the 3d hard guard + test) was not built
+this session. Building it correctly — writing ONLY through existing
+functions, with a real kill switch and a correctly-enforced 4-attempt repair
+cap surfaced in the UI — is itself a multi-file, multi-test piece of work
+comparable in size to Phase 2, and rushing it risks bugs in code that writes
+to the same `forward_trial.json`/graveyard files Trial admission depends on.
+Recommended as the clear next session's first task, using the option 1
+design above.
+
+## PHASE 4 — not implemented this directive (see honesty note)
+
+**Per the directive's own text** ("Phases 4, 5, and 6 are independent of
+1-3... If time runs short, Phases 1 and 2 are the ones that matter"): no
+website/site-data change was made this directive. Every number Phase 4 asks
+to surface (the 0/1000 random-baseline result, the real test counts, the
+pre-registration text, claimed-vs-measured frequency, the Truth Ledger page,
+graveyard header, promising-strategies list, quant explainer, news-sentiment
+export, tier-classification fragility) is exactly as it was before this
+directive — **stated honestly as not done, rather than a partial or
+cosmetic change presented as complete.** Recommended as the next parallel
+track once Phase 3 lands, per the directive's own note that 4 can run
+independently of 1-3.
+
+## PHASE 5 — Automation schedule (report only, nothing enabled)
+
+### 5a — real budget arithmetic, re-derived this directive from the live ledger
+
+**FINDING, `docs/site_data/eve_budget_ledger.json` (27 entries), read
+directly:** actual (reconciled) spend so far = **$2.1416** (sum of
+`actual_cost_usd` where `status="actual"`). The 6 orphaned `reserved`
+entries total **$1.27371** (unchanged from the prior directive's own count).
+Combined real consumption against the pre-registration's own stated `~$14`
+envelope (`eve_session_registry.json` line 40, `"sessions_budgeted": "8 Eve
+sessions + 8 Adam runs (~$14)"`) = **$3.4153**, leaving **$10.5847**
+remaining — not the `~$11.7` this directive's own text states. **Flagged as
+stale, Phase 8 note:** the `~$11.7` figure predates at least one entry
+recorded in the ledger's own `actual`/`reserved` totals above; $10.58 is the
+real, current, reproducible number as of this run. Separately, the
+month-level hard ceiling (`MONTH_CEILING_USD=20.0`) has **$17.86** remaining
+against actual spend alone — the two figures track different things (a
+fixed ~$14 pre-registration research budget vs. a $20/month hard safety
+ceiling) and should not be conflated.
+
+Per-run costs (Eve Session 1's real $0.4273 and `DEFAULT_SESSION_BUDGET_USD`
+$1.50 ceiling; Adam's real $0–$0.558 range, n=4 — both carried forward from
+the prior directive's own confirmed figures, re-verified unchanged this
+session) plus Phase 2's new spend line: `tools/factory_loop_run.py --live`
+spends money ONLY when a family is at the distillation trigger (today:
+yes, 1 family) — one `draft_distillation_entry` call, comparable in shape
+and cost to a single Adam hypothesis-generation call (well under $0.30
+based on this project's own observed per-call costs).
+
+- **Weekly schedule** (Adam + Eve + factory-loop-run, worst case): `(1.50 +
+  0.558 + ~0.30) × 4.33 ≈ $10.21/month` — fits the $20 hard ceiling with
+  margin, and burns the real, current $10.58 pre-registration remainder in
+  roughly **4.3 weeks** at worst case (`10.58 / 2.358`), or meaningfully
+  longer at Eve's REAL observed $0.4273 (`10.58 / (0.4273+0.558+0.30) ≈ 8.1`
+  weeks) — both numbers are below the prior directive's own weekly estimate
+  because the real remaining budget is smaller than the `~$14` that estimate
+  assumed and because this directive adds a new spend line (Phase 2's
+  distillation drafting).
+- **Daily schedule:** unchanged conclusion from the prior directive — `(1.50
+  + 0.558) × 30 ≈ $61.74/month` exhausts the $20 hard ceiling in under 10
+  days worst case; **not viable as designed.**
+
+### 5b — guardrails required before any schedule is enabled (report only)
+
+A hard daily spend ceiling that halts (not warns), auto-pause at 80% of
+$20 (`$16`), an ntfy notification per run (success/failure/spend — `nero_
+core.eve.notify` already exists and is used elsewhere in this codebase, so
+this is wiring an existing mechanism, not new infrastructure), and crash-rate
+monitoring that auto-pauses above a threshold (the real observed crash rate
+this project has seen — 6 crashed sessions of 7 real attempts before Phase
+1's streaming fix — makes this the single most important guardrail if
+scheduling is ever enabled before Phase 1's real-world crash-rate impact is
+independently confirmed over more real sessions).
+
+### 5c — compatible with the pre-registered 8-session structure? A real, scoped answer
+
+**The proposed split ("research execution automates, publication/approval
+stays human") holds for `tools/factory_loop_run.py` specifically, more
+cleanly than for Adam/Eve themselves:** `factory_loop_run.py --dry-run`
+(the default) makes zero LLM calls and writes nothing — **it is safe to
+schedule immediately, today, with zero collision with any standing rule**,
+since it only ever reports on hypotheses/attempts that ALREADY exist from a
+deliberately-watched Adam/Eve run. Even `--live` mode doesn't generate a new
+hypothesis or run a new Eve/Adam session — it only admits/drafts/ticks
+data from runs a human already watched separately. **Scheduling Adam or Eve
+generation itself remains the real collision** the prior directive already
+found (collapses the "deliberate, watched click" review discipline
+`research_agent_manual.yml`'s own comment requires) — this directive's own
+work does not change that conclusion, it only narrows which PART of the
+Factory Loop is actually safe to automate today.
+
+### 5d — nothing enabled
+
+No schedule, no `EVE_ENABLED`, no CI cron touched. Options and real numbers
+reported above only.
+
+## PHASE 6 — Multi-timeframe rollout plan (report only, nothing implemented)
+
+**Scope, confirmed from code:** 4 approved crypto assets
+(`nero_core/asset_universe.py::APPROVED_RESEARCH_UNIVERSE` — BTC, ETH, SOL,
+PAXG, all currently only at `4h`) × 5 target timeframes (1h, 2h, 12h, 1d,
+"7d") = **20 (asset, timeframe) pairs**, matching the directive's own "20
+research candle pulls" / "20 fresh K=200 baselines" figures.
+
+- **The 20 research candle pulls:** real fetch time not measured this
+  session (no live network pulls were performed as part of this report-only
+  phase) — recommend timing the FIRST pair's pull as a calibration point
+  before queuing all 20, rather than assuming a per-pair duration.
+- **The 20 K=200 baselines:** confirmed **pure-code, zero LLM spend** —
+  `nero_core/eve/random_baseline.py` (Eve's own random-hypothesis baseline
+  module) contains no `requests`/`anthropic` call of any kind, confirmed by
+  reading the module's own imports. Compute time not measured this session;
+  proportional to the existing single-pair baseline runs already committed
+  (`docs/site_data/{btc,eth,sol,paxg}_4h_random_baseline_result.json`).
+- **The `APPROVED_RESEARCH_UNIVERSE` edit:** a 4-asset × 5-timeframe
+  expansion of the frozenset in `nero_core/asset_universe.py` — explicitly
+  OUT OF SCOPE for this directive (report only); the edit itself is
+  mechanical once each pair's export + baseline exists, per the module's own
+  binding-in-both-directions discipline.
+- **The "7d" decision, verified against Binance's live documentation this
+  directive** (`https://developers.binance.com/docs/binance-spot-api-docs/
+  rest-api/market-data-endpoints`, fetched fresh, not assumed): Binance's
+  real, current kline interval set is `1s, 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h,
+  6h, 8h, 12h, 1d, 3d, 1w, 1M` — **there is no `7d` interval.** Recommend
+  `1w` (the native weekly interval), matching the precedent already
+  established in this codebase's own `tools/timeframe_data.py`
+  (`NATIVE_BINANCE_INTERVAL = {..., "1week": "1w"}`) rather than a
+  client-side 7-candle resample from daily — Binance's `1w` already aligns
+  to a calendar week boundary the same way `market_data.py:223-226`'s own
+  GOLD/SILVER/PLATINUM 12h-from-1h resampling precedent handles a missing
+  native interval, so no NEW resampling code is needed for "7d" specifically
+  — it already has a native answer.
+- **Interval-validation guard:** confirmed real — `tools/timeframe_data.py`'s
+  `fetch_timeframe_candles` passes whatever `NATIVE_BINANCE_INTERVAL[timeframe]`
+  resolves to straight through to the client with no validation that the
+  resulting string is one Binance actually accepts; an invalid entry in
+  that dict would only surface as a live 4xx from Binance at fetch time,
+  not at import/config time. **Recommend** (propose only, per this phase
+  being report-only): a small module-import-time assertion that every value
+  in `NATIVE_BINANCE_INTERVAL`/`NATIVE_TWELVEDATA_INTERVAL` is drawn from a
+  hardcoded closed set of Binance's real intervals (listed above) — the same
+  "closed vocabulary, enforced at the boundary" discipline this codebase
+  already applies to `graveyard_distillation.ALLOWED_FAILURE_PATTERN_VALUES`
+  and the failure-pattern taxonomy.
+
+**Nothing implemented — plan only, per the directive's own instruction.**
+
+## Out-of-scope confirmations, this directive
+
+- `EVE_ENABLED`/`RESEARCH_AGENT_ENABLED` not touched anywhere.
+- No schedule created, no cron/CI file touched (Phase 5, report only).
+- No pair added to `APPROVED_RESEARCH_UNIVERSE` (Phase 6, report only).
+- Nothing at `REVIEW_PENDING` was auto-approved — `tools/factory_loop_run.py`
+  never calls `commit_graveyard_entry`, confirmed by reading its own source:
+  zero references to that function anywhere in the file.
+- No evidence-bar constant changed. Confirmed via `git diff --stat` across
+  every commit this directive — none touch `tools/backtest_statistics.py`,
+  `nero_core/research_agent/frequency_gate.py`, or the constant-defining
+  sections of `nero_core/eve/scoring.py`. The existing
+  `tests/test_eve_citation_freshness.py::ConstantsUncnhangedTest` (asserting
+  `MIN_SAMPLE_SIZE==20`, `TARGET_RESOLVED_TRADES==30`, `FAST_MAX_MONTHS==6.0`,
+  `VIABLE_MAX_MONTHS==12.0`, `DEFAULT_FDR_ALPHA==0.05`,
+  `FRESHNESS_DISQUALIFICATION_WINDOW_DAYS==30`) ran as part of this
+  directive's own full Python suite and still passes.
+- The operator panel (Phase 3b/3c/3d) and every website/site-data change
+  Phase 4 asks for were **not built this directive** — stated plainly above,
+  not glossed over.
+
+## Stale figures found in this directive, and the real values
+
+1. **"~55 test call sites across 3 files" (carried forward from the prior
+   directive) — the file count was stale. The real count is 6 files**, not
+   3 — see Phase 1's own item 1c section above for the 3 additional files
+   and how the gap was actually caught (a real full-suite failure, not a
+   re-read of the old estimate).
+2. **"~$11.7 remaining" (this directive's own Phase 5 text) — stale. The
+   real, live-ledger-derived figure is $10.5847 remaining** of the
+   pre-registration's own `~$14` envelope, as of `docs/site_data/
+   eve_budget_ledger.json`'s 27 real entries at the time this directive ran
+   — see Phase 5a above for the full arithmetic.
+3. Every other figure checked against real, current data this directive
+   (Adam's two known hypotheses' exact measured/claimed rates, the
+   `DIED_COUNT_TRIGGER=3` distillation threshold and the real "Range Mean
+   Reversion" family at 4 DIED, the 6 orphaned reservations totalling
+   $1.27371, the $20 monthly hard ceiling with $17.86 remaining against
+   actual spend) matched what was already stated — no other staleness
+   found.
+
+## Test counts, this directive
+
+**Python:**
+- Before this directive: 2521 tests, OK (matches the prior directive's own
+  closing figure — re-confirmed, not re-run from scratch, since zero Python
+  files were touched between that directive's close and this one's start).
+- **A real, caught-and-fixed regression along the way:** the first full
+  suite run after Phase 1/2's initial changes came back **2553 tests,
+  FAILED (errors=7)** — the 3 additional `_FakeResponse` fixtures from item
+  1c above, not yet fixed at that point. Reported here rather than silently
+  re-running until green, per this directive's own "100% accuracy" standard.
+- After the fix and Phase 2's new tests: **2555 tests, OK** (full
+  `python -m unittest discover -s tests` rerun, 450.7s) — net **+34** from
+  the 2521 baseline.
+- **Reconciliation, stated honestly rather than forced to match:**
+  `git diff e8e6ee0..HEAD -- tests/` (every commit this directive, against
+  the commit `origin/main` was on before this directive started) shows
+  **28** new `def test_` methods, 0 removed — accounting for `+28` of the
+  `+34` test delta directly. The remaining `+6` is not reconciled by this
+  count and is most likely `unittest discover`'s own subtest/parameterization
+  expansion rather than a miscount (`assertRaises`/loop-based test bodies in
+  this suite can register more than one reported test per `def test_`), but
+  that mechanism was not independently re-verified this session — flagged
+  here rather than asserting a tidy reconciliation that isn't fully proven.
+  The 28 new methods break down as (per-file `git diff` count, exact): 17 in
+  `test_factory_loop_run.py`, 2 in `test_factory_loop_status_summary.py`,
+  4 in `test_eve_llm_client.py`, 2 in `test_research_agent_hypothesis_gen.py`,
+  3 in `test_research_agent_web_hypothesis_gen.py` — the other 3 files that
+  needed the `iter_lines()` fixture fix (`test_factory_loop_provenance.py`,
+  `test_repair_lab_diagnosis_boundary.py`, `test_research_agent_secret_
+  handling.py`) added 0 new test methods, only the one shared fixture change
+  each.
+
+**Website:** not run this directive — no `website/` file was touched (Phase
+4 not implemented this session, confirmed above).
+
+## `git log origin/main --oneline -3`, per commit this directive
+
+**After Phase 1's push:**
+```
+1d0bc45 CC-1 Master Directive v2 Phase 1: convert Adam/Eve LLM calls to streaming
+e8e6ee0 Update live scheduler execution log
+7308e8c Update live scheduler execution log
+```
+
+**After Phase 2's push:**
+```
+3fcd9c1 CC-1 Master Directive v2 Phase 2: the Factory Loop runner
+1d0bc45 CC-1 Master Directive v2 Phase 1: convert Adam/Eve LLM calls to streaming
+e8e6ee0 Update live scheduler execution log
+```
+
+Both pushes required a rebase first — `origin/main` had moved 11 commits
+ahead (all automated "Update live scheduler execution log"/"Update strategy
+health check report" entries, unrelated to this work) between this
+directive starting and Phase 1's first push attempt. Rebased cleanly, no
+conflicts, verified via `git log origin/main --oneline` after each push
+(not assumed from a successful `git commit` alone — this project's own
+standing note that a successful commit is not a successful push).
+
+## What the factory still cannot do
+
+Even after Phase 2, the loop is not fully closed: Trial admission and
+graveyard-distillation drafting now run for real, but **nothing yet
+launches a repair chain** (Phase 3.2 of the prior directive already found
+this — still true, unchanged), and **the Operator Panel that would let the
+owner approve a `REVIEW_PENDING` draft or launch a repair chain without
+hand-editing JSON does not exist yet** (Phase 3 of this directive, report
+only). Scheduling anything beyond `factory_loop_run.py --dry-run` remains a
+human decision, deliberately, per Phase 5.
