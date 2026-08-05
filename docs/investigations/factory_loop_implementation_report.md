@@ -1704,3 +1704,791 @@ owner approve a `REVIEW_PENDING` draft or launch a repair chain without
 hand-editing JSON does not exist yet** (Phase 3 of this directive, report
 only). Scheduling anything beyond `factory_loop_run.py --dry-run` remains a
 human decision, deliberately, per Phase 5.
+---
+
+# CC-1 DIRECTIVE — "Turn the factory for real, then finish Phases 3 and 4" (2026-08-06)
+
+New directive, same initiative — continues directly from the prior "CC-1
+Master Directive v2" section above (Phases 1/2 shipped as `1d0bc45`/`3fcd9c1`,
+closing report `f6ccd4c`/`a0584eb`).
+
+## ITEM 1 — Three questions, answered before any code
+
+### 1a — the real remaining budget, recomputed live
+
+**FINDING, `docs/site_data/eve_budget_ledger.json` (still 27 entries — zero
+new activity since the last directive closed):** 21 entries `status="actual"`
+summing to **$2.141599** real reconciled spend; 6 entries `status="reserved"`
+(the same orphaned reservations from before, unchanged: `df7df0f9`,
+`2b98a5f0`, `29f48c2e`, `12e60677`, `b7568699`, `243d095f`) summing to
+**$1.27371**. **CONFIDENCE:** confirmed-from-data (recomputed directly this
+directive, not carried forward).
+
+**Real arithmetic:** $2.141599 + $1.27371 = **$3.415309** consumed against
+the pre-registration's own `~$14` envelope (`eve_session_registry.json`
+line 40) → **$10.5847 remaining** — identical to the prior directive's own
+recomputed figure (nothing has run against this ledger since). Separately,
+against the `$20`/month hard ceiling (`MONTH_CEILING_USD`), actual spend
+alone leaves **$17.8584** — the two figures track different things (see
+prior section) and should not be conflated.
+
+**Unknown-cost calls — a real, confirmed gap, not a number I can report:**
+`nero_core/research_agent/pipeline.py`'s `PipelineRunResult.calls_with_
+unknown_cost` (line 207) is computed correctly per-run and printed as a
+console `WARNING` in `main()` (line 438), but `tools/research_agent_run_
+summary.py` — the ONLY thing that persists Adam's run data to
+`agent_run_summaries.json` — never reads or writes that field (confirmed:
+zero matches for `unknown_cost` in that file). Adam's own historical
+unknown-cost call count is therefore **UNKNOWN — not recoverable from any
+committed file**, only ever visible in a workflow run's own console log at
+the time it happened. Reported honestly rather than guessed; the Operator
+Panel's budget meter (Item 4) shows what's real — Eve's 6/$1.27371 — and
+states this Adam-side gap explicitly rather than fabricating a number for
+it.
+
+### 1b — the design tension, in full
+
+**Both sides, real, from code:**
+
+- **The frequency gate's job** (`nero_core/research_agent/frequency_gate.py`,
+  measured against real historical candles): a hypothesis whose entry
+  condition triggers too rarely to ever accumulate `MIN_SAMPLE_SIZE=20`
+  resolved trades in a practical planning horizon gets `verdict=SKIPPED`,
+  `frequency_classification=TOO_SLOW` — this happens BEFORE any real
+  backtest verdict (SURVIVED/DIED/PROMISING-WATCHLIST) is ever computed for
+  it. Its purpose: don't waste a real backtest (and, for auto_tester's
+  in-sample/out-of-sample split, real statistical power) on a rule that
+  cannot be measured in any useful timeframe. `RSI2_TREND_PULLBACK_PAXG_4H`
+  measured **0.498 trades/year** against a claimed 35.0 — the gate correctly
+  identified this real rule fires roughly once every two years on PAXG/4h.
+- **Trial admission's job** (`nero_core/research_agent/trial.py::
+  admit_to_trial`): admit ANY hypothesis whose `structured_entry_rule`/
+  `structured_exit_plan` parse via the rule-DSL — deliberately NOT
+  conditioned on the backtest verdict OR the frequency classification (see
+  `admit_to_trial`'s own docstring: "the real gate is DSL-validity alone").
+  Its purpose, per this branch's own "measure, never gate" philosophy
+  (`[[feedback_cc1_directive_conventions]]`): a SKIPPED verdict is itself a
+  measurement made on a LIMITED historical sample — the frequency gate
+  could be right that this asset/timeframe/rule combination is genuinely
+  rare, or the historical window it measured against could simply have been
+  a quiet stretch for this specific trigger. Excluding it from Trial would
+  make that judgment permanent and unfalsifiable; admitting it (with its
+  slow projection clearly labeled) lets REAL forward data, not a retrospective
+  guess, eventually confirm or overturn the frequency gate's own finding.
+
+**Why they disagree:** they are measuring different things at different
+times with different consequences. The frequency gate protects a SPECIFIC
+downstream resource (a finite backtest's own statistical power, spent once,
+on a historical window that cannot grow) from being wasted on a rule almost
+certain to starve it. Trial admission protects a DIFFERENT resource (this
+project's own claim to be evidence-based) from silently discarding a
+measurement-worthy idea because one earlier, resource-constrained gate said
+no.
+
+**Recommendation, not a decision (per this item's own instruction):**
+this reads as a deliberate division of labor working as designed, not a bug
+— PROVIDED the resulting Trial entry is never displayed or treated as
+equivalent to a normally-paced one (see 1c below, where this is exactly
+what the display framing has to get right). If it were later found that a
+TOO_SLOW-admitted entry were being weighted, promoted, or averaged into an
+aggregate stat alongside normally-paced entries with no visible distinction,
+THAT would be the point where "deliberate division of labor" tips into
+"silently misleading" — worth a standing regression test asserting
+`unmeasurable_count`/`beyond_2_years_count` stays a SEPARATE, always-shown
+figure, never silently dropped from any aggregate. No such test exists yet
+— proposed here, not built (Item 1 is report-only).
+
+### 1c — the real projected number, and how to frame it
+
+**FINDING, computed directly this directive
+(`trial.compute_projected_time_to_min_sample(0.498181404864742)`):**
+
+```
+years = 40.14601870864704
+label = "40.1 years at the currently measured rate (0.50 trades/year) -- EXCEEDS the 2-year visibility horizon (item 4b)"
+```
+
+**CONFIDENCE:** confirmed-from-code (real function call, real measured
+rate from `agent_test_results.json`, not estimated).
+
+**Where this would actually render, checked directly:** `website/app/
+factory-loop/page.tsx` (173 lines, read in full this directive) shows
+ONLY aggregate counts today — `forwardTrialCount` and its `by_origin`
+split. It does not render any per-hypothesis field, and critically, it
+does not render `unmeasurable_count` at all, even though
+`factory_loop_status_summary.py`'s own `_forward_trial_summary` (already
+shipped, Phase 2 of the prior directive) computes it — a real, already-
+available number the page simply never reads. So today, a 40.1-year Trial
+entry would be invisible on `/factory-loop` — folded into the plain count
+`8`, with nothing distinguishing it from `ADX_REGIME_IGNITION_SOL_4H`'s
+much more measurable 1.2 years.
+
+**Two real framing options, recommend one:**
+
+1. **Aggregate-only badge (cheapest, ships today):** surface the EXISTING
+   `unmeasurable_count` field next to the Forward Trial count — e.g. "8
+   hypotheses in Forward Trial (2 with a projected measurement time beyond
+   2 years — shown, not hidden or excluded, because measuring a genuinely
+   rare trigger honestly takes proportionally longer)." *Effort:* one JSX
+   edit, no new data plumbing (the field already exists in
+   `factory_loop_status.json`'s schema). *Limitation:* doesn't name WHICH
+   hypothesis or its real number (40.1 years specifically), so a reader
+   curious about the outlier has no way to find it.
+2. **Per-hypothesis table/detail** (a new section on `/factory-loop` or a
+   dedicated `/forward-trial` page) listing every entry — name, origin,
+   entry verdict, `projected_time_to_min_sample_label` verbatim — with one
+   shared framing sentence above any row exceeding the 2-year horizon (e.g.
+   "A large number here is a real result, not a bug or a joke: it means
+   this rule's trigger condition is measured, honestly, as genuinely rare
+   at its currently-known rate — it stays open and unpromoted while real
+   data accrues, exactly like every other Trial entry, just on a longer
+   clock."). *Effort:* moderate — needs `forward_trial.json` exported to
+   `docs/site_data/` in a site-fetchable form (it is not currently listed
+   among `website/lib/data.ts`'s fetch functions — `fetchFactoryLoopStatus`
+   only reads the aggregate `factory_loop_status.json`, not the per-record
+   file). *Benefit:* this is exactly the "show the work, including the
+   slow ones, honestly" instinct the whole Master Directive is built
+   around — a number this specific IS the evidence, per item 5's own
+   framing.
+
+**Recommendation: build option 2 as part of Item 5** (site display), since
+Item 2 below will populate `forward_trial.json` with real records this
+directive, including this exact 40.1-year one — the data option 2 needs
+will exist by the time Item 5 starts. Option 1 is a good INTERIM step if
+Item 5's time runs short; not mutually exclusive with option 2, worth
+shipping both.
+
+## ITEM 2 — Turn the factory for real
+
+### 2a — the exact command, and exactly what it writes
+
+**Command:** `python -m tools.factory_loop_run --live` (run from the repo
+root; `ANTHROPIC_API_KEY` in the environment is optional — only consulted
+if a family is at the distillation trigger, see below).
+
+**What it writes, confirmed from the real run below (not predicted):**
+- `docs/site_data/forward_trial.json` — one `TrialRecord.to_dict()` JSON
+  object appended per newly-admitted hypothesis (8, this run).
+- `docs/site_data/graveyard_distillation_drafts.json` — one entry per
+  family at `DIED_COUNT_TRIGGER`, IF drafting succeeds (it did not this
+  run — see below; the file was therefore not created).
+- `data/repair_lab_forward_tracking.db` — one `execution_log` row per
+  forward tick that logs an ENTRY or EXIT signal (7 of 8 ticks this run
+  logged `NO_TRADE`, which writes nothing to this DB; 1 logged a real
+  `ENTRY`).
+- `docs/site_data/factory_loop_status.json` — fully overwritten (a
+  point-in-time snapshot, not appended).
+
+### 2b — real execution, and a real bug caught along the way (per item 2e)
+
+**First `--live` attempt — diverged from the dry-run prediction, stopped
+and reported per item 2e, not pushed through silently:**
+
+1. **Real divergence #1 — a genuine bug the dry run could never have
+   caught:** `tools/factory_loop_run.py`'s `advance_open_trials` expected
+   each written `TrialRecord` dict to carry a `"hypothesis"` key with
+   `asset`/`timeframe` — but `nero_core.research_agent.trial.TrialRecord.
+   to_dict()` (unchanged, pre-existing code) never produces that key, only
+   `source_hypothesis_ref.hypothesis_name`. Dry-run mode never exercises
+   this code path at all (it returns early before touching any record), so
+   this was structurally impossible for the dry run to predict — exactly
+   the "dry run that mispredicts is a bug worth more than the run itself"
+   scenario item 2e names. **Fixed:** `advance_open_trials` now takes a
+   `hypothesis_lookup: dict[str, dict]` (built by `main()` from the SAME
+   Adam/Eve candidate sources `load_adam_candidates`/`load_eve_candidates`
+   already read) and resolves each OPEN record's asset/timeframe by
+   `hypothesis_name` instead of expecting the Trial record to carry a copy.
+   A repaired-origin record's real name (`...__REPAIR_<attempt_id>`) will
+   never match either lookup — reported as a real, scoped, currently-unhit
+   limitation (0 repaired admissions exist yet), not silently papered over.
+   New regression test: `test_hypothesis_not_in_lookup_is_reported_not_
+   crashed`. **A second, quieter finding alongside this:** the PRE-EXISTING
+   test for this function (`test_live_tick_uses_real_fetch_layer_and_logs_
+   outcome`) had put a `"hypothesis"` key directly on its fixture record —
+   a shape that does not match what production code ever actually
+   produces — so it gave false confidence rather than exercising the real
+   path. Fixed to build the lookup the way a real caller now does.
+2. **Real divergence #2 — the local `ANTHROPIC_API_KEY` was rejected:**
+   `graveyard_distillation.draft_distillation_entry`'s own preflight
+   (`validate_api_key`) received a real `401 Unauthorized` from Anthropic's
+   servers — confirmed `$0`, no tokens processed (see Item 3 for the full
+   analysis; this is the SAME key checked there). This is not itself a bug
+   in this directive's code, but it exposed a real robustness gap: the
+   exception propagated UNCAUGHT out of `main()`, crashing the whole `
+   --live` run BEFORE the deterministic remaining steps (regenerating
+   `factory_loop_status.json`) ever executed — a single LLM-dependent step
+   was able to abort work that has nothing to do with whether that call
+   succeeded. **Fixed:** the drafting call is now wrapped in a `try/except
+   graveyard_distillation.ApiKeyRejectedError`, printing the real failure
+   and continuing to the remaining steps, never silently swallowed.
+
+Both fixes are in `tools/factory_loop_run.py`; both are covered by tests
+in `tests/test_factory_loop_run.py` (18 tests total in that file after this
+item, up from 17).
+
+**Second `--live` attempt, after both fixes — completed cleanly, real
+output pasted verbatim:**
+
+```
+Factory Loop run (LIVE):
+
+Fresh admissions: 0 admitted, 8 not admitted, out of 8 candidates considered.
+  [skipped] RSI2_TREND_PULLBACK_PAXG_4H (adam): already admitted to Trial in an earlier run
+  [skipped] ADX_REGIME_IGNITION_SOL_4H (adam): already admitted to Trial in an earlier run
+  [skipped] PAXG_PEG_REVERSION (eve): already admitted to Trial in an earlier run
+  [skipped] BTC_VOL_EXPANSION_BREAKOUT (eve): already admitted to Trial in an earlier run
+  [skipped] SOL_TREND_ALIGNED_PULLBACK (eve): already admitted to Trial in an earlier run
+  [skipped] ETH_BIDIRECTIONAL_ZSCORE_FADE (eve): already admitted to Trial in an earlier run
+  [skipped] BTC_MOMENTUM_IGNITION (eve): already admitted to Trial in an earlier run
+  [skipped] PAXG_PREMIUM_FADE_DYNAMIC_EXIT (eve): already admitted to Trial in an earlier run
+
+Repair admissions: 0 admitted, out of 0 resolved-passing attempts found.
+
+Graveyard distillation: 1 family/families at or past the trigger:
+  Range Mean Reversion: 4 DIED
+
+Forward Trial ticks: 8 OPEN record(s).
+  RSI2_TREND_PULLBACK_PAXG_4H: NO_TRADE tick logged; still PENDING_FORWARD_DATA
+  ADX_REGIME_IGNITION_SOL_4H: NO_TRADE tick logged; still PENDING_FORWARD_DATA
+  PAXG_PEG_REVERSION: NO_TRADE tick logged; still PENDING_FORWARD_DATA
+  BTC_VOL_EXPANSION_BREAKOUT: NO_TRADE tick logged; still PENDING_FORWARD_DATA
+  SOL_TREND_ALIGNED_PULLBACK: NO_TRADE tick logged; still PENDING_FORWARD_DATA
+  ETH_BIDIRECTIONAL_ZSCORE_FADE: ENTRY tick logged; still PENDING_FORWARD_DATA
+  BTC_MOMENTUM_IGNITION: NO_TRADE tick logged; still PENDING_FORWARD_DATA
+  PAXG_PREMIUM_FADE_DYNAMIC_EXIT: NO_TRADE tick logged; still PENDING_FORWARD_DATA
+
+Distillation drafting failed: ANTHROPIC_API_KEY is present but was rejected (401 Unauthorized) by the Claude API. No further calls were attempted this run -- check the key's validity before retrying. (confirmed $0 -- rejected before any token was processed; the rest of this run still completes).
+
+factory_loop_status.json regenerated:
+Factory Loop status:
+  Forward Trial: 8 (adam=2 eve=6 repaired=0, unmeasurable=1)
+  Graveyard: 21 (distilled_this_period=0 pending_review=0)
+  Repair: 0 chains (open=0 resolved=0)
+```
+
+**The "Range Mean Reversion" distillation draft was NOT written this
+directive** — the only blocker was the rejected key, confirmed $0 spent,
+not a design or process decision. Out-of-scope item ("do not approve it")
+is trivially still true: nothing was drafted to approve or reject.
+
+**One real, live signal worth naming plainly:** `ETH_BIDIRECTIONAL_ZSCORE_
+FADE` (Eve, measured 27.40 trades/year) logged a real `ENTRY` tick against
+real, live-fetched ETH/4h candles — the first real forward-tracked position
+this project's Trial mechanism has ever opened. Paper only, per this
+project's own hard rule; no real capital at risk.
+
+### 2c — real before/after numbers
+
+| | Before | After |
+|---|---|---|
+| Forward Trial count | 0 | **8** |
+| — by origin | adam=0, eve=0, repaired=0 | **adam=2, eve=6, repaired=0** |
+| — unmeasurable_count | 0 | **1** (`RSI2_TREND_PULLBACK_PAXG_4H`, 40.1yr) |
+| Graveyard count | 21 | 21 (unchanged — nothing committed to it this run) |
+| Repair chains | 0 | 0 (unchanged — 0 repair events exist) |
+
+Source: `docs/site_data/factory_loop_status.json`, `last_updated` moved
+from `2026-08-05T02:09:23Z` (stale, from before Phase 2 even shipped) to
+`2026-08-05T23:11:00Z` (this run).
+
+### 2d — live-site confirmation: unable to verify, stated plainly
+
+**No confirmed production URL exists anywhere in this repository** —
+re-confirmed this directive (grepped `website/package.json`, `README.md`,
+`.github/workflows/` for a `vercel.app` or custom domain: zero matches,
+matching the prior directive's own identical "unable-to-verify" finding).
+`.github/workflows/` contains no deploy workflow either — this site is
+evidently deployed by an external process (e.g. a Vercel GitHub
+integration) outside this repository's own visible configuration. **I
+cannot check a live URL I do not have.** What IS true and checkable: the
+real data change (`forward_trial.json`, `factory_loop_status.json`) is
+pushed to `origin/main` as part of this item (see commit hash below) — if
+the site's ISR (`revalidate: 300`, confirmed in `factory-loop/page.tsx`)
+is wired to this branch, it will pick up the new numbers within 5 minutes
+of that push, but this is inferred from the code's own revalidate config,
+not independently confirmed against a live response.
+
+### 2e — divergence handling
+
+Both real divergences (2b above) were stopped on, root-caused, and fixed
+before the run was allowed to complete — per this item's own instruction,
+neither was silently pushed through.
+
+## ITEM 3 — Prove streaming actually works
+
+### 3a — real trigger commands, requirements, and expected cost
+
+**Adam — production path:** GitHub Actions `workflow_dispatch` on
+`.github/workflows/research_agent_manual.yml` (confirmed: `on:
+workflow_dispatch:` only, no `schedule:` block, by explicit design —
+"every run after it must be a deliberate, watched click from the Actions
+tab, not an automation"). That job sets `RESEARCH_AGENT_ENABLED: "true"`
+and `ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}` inline, for that
+one step only — **a GitHub Actions repository secret, a DIFFERENT
+credential from the `ANTHROPIC_API_KEY` environment variable available in
+this local session** (this distinction matters for 3c below). Local
+equivalent: `RESEARCH_AGENT_ENABLED=true python -m nero_core.research_
+agent.pipeline` with a valid key in the environment. **Real expected
+cost:** $0–$0.558 per run (n=4 historical, carried forward from the prior
+directive, re-confirmed unchanged this session).
+
+**Eve — no production path exists.** Confirmed by direct search: zero
+files under `.github/workflows/` reference Eve or `nero_core.eve` in any
+way. Every real Eve session to date (the "6 crashed, 1 completed" record)
+was run manually/locally, never via a repeatable CI workflow. The real
+command: `EVE_ENABLED=true python -m nero_core.eve.pipeline` (confirmed
+entrypoint: `nero_core/eve/pipeline.py:416` `def main()` /
+`if __name__ == "__main__":` at line 435), reading `ANTHROPIC_API_KEY`
+from the environment once (line 421) and never logging it (enforced by
+`test_eve_secret_handling.py`'s own ast-based check). **Real expected
+cost:** ceiling `DEFAULT_SESSION_BUDGET_USD=$1.50`; real Session 1 actual
+was $0.4273.
+
+### 3b — what evidence would demonstrate the fix worked
+
+**The clearest single tell:** a `docs/site_data/eve_budget_ledger.json`
+entry moving from `status="reserved"` (a pre-call reservation,
+`actual_cost_usd: null`) to `status="actual"` with a fully populated
+`usage` dict (`input_tokens`, `output_tokens`, `cache_read_input_tokens`,
+`cache_creation_input_tokens` all non-null) — proving a full request/
+response round trip completed, the opposite of every one of the 6 real
+orphaned entries today (all still `status="reserved"`, `actual_cost_usd:
+null`, forever, because the session crashed before any reconciliation
+could happen).
+
+**For Eve specifically:** `docs/site_data/eve_session_registry.json`'s new
+session entry showing `terminated_because: "end_session_called"` or
+`"max_turns_safety_cap_reached"` (both NORMAL, expected terminations) —
+never `"crashed_mid_session"` (`TERMINATION_CRASHED`, `session.py`'s own
+constant for exactly the failure mode Phase 1 targeted).
+
+**For Adam specifically:** `docs/site_data/agent_run_summaries.json`'s new
+run entry showing `total_llm_cost_usd` non-null and non-zero with a
+plausible `hypotheses_generated` count, compared against the historical
+0-hypotheses-at-180s pattern the prior directive's own report already
+documented (`llm_calls_made: 3, total_llm_cost_usd: 0.0` — a run where
+every call failed).
+
+**The literal, lowest-level tell, if a raw log is available:** the request
+body Adam/Eve now send includes `"stream": true` (this directive's own
+Phase 1 regression tests assert exactly this) — a captured request body
+without that key would mean a silent revert, which the anti-regression
+tests are designed to catch before it ever reaches a real run.
+
+### 3c — real attempt, real result, stated plainly (not simulated)
+
+**A real, authenticated call WAS attempted this directive** — not by
+design (Item 3 was reached after Item 2), but Item 2b's distillation-
+drafting step made a genuine preflight call
+(`nero_core.research_agent.hypothesis_gen.validate_api_key`, called from
+inside `graveyard_distillation.draft_distillation_entry`) using this local
+session's real `ANTHROPIC_API_KEY` (confirmed present, 108 characters —
+real-shaped, not empty or a placeholder). **Real result: HTTP 401
+Unauthorized from Anthropic's own servers** — confirmed `$0` cost (rejected
+before any token was processed, per `validate_api_key`'s own documented
+401 semantics) — see the verbatim output in Item 2b.
+
+**What this does and does not prove:** it confirms request formation and
+network reachability are correct (a real response came back FROM Anthropic,
+not a connection error) — but it does NOT exercise the streaming assembly
+path at all, since `validate_api_key`'s own preflight call was deliberately
+kept non-streaming in Phase 1 (a `max_tokens=1` probe, real risk of an idle
+timeout is structurally near-zero regardless). **A full, real, streamed
+call with actual generated content was NOT made this directive.**
+
+**Why I stopped here rather than pushing further, per this item's own
+"if you cannot — say so plainly and stop" instruction:**
+1. The local key is rejected — confirmed, not assumed.
+2. Even with a valid key, both `RESEARCH_AGENT_ENABLED` and `EVE_ENABLED`
+   are unset (confirmed: `False` for both, checked directly) in this
+   environment — both agents' own kill-switch (`nero_core.research_agent.
+   config.is_enabled`/`nero_core.eve.config.is_enabled`) would refuse to
+   run. Flipping either myself would mean overriding this project's own
+   deliberate, standing default — not something to do unilaterally to make
+   a demo possible.
+3. The actual PRODUCTION trigger (GitHub Actions `workflow_dispatch` with
+   the repo's own secret) is outside my reach: no `gh` CLI is available in
+   this environment (confirmed: `gh: command not found`), and dispatching
+   a workflow requires `actions:write` permission I have no evidence of
+   holding.
+
+**No agent run was simulated or faked to produce a report-friendly
+result.** The one real call this directive made is reported exactly as it
+happened, including its real failure.
+
+## ITEM 4 — the Local Operator Panel, built
+
+**Chosen implementation (per the prior directive's own Phase 3a
+recommendation, confirmed still the right call, no findings argued
+against proceeding):** a standalone FastAPI app under `tools/operator_
+panel/` (`app.py`, one file, plus `static/index.html` — vanilla JS, no
+build step), run locally via `uvicorn`/`python -m tools.operator_panel.app`
+(bound to `127.0.0.1` in code, not just documentation). New dependency
+(`fastapi`, `uvicorn`, `python-multipart`) isolated in its own `requirements-
+operator-panel.txt`, never merged into the main `requirements.txt` every CI
+workflow installs.
+
+**3d — the hard guard, and its test:** `tests/test_operator_panel_no_
+public_bundle.py` (5 tests) — zero string references to the panel anywhere
+under `website/` (scanned every file, `node_modules`/`.next` excluded),
+`website/package.json` carries no `fastapi`/`uvicorn` dependency, no
+`.github/workflows/*.yml` references the panel, and the panel's own
+requirements file is confirmed separate from the main one. All 5 pass.
+
+**What it can do, all writing through existing functions, confirmed by
+test (`tests/test_operator_panel.py`, 11 tests):**
+- **Run Adam** (`POST /api/adam/run`) — spawns `python -m nero_core.
+  research_agent.pipeline` (the exact entrypoint the production GitHub
+  Actions workflow calls), with `RESEARCH_AGENT_ENABLED=true` set only for
+  that one subprocess's environment, streaming stdout live via SSE.
+- **Run Eve** (`GET /api/eve/preflight` then `POST /api/eve/run`) — shows
+  the real session ceiling ($1.50) and real remaining pre-registration
+  budget before requiring `confirm=true`; spawns `python -m nero_core.eve.
+  pipeline` with `EVE_ENABLED=true` for that one subprocess only.
+- **Run the Factory Loop** — `POST /api/factory-loop/dry-run` calls the
+  identical pure functions `tools/factory_loop_run.py`'s own `main()` calls
+  in dry-run mode (test-verified this endpoint never calls `append_json_
+  list`); `POST /api/factory-loop/live` requires `confirm=true` and calls
+  the identical sequence the real Item 2 run used.
+- **Approval queue** — `GET /api/approval-queue` lists every `REVIEW_
+  PENDING` entry in `docs/site_data/graveyard_distillation_drafts.json`.
+  Approve sets `review_status` the same way a human editing the JSON by
+  hand would, then calls the real `graveyard_distillation.commit_graveyard_
+  entry` (test-verified: the mocked `commit_graveyard_entry` is called
+  with an entry whose `review_status == "approved"`; `commit_graveyard_
+  entry`'s own `EntryNotApprovedError` is still the backstop even if this
+  endpoint had a bug). Reject sets `review_status="rejected"` and never
+  calls `commit_graveyard_entry` (test-verified). **No draft exists in the
+  queue as of this directive's own Item 2 run** (the real distillation call
+  failed on the rejected key) — the queue is real and correctly empty,
+  not a placeholder.
+- **Budget meter** (`GET /api/budget`) — real numbers, same computation as
+  Item 1a: actual spend, the 6 orphaned reservations and their total, both
+  remaining-budget figures, and Adam's unknown-cost-call gap reported as
+  `null` with an explicit note (never fabricated).
+- **Kill switch** (`POST /api/kill/{run_id}`) — terminates the tracked
+  subprocess; `GET /api/runs` lists what's currently running.
+- **Repair chain — deliberately incomplete, reported rather than risked:**
+  `GET /api/repair/candidates` shows the real 3 candidates from `repair_
+  candidates.json` with their real, live-computed 4-attempt-cap status (all
+  3 currently show 0/4 launched). `POST /api/repair/propose` calls the
+  real `repair_lab.propose_modification` (one real LLM call) and `repair_
+  lab.validate_modification`. **It stops there, by design — see the
+  endpoint's own docstring:** committing an actual launch (choosing a
+  fresh-data mechanism and calling `repair_lab.append_repair_event` with
+  `EVENT_ATTEMPT_LAUNCHED`) has no existing single entry point anywhere in
+  this codebase — nothing has ever launched a repair chain in production
+  (confirmed, the prior directive's own finding, still true). Assembling
+  that commit sequence for the first time inside this panel would itself
+  be a new write path, which this directive's own instruction says to stop
+  and report on rather than build blind. Test-verified via AST parse (not
+  a substring scan, since the module's own docstring names the function in
+  prose): `append_repair_event` is never called anywhere in `app.py`.
+  **Recommendation:** a follow-up session should build `tools/repair_
+  chain_launch.py` as its own carefully-tested script — mirroring how
+  `tools/factory_loop_run.py` itself was built in the prior directive —
+  before this panel's "Launch" button can safely go further than propose.
+
+**Manually smoke-tested against this repo's real, current data** (not
+just mocks): `/api/budget` returned the exact same $10.5847/$17.8584
+figures as Item 1a's own hand-computed arithmetic; `/api/factory-loop/dry-
+run` correctly reported all 8 hypotheses as already-admitted (post-Item 2);
+`/api/repair/candidates` correctly showed all 3 real candidates at 0/4
+attempts; `/api/eve/preflight` correctly showed `eve_enabled: false`
+(matching Item 3's own finding).
+
+**Not done this directive:** the panel was not actually served/opened in a
+browser (`python -m tools.operator_panel.app` was not run as a live
+server) — every endpoint was verified via FastAPI's own `TestClient` (an
+in-process real request/response cycle, not a mock of FastAPI itself) plus
+one direct smoke-test script exercising the real repo data (both shown
+above), which is the honest limit of what this text-only session can
+independently confirm without a browser.
+
+## ITEM 5 — Show the work: what shipped, what's report-only, and why
+
+**Efficiency note (per this item's own "independent, can run in
+parallel" permission):** investigated in parallel with Items 2-4 wherever
+that was faster (e.g. Item 1a's ledger read directly informs 5's budget
+figures); built sequentially after Item 4, once real Forward Trial data
+existed to display.
+
+### Real finding before any build: two of the eight sub-items were already done
+
+Investigating `website/app/agents/page.tsx` (250 lines, read in full)
+before writing anything found:
+- **5e (claimed vs. measured frequency) is already fully built**,
+  including the exact Track A A6 caveat wording ("The direction
+  (overestimation) is consistent so far; the magnitude, on this few data
+  points, is not something to trust yet."). Not duplicated.
+- **5d (pre-registration, Session N of 8, crashes counted separately) is
+  already substantially built** (`pre-registration-progress` section,
+  real `Session {N} of 8`, a dedicated "Session health" list with every
+  crashed attempt shown, never hidden). **One real, confirmed gap found
+  and closed this directive:** `pre_registration.kill_criterion` was
+  typed (`lib/types.ts`) and fetched, with a comment even naming it as
+  something this page's lib layer prepares — but never actually rendered
+  anywhere. Now displayed verbatim (new test:
+  `shows the kill criterion verbatim...`).
+
+### 5a — built: the random baselines, now prominent, not a footnote
+
+**FINDING, re-read directly from all 5 source files this directive
+(`docs/investigations/{btc,eth,sol,paxg}_4h_random_baseline_result.json`,
+`docs/investigations/btc_24h_random_baseline_result.json`), their own
+`verdict_counts` fields:**
+
+| Pair | K | SURVIVED | PROMISING-WATCHLIST | DIED | SKIPPED |
+|---|---|---|---|---|---|
+| BTC/4h | 200 | 0 | 0 | 69 | 131 |
+| BTC/24h | 200 | 0 | 0 | 64 | 136 |
+| ETH/4h | 200 | 0 | 3 | 63 | 134 |
+| SOL/4h | 200 | 0 | 0 | 70 | 130 |
+| PAXG/4h | 200 | 0 | 8 | 63 | 129 |
+| **Total** | **1000** | **0** | **11** | **329** | **660** |
+
+**0 SURVIVED out of 1000**, confirmed exactly. New `RandomBaselinePanel`
+on `/agents` (static content — a completed, one-time investigation, not
+something that changes run to run, matching `/methodology`'s own
+established "static-prose" convention rather than building a live export
+for numbers that will not move) states this prominently with the real
+per-baseline breakdown and an honest note distinguishing PROMISING-
+WATCHLIST-by-chance (expected, 11/1000) from SURVIVED (the real bar,
+0/1000). **One real, minor stale-figure note:** `btc_4h_random_baseline_
+result.json`'s own committed `note` field explains that an EARLIER,
+different-methodology BTC/4h investigation (Eve's own IS/OOS split,
+`eve_engine_v1_report.md`) reported 17/200 PROMISING-WATCHLIST in-sample
+(all died OOS) — a figure `nero_core/asset_universe.py`'s own comment
+still cites. This directive's 5 files use a CONSISTENT combined-verdict
+methodology across all five pairs instead, under which BTC/4h shows 0 —
+the file's own note explicitly warns these are not expected to match. Not
+a bug, not silently reconciled — both real, both cited precisely, for two
+different investigations.
+
+### 1c/5f — built: the Forward Trial table and unmeasurable_count
+
+Covered under Item 2/1c above — `factory_loop_status_summary.py` computed
+`unmeasurable_count` since the prior directive but `/factory-loop` never
+rendered it; now shown, plus a new per-hypothesis table (name, origin,
+entry verdict, `projected_time_to_min_sample_label` verbatim) reading a
+new `fetchForwardTrial()` — `docs/site_data/forward_trial.json` needed NO
+new export step (same "already lives under docs/site_data/, fetchJson
+reaches it directly" plumbing this site's own Eve fetchers already use).
+The 40.1-year `RSI2_TREND_PULLBACK_PAXG_4H` entry now renders with the
+exact framing this directive's own Item 1c asked for: "a real, honestly-
+measured result... not a bug or a joke."
+
+### Entry/exit chart markers — report only, confirmed real and not rebuilt
+
+**FINDING:** `website/components/CandlestickChart.tsx`'s `setMarkers` call
+(line 64) and `website/lib/chartMarkers.ts`'s `buildChartMarkers` (real,
+tested for the empty case in `CandlestickChart.test.tsx`) are both real
+and unchanged. **Real trade data exists for both named strategies** —
+`docs/site_data/ledger_full.json`'s 220 real rows include **87 for
+ORDERFLOW_IMBALANCE and 4 for PEAD** (counted directly this directive).
+**CONFIDENCE: confirmed-from-code that the mechanism and the data both
+exist; unable-to-verify that markers visually render correctly** — that
+would require opening the live page in a browser (candle-range/trade-
+timestamp overlap is a real, plausible failure mode `buildChartMarkers`
+itself guards against with an explicit in-range check, but confirming it
+actually clears for these two strategies' real data needs a render, not
+a code read). Not rebuilt, per this item's own explicit instruction.
+
+### 5c — built: the test suite as a public number
+
+Added to the new `RandomBaselinePanel`'s neighboring context is not the
+only place this belongs, but given time, the real, current counts are
+recorded here for the closing report table below rather than a third
+website change this directive: **2572 Python + 629 website tests** (both
+real, both re-run this directive, see the Test counts section).
+**Recommendation, not built:** a small, permanent "N tests, run before
+every change" stat belongs on `/methodology` in its own register — scoped
+but not implemented this directive.
+
+### 5g — News Sentiment export: real current state, not built
+
+**FINDING:** `nero_core/truth_ledger/execution_log.py` has `list_news_
+sentiment_log_for_run(run_id, ...)` (confirmed, line 341) — a PER-RUN
+query function, not the aggregate `list_news_sentiment_log()` this
+directive's own text names. **No `docs/site_data/news_sentiment.json`
+export exists** (confirmed, no such file anywhere under `docs/site_data/`)
+and **no website display component exists** (confirmed, zero files match
+`*news-sentiment*`/`*NewsSentiment*` under `website/`). **CONFIDENCE:**
+confirmed-from-code. **Not built this directive** — a real aggregate
+export function, a new site_data export step (likely wired into the same
+scheduler that runs `export_site_data.py`), and a new display component
+are three separate pieces of new work, comparable in size to Item 5a's
+random-baseline panel on its own; genuinely out of remaining scope this
+session. Recommended as a bounded, well-defined next-session task (the
+per-run function already exists, so the aggregate version is additive,
+not a redesign).
+
+### 5h — tier classification fragility: confirmed real, proposal only, no config changed
+
+**FINDING:** `website/lib/tier.ts::classifyTier` (line 26) matches a
+free-text `verification_status` string via `.startsWith()` against 4
+known prefixes, defaulting SILENTLY to `"experimental"` for anything
+unmatched (the final `return "experimental"` at line 36 has no `else`
+guard, no warning, no test failure). **Confirmed a typo really can
+misclassify a config with zero error anywhere:** `nero_core/execution/
+verification_status.py` (the ONE Python-side source of these strings,
+confirmed by its own docstring) is a hand-authored `dict[tuple, str]`
+with **no enum, no closed vocabulary, and no test enforcing one**
+(confirmed: `tests/test_verification_status.py` only tests the *default*
+fallback for an unknown `(strategy_id, version, asset)` KEY, never
+validates the STRING VALUES against a closed set). A status string like
+`"verifed"` (typo) or `"Watch-list"` would pass Python-side silently and
+land in `"experimental"` on the live site with no error anywhere.
+**CONFIDENCE:** confirmed-from-code, both sides.
+
+**Proposal (not built, per this item's own instruction), two options:**
+1. **Python-side test**, mirroring `graveyard_distillation.ALLOWED_
+   FAILURE_PATTERN_VALUES`'s own enforced-taxonomy pattern: a small
+   `ALLOWED_VERIFICATION_STATUS_PREFIXES` frozenset (`"experimental"`,
+   `"forward-test-only"`, `"watchlist"`, `"promising-watchlist"`,
+   `"verified"`, `"triple-verified"`) plus one test asserting every value
+   in `VERIFICATION_STATUS.values()` starts with one of them, byte-
+   identical in spirit to `classifyTier`'s own prefix list so the two can
+   never silently drift apart. *Effort:* trivial (one constant, one test).
+2. **TypeScript-side hardening**: `classifyTier` logs a console warning
+   (server-side, at page-render time, so it would appear in the site's own
+   build/deploy logs) when it falls through to the default case, so an
+   unmatched status is at least visible somewhere instead of silently
+   indistinguishable from a genuinely-intended "experimental."
+   *Effort:* small, but only surfaces the problem after it has already
+   happened at least once.
+
+**Recommend option 1** — it catches the typo before it ever reaches the
+site at all, at the same layer (`nero_core/execution/verification_
+status.py`) where the string is actually authored, rather than downstream
+where the damage is already done. **No config's tier was changed.**
+
+### 5b / 5f (remaining) — not built this directive, stated plainly
+
+**Not built, real scope estimate for each, honestly:**
+- **5b, the machinery page** — a new page enumerating Repair Lab v1,
+  Trial admission, distillation, provenance, citation, self-dedup, FDR
+  correction, crash-safety, and the budget ledger, each labeled built/
+  running/never-invoked. Every underlying fact needed for this already
+  exists in this and the prior directive's own closing-report sections —
+  this is real writing/layout work, not investigation, comparable in size
+  to the `/agents` page itself.
+- **5f — Truth Ledger's own page with a 5th commentary column, a
+  Graveyard page header, a simplified Factory Loop diagram, and a
+  dedicated "Promising strategies" list** — four separate, real pieces of
+  UI work. Note on the last one specifically: today there is genuinely
+  nothing REAL to list under "promising" by the site's own SURVIVED/
+  PROMISING-WATCHLIST vocabulary (Adam: 0/0 cumulative, confirmed;
+  Eve: 0/0 combined-verdict, confirmed) — an honest empty state, not a
+  missing feature, unless "promising" is meant to reuse the EXISTING
+  `watchlist` tier (14 live configs, per `lib/tier.ts`), which is a real,
+  buildable list today but a different concept than SURVIVED/PROMISING-
+  WATCHLIST Trial results. Flagged as ambiguous rather than silently
+  picking an interpretation.
+
+**None of 5b/5f (remaining) was implemented this directive** — reported
+honestly, not attempted partially and presented as done.
+
+## Out-of-scope confirmations, this directive
+
+- Nothing at `REVIEW_PENDING` was approved — the queue was real and empty
+  (the one real distillation attempt failed on a rejected key, confirmed
+  $0). The Operator Panel's Approve button was test-verified, never
+  clicked for real.
+- The operator panel was never deployed publicly; no public auth added.
+- No schedule enabled, `EVE_ENABLED` untouched everywhere.
+- No repair chain was launched — the panel's own `/api/repair/propose`
+  was built and test-verified but never invoked against the real API this
+  directive (it would spend real money); nothing was committed to
+  `repair_attempts.json`.
+- No pair added to `APPROVED_RESEARCH_UNIVERSE`.
+- No evidence-bar constant changed — confirmed via `git diff --stat
+  dfb4bbc..HEAD` (the commit `origin/main` was on before this directive)
+  against `tools/backtest_statistics.py`, `nero_core/research_agent/
+  frequency_gate.py`, and `nero_core/eve/scoring.py`: zero changes to any
+  of the three. `tests/test_eve_citation_freshness.py::
+  ConstantsUncnhangedTest` re-run directly this directive: still passes.
+- Binding freshness disqualification was not re-enabled.
+- The 6 orphaned reservations were not reconciled (still 6, still
+  $1.27371, confirmed unchanged in Item 1a's own recomputation).
+- No config's tier was changed (5h is a proposal only).
+
+## Test counts, this directive
+
+**Python:** before = **2555** (the prior directive's own closing figure).
+A real, caught-and-fixed intermediate regression is documented under Item
+2 above (not a test-count issue, a runtime bug). After Item 2's two bug
+fixes: **2556** (+1, the new `test_hypothesis_not_in_lookup_is_reported_
+not_crashed`). After Item 4: **2572** (+16: 5 hard-guard tests + 11
+endpoint tests). Item 5 added no new Python tests (website-only). **Final:
+2572 tests, OK** (`python -m unittest discover -s tests`, 498.9s).
+
+**Website:** before = **624** (622 passing, 2 pre-existing unrelated
+failures in `siteDataSchema.test.ts`, re-confirmed unchanged this
+directive by name and cause). After Item 5: **629** (627 passing, same 2
+pre-existing failures — net +5: 2 in `agentsPageRender.test.tsx`, 3 in
+`factoryLoopPage.test.tsx`). `tsc --noEmit` clean outside `__tests__/`
+(the jest-dom matcher gap inside `__tests__/` is pre-existing/project-
+wide, confirmed via `strategyPage.test.tsx`, untouched this directive).
+
+## `git log origin/main --oneline -3`, per commit this directive
+
+**After Item 2's push:**
+```
+1652ffe CC-1 directive: turn the factory for real (Item 2) + two real bugs fixed
+dfb4bbc Update live scheduler execution log
+a0584eb CC-1 Master Directive v2: fill in this report's own commit hash (item 0)
+```
+
+**After Item 4's push:**
+```
+e3730ca CC-1 directive Item 4: the Local Operator Panel
+1652ffe CC-1 directive: turn the factory for real (Item 2) + two real bugs fixed
+dfb4bbc Update live scheduler execution log
+```
+
+**After Item 5's push:**
+```
+dfaf70e CC-1 directive Item 5: show the work (5a, 5d partial, 1c)
+e3730ca CC-1 directive Item 4: the Local Operator Panel
+1652ffe CC-1 directive: turn the factory for real (Item 2) + two real bugs fixed
+```
+
+(Item 1 and Item 3 were report-only, no commit of their own — their real
+findings are folded into the record above; Item 2's commit covers both.)
+
+## What the factory still cannot do
+
+Trial admission and forward-tick advancement now run for real (8 real
+entries, 1 real ENTRY signal), but: **no repair chain has been launched**
+(the Operator Panel's own propose/validate step exists and is tested, but
+committing a launch has no existing code path — see Item 4). **No
+distillation entry has actually been drafted** (the one real attempt this
+directive failed on a rejected `ANTHROPIC_API_KEY` — confirmed $0, not a
+process gap). **Nothing runs on a schedule** — every real write this
+directive produced came from a manual, deliberately-watched command.
+**Adam's own unknown-cost-call count remains unrecoverable from any
+committed file** (Item 1a's own confirmed gap) — the ONE piece of budget
+accounting this directive could not make the Operator Panel show honestly,
+because the underlying number was never persisted anywhere to read.
+
+## Figures found stale this directive, and the real values
+
+1. **This directive's own "~$11.7 remaining" — confirmed stale again.**
+   The real, live-ledger figure is unchanged from the prior directive's own
+   recomputation: **$10.5847** (Item 1a). Nothing ran against the ledger
+   between the two directives, so this is the same real number, still not
+   matching the directive text's own carried-forward figure.
+2. **`nero_core/asset_universe.py`'s own comment ("BTC/4h: 17 PROMISING-
+   WATCHLIST") — not wrong, but describes a DIFFERENT, earlier
+   investigation** (Eve's own IS/OOS split) than the 5 consistent combined-
+   verdict baseline files this directive cites for the 0/1000 SURVIVED
+   figure (which show BTC/4h at 0 PROMISING-WATCHLIST under THIS
+   methodology) — see Item 5a above for the full reconciliation, sourced
+   from the data file's own committed `note` field, not inferred.
+3. Every other figure checked against real, current data this directive
+   (the 8 real Forward Trial admissions and their exact projected times,
+   the 6 orphaned reservations at $1.27371, the real ETH_BIDIRECTIONAL_
+   ZSCORE_FADE ENTRY signal, ORDERFLOW_IMBALANCE/PEAD's real 87/4 ledger
+   rows) matched what was already stated or was newly, honestly reported —
+   no other staleness found.
