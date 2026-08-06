@@ -1,0 +1,152 @@
+[
+  {
+    "hypothesis_name": "RSI2_TREND_PULLBACK_PAXG_4H",
+    "asset": "PAXG",
+    "timeframe": "4h",
+    "verdict": "SKIPPED",
+    "review_status": "rejected_too_slow",
+    "frequency_classification": "TOO_SLOW",
+    "measured_trades_per_year": 0.498181404864742,
+    "expected_time_to_30_trades_months": 722.6283367556468,
+    "reason": "Measured 1 trigger(s) over 733 eligible days (0.50 trades/year) -> ~722.6 months to 30 resolved trades -> TOO_SLOW.",
+    "train": null,
+    "test": null,
+    "tested_at": "2026-08-04T11:10:43.890088+00:00"
+  },
+  {
+    "hypothesis_name": "ADX_REGIME_IGNITION_SOL_4H",
+    "asset": "SOL",
+    "timeframe": "4h",
+    "verdict": "SKIPPED",
+    "review_status": "rejected_too_slow",
+    "frequency_classification": "TOO_SLOW",
+    "measured_trades_per_year": 16.93816776540123,
+    "expected_time_to_30_trades_months": 21.253774610460198,
+    "reason": "Measured 34 trigger(s) over 733 eligible days (16.94 trades/year) -> ~21.3 months to 30 resolved trades -> TOO_SLOW.",
+    "train": null,
+    "test": null,
+    "tested_at": "2026-08-04T11:10:43.890088+00:00"
+  },
+  {
+    "hypothesis_name": "INTRADAY_TSMOM_BTC_4H",
+    "asset": "BTC",
+    "timeframe": "4h",
+    "verdict": "DIED",
+    "review_status": "dead",
+    "frequency_classification": "FAST",
+    "measured_trades_per_year": 673.0430779722664,
+    "expected_time_to_30_trades_months": 0.5348840390493315,
+    "reason": "train: N=228 ExpR=-0.008; test: N=93 ExpR=-0.238 -> DIED",
+    "train": {
+      "trades": 228,
+      "expectancy_r": -0.008068105508249138,
+      "bootstrap_ci": {
+        "sample_size": 228,
+        "mean_r": -0.008068105508249138,
+        "lower_2_5": -0.16625245539469538,
+        "upper_97_5": 0.1517470782938891,
+        "crosses_zero": true
+      },
+      "random_baseline": {
+        "real_expectancy_r": -0.008068105508249138,
+        "mean_random_expectancy_r": -0.09026183781811697,
+        "p95_random_expectancy_r": 0.029109482995413643,
+        "edge_over_random": 0.08219373230986783,
+        "target_trade_count": 228,
+        "realized_mean_trade_count": 152.815,
+        "n_runs": 200,
+        "caveat": null
+      }
+    },
+    "test": {
+      "trades": 93,
+      "expectancy_r": -0.23796634124345784,
+      "bootstrap_ci": {
+        "sample_size": 93,
+        "mean_r": -0.23796634124345784,
+        "lower_2_5": -0.45042585105103095,
+        "upper_97_5": -0.02013025206856672,
+        "crosses_zero": false
+      },
+      "random_baseline": {
+        "real_expectancy_r": -0.23796634124345784,
+        "mean_random_expectancy_r": -0.17845435165000306,
+        "p95_random_expectancy_r": 0.015333844794644377,
+        "edge_over_random": -0.05951198959345477,
+        "target_trade_count": 93,
+        "realized_mean_trade_count": 63.1,
+        "n_runs": 200,
+        "caveat": null
+      }
+    },
+    "tested_at": "2026-08-06T04:15:42.867882+00:00"
+  },
+  {
+    "hypothesis_name": "BB_SQUEEZE_BREAKOUT_PAXG_4H",
+    "asset": "PAXG",
+    "timeframe": "4h",
+    "verdict": "DIED",
+    "review_status": "dead",
+    "frequency_classification": "FAST",
+    "measured_trades_per_year": 75.22539213457604,
+    "expected_time_to_30_trades_months": 4.785618124209582,
+    "reason": "train: N=75 ExpR=0.061; test: N=27 ExpR=-0.217 -> DIED",
+    "train": {
+      "trades": 75,
+      "expectancy_r": 0.06071558277205798,
+      "bootstrap_ci": {
+        "sample_size": 75,
+        "mean_r": 0.06071558277205798,
+        "lower_2_5": -0.23967734031285887,
+        "upper_97_5": 0.3767606384964229,
+        "crosses_zero": true
+      },
+      "random_baseline": {
+        "real_expectancy_r": 0.06071558277205798,
+        "mean_random_expectancy_r": 0.023845985322443572,
+        "p95_random_expectancy_r": 0.2539435990289456,
+        "edge_over_random": 0.036869597449614405,
+        "target_trade_count": 75,
+        "realized_mean_trade_count": 59.15,
+        "n_runs": 200,
+        "caveat": null
+      }
+    },
+    "test": {
+      "trades": 27,
+      "expectancy_r": -0.2170959379299594,
+      "bootstrap_ci": {
+        "sample_size": 27,
+        "mean_r": -0.2170959379299594,
+        "lower_2_5": -0.6703043973764493,
+        "upper_97_5": 0.2737416474211826,
+        "crosses_zero": true
+      },
+      "random_baseline": {
+        "real_expectancy_r": -0.2170959379299594,
+        "mean_random_expectancy_r": -0.3452505158131125,
+        "p95_random_expectancy_r": 0.130583760291518,
+        "edge_over_random": 0.1281545778831531,
+        "target_trade_count": 27,
+        "realized_mean_trade_count": 22.42,
+        "n_runs": 200,
+        "caveat": null
+      }
+    },
+    "tested_at": "2026-08-06T04:15:42.867882+00:00"
+  },
+  {
+    "hypothesis_name": "VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H",
+    "asset": "ETH",
+    "timeframe": "4h",
+    "verdict": "SKIPPED",
+    "review_status": "rejected_unmeasurable",
+    "frequency_classification": "UNMEASURABLE",
+    "measured_trades_per_year": null,
+    "expected_time_to_30_trades_months": null,
+    "reason": "entry_rule ambiguous: entry_rule must be a dict with a 'conditions' list, got NoneType",
+    "train": null,
+    "test": null,
+    "tested_at": "2026-08-06T04:15:42.867882+00:00"
+  }
+]

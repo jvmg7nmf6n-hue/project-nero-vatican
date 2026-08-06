@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-04T11:10:43.890088+00:00",
+  "last_updated": "2026-08-06T04:15:42.867882+00:00",
   "last_regime": {
     "AAPL|1day": "HIGH",
     "AMZN|1day": "EXTREME",
@@ -11,7 +11,7 @@
     "GBP/USD|1week": "NORMAL",
     "GOLD|1week": "NORMAL",
     "GOLD|24h": "NORMAL",
-    "GOOGL|1day": "NORMAL",
+    "GOOGL|1day": "HIGH",
     "META|1day": "NORMAL",
     "MSFT|1day": "EXTREME",
     "NVDA|1day": "NORMAL",
@@ -26,7 +26,7 @@
     "BTC|4h": "NORMAL",
     "EUR/USD|1day": "NORMAL",
     "EUR/USD|4h": "NORMAL",
-    "GOLD|4h": "LOW",
+    "GOLD|4h": "NORMAL",
     "GOOGL|4h": "HIGH",
     "META|4h": "HIGH",
     "MSFT|4h": "HIGH",
@@ -34,6 +34,6 @@
     "SILVER|4h": "NORMAL",
     "TSLA|4h": "HIGH",
     "USD/JPY|1day": "EXTREME",
-    "USD/JPY|4h": "HIGH"
+    "USD/JPY|4h": "NORMAL"
   }
 }

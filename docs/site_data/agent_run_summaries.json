@@ -163,5 +163,127 @@
       },
       "infinite_overestimate_hypothesis_names": []
     }
+  },
+  {
+    "run_at": "2026-08-06T04:37:28.558750+00:00",
+    "source": "research_agent_run_summary.py",
+    "run_aggregate": {
+      "hypotheses_generated": 3,
+      "duplicates_skipped": 0,
+      "llm_calls_made": 3,
+      "total_llm_cost_usd": 1.570826,
+      "cost_limit_hit": true,
+      "by_channel": {
+        "scanner": {
+          "hypotheses": 0,
+          "calls": 0,
+          "cost_usd": 0.0
+        },
+        "web_search": {
+          "hypotheses": 3,
+          "calls": 3,
+          "cost_usd": 1.570826,
+          "cost_limit_hit": true
+        }
+      },
+      "web_search_zero_hypotheses_note": false,
+      "too_slow_rejected": 0,
+      "unmeasurable_rejected": 1,
+      "survived": 0,
+      "promising_watchlist": 0,
+      "died": 2,
+      "untestable": 0,
+      "no_candles_available": 0
+    },
+    "n_test_results": 5,
+    "per_hypothesis": [
+      {
+        "hypothesis_name": "RSI2_TREND_PULLBACK_PAXG_4H",
+        "asset": "PAXG",
+        "timeframe": "4h",
+        "discovery_channel": "web_search",
+        "llm_claimed_trades_per_year": 35.0,
+        "measured_trades_per_year": 0.498181404864742,
+        "expected_time_to_30_trades_months": 722.6283367556468,
+        "frequency_classification": "TOO_SLOW",
+        "verdict": "SKIPPED"
+      },
+      {
+        "hypothesis_name": "ADX_REGIME_IGNITION_SOL_4H",
+        "asset": "SOL",
+        "timeframe": "4h",
+        "discovery_channel": "web_search",
+        "llm_claimed_trades_per_year": 45.0,
+        "measured_trades_per_year": 16.93816776540123,
+        "expected_time_to_30_trades_months": 21.253774610460198,
+        "frequency_classification": "TOO_SLOW",
+        "verdict": "SKIPPED"
+      },
+      {
+        "hypothesis_name": "INTRADAY_TSMOM_BTC_4H",
+        "asset": "BTC",
+        "timeframe": "4h",
+        "discovery_channel": "web_search",
+        "llm_claimed_trades_per_year": 90.0,
+        "measured_trades_per_year": 673.0430779722664,
+        "expected_time_to_30_trades_months": 0.5348840390493315,
+        "frequency_classification": "FAST",
+        "verdict": "DIED"
+      },
+      {
+        "hypothesis_name": "BB_SQUEEZE_BREAKOUT_PAXG_4H",
+        "asset": "PAXG",
+        "timeframe": "4h",
+        "discovery_channel": "web_search",
+        "llm_claimed_trades_per_year": 45.0,
+        "measured_trades_per_year": 75.22539213457604,
+        "expected_time_to_30_trades_months": 4.785618124209582,
+        "frequency_classification": "FAST",
+        "verdict": "DIED"
+      },
+      {
+        "hypothesis_name": "VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H",
+        "asset": "ETH",
+        "timeframe": "4h",
+        "discovery_channel": "web_search",
+        "llm_claimed_trades_per_year": 45.0,
+        "measured_trades_per_year": null,
+        "expected_time_to_30_trades_months": null,
+        "frequency_classification": "UNMEASURABLE",
+        "verdict": "SKIPPED"
+      }
+    ],
+    "untested_no_candles": [],
+    "too_slow": [
+      {
+        "hypothesis_name": "RSI2_TREND_PULLBACK_PAXG_4H",
+        "measured_trades_per_year": 0.498181404864742,
+        "llm_claimed_trades_per_year": 35.0
+      },
+      {
+        "hypothesis_name": "ADX_REGIME_IGNITION_SOL_4H",
+        "measured_trades_per_year": 16.93816776540123,
+        "llm_claimed_trades_per_year": 45.0
+      }
+    ],
+    "unmeasurable": [
+      {
+        "hypothesis_name": "VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H",
+        "reason": "entry_rule ambiguous: entry_rule must be a dict with a 'conditions' list, got NoneType"
+      }
+    ],
+    "calibration": {
+      "average_ratio": 18.411044460432095,
+      "median_ratio": 1.6274620459168612,
+      "n": 4,
+      "direction": "overestimate",
+      "ratio_by_hypothesis_name": {
+        "RSI2_TREND_PULLBACK_PAXG_4H": 70.25553274013232,
+        "ADX_REGIME_IGNITION_SOL_4H": 2.6567218263075247,
+        "INTRADAY_TSMOM_BTC_4H": 0.1337210097623329,
+        "BB_SQUEEZE_BREAKOUT_PAXG_4H": 0.5982022655261977
+      },
+      "infinite_overestimate_hypothesis_names": []
+    }
   }
 ]
