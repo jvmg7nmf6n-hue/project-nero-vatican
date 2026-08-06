@@ -1,25 +1,25 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-06T04:15:42.867882+00:00",
+  "last_updated": "2026-08-06T11:12:48.838690+00:00",
   "cumulative": {
-    "hypotheses_generated": 5,
+    "hypotheses_generated": 7,
     "duplicates_skipped": 0,
     "too_slow_rejected": 2,
-    "unmeasurable_rejected": 1,
+    "unmeasurable_rejected": 3,
     "tested": 2,
     "survived": 0,
     "promising_watchlist": 0,
     "died": 2,
     "untestable": 0,
     "no_candles_available": 0,
-    "llm_calls_made": 12,
-    "total_llm_cost_usd": 2.128866,
+    "llm_calls_made": 15,
+    "total_llm_cost_usd": 3.8369479999999996,
     "survival_rate": 0.0,
-    "web_hypotheses_generated": 5,
-    "web_llm_calls_made": 9,
-    "calls_with_unknown_cost": 4,
-    "web_calls_with_unknown_cost": 4,
-    "web_total_llm_cost_usd": 2.128866
+    "web_hypotheses_generated": 7,
+    "web_llm_calls_made": 12,
+    "calls_with_unknown_cost": 5,
+    "web_calls_with_unknown_cost": 5,
+    "web_total_llm_cost_usd": 3.8369479999999996
   },
   "runs": [
     {
@@ -157,6 +157,38 @@
       "web_total_llm_cost_usd": 1.570826,
       "web_cost_limit_hit": true,
       "web_calls_with_unknown_cost": 0
+    },
+    {
+      "run_at": "2026-08-06T11:12:48.838690+00:00",
+      "enabled": true,
+      "reason": "",
+      "status": "error",
+      "errors": [
+        {
+          "phase": "hypothesis_gen",
+          "context": "(web search)",
+          "message": "ConnectionError: HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out. (cost UNKNOWN, not confirmed $0 -- request may have reached Anthropic's servers before failing)"
+        }
+      ],
+      "hypotheses_generated": 2,
+      "duplicates_skipped": 0,
+      "too_slow_rejected": 0,
+      "unmeasurable_rejected": 2,
+      "tested": 0,
+      "survived": 0,
+      "promising_watchlist": 0,
+      "died": 0,
+      "untestable": 0,
+      "no_candles_available": 0,
+      "llm_calls_made": 3,
+      "total_llm_cost_usd": 1.7080819999999999,
+      "cost_limit_hit": true,
+      "calls_with_unknown_cost": 1,
+      "web_hypotheses_generated": 2,
+      "web_llm_calls_made": 3,
+      "web_total_llm_cost_usd": 1.7080819999999999,
+      "web_cost_limit_hit": true,
+      "web_calls_with_unknown_cost": 1
     }
   ],
   "corrections": [

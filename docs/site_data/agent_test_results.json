@@ -148,5 +148,33 @@
     "train": null,
     "test": null,
     "tested_at": "2026-08-06T04:15:42.867882+00:00"
+  },
+  {
+    "hypothesis_name": "DAILY_HOUR_SEASONALITY_BTC_4H",
+    "asset": "BTC",
+    "timeframe": "4h",
+    "verdict": "SKIPPED",
+    "review_status": "rejected_unmeasurable",
+    "frequency_classification": "UNMEASURABLE",
+    "measured_trades_per_year": null,
+    "expected_time_to_30_trades_months": null,
+    "reason": "entry_rule ambiguous: entry_rule must be a dict with a 'conditions' list, got NoneType",
+    "train": null,
+    "test": null,
+    "tested_at": "2026-08-06T11:12:48.838690+00:00"
+  },
+  {
+    "hypothesis_name": "STREAK_PULLBACK_UPTREND_ETH_4H",
+    "asset": "ETH",
+    "timeframe": "4h",
+    "verdict": "SKIPPED",
+    "review_status": "rejected_unmeasurable",
+    "frequency_classification": "UNMEASURABLE",
+    "measured_trades_per_year": null,
+    "expected_time_to_30_trades_months": null,
+    "reason": "entry_rule ambiguous: entry_rule must be a dict with a 'conditions' list, got NoneType",
+    "train": null,
+    "test": null,
+    "tested_at": "2026-08-06T11:12:48.838690+00:00"
   }
 ]
