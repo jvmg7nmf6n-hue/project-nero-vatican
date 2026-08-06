@@ -111,5 +111,115 @@ class PromptTextTest(unittest.TestCase):
         self.assertIn("none of it constrains what", text)
 
 
+class NearMissDefinitionTest(unittest.TestCase):
+    """CC-1 directive, item B2 (2026-08-06): _is_near_miss's two real,
+    data-derived halves."""
+
+    def test_half_1_fdr_is_significant_oos_not(self) -> None:
+        # The directive's own canonical example shape (BTC_MOMENTUM_
+        # IGNITION): keyed off fdr_survives_is/fdr_survives_oos, NOT
+        # verdict_is/verdict_oos -- a record's overall verdict can be DIED
+        # even with an FDR-significant p_value_is (real, confirmed).
+        record = {"fdr_survives_is": True, "fdr_survives_oos": False, "verdict_is": "DIED", "verdict_oos": "PROMISING_WATCHLIST"}
+        self.assertTrue(context._is_near_miss(record))
+
+    def test_half_1_fdr_oos_none_also_counts_as_not_true(self) -> None:
+        record = {"fdr_survives_is": True, "fdr_survives_oos": None}
+        self.assertTrue(context._is_near_miss(record))
+
+    def test_half_2_positive_is_verdict_with_insufficient_oos_sample(self) -> None:
+        record = {"verdict_is": "PROMISING_WATCHLIST", "verdict_oos": "INSUFFICIENT_SAMPLE"}
+        self.assertTrue(context._is_near_miss(record))
+
+    def test_half_2_survived_is_verdict_also_counts(self) -> None:
+        record = {"verdict_is": "SURVIVED", "verdict_oos": "INSUFFICIENT_SAMPLE"}
+        self.assertTrue(context._is_near_miss(record))
+
+    def test_half_2_died_is_verdict_does_not_count_even_with_insufficient_oos_sample(self) -> None:
+        # Real, confirmed data (PAXG_PEG_REVERSION): verdict_is=DIED,
+        # verdict_oos=INSUFFICIENT_SAMPLE matches the DIRECTIVE'S LITERAL
+        # wording ("IS produced a real verdict") but is not a promising
+        # near-miss -- a died in-sample half is not an invitation to
+        # refine. This is the refinement to the literal definition this
+        # directive's own investigation found necessary.
+        record = {"verdict_is": "DIED", "verdict_oos": "INSUFFICIENT_SAMPLE"}
+        self.assertFalse(context._is_near_miss(record))
+
+    def test_neither_half_matches_is_not_a_near_miss(self) -> None:
+        record = {"fdr_survives_is": False, "fdr_survives_oos": False, "verdict_is": "DIED", "verdict_oos": "DIED"}
+        self.assertFalse(context._is_near_miss(record))
+
+
+class LoadNearMissesTest(unittest.TestCase):
+    def _write(self, tmp, records) -> Path:
+        path = Path(tmp) / "eve_hypotheses.json"
+        path.write_text(json.dumps(records))
+        return path
+
+    def test_real_committed_data_yields_exactly_one_near_miss(self) -> None:
+        # CC-1 directive, item B2: real count against the actual, currently
+        # committed docs/site_data/eve_hypotheses.json -- re-derived here,
+        # not assumed, so this test fails the moment that file's real
+        # content changes in a way that changes the real count.
+        near_misses = context.load_near_misses()
+        names = [m["hypothesis_name"] for m in near_misses]
+        self.assertEqual(names, ["BTC_MOMENTUM_IGNITION"])
+
+    def test_cap_is_enforced(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            records = [
+                {
+                    "raw_hypothesis": {"hypothesis_name": f"NM_{i}", "mechanism": "m"},
+                    "fdr_survives_is": True, "fdr_survives_oos": False,
+                }
+                for i in range(15)
+            ]
+            path = self._write(tmp, records)
+            near_misses = context.load_near_misses(path=path, cap=10)
+        self.assertEqual(len(near_misses), 10)
+
+    def test_non_near_miss_records_are_excluded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            records = [
+                {"raw_hypothesis": {"hypothesis_name": "DEAD", "mechanism": "m"}, "verdict_is": "DIED", "verdict_oos": "DIED"},
+                {"raw_hypothesis": {"hypothesis_name": "REAL_NEAR_MISS", "mechanism": "m"}, "fdr_survives_is": True, "fdr_survives_oos": False},
+            ]
+            path = self._write(tmp, records)
+            near_misses = context.load_near_misses(path=path)
+        self.assertEqual([m["hypothesis_name"] for m in near_misses], ["REAL_NEAR_MISS"])
+
+    def test_missing_file_returns_empty_list(self) -> None:
+        self.assertEqual(context.load_near_misses(path=Path("/nonexistent/eve_hypotheses.json")), [])
+
+
+class NearMissPromptTextTest(unittest.TestCase):
+    def test_near_misses_appear_in_prompt_text_with_invitation_framing_not_verdict_language(self) -> None:
+        near_misses = [{"hypothesis_name": "BTC_MOMENTUM_IGNITION", "mechanism": "m", "p_value_is": 0.0044, "p_value_oos": 0.224}]
+        ctx = context.EveContext(tracked_pairs=[], graveyard=[], adam_history=[], near_misses=near_misses)
+        text = ctx.as_prompt_text()
+        self.assertIn("BTC_MOMENTUM_IGNITION", text)
+        self.assertIn("INVITATION TO REFINE", text)
+        self.assertIn("not a verdict", text)
+        self.assertIn("derived_from", text)
+
+    def test_near_miss_section_is_textually_distinct_from_the_graveyard_section(self) -> None:
+        # "Keep strictly separate from the graveyard -- a near-miss is not
+        # a death" (directive's own words) -- confirmed the two sections
+        # use different framing language, not a shared/merged block.
+        ctx = context.EveContext(
+            tracked_pairs=[], graveyard=[{"name": "X", "family": "Y"}],
+            adam_history=[], near_misses=[{"hypothesis_name": "Z", "mechanism": "m"}],
+        )
+        text = ctx.as_prompt_text()
+        self.assertIn("KNOWN DEAD MECHANISMS", text)
+        self.assertIn("NEAR-MISSES", text)
+        self.assertIn("NOT dead", text)
+
+    def test_empty_near_misses_shows_none_on_file(self) -> None:
+        ctx = context.EveContext(tracked_pairs=[], graveyard=[], adam_history=[])
+        text = ctx.as_prompt_text()
+        self.assertIn("none on file", text)
+
+
 if __name__ == "__main__":
     unittest.main()
