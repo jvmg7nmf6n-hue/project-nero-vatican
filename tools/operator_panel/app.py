@@ -195,9 +195,14 @@ def factory_loop_live(body: FactoryLoopLiveRequest) -> dict:
             draft_note = "ANTHROPIC_API_KEY not set -- no drafting call made, no cost incurred"
         else:
             try:
-                drafts = factory_loop_run.draft_ready_distillations(failure_patterns, repair_events, api_key)
-                factory_loop_run.persist_distillation_drafts(drafts)
-                draft_note = f"{len(drafts)} draft(s) written at review_status=pending_human_approval"
+                distillation_result = factory_loop_run.draft_ready_distillations(failure_patterns, repair_events, api_key)
+                factory_loop_run.persist_distillation_drafts(distillation_result.drafts)
+                draft_note = (
+                    f"{len(distillation_result.drafts)} draft(s) written at review_status=pending_human_approval "
+                    f"-- real cost ${distillation_result.total_cost_usd:.6f}"
+                )
+                if distillation_result.errors:
+                    draft_note += f" -- errors: {'; '.join(distillation_result.errors)}"
             except graveyard_distillation.ApiKeyRejectedError as exc:
                 draft_note = f"drafting failed: {exc}"
 

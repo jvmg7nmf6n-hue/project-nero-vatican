@@ -194,6 +194,63 @@ class EvaluateDistillationCandidatesTest(unittest.TestCase):
         self.assertEqual(ready, {})
 
 
+class DraftReadyDistillationsTest(unittest.TestCase):
+    """Regression guard on a real bug found and fixed 2026-08-06 (the first
+    successful real distillation draft, after the API key fix): this
+    function used to return a bare list[dict], silently discarding
+    DistillationDraftResult.cost_usd on every call and .error entirely
+    whenever a call was billed but produced no entry -- real spend that
+    would vanish with no trace, and a real per-family failure
+    indistinguishable from "no family was ready" at the call site."""
+
+    def _died_records(self, family: str = "Test Family", n: int = 3) -> list:
+        return [
+            graveyard_distillation.DiedRecord(hypothesis_name=f"DEAD_{i}", mechanism="m", origin_agent="adam", matched_family=family, p_value_oos=0.2)
+            for i in range(n)
+        ]
+
+    def test_real_cost_is_never_discarded(self) -> None:
+        draft_result = graveyard_distillation.DistillationDraftResult(
+            entry={"name": "X", "family": "Test Family", "review_status": "pending_human_approval"},
+            usage={}, cost_usd=0.123456, error=None,
+        )
+        with patch("nero_core.research_agent.graveyard_distillation.load_died_records", return_value=self._died_records()), \
+             patch("nero_core.research_agent.graveyard_distillation.load_died_repair_records", return_value=[]), \
+             patch("nero_core.research_agent.graveyard_distillation.draft_distillation_entry", return_value=draft_result):
+            result = runner.draft_ready_distillations([], [], "fake-key")
+
+        self.assertEqual(len(result.drafts), 1)
+        self.assertAlmostEqual(result.total_cost_usd, 0.123456)
+        self.assertEqual(result.errors, [])
+
+    def test_a_billed_but_failed_draft_reports_its_error_and_cost_not_silently_dropped(self) -> None:
+        # The call WAS billed (cost_usd > 0) but produced no usable entry
+        # (e.g. an invalid failure_pattern) -- this must be visible, not
+        # indistinguishable from "no family was ready this run."
+        draft_result = graveyard_distillation.DistillationDraftResult(
+            entry=None, usage={}, cost_usd=0.05, error="LLM returned failure_pattern='not_a_real_one', outside the closed vocabulary",
+        )
+        with patch("nero_core.research_agent.graveyard_distillation.load_died_records", return_value=self._died_records()), \
+             patch("nero_core.research_agent.graveyard_distillation.load_died_repair_records", return_value=[]), \
+             patch("nero_core.research_agent.graveyard_distillation.draft_distillation_entry", return_value=draft_result):
+            result = runner.draft_ready_distillations([], [], "fake-key")
+
+        self.assertEqual(result.drafts, [])
+        self.assertAlmostEqual(result.total_cost_usd, 0.05)
+        self.assertEqual(len(result.errors), 1)
+        self.assertIn("Test Family", result.errors[0])
+        self.assertIn("outside the closed vocabulary", result.errors[0])
+
+    def test_no_family_ready_costs_nothing_and_has_no_errors(self) -> None:
+        with patch("nero_core.research_agent.graveyard_distillation.load_died_records", return_value=[]), \
+             patch("nero_core.research_agent.graveyard_distillation.load_died_repair_records", return_value=[]):
+            result = runner.draft_ready_distillations([], [], "fake-key")
+
+        self.assertEqual(result.drafts, [])
+        self.assertEqual(result.total_cost_usd, 0.0)
+        self.assertEqual(result.errors, [])
+
+
 class AdvanceOpenTrialsTest(unittest.TestCase):
     def test_dry_run_never_fetches_or_ticks(self) -> None:
         records = [{"trial_id": "t1", "status": trial.STATUS_OPEN, "source_hypothesis_ref": {"hypothesis_name": "X"}}]

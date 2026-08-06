@@ -234,22 +234,46 @@ def evaluate_distillation_candidates(
     return {family: len(members) for family, members in ready.items()}
 
 
+@dataclass(frozen=True)
+class DistillationRunResult:
+    drafts: list[dict]
+    total_cost_usd: float
+    errors: list[str]
+
+
 def draft_ready_distillations(
     failure_patterns: list[dict], repair_events: list[dict], api_key: str,
-) -> list[dict]:
+) -> DistillationRunResult:
     """Item 2's step 4, the ONE part of a --live run that spends real money:
     one draft_distillation_entry call per family at or past the trigger.
     Returns the drafted entries (review_status=REVIEW_PENDING on every one)
-    -- never commits them; see module docstring."""
+    -- never commits them; see module docstring.
+
+    REAL BUG FOUND AND FIXED, 2026-08-06 (first successful real distillation
+    draft, after the API key fix): this used to return a bare `list[dict]`,
+    silently discarding `DistillationDraftResult.cost_usd` on every call and
+    `.error` entirely whenever `result.entry is None` (an LLM call that WAS
+    billed but failed to parse, or returned a `failure_pattern` outside the
+    closed vocabulary -- see draft_distillation_entry's own docstring) --
+    real spend that would have vanished with no trace anywhere, and a real
+    per-family failure that would have produced no drafts and no error,
+    indistinguishable from "no family was ready" at the call site. Now
+    returns cost and per-family errors explicitly so a caller can never
+    silently lose either."""
     died = graveyard_distillation.load_died_records(failure_patterns=failure_patterns)
     died += graveyard_distillation.load_died_repair_records(events=repair_events, failure_patterns=failure_patterns)
     ready = graveyard_distillation.find_families_ready_for_distillation(died)
     drafts: list[dict] = []
+    total_cost = 0.0
+    errors: list[str] = []
     for family, members in ready.items():
         result = graveyard_distillation.draft_distillation_entry(family, members, api_key, DEFAULT_PARAMETERS)
+        total_cost += result.cost_usd
         if result.entry is not None:
             drafts.append(result.entry)
-    return drafts
+        if result.error:
+            errors.append(f"{family}: {result.error}")
+    return DistillationRunResult(drafts=drafts, total_cost_usd=total_cost, errors=errors)
 
 
 def persist_distillation_drafts(drafts: list[dict], path: Path = DEFAULT_DISTILLATION_DRAFTS_PATH) -> None:
@@ -418,9 +442,15 @@ def main() -> None:
             # call succeeded. Caught here so a drafting failure is reported,
             # not silently fatal to the rest of a real run.
             try:
-                drafts = draft_ready_distillations(failure_patterns, repair_events, api_key)
-                persist_distillation_drafts(drafts)
-                print(f"\n{len(drafts)} distillation draft(s) written to {DEFAULT_DISTILLATION_DRAFTS_PATH} at review_status=REVIEW_PENDING (human approval required before commit_graveyard_entry may write them).")
+                distillation_result = draft_ready_distillations(failure_patterns, repair_events, api_key)
+                persist_distillation_drafts(distillation_result.drafts)
+                print(
+                    f"\n{len(distillation_result.drafts)} distillation draft(s) written to {DEFAULT_DISTILLATION_DRAFTS_PATH} "
+                    f"at review_status=REVIEW_PENDING (human approval required before commit_graveyard_entry may write them). "
+                    f"Real cost: ${distillation_result.total_cost_usd:.6f}."
+                )
+                for err in distillation_result.errors:
+                    print(f"  DISTILLATION ERROR (call WAS billed, no draft produced for this family): {err}")
             except graveyard_distillation.ApiKeyRejectedError as exc:
                 print(f"\nDistillation drafting failed: {exc} (confirmed $0 -- rejected before any token was processed; the rest of this run still completes).")
 
