@@ -108,6 +108,33 @@ def measure_entry_frequency(
             f"(need >= {MIN_CANDLES_FOR_MEASUREMENT} to trust a rate) -- rejected as UNMEASURABLE.",
         )
 
+    # CC-1 directive (2026-08-06): structured_entry_rule is None on purpose
+    # for a real, non-trivial share of Adam's own real hypotheses (3/7 in
+    # docs/site_data/agent_hypotheses.json as of this fix) -- hypothesis_gen.
+    # py's own prompt explicitly instructs the model to set it to null
+    # "If the entry condition genuinely cannot be expressed with these
+    # fields/ops... do NOT force an approximate mapping." Before this fix,
+    # that legitimate, deliberate null fell into the exact same generic
+    # "entry_rule ambiguous: entry_rule must be a dict with a 'conditions'
+    # list, got NoneType" message as any OTHER RuleAmbiguousError (a
+    # malformed-but-present dict, e.g. Eve's own "condition must set exactly
+    # one of value/compare_to_field" case) -- reading as an ambiguous DSL
+    # bug when it's actually an honest, model-declared DSL-vocabulary
+    # ceiling (no field for hour-of-day, rolling-max/highest-high, a
+    # volume moving average, or a consecutive-candle streak count, as of
+    # this writing). Checked here, BEFORE parse_structured_rule, so this
+    # specific, common, non-bug case gets a distinct, accurate reason
+    # string -- never silently merged back into the generic one below.
+    if structured_entry_rule is None:
+        return FrequencyMeasurement(
+            UNMEASURABLE, None, None, 0, len(eligible), None,
+            "structured_entry_rule is null -- the model explicitly reported this entry rule cannot be "
+            "expressed in the current DSL's field/op vocabulary (see hypothesis_gen.py's own prompt "
+            "instruction to set structured_entry_rule to null rather than force an approximate mapping). "
+            "This is a DSL-expressiveness gap in the mechanism itself, not a data problem, and not a case "
+            "where the model failed to comply with an achievable schema.",
+        )
+
     try:
         rule = parse_structured_rule(structured_entry_rule)
         indicator_frame = compute_indicator_frame(eligible)

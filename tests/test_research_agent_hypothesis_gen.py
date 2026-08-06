@@ -227,17 +227,25 @@ class GenerateHypothesesTest(unittest.TestCase):
         import requests as requests_module
 
         # Every requests.post call (preflight AND the real per-finding call)
-        # raises the same ConnectionError here -- so this now records TWO
+        # raises the same ConnectionError here -- so this now records THREE
         # error notes: the preflight's own non-fatal note (item #3's fix --
-        # previously silently swallowed with zero trace) plus the real call's
-        # failure. llm_calls_made only counts the real per-finding attempt.
+        # previously silently swallowed with zero trace) plus TWO real-call
+        # failures. CC-1 directive (2026-08-06): "down" carries no
+        # "(read timeout=N)" suffix, matching _is_pre_first_byte_
+        # connection_error, so the real call now earns one bounded retry
+        # (call_claude_with_bounded_retry) -- both attempts fail identically
+        # here (side_effect is a single repeatable exception, not a list),
+        # so llm_calls_made counts both real attempts, never just the first.
         with patch("nero_core.research_agent.hypothesis_gen.requests.post", side_effect=requests_module.ConnectionError("down")):
             result = generate_hypotheses([_finding()], [], "fake-key", now=NOW)
 
-        self.assertEqual(result.llm_calls_made, 1)
-        self.assertEqual(len(result.errors), 2)
+        self.assertEqual(result.llm_calls_made, 2)
+        self.assertEqual(result.calls_with_unknown_cost, 2)
+        self.assertEqual(len(result.errors), 3)
         self.assertIn("preflight key check did not complete", result.errors[0]["message"])
         self.assertIn("ConnectionError", result.errors[1]["message"])
+        self.assertIn("ConnectionError", result.errors[2]["message"])
+        self.assertIn("retry was attempted", result.errors[1]["message"])
         self.assertEqual(result.hypotheses, [])
 
     def test_malformed_json_response_still_records_the_real_billed_cost(self) -> None:
@@ -382,15 +390,27 @@ class GenerateHypothesesTest(unittest.TestCase):
         # usage available at all) must NOT be conflated with the billed-but-
         # unparseable case above -- it must stay $0.00, not get some
         # fabricated non-zero figure.
+        #
+        # CC-1 directive (2026-08-06): a bare ConnectionError with no
+        # "(read timeout=N)" suffix (like "down" here) now matches
+        # _is_pre_first_byte_connection_error and earns ONE bounded retry
+        # (see call_claude_with_bounded_retry) -- the fixture supplies a
+        # second failure for that retry so the mocked call sequence
+        # doesn't run out mid-test. Both attempts stay unbilled either way.
         import requests as requests_module
 
         with patch(
             "nero_core.research_agent.hypothesis_gen.requests.post",
-            side_effect=[_FakeResponse({}, status_code=200), requests_module.ConnectionError("down")],
+            side_effect=[
+                _FakeResponse({}, status_code=200),
+                requests_module.ConnectionError("down"),
+                requests_module.ConnectionError("down"),
+            ],
         ):
             result = generate_hypotheses([_finding()], [], "fake-key", now=NOW)
 
         self.assertEqual(result.total_cost_usd, 0.0)
+        self.assertEqual(result.calls_with_unknown_cost, 2)
         self.assertNotIn("call WAS billed", result.errors[-1]["message"])
 
     def test_within_run_duplicates_are_also_caught(self) -> None:
@@ -632,13 +652,21 @@ class UnknownCostOnTransportFailureOfTheRealCallTest(unittest.TestCase):
     def test_connection_error_on_the_real_call_also_increments_calls_with_unknown_cost(self) -> None:
         import requests as requests_module
 
+        # CC-1 directive (2026-08-06): "down" has no "(read timeout=N)"
+        # suffix, so this now earns one bounded retry -- a third
+        # side_effect item covers it (also failing, so this stays a clean
+        # "both attempts unknown-cost" case).
         with patch(
             "nero_core.research_agent.hypothesis_gen.requests.post",
-            side_effect=[_FakeResponse({}, status_code=200), requests_module.ConnectionError("down")],
+            side_effect=[
+                _FakeResponse({}, status_code=200),
+                requests_module.ConnectionError("down"),
+                requests_module.ConnectionError("down"),
+            ],
         ):
             result = generate_hypotheses([_finding()], [], "fake-key", now=NOW)
 
-        self.assertEqual(result.calls_with_unknown_cost, 1)
+        self.assertEqual(result.calls_with_unknown_cost, 2)
         self.assertEqual(result.total_cost_usd, 0.0)
         self.assertIn("cost UNKNOWN, not confirmed $0", result.errors[-1]["message"])
 

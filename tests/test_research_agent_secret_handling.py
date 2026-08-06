@@ -199,9 +199,16 @@ class DynamicApiKeyNeverLeaksTest(unittest.TestCase):
         ):
             result = generate_hypotheses([_finding()], [], FAKE_SECRET, now=NOW)
 
-        # Both the preflight's own non-fatal note (item #3's fix) and the real
-        # per-finding call's failure hit this same mocked ConnectionError.
-        self.assertEqual(len(result.errors), 2)
+        # The preflight's own non-fatal note (item #3's fix), plus the real
+        # per-finding call's failure -- which, CC-1 directive (2026-08-06),
+        # now earns one bounded retry (call_claude_with_bounded_retry) since
+        # this message carries no "(read timeout=N)" suffix, matching
+        # _is_pre_first_byte_connection_error. Both real attempts hit this
+        # same mocked ConnectionError (side_effect is a single repeatable
+        # exception, not a list), so this is 3 error entries, not 2 -- the
+        # security property under test (the key never leaks) is unaffected
+        # by how many times the mock was called.
+        self.assertEqual(len(result.errors), 3)
         self.assertNotIn(FAKE_SECRET, _flatten_for_leak_check(result))
 
     def test_key_absent_from_result_on_bad_http_status(self) -> None:

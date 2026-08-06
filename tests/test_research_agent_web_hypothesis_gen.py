@@ -18,6 +18,9 @@ from nero_core.research_agent.hypothesis_gen import (
     SOURCE_TIERS,
     WEB_SEARCH_COST_PER_SEARCH,
     WEB_SEARCH_TOOL,
+    ClaudeCallAttempt,
+    _is_pre_first_byte_connection_error,
+    call_claude_with_bounded_retry,
     check_graveyard_match,
     generate_web_hypotheses,
     load_tracked_asset_timeframes,
@@ -308,6 +311,63 @@ class GenerateWebHypothesesTest(unittest.TestCase):
         self.assertEqual(result.total_cost_usd, 0.0)
         self.assertIn("ReadTimeout", result.errors[-1]["message"])
         self.assertIn("cost UNKNOWN, not confirmed $0", result.errors[-1]["message"])
+        # CC-1 directive (2026-08-06): a genuine mid-stream ReadTimeout is
+        # NOT the class this same directive's retry targets (Phase 1a's
+        # streaming fix already resets the idle clock on every SSE line for
+        # this case) -- confirms no retry was attempted (still exactly 1
+        # call, not 2).
+        self.assertNotIn("retry was attempted", result.errors[-1]["message"])
+
+    def test_pre_first_byte_connection_error_is_retried_once_and_recovers(self) -> None:
+        # CC-1 directive (2026-08-06): real incident, run e0a6e6d6 -- a
+        # requests.exceptions.ConnectionError with NO "(read timeout=N)"
+        # suffix (unlike the ReadTimeout case above) means the failure
+        # happened before any SSE line ever arrived to reset Phase 1a's
+        # idle-gap clock. This is the one failure class that gets a bounded
+        # retry; here the retry succeeds and a real hypothesis is produced.
+        import requests as requests_module
+
+        pre_first_byte_exc = requests_module.exceptions.ConnectionError(
+            "HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out."
+        )
+        payload = _payload(WEB_HYPOTHESIS_DATA, input_tokens=1000, output_tokens=500)
+        with patch(
+            "nero_core.research_agent.hypothesis_gen.requests.post",
+            side_effect=[_FakeResponse({}, status_code=200), pre_first_byte_exc, _FakeResponse(payload)],
+        ):
+            result = generate_web_hypotheses([], [], "fake-key", TRACKED_PAIRS, max_calls_per_run=1, now=NOW)
+
+        # 2 REAL network attempts for this one logical hypothesis slot --
+        # both counted, neither hidden.
+        self.assertEqual(result.llm_calls_made, 2)
+        self.assertEqual(result.calls_with_unknown_cost, 1)
+        self.assertEqual(len(result.hypotheses), 1)
+        # The successful retry's own real cost is recorded -- the failed
+        # first attempt's cost stays UNKNOWN, never fabricated as $0 and
+        # never double-counted into the total either.
+        self.assertGreater(result.total_cost_usd, 0.0)
+        self.assertIn("ConnectionError", result.errors[-1]["message"])
+        self.assertIn("cost UNKNOWN, not confirmed $0", result.errors[-1]["message"])
+        self.assertIn("retry was attempted", result.errors[-1]["message"])
+
+    def test_pre_first_byte_connection_error_retried_once_never_twice(self) -> None:
+        # Bounded retry, not a loop: if the retry ALSO fails, there is no
+        # third attempt.
+        import requests as requests_module
+
+        pre_first_byte_exc = requests_module.exceptions.ConnectionError(
+            "HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out."
+        )
+        with patch(
+            "nero_core.research_agent.hypothesis_gen.requests.post",
+            side_effect=[_FakeResponse({}, status_code=200), pre_first_byte_exc, pre_first_byte_exc],
+        ):
+            result = generate_web_hypotheses([], [], "fake-key", TRACKED_PAIRS, max_calls_per_run=1, now=NOW)
+
+        self.assertEqual(result.llm_calls_made, 2)
+        self.assertEqual(result.calls_with_unknown_cost, 2)
+        self.assertEqual(len(result.hypotheses), 0)
+        self.assertEqual(result.total_cost_usd, 0.0)
 
     def test_invalid_source_tier_falls_back_to_the_most_conservative_tier(self) -> None:
         data = dict(WEB_HYPOTHESIS_DATA, source_tier="extremely_credible_trust_me")
@@ -362,6 +422,132 @@ class GenerateWebHypothesesTest(unittest.TestCase):
         self.assertEqual(result.llm_calls_made, 2)
         self.assertTrue(result.cost_limit_hit)
         self.assertEqual(len(result.hypotheses), 2)
+
+
+class PreFirstByteConnectionErrorClassifierTest(unittest.TestCase):
+    """CC-1 directive (2026-08-06): unit-level coverage of the exact
+    distinction the retry decision hinges on -- a urllib3 ReadTimeoutError
+    (surfaced by requests as ReadTimeout, or -- defensively -- as a
+    ConnectionError carrying its own "(read timeout=N)" suffix) is the
+    mid-stream idle-gap case Phase 1a's streaming fix already covers, and
+    must NEVER be classified as the retryable pre-first-byte case."""
+
+    def test_connection_error_with_no_read_timeout_suffix_is_pre_first_byte(self) -> None:
+        import requests as requests_module
+
+        exc = requests_module.exceptions.ConnectionError(
+            "HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out."
+        )
+        self.assertTrue(_is_pre_first_byte_connection_error(exc))
+
+    def test_connection_error_with_read_timeout_suffix_is_not_pre_first_byte(self) -> None:
+        # Defensive case: even if some environment surfaces a mid-stream
+        # idle-gap as ConnectionError rather than ReadTimeout, the
+        # classifier keys off the real urllib3 ReadTimeoutError.__str__
+        # suffix, not just the exception class.
+        import requests as requests_module
+
+        exc = requests_module.exceptions.ConnectionError(
+            "HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out. (read timeout=180)"
+        )
+        self.assertFalse(_is_pre_first_byte_connection_error(exc))
+
+    def test_read_timeout_is_never_pre_first_byte_regardless_of_message(self) -> None:
+        # requests.exceptions.ReadTimeout is a Timeout subclass, not a
+        # ConnectionError subclass -- excluded by isinstance alone,
+        # independent of message content.
+        import requests as requests_module
+
+        exc = requests_module.exceptions.ReadTimeout("timed out")
+        self.assertFalse(_is_pre_first_byte_connection_error(exc))
+
+    def test_unrelated_request_exception_is_not_pre_first_byte(self) -> None:
+        import requests as requests_module
+
+        self.assertFalse(_is_pre_first_byte_connection_error(requests_module.exceptions.HTTPError("bad status")))
+
+
+class CallClaudeWithBoundedRetryTest(unittest.TestCase):
+    """CC-1 directive (2026-08-06): direct coverage of
+    call_claude_with_bounded_retry, the shared helper both generate_
+    hypotheses and generate_web_hypotheses now use -- confirms each of the
+    5 real outcome classes is handled by its intended path (retried
+    exactly once, or never retried), independent of either caller's own
+    loop/accounting logic (covered separately, end-to-end, in
+    GenerateWebHypothesesTest above)."""
+
+    def test_success_on_first_attempt_returns_one_attempt(self) -> None:
+        payload = _payload(WEB_HYPOTHESIS_DATA)
+        with patch("nero_core.research_agent.hypothesis_gen.requests.post", return_value=_FakeResponse(payload)):
+            attempts = call_claude_with_bounded_retry("prompt", "fake-key", DEFAULT_PARAMETERS)
+        self.assertEqual(len(attempts), 1)
+        self.assertIsNone(attempts[0].exc)
+        self.assertIsNotNone(attempts[0].data)
+
+    def test_pre_first_byte_failure_then_success_returns_two_attempts(self) -> None:
+        import requests as requests_module
+
+        pre_first_byte_exc = requests_module.exceptions.ConnectionError(
+            "HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out."
+        )
+        payload = _payload(WEB_HYPOTHESIS_DATA)
+        with patch(
+            "nero_core.research_agent.hypothesis_gen.requests.post",
+            side_effect=[pre_first_byte_exc, _FakeResponse(payload)],
+        ):
+            attempts = call_claude_with_bounded_retry("prompt", "fake-key", DEFAULT_PARAMETERS)
+        self.assertEqual(len(attempts), 2)
+        self.assertIs(attempts[0].exc, pre_first_byte_exc)
+        self.assertIsNone(attempts[1].exc)
+        self.assertIsNotNone(attempts[1].data)
+
+    def test_pre_first_byte_failure_twice_stops_at_two_never_three(self) -> None:
+        import requests as requests_module
+
+        pre_first_byte_exc = requests_module.exceptions.ConnectionError(
+            "HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out."
+        )
+        with patch(
+            "nero_core.research_agent.hypothesis_gen.requests.post",
+            side_effect=[pre_first_byte_exc, pre_first_byte_exc, pre_first_byte_exc],
+        ) as mock_post:
+            attempts = call_claude_with_bounded_retry("prompt", "fake-key", DEFAULT_PARAMETERS)
+        self.assertEqual(len(attempts), 2)
+        self.assertEqual(mock_post.call_count, 2)
+
+    def test_genuine_mid_stream_read_timeout_is_never_retried(self) -> None:
+        # The exact class Phase 1a's own streaming fix already targets --
+        # retrying here risks paying twice for a response Anthropic may
+        # already be generating mid-stream.
+        import requests as requests_module
+
+        with patch(
+            "nero_core.research_agent.hypothesis_gen.requests.post",
+            side_effect=[requests_module.exceptions.ReadTimeout("timed out")],
+        ) as mock_post:
+            attempts = call_claude_with_bounded_retry("prompt", "fake-key", DEFAULT_PARAMETERS)
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual(mock_post.call_count, 1)
+
+    def test_rejected_before_token_processing_is_never_retried(self) -> None:
+        with patch(
+            "nero_core.research_agent.hypothesis_gen.requests.post",
+            return_value=_FakeResponse({}, status_ok=False, status_code=401),
+        ) as mock_post:
+            attempts = call_claude_with_bounded_retry("prompt", "fake-key", DEFAULT_PARAMETERS)
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual(mock_post.call_count, 1)
+
+    def test_response_parse_error_is_never_retried(self) -> None:
+        # A billed-but-unparseable 2xx is already a determinate outcome --
+        # not a connection failure a retry could plausibly fix.
+        with patch(
+            "nero_core.research_agent.hypothesis_gen.requests.post",
+            return_value=_FakeResponse({"content": [{"type": "text", "text": "not json"}], "usage": {}}),
+        ) as mock_post:
+            attempts = call_claude_with_bounded_retry("prompt", "fake-key", DEFAULT_PARAMETERS)
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual(mock_post.call_count, 1)
 
 
 class LoadTrackedAssetTimeframesTest(unittest.TestCase):

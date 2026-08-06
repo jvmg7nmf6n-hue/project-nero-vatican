@@ -103,6 +103,43 @@ class FrequencyClassificationTest(unittest.TestCase):
 
         self.assertEqual(result.classification, UNMEASURABLE)
 
+    def test_null_structured_entry_rule_gets_a_distinct_dsl_gap_reason_not_the_generic_ambiguous_message(self) -> None:
+        # CC-1 directive (2026-08-06): real run e0a6e6d6 rejected 2 real
+        # hypotheses -- DAILY_HOUR_SEASONALITY_BTC_4H (a wall-clock-hour
+        # trigger, no such field in the DSL) and STREAK_PULLBACK_UPTREND_
+        # ETH_4H (a consecutive-down-closes streak count, no such op) --
+        # both with structured_entry_rule=None, both legitimate per
+        # hypothesis_gen.py's own prompt ("if the entry condition
+        # genuinely cannot be expressed... do NOT force an approximate
+        # mapping"), not a bug. Before this fix, this fell into the exact
+        # same generic "entry_rule ambiguous: ...got NoneType" message as
+        # any other malformed structured_entry_rule.
+        candles = _daily_candles(200, trigger_indices=set(range(200)))
+        generated_at = datetime(2020, 1, 1, tzinfo=timezone.utc) + timedelta(days=250)
+
+        result = measure_entry_frequency(candles, None, generated_at)
+
+        self.assertEqual(result.classification, UNMEASURABLE)
+        self.assertIn("structured_entry_rule is null", result.reason)
+        self.assertIn("DSL", result.reason)
+        self.assertNotIn("NoneType", result.reason)
+        self.assertNotIn("ambiguous", result.reason.lower())
+
+    def test_null_and_malformed_structured_entry_rule_get_distinguishable_reasons(self) -> None:
+        # The two real UNMEASURABLE causes (a deliberate null vs. a
+        # present-but-malformed dict, e.g. Eve's own "must set exactly one
+        # of value/compare_to_field" case) must not read identically --
+        # that conflation is exactly what this fix corrects.
+        candles = _daily_candles(200, trigger_indices=set(range(200)))
+        generated_at = datetime(2020, 1, 1, tzinfo=timezone.utc) + timedelta(days=250)
+
+        null_result = measure_entry_frequency(candles, None, generated_at)
+        malformed_result = measure_entry_frequency(candles, {"conditions": []}, generated_at)
+
+        self.assertNotEqual(null_result.reason, malformed_result.reason)
+        self.assertIn("structured_entry_rule is null", null_result.reason)
+        self.assertIn("ambiguous", malformed_result.reason.lower())
+
 
 class LookaheadProtectionHardTest(unittest.TestCase):
     """HARD TEST (per the branch's own task spec): the gate must measure

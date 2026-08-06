@@ -570,6 +570,79 @@ def _call_claude(
     return data, usage
 
 
+def _is_pre_first_byte_connection_error(exc: BaseException) -> bool:
+    """True for a requests.exceptions.ConnectionError that fired BEFORE any
+    SSE line ever arrived -- i.e. NOT a urllib3 ReadTimeoutError-derived
+    requests.exceptions.ReadTimeout (the idle-gap-between-lines timeout
+    Phase 1a's streaming fix already resets on every _iter_sse_events
+    line). This distinction is real, not guessed: urllib3.exceptions.
+    ReadTimeoutError.__str__ ALWAYS appends a "(read timeout=N)" suffix
+    (confirmed against urllib3's own source) -- ITS ABSENCE on a
+    ConnectionError is the signal that the failure happened at the
+    connection/first-response layer, before _iter_sse_events had anything
+    to reset from. Real incident, 2026-08-06 (run e0a6e6d6): a
+    ConnectionError with no "(read timeout=180)" suffix recurred at the
+    same 180s ceiling the two PRIOR ReadTimeout incidents (2026-08-04,
+    90s then 180s) already used -- those two DID carry the suffix, this
+    one didn't, confirming it's a genuinely different, unprotected failure
+    class, not a repeat of the case Phase 1a already fixed."""
+    return isinstance(exc, requests.exceptions.ConnectionError) and "(read timeout=" not in str(exc)
+
+
+@dataclass(frozen=True)
+class ClaudeCallAttempt:
+    """One REAL network attempt's outcome -- never a synthetic/merged
+    record. `data`/`usage` populated on success; `exc` populated on
+    failure (mutually exclusive)."""
+    data: dict | None
+    usage: dict
+    exc: Exception | None
+
+
+def call_claude_with_bounded_retry(
+    prompt: str, api_key: str, params: HypothesisGenParameters, tools: list[dict] | None = None,
+) -> list[ClaudeCallAttempt]:
+    """Returns 1 or 2 ClaudeCallAttempt entries, one per REAL attempt made
+    -- callers must account for EVERY entry (calls_made, cost, errors),
+    never just the last one, so a retried failure is still counted, never
+    silently absorbed into a clean-looking success.
+
+    A second entry exists ONLY when the first attempt failed with the
+    exact _is_pre_first_byte_connection_error signature -- a bounded,
+    single retry, never a loop. WHY only this failure class: Anthropic's
+    own docs (platform.claude.com/docs/en/api/errors, "Long requests")
+    name idle-connection drops before any response as a real, expected
+    failure mode for a direct (non-SDK) integration on some networks --
+    this codebase uses raw `requests`, not the official SDK, which is the
+    integration shape that guidance addresses. Their streaming guide's own
+    "Error recovery" section endorses retrying/resuming a
+    network-interrupted streaming request. A pre-first-byte failure also
+    carries markedly LOWER risk of double-billing than a mid-stream one --
+    no tokens had necessarily been generated yet -- which is why a
+    ReadTimeout (WITH the urllib3 suffix, a genuine mid-stream idle gap,
+    already covered by Phase 1a's per-line reset) is deliberately never
+    retried here: retrying that risks paying twice for a response
+    Anthropic may already be generating. A ResponseParseError or
+    RejectedBeforeTokenProcessingError is never retried either -- both are
+    already-determinate outcomes (billed-but-unparseable; confirmed-$0
+    auth rejection), not a connection failure a retry could plausibly fix."""
+    attempts: list[ClaudeCallAttempt] = []
+    for attempt_num in (1, 2):
+        try:
+            data, usage = _call_claude(prompt, api_key, params, tools=tools)
+            attempts.append(ClaudeCallAttempt(data, usage, None))
+            break
+        except (ResponseParseError, RejectedBeforeTokenProcessingError) as exc:
+            attempts.append(ClaudeCallAttempt(None, {}, exc))
+            break
+        except (requests.RequestException, KeyError, ValueError) as exc:
+            attempts.append(ClaudeCallAttempt(None, {}, exc))
+            if attempt_num == 1 and _is_pre_first_byte_connection_error(exc):
+                continue
+            break
+    return attempts
+
+
 class ApiKeyRejectedError(Exception):
     """Raised by validate_api_key when a preflight call to the Claude API
     returns 401 Unauthorized -- the key is PRESENT but not accepted. Distinct
@@ -867,40 +940,48 @@ def generate_hypotheses(
             errors.append({"scan_finding": finding.description, "message": "no Claude API key configured -- no call made"})
             continue
 
-        try:
-            data, usage = _call_claude(_build_prompt(finding, failure_patterns), api_key, params)
-        except ResponseParseError as exc:
-            # Item #4/TIER 4: this response WAS billed by Anthropic (2xx,
-            # processed) even though it couldn't be used -- record the real
-            # cost instead of letting it silently disappear as $0.00.
+        # CC-1 directive (2026-08-06): call_claude_with_bounded_retry may
+        # make 1 or 2 REAL attempts -- every one is accounted for below,
+        # never just the last. See its own docstring for exactly which
+        # failure class earns the one bounded retry (and why the others
+        # deliberately don't).
+        attempts = call_claude_with_bounded_retry(_build_prompt(finding, failure_patterns), api_key, params)
+        data = None
+        usage: dict = {}
+        for i, attempt in enumerate(attempts):
             calls_made += 1
-            billed_cost = _call_cost_usd(exc.usage, params)
-            total_cost += billed_cost
-            errors.append({
-                "scan_finding": finding.description,
-                "message": f"{exc} (call WAS billed: ${billed_cost:.6f} -- Anthropic processed "
-                           f"this request even though the response couldn't be used)",
-            })
-            continue
-        except RejectedBeforeTokenProcessingError as exc:
-            # Confirmed $0 -- rejected before the model ever saw a token
-            # (401/403/429). See the exception's own docstring.
-            calls_made += 1
-            errors.append({"scan_finding": finding.description, "message": f"HTTP {exc.status_code}: {exc} (confirmed $0.00 -- rejected before any token was processed)"})
-            continue
-        except (requests.RequestException, KeyError, ValueError) as exc:
-            # CC-1 review, item A3: the attempt still consumed this run's
-            # call budget, but "nothing billed" is no longer assumed -- a
-            # ReadTimeout/ConnectionError/5xx means the request may have
-            # reached Anthropic's servers before failing, so the real cost
-            # is UNKNOWN, tracked separately rather than silently folded
-            # into total_cost as a confirmed zero.
-            calls_made += 1
-            calls_with_unknown_cost += 1
-            errors.append({"scan_finding": finding.description, "message": f"{exc.__class__.__name__}: {exc} (cost UNKNOWN, not confirmed $0 -- request may have reached Anthropic's servers before failing)"})
+            if attempt.exc is None:
+                data, usage = attempt.data, attempt.usage
+                break
+            exc = attempt.exc
+            if isinstance(exc, ResponseParseError):
+                # Item #4/TIER 4: this response WAS billed by Anthropic (2xx,
+                # processed) even though it couldn't be used -- record the real
+                # cost instead of letting it silently disappear as $0.00.
+                billed_cost = _call_cost_usd(exc.usage, params)
+                total_cost += billed_cost
+                errors.append({
+                    "scan_finding": finding.description,
+                    "message": f"{exc} (call WAS billed: ${billed_cost:.6f} -- Anthropic processed "
+                               f"this request even though the response couldn't be used)",
+                })
+            elif isinstance(exc, RejectedBeforeTokenProcessingError):
+                # Confirmed $0 -- rejected before the model ever saw a token
+                # (401/403/429). See the exception's own docstring.
+                errors.append({"scan_finding": finding.description, "message": f"HTTP {exc.status_code}: {exc} (confirmed $0.00 -- rejected before any token was processed)"})
+            else:
+                # CC-1 review, item A3: the attempt still consumed this run's
+                # call budget, but "nothing billed" is no longer assumed -- a
+                # ReadTimeout/ConnectionError/5xx means the request may have
+                # reached Anthropic's servers before failing, so the real cost
+                # is UNKNOWN, tracked separately rather than silently folded
+                # into total_cost as a confirmed zero.
+                calls_with_unknown_cost += 1
+                retry_note = " -- a retry was attempted next (pre-first-byte failure, low double-bill risk)" if i == 0 and len(attempts) == 2 else ""
+                errors.append({"scan_finding": finding.description, "message": f"{exc.__class__.__name__}: {exc} (cost UNKNOWN, not confirmed $0 -- request may have reached Anthropic's servers before failing){retry_note}"})
+        if data is None:
             continue
 
-        calls_made += 1
         cost = _call_cost_usd(usage, params)
         total_cost += cost
         record = _build_record(finding, data, cost, now, failure_patterns, run_id=run_id)
@@ -1206,37 +1287,44 @@ def generate_web_hypotheses(
 
     for _ in range(max_calls_per_run):
         prompt = _build_web_search_prompt(tracked_pairs, known_names, failure_patterns)
-        try:
-            data, usage = _call_claude(prompt, api_key, params, tools=[WEB_SEARCH_TOOL])
-        except ResponseParseError as exc:
+        # CC-1 directive (2026-08-06): see call_claude_with_bounded_retry's
+        # own docstring for exactly which failure class earns the one
+        # bounded retry -- every real attempt (1 or 2) is accounted for
+        # below, never just the last.
+        attempts = call_claude_with_bounded_retry(prompt, api_key, params, tools=[WEB_SEARCH_TOOL])
+        data = None
+        usage: dict = {}
+        for i, attempt in enumerate(attempts):
             calls_made += 1
-            billed_cost = _web_call_cost_usd(exc.usage, params)
-            total_cost += billed_cost
-            errors.append({
-                "scan_finding": "(web search)",
-                "message": f"{exc} (call WAS billed: ${billed_cost:.6f} -- Anthropic processed "
-                           f"this request even though the response couldn't be used)",
-            })
-            continue
-        except RejectedBeforeTokenProcessingError as exc:
-            # Confirmed $0 -- rejected before the model ever saw a token.
-            calls_made += 1
-            errors.append({"scan_finding": "(web search)", "message": f"HTTP {exc.status_code}: {exc} (confirmed $0.00 -- rejected before any token was processed)"})
-            continue
-        except (requests.RequestException, KeyError, ValueError) as exc:
-            # CC-1 review, item A3: real ReadTimeout incident this fixes --
-            # 3 web-search calls timed out and were recorded as "nothing
-            # billed." The connection succeeded and Anthropic may have
-            # already started (and billed) processing a tool-using call
-            # before the response timed out client-side -- the real cost is
-            # UNKNOWN, tracked separately, never silently folded into
-            # total_cost as a confirmed zero.
-            calls_made += 1
-            calls_with_unknown_cost += 1
-            errors.append({"scan_finding": "(web search)", "message": f"{exc.__class__.__name__}: {exc} (cost UNKNOWN, not confirmed $0 -- request may have reached Anthropic's servers before failing)"})
+            if attempt.exc is None:
+                data, usage = attempt.data, attempt.usage
+                break
+            exc = attempt.exc
+            if isinstance(exc, ResponseParseError):
+                billed_cost = _web_call_cost_usd(exc.usage, params)
+                total_cost += billed_cost
+                errors.append({
+                    "scan_finding": "(web search)",
+                    "message": f"{exc} (call WAS billed: ${billed_cost:.6f} -- Anthropic processed "
+                               f"this request even though the response couldn't be used)",
+                })
+            elif isinstance(exc, RejectedBeforeTokenProcessingError):
+                # Confirmed $0 -- rejected before the model ever saw a token.
+                errors.append({"scan_finding": "(web search)", "message": f"HTTP {exc.status_code}: {exc} (confirmed $0.00 -- rejected before any token was processed)"})
+            else:
+                # CC-1 review, item A3: real ReadTimeout incident this fixes --
+                # 3 web-search calls timed out and were recorded as "nothing
+                # billed." The connection succeeded and Anthropic may have
+                # already started (and billed) processing a tool-using call
+                # before the response timed out client-side -- the real cost is
+                # UNKNOWN, tracked separately, never silently folded into
+                # total_cost as a confirmed zero.
+                calls_with_unknown_cost += 1
+                retry_note = " -- a retry was attempted next (pre-first-byte failure, low double-bill risk)" if i == 0 and len(attempts) == 2 else ""
+                errors.append({"scan_finding": "(web search)", "message": f"{exc.__class__.__name__}: {exc} (cost UNKNOWN, not confirmed $0 -- request may have reached Anthropic's servers before failing){retry_note}"})
+        if data is None:
             continue
 
-        calls_made += 1
         cost = _web_call_cost_usd(usage, params)
         total_cost += cost
         result = _build_web_record(data, cost, now, failure_patterns, run_id=run_id)
