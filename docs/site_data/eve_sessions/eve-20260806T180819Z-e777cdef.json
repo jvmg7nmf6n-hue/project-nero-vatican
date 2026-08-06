@@ -2124,5 +2124,8 @@
       "reason": "source dated '2 days ago' (parsed 2026-08-04) is within 30 days of this session's own start (2026-08-06) -- Variant C binding disqualification"
     }
   ],
-  "freshness_disqualified_entire_session": true
+  "freshness_disqualified_entire_session": true,
+  "counts_toward_pre_registered_8": true,
+  "session_label": "Session 2 of 8",
+  "counting_reason": "Second session run to completion under the fully-corrected, now POST_INHERITANCE system (REFINEMENT-vs-SELF_DERIVATIVE tagging, the near-miss context channel, regime tagging -- see docs/site_data/eve_session_registry.json's own inheritance_regime_provenance). 3/5 hypotheses reached the real backtest harness; 2/5 were rejected TOO_SLOW by the frequency gate (a real, expected outcome, not a defect). 0/3 SURVIVED. 1/3 (VOLUME_CAPITULATION_REVERSAL_SOL_4H) caught and correctly excluded from the FDR family as SELF_DERIVATIVE. All 5 carry freshness_disqualified=True (session-wide item 7 flag) -- confirmed informational only, not binding: 2 of the 3 backtested hypotheses still received real fdr_survives_is/oos values despite the flag. This is Session 2 of the pre-registered 8 -- recorded machine-readably in docs/site_data/eve_session_registry.json."
 }

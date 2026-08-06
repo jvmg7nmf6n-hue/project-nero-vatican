@@ -76,15 +76,21 @@ class RegistryShapeTest(unittest.TestCase):
             self.assertIsInstance(entry["counts_toward_pre_registered_8"], bool)
             self.assertTrue(entry.get("reason"), f"{entry['session_id']} has no reason recorded")
 
-    def test_exactly_one_session_counts_so_far(self) -> None:
+    def test_exactly_two_sessions_count_so_far(self) -> None:
         # 2026-08-04: eve-20260804T020749Z-4cf6e4c9 is Session 1 of 8 -- the
         # first session to run to completion under the fully-corrected
-        # system. Every OTHER entry (2 spec-defect sessions, 3 crashed
+        # system. 2026-08-06: eve-20260806T180819Z-e777cdef is Session 2 of
+        # 8, applying the SAME counting_rule (this registry's own field) --
+        # see that session's own registry entry for the full real-data
+        # reasoning. Every OTHER entry (2 spec-defect sessions, 3 crashed
         # attempts) must still not count.
         counting = [e for e in self.registry["sessions"] if e["counts_toward_pre_registered_8"]]
-        self.assertEqual(len(counting), 1)
-        self.assertEqual(counting[0]["session_id"], "eve-20260804T020749Z-4cf6e4c9")
-        self.assertEqual(self.registry["next_countable_session_number"], 2)
+        self.assertEqual(len(counting), 2)
+        self.assertEqual(
+            {e["session_id"] for e in counting},
+            {"eve-20260804T020749Z-4cf6e4c9", "eve-20260806T180819Z-e777cdef"},
+        )
+        self.assertEqual(self.registry["next_countable_session_number"], 3)
 
     def test_freshness_gate_reversal_is_recorded_with_dates_and_confirmed_homogeneity(self) -> None:
         # CC-1 correction directive (2026-08-05): the binding freshness gate
@@ -164,15 +170,27 @@ class SessionRegimeTagTest(unittest.TestCase):
             self.assertIn("regime", record, f"{path.name} has no regime tag")
             self.assertIn(record["regime"], ("pre_inheritance", "post_inheritance"))
 
-    def test_every_real_committed_session_predates_inheritance_and_is_tagged_pre(self) -> None:
-        # All 3 real session files under docs/site_data/eve_sessions/ (the
-        # only ones that exist as of this directive) ran before B1/B2
-        # shipped -- every one must be pre_inheritance, not just the one
-        # that counts toward the pre-registered 8.
+    def test_the_3_original_committed_sessions_predate_inheritance_and_are_tagged_pre(self) -> None:
+        # The 3 real session files that existed as of the B0/B1/B2 directive
+        # (Session 0, Session 0-B, Session 1) all ran before B1/B2 shipped --
+        # every one of these specific 3 must be pre_inheritance.
         sessions_dir = storage.REPO_ROOT / "docs" / "site_data" / "eve_sessions"
-        for path in sorted(sessions_dir.glob("eve-*.json")):
-            record = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(record["regime"], "pre_inheritance", f"{path.name} should be pre_inheritance")
+        original_three = (
+            "eve-20260803T095520Z-394385c7.json",
+            "eve-20260803T142519Z-718833c9.json",
+            "eve-20260804T020749Z-4cf6e4c9.json",
+        )
+        for name in original_three:
+            record = json.loads((sessions_dir / name).read_text(encoding="utf-8"))
+            self.assertEqual(record["regime"], "pre_inheritance", f"{name} should be pre_inheritance")
+
+    def test_session_2_ran_after_inheritance_and_is_tagged_post(self) -> None:
+        # eve-20260806T180819Z-e777cdef (Session 2 of 8) is the first real
+        # session to run AFTER B0/B1/B2 shipped -- it must be tagged
+        # post_inheritance, not left as/reverted to pre_inheritance.
+        sessions_dir = storage.REPO_ROOT / "docs" / "site_data" / "eve_sessions"
+        record = json.loads((sessions_dir / "eve-20260806T180819Z-e777cdef.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["regime"], "post_inheritance")
 
 
 class RegistryMatchesRealLedgerTest(unittest.TestCase):
