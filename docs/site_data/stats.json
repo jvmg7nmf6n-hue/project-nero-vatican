@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-06T09:46:43.329233+00:00",
+  "last_updated": "2026-08-06T12:09:46.955663+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -33,7 +33,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 17
+        "NO_TRADE": 19
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -231,7 +231,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 17
+        "NO_TRADE": 19
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -246,12 +246,16 @@
       "expectancy_r": -0.1893833462730351,
       "avg_return_pct": -0.027069310898919667,
       "signal_counts": {
-        "ENTRY": 52,
+        "ENTRY": 53,
         "EXIT": 52,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null,
+      "open_position": {
+        "entry_price": 64622.09,
+        "entry_timestamp": "2026-08-06T12:09:21.216507+00:00",
+        "candle_timestamp": "2026-08-06T11:59:59.999000+00:00"
+      },
       "unverified_open_entries": 0
     },
     {
