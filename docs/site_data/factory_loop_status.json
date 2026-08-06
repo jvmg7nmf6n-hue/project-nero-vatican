@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-05T23:11:00.847584+00:00",
+  "last_updated": "2026-08-06T04:44:12.165978+00:00",
   "forward_trial": {
-    "count": 8,
+    "count": 10,
     "by_origin": {
-      "adam": 2,
+      "adam": 4,
       "eve": 6,
       "repaired": 0
     },
@@ -13,7 +13,7 @@
   "graveyard": {
     "count": 21,
     "distilled_this_period": 0,
-    "pending_review": 0
+    "pending_review": 1
   },
   "repair": {
     "count": 0,

@@ -1,0 +1,27 @@
+[
+  {
+    "name": "RANGE_MEAN_REVERSION_GRAVEYARD",
+    "family": "Range Mean Reversion",
+    "failure_pattern": "sample-too-thin",
+    "why_it_died": "Across a physically-arbitraged asset (PAXG long and short) and two crypto variants (BTC volatility breakout, SOL trend pullback), none produced usable evidence: two had no OOS p-value at all and the one that reported a p-value (0.26) failed significance, meaning the plausible economic stories (redemption arbitrage, volatility regime shift, trend-confirmed pullback) were never actually tested against enough data to distinguish real edge from noise. The family dies not because the mechanisms are disproven but because they were asserted via narrative and never survived contact with sufficient out-of-sample trades.",
+    "fixable": false,
+    "source_doc": "eve-origin graveyard review: PAXG_PEG_REVERSION, BTC_VOL_EXPANSION_BREAKOUT, SOL_TREND_ALIGNED_PULLBACK, PAXG_PREMIUM_FADE_DYNAMIC_EXIT",
+    "covers": [
+      "PAXG_PEG_REVERSION",
+      "BTC_VOL_EXPANSION_BREAKOUT",
+      "SOL_TREND_ALIGNED_PULLBACK",
+      "PAXG_PREMIUM_FADE_DYNAMIC_EXIT"
+    ],
+    "origin_agent_breakdown": {
+      "eve": 4
+    },
+    "origin_agent_by_name": {
+      "PAXG_PEG_REVERSION": "eve",
+      "BTC_VOL_EXPANSION_BREAKOUT": "eve",
+      "SOL_TREND_ALIGNED_PULLBACK": "eve",
+      "PAXG_PREMIUM_FADE_DYNAMIC_EXIT": "eve"
+    },
+    "review_status": "pending_human_approval",
+    "drafted_at": "2026-08-06T04:44:12.131358+00:00"
+  }
+]

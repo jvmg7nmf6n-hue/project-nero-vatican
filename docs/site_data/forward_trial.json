@@ -174,5 +174,49 @@
     "status": "OPEN",
     "forward_tracking_db_ref": "C:\\Users\\HP\\Documents\\Codex\\project-nero-vatican\\data\\repair_lab_forward_tracking.db",
     "attribution": "Explored by Eve, our research agent."
+  },
+  {
+    "trial_id": "268bb030-f7bb-44b3-9885-39d02ebdaf19",
+    "source_hypothesis_ref": {
+      "origin": "fresh",
+      "origin_agent": "adam",
+      "hypothesis_name": "INTRADAY_TSMOM_BTC_4H",
+      "session_id_or_run_ref": "ffd8dc0b-f3d5-444d-9e7f-c25e6b9276b9"
+    },
+    "entry_verdict": {
+      "verdict": "DIED",
+      "review_status": "dead",
+      "frequency_classification": "FAST",
+      "reason": "train: N=228 ExpR=-0.008; test: N=93 ExpR=-0.238 -> DIED"
+    },
+    "measured_trades_per_year": 673.0430779722664,
+    "projected_time_to_min_sample_years": 0.029715779947185085,
+    "projected_time_to_min_sample_label": "0.0 years at the currently measured rate (673.04 trades/year)",
+    "opened_at": "2026-08-06T04:39:43.908671+00:00",
+    "status": "OPEN",
+    "forward_tracking_db_ref": "C:\\Users\\HP\\Documents\\Codex\\project-nero-vatican\\data\\repair_lab_forward_tracking.db",
+    "attribution": "Explored by Adam, our research agent."
+  },
+  {
+    "trial_id": "f329729b-9b93-4cbb-aec6-2d4c91b26b37",
+    "source_hypothesis_ref": {
+      "origin": "fresh",
+      "origin_agent": "adam",
+      "hypothesis_name": "BB_SQUEEZE_BREAKOUT_PAXG_4H",
+      "session_id_or_run_ref": "ffd8dc0b-f3d5-444d-9e7f-c25e6b9276b9"
+    },
+    "entry_verdict": {
+      "verdict": "DIED",
+      "review_status": "dead",
+      "frequency_classification": "FAST",
+      "reason": "train: N=75 ExpR=0.061; test: N=27 ExpR=-0.217 -> DIED"
+    },
+    "measured_trades_per_year": 75.22539213457604,
+    "projected_time_to_min_sample_years": 0.265867673567199,
+    "projected_time_to_min_sample_label": "0.3 years at the currently measured rate (75.23 trades/year)",
+    "opened_at": "2026-08-06T04:39:43.908671+00:00",
+    "status": "OPEN",
+    "forward_tracking_db_ref": "C:\\Users\\HP\\Documents\\Codex\\project-nero-vatican\\data\\repair_lab_forward_tracking.db",
+    "attribution": "Explored by Adam, our research agent."
   }
 ]
