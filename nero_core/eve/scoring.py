@@ -155,6 +155,22 @@ DERIVATIVE_TAG_NAME = "DERIVATIVE"
 # something Adam already proposed" and "Eve has already proposed this
 # herself" -- see apply_self_derivative_tags below.
 SELF_DERIVATIVE_TAG_NAME = "SELF_DERIVATIVE"
+# CC-1 directive, item B1 (2026-08-06): a hypothesis similar enough to a
+# prior one to earn a SELF_DERIVATIVE-shaped similarity flag, but which
+# DECLARES that prior hypothesis as its parent via a validated
+# `derived_from` field (see validate_derived_from), is a deliberate
+# refinement, not lazy repetition -- tagged REFINEMENT instead and kept
+# IN the FDR family (apply_fdr_correction), unlike SELF_DERIVATIVE. Same
+# similarity method/threshold, same tag_derivative call -- only the tag
+# name differs, and only for the ONE flag matching the declared parent
+# (an unrelated undeclared match on a DIFFERENT prior still gets tagged
+# SELF_DERIVATIVE and still excludes the record from FDR membership via
+# is_self_derivative below).
+REFINEMENT_TAG_NAME = "REFINEMENT"
+# The 4 required sub-fields when a hypothesis declares derived_from -- see
+# validate_derived_from. Partial (some but not all present/non-empty) is
+# a hard validation error, never silently accepted.
+DERIVED_FROM_REQUIRED_FIELDS = ("parent_hypothesis_name", "parent_session_id", "what_changed", "why_this_change")
 
 
 def classify_testability(raw_hypothesis: dict) -> tuple[str, str]:
@@ -171,6 +187,54 @@ def classify_testability(raw_hypothesis: dict) -> tuple[str, str]:
     except (AttributeError, TypeError, KeyError) as exc:
         return TESTABILITY_UNTESTABLE_BY_DSL, f"{exc.__class__.__name__}: {exc}"
     return TESTABILITY_TESTABLE, "structured_entry_rule and structured_exit_plan both parse via rule_dsl"
+
+
+def validate_derived_from(raw_hypothesis: dict, known_hypothesis_names: set) -> tuple[bool, str]:
+    """CC-1 directive, item B1: `derived_from` is an OPTIONAL declared field
+    -- null/absent is always valid (nothing declared). When present, it
+    must be a dict with ALL FOUR of DERIVED_FROM_REQUIRED_FIELDS non-empty
+    (partial is a hard error, mirroring classify_testability's own "never
+    guess a substitute" discipline) -- AND `parent_hypothesis_name` must
+    actually appear in `known_hypothesis_names` (the real union of Adam's
+    history, Eve's own prior-session history, and this session's own
+    already-finalized hypotheses so far -- see session.py's own call site).
+    Naming a never-proposed parent is a hard error: this is what makes
+    REFINEMENT tagging (apply_self_derivative_tags) trustworthy -- a
+    declared parent that was never validated against real data would let
+    any similarity match be waved through as "deliberate," defeating the
+    whole point of distinguishing refinement from repetition.
+
+    Returns (True, "") when valid (including the null case). Returns
+    (False, reason) otherwise -- callers route this through the SAME
+    retry-or-finalize mechanism classify_testability's own DSL errors
+    already use (see session.py's _process_proposed_hypotheses), not a
+    silent rejection."""
+    derived_from = raw_hypothesis.get("derived_from") if isinstance(raw_hypothesis, dict) else None
+    if derived_from is None:
+        return True, ""
+    if not isinstance(derived_from, dict):
+        return False, f"derived_from must be a JSON object (or omitted entirely), got {type(derived_from).__name__}"
+
+    missing_or_empty = [
+        f for f in DERIVED_FROM_REQUIRED_FIELDS
+        if not isinstance(derived_from.get(f), str) or not derived_from.get(f).strip()
+    ]
+    if missing_or_empty:
+        return False, (
+            f"derived_from is present but missing/empty required field(s) {missing_or_empty} -- all of "
+            f"{list(DERIVED_FROM_REQUIRED_FIELDS)} must be non-empty strings when derived_from is declared "
+            f"at all, or omit derived_from entirely for a fresh (non-refinement) hypothesis"
+        )
+
+    parent_name = derived_from["parent_hypothesis_name"]
+    if parent_name not in known_hypothesis_names:
+        return False, (
+            f"derived_from.parent_hypothesis_name {parent_name!r} does not match any hypothesis this "
+            f"platform has a real record of (checked against Adam's history, your own prior-session "
+            f"history, and everything already proposed this session) -- a declared parent must be a real, "
+            f"previously-proposed hypothesis, never invented"
+        )
+    return True, ""
 
 
 def _map_half_verdict(stats) -> str | None:
@@ -531,14 +595,46 @@ def apply_self_derivative_tags(scored_records: list[dict], eve_history: list[dic
     applies exactly as it does to every other contamination tag. What
     changes is downstream, in apply_fdr_correction: a self-derivative
     hypothesis is excluded from the FDR family, because a hypothesis Eve
-    has already tried is not an INDEPENDENT test of the survival bar."""
+    has already tried is not an INDEPENDENT test of the survival bar.
+
+    REFINEMENT SPLIT (CC-1 directive, item B1, 2026-08-06): a similarity
+    flag whose `matched_hypothesis_name` equals the hypothesis's own
+    validated `derived_from.parent_hypothesis_name` (see
+    validate_derived_from -- already confirmed real before this ever
+    runs, since session.py's pre-submit validator rejects an invented
+    parent) is reclassified REFINEMENT_TAG_NAME instead of
+    SELF_DERIVATIVE_TAG_NAME -- ONLY that one flag. A record can still
+    carry an UNRELATED SELF_DERIVATIVE flag against some OTHER,
+    undeclared prior hypothesis at the same time; that flag is untouched
+    and still excludes the record from the FDR family via
+    is_self_derivative below -- declaring one real parent does not
+    launder an unrelated undeclared near-duplicate."""
     updated = []
     for r in scored_records:
         raw = r.get("raw_hypothesis") if isinstance(r.get("raw_hypothesis"), dict) else {}
+        declared_parent = None
+        derived_from = raw.get("derived_from") if isinstance(raw.get("derived_from"), dict) else None
+        if derived_from is not None:
+            declared_parent = derived_from.get("parent_hypothesis_name")
+        derivative_flags = tag_derivative(raw, eve_history, tag_name=SELF_DERIVATIVE_TAG_NAME)
+        reclassified_flags = [
+            {**flag, "tag": REFINEMENT_TAG_NAME} if declared_parent and flag["matched_hypothesis_name"] == declared_parent else flag
+            for flag in derivative_flags
+        ]
         tags = list(r.get("contamination_tags") or [])
-        tags.extend(tag_derivative(raw, eve_history, tag_name=SELF_DERIVATIVE_TAG_NAME))
+        tags.extend(reclassified_flags)
         updated.append({**r, "contamination_tags": tags})
     return updated
+
+
+def is_refinement(record: dict) -> bool:
+    """True iff `record` carries a REFINEMENT contamination tag -- mirrors
+    is_self_derivative's own shape exactly. Public for the same reason:
+    nero_core.eve.pipeline uses it to count refinements per session for
+    ablation_metadata, and apply_fdr_correction's own docstring/tests
+    reference it directly to confirm a REFINEMENT-tagged record is NOT
+    excluded from the FDR family the way a SELF_DERIVATIVE one is."""
+    return any(t.get("tag") == REFINEMENT_TAG_NAME for t in (record.get("contamination_tags") or []))
 
 
 # CC-1 directive, item A4: real web_search_tool_result page_age values

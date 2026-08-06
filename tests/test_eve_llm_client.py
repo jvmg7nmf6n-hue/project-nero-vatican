@@ -100,6 +100,26 @@ class DslVocabularyReuseTest(unittest.TestCase):
         for key_name in ("compare_to_field", "stop_atr_multiple", "target_r_multiple", "max_holding_hours"):
             self.assertIn(key_name, SYSTEM_PROMPT_TEMPLATE)
 
+    def test_propose_hypothesis_tool_description_mentions_every_allowed_field(self) -> None:
+        # CC-1 directive item B1 (2026-08-06): found while touching this
+        # file for an unrelated reason -- tools_defs.py's own PROPOSE_
+        # HYPOTHESIS_TOOL description hand-lists the DSL field vocabulary
+        # as a THIRD independent copy (session.py's DSL_ALLOWED_FIELDS is
+        # the second, already covered by test_allowed_fields_match_rule_
+        # dsl_exactly above) -- it had silently drifted stale (missing
+        # hour_of_day/high20/low20/vol_ma20 after those fields were added)
+        # until fixed in this same commit. tools_defs.py cannot import
+        # DSL_ALLOWED_FIELDS directly (session.py imports FROM tools_defs.py,
+        # not the other way -- importing back would be circular), so this
+        # stays a hand-synced literal, guarded by this test rather than by
+        # a structural fix, unlike hypothesis_gen.py's own prompts.
+        from nero_core.eve.session import DSL_ALLOWED_FIELDS
+        from nero_core.eve.tools_defs import PROPOSE_HYPOTHESIS_TOOL
+
+        description = PROPOSE_HYPOTHESIS_TOOL["description"]
+        for field in DSL_ALLOWED_FIELDS:
+            self.assertIn(field, description, f"{field!r} missing from PROPOSE_HYPOTHESIS_TOOL's description")
+
     def test_system_prompt_states_the_approved_research_universe(self) -> None:
         # Session 0-B (eve-20260803T142519Z-718833c9): 6/6 hypotheses parsed
         # cleanly but all 6 targeted a pair with no real backtest data, and

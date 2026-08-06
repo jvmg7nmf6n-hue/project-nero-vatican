@@ -307,11 +307,19 @@ def run_pipeline(
     # disagree by re-resolving "now" a second time at a different instant.
     now = now or datetime.now(timezone.utc)
     session_id = session.new_session_id(now)
+    # CC-1 directive, item B1: loaded BEFORE run_session (not just after,
+    # as before this directive) so a declared derived_from can be validated
+    # live, during the session, against Eve's real prior-session history --
+    # same function, same "exclude this session's own not-yet-written
+    # records" behavior, called once and reused for both purposes rather
+    # than reading the file twice.
+    eve_history = _load_eve_history_excluding_session(session_id)
     try:
-        result = session.run_session(api_key=api_key, stub=stub, now=now, session_id=session_id)
+        result = session.run_session(
+            api_key=api_key, stub=stub, now=now, session_id=session_id, eve_history=eve_history,
+        )
 
         adam_history = eve_context.load_adam_history_verdict_stripped()
-        eve_history = _load_eve_history_excluding_session(result.session_id)
         scored = scoring.score_all(result.hypothesis_records, candles_provider=candles_provider, now=now)
         # Contamination tagging BEFORE FDR correction (order matters, unlike
         # before CC-1's own item 1 fix): apply_fdr_correction now excludes a

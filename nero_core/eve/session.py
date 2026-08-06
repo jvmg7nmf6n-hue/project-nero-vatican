@@ -190,6 +190,24 @@ structured_exit_plan is a FLAT object (never nested) with exactly these keys:
 "asset" and "timeframe" are always TWO SEPARATE fields (e.g. "asset": "BTC", "timeframe":
 "4h" -- never "BTC/4h" combined into one field).
 
+REFINING A PREVIOUS HYPOTHESIS: if this hypothesis is a deliberate refinement of one YOU
+already proposed (not Adam's), declare it -- include an OPTIONAL "derived_from" key:
+  {{"parent_hypothesis_name": <the exact hypothesis_name you gave it>,
+    "parent_session_id": <that hypothesis's session_id, if you know it>,
+    "what_changed": <what you actually changed, specifically>,
+    "why_this_change": <why you think the change addresses what didn't work>}}
+All four keys are required when you include derived_from at all -- partial is rejected the
+same way a malformed structured_entry_rule is. The named parent must be REAL: a
+hypothesis_name you can't actually point to (never proposed, or invented) is rejected too.
+A declared, validated refinement counts toward this session's real result differently than
+an undeclared near-duplicate -- refining your own idea on purpose is welcome and rewarded
+with that distinction; quietly re-proposing something very similar without declaring it is
+still recorded honestly but does not get that same credit. Practically, right now, this
+only works for a hypothesis YOU proposed earlier in THIS SAME SESSION -- your own past
+sessions' hypothesis names are not shown to you anywhere above, so there is nothing real to
+declare a cross-session parent against yet. Omit derived_from entirely for a fresh idea --
+it is not required, and an omitted derived_from is a completely normal, honest answer.
+
 Minimal worked example (syntax only -- deliberately arbitrary values, not a suggested or
 recommended mechanism, just to show the shape):
 {{
@@ -423,6 +441,7 @@ def _process_proposed_hypotheses(
     retry_counts: dict[str, int],
     correction_log: list[dict],
     now: datetime,
+    known_hypothesis_names: set | None = None,
 ) -> tuple[list[dict], dict[str, str]]:
     """Pre-submit DSL validator (spec item 3): every propose_hypothesis call
     THIS turn is run through scoring.classify_testability -- the SAME
@@ -430,6 +449,21 @@ def _process_proposed_hypotheses(
     nero_core.eve.scoring (session.py itself still has zero direct
     nero_core.research_agent imports; scoring.py remains the one documented
     exception -- see test_eve_no_auto_wire.py).
+
+    CC-1 directive, item B1 (2026-08-06): ALSO runs scoring.validate_
+    derived_from against `known_hypothesis_names` (the real union of
+    Adam's history, Eve's own prior-session history, and every hypothesis
+    already finalized earlier in THIS session -- see run_session's own
+    call site for how that set is built and grown turn-by-turn). Both
+    checks share the SAME retry-or-finalize mechanism below: a DSL
+    failure OR an invalid derived_from (malformed, partial, or naming a
+    parent that was never really proposed) is treated identically --
+    "hard error, with up to MAX_DSL_RETRIES chances to correct it,"
+    exactly as one class of pre-submit validation failure, not two
+    differently-handled ones. `known_hypothesis_names=None` (e.g. an
+    older caller that hasn't been updated) is treated as an empty set --
+    conservative: any declared derived_from would fail validation rather
+    than silently skip the check.
 
     Returns (finalized_records, tool_result_text_by_id):
       - TESTABLE -> finalized immediately, normal ack text.
@@ -456,13 +490,26 @@ def _process_proposed_hypotheses(
         raw = (block.get("input") or {}).get("hypothesis")
         if not isinstance(raw, dict):
             continue  # matches hypothesis_shapes.extract_proposed_hypotheses's own skip rule
-        testability, reason = scoring.classify_testability(raw)
+        testability, dsl_reason = scoring.classify_testability(raw)
+        derived_from_valid, derived_from_reason = scoring.validate_derived_from(raw, known_hypothesis_names or set())
         key = _hypothesis_retry_key(raw, tool_use_id)
 
-        if testability == scoring.TESTABILITY_TESTABLE:
+        if testability == scoring.TESTABILITY_TESTABLE and derived_from_valid:
             finalized.append(hypothesis_shapes.build_hypothesis_record(raw, session_id, turn_index, tool_use_id, now=now))
             tool_result_text[tool_use_id] = PROPOSE_HYPOTHESIS_ACK_TEXT
             continue
+
+        # CC-1 directive, item B1: a DSL failure and an invalid derived_from
+        # are two INDEPENDENT reasons a submission can be blocked -- both
+        # (or either) may fail at once; the combined reason string names
+        # every real problem so a single revise-and-resubmit can fix all of
+        # them, not just whichever one happened to be checked first.
+        reason_parts = []
+        if testability != scoring.TESTABILITY_TESTABLE:
+            reason_parts.append(f"DSL: {dsl_reason}")
+        if not derived_from_valid:
+            reason_parts.append(f"derived_from: {derived_from_reason}")
+        reason = " | ".join(reason_parts)
 
         retries_used = retry_counts.get(key, 0)
         if retries_used < MAX_DSL_RETRIES:
@@ -477,12 +524,12 @@ def _process_proposed_hypotheses(
                 "outcome": "retry_offered",
             })
             tool_result_text[tool_use_id] = (
-                f"This hypothesis did not parse against the platform's rule DSL: {reason}. You may "
-                f"revise structured_entry_rule/structured_exit_plan and re-propose it (same "
-                f"hypothesis_name, if you have one) -- attempt {retries_used + 1} of {MAX_DSL_RETRIES} "
-                f"corrections used -- or propose something else instead. If it still fails to parse "
-                f"after your remaining attempts, it will be recorded and scored honestly as "
-                f"UNTESTABLE_BY_DSL rather than discarded."
+                f"This hypothesis was not accepted as submitted: {reason}. You may revise it (same "
+                f"hypothesis_name, if you have one) and re-propose -- attempt {retries_used + 1} of "
+                f"{MAX_DSL_RETRIES} corrections used -- or propose something else instead. A DSL parse "
+                f"failure that's never corrected is still recorded and scored honestly as "
+                f"UNTESTABLE_BY_DSL, never discarded; an uncorrected derived_from problem is recorded "
+                f"as-is with that field simply inert (no REFINEMENT credit), also never discarded."
             )
         else:
             correction_log.append({
@@ -496,9 +543,10 @@ def _process_proposed_hypotheses(
             })
             finalized.append(hypothesis_shapes.build_hypothesis_record(raw, session_id, turn_index, tool_use_id, now=now))
             tool_result_text[tool_use_id] = (
-                f"This hypothesis still does not parse against the rule DSL after {MAX_DSL_RETRIES} "
-                f"correction attempts ({reason}). Recorded as-is and will be scored honestly as "
-                f"UNTESTABLE_BY_DSL -- that is real capability data, not a penalty."
+                f"This hypothesis still was not accepted after {MAX_DSL_RETRIES} correction attempts "
+                f"({reason}). Recorded as-is -- a real capability data point, not a penalty. Any real "
+                f"DSL problem is scored honestly as UNTESTABLE_BY_DSL; any real derived_from problem "
+                f"just leaves that field inert (no REFINEMENT credit for the declared parent)."
             )
     return finalized, tool_result_text
 
@@ -510,6 +558,7 @@ def run_session(
     max_turns: int = MAX_TURNS,
     llm_params: llm_client.LlmParameters = llm_client.DEFAULT_LLM_PARAMETERS,
     session_id: str | None = None,
+    eve_history: list[dict] | None = None,
 ) -> SessionResult:
     """Runs one full Eve session end to end: builds context, loops turns
     (budget-checking every single one, per Phase 1), persists the reasoning
@@ -524,9 +573,32 @@ def run_session(
     fresh one via new_session_id(now), exactly as before. nero_core.eve.
     pipeline now passes one in explicitly, minted BEFORE this call, so it
     can name the session in a crash notification even in the case this
-    function never returns at all (see Phase 1.1b below)."""
+    function never returns at all (see Phase 1.1b below).
+
+    `eve_history` (CC-1 directive, item B1, 2026-08-06): Eve's own
+    prior-session raw_hypothesis dicts, for validating a declared
+    derived_from.parent_hypothesis_name against real data (see
+    scoring.validate_derived_from). None/omitted (every existing caller
+    that hasn't been updated) means an empty history -- conservative, not
+    a crash: a derived_from naming a cross-session parent simply fails
+    validation rather than the session refusing to start. nero_core.eve.
+    pipeline passes this in explicitly, loaded via the SAME _load_eve_
+    history_excluding_session function it already uses post-session (no
+    reimplementation). KNOWN LIMITATION, not fixed by this parameter
+    alone: EveContext.as_prompt_text() does not currently show Eve her
+    own past hypothesis names anywhere in her live context/system prompt
+    (context.py has no such field) -- so in practice, until a future
+    change adds that, a real cross-session derived_from declaration is
+    only possible if Eve happens to already know a name (e.g. from her
+    own training, not this platform), which validate_derived_from would
+    then correctly accept if it happens to be a genuine match. Practically
+    achievable REFINEMENT today is within-session only (declaring a
+    parent she herself proposed earlier in the SAME session, which she
+    obviously already knows) plus refinement of Adam's own history
+    (which IS in her context, via context.adam_history)."""
     now = now or datetime.now(timezone.utc)
     session_id = session_id or new_session_id(now)
+    eve_history = eve_history or []
 
     context = eve_context.load_context()
     system_blocks = llm_client.build_system_blocks(SYSTEM_PROMPT_TEMPLATE)
@@ -537,6 +609,14 @@ def run_session(
     turns_log: list[dict] = []
     hypothesis_records: list[dict] = []
     all_assistant_text_parts: list[str] = []
+    # CC-1 directive, item B1: the real, growing universe of names a
+    # derived_from.parent_hypothesis_name may legitimately reference --
+    # Adam's history (fixed for the whole session) plus Eve's own
+    # prior-session history (fixed) plus every hypothesis THIS session has
+    # already finalized (grows turn by turn, see the main loop below).
+    known_hypothesis_names: set = {
+        h.get("hypothesis_name") for h in context.adam_history if h.get("hypothesis_name")
+    } | {h.get("hypothesis_name") for h in eve_history if h.get("hypothesis_name")}
     dsl_retry_counts: dict[str, int] = {}
     dsl_correction_log: list[dict] = []
     n_searches = 0
@@ -641,9 +721,20 @@ def run_session(
                 all_assistant_text_parts.append(turn_text)
 
             proposed, dsl_tool_result_text = _process_proposed_hypotheses(
-                result.content_blocks, session_id, turn_index, dsl_retry_counts, dsl_correction_log, now
+                result.content_blocks, session_id, turn_index, dsl_retry_counts, dsl_correction_log, now,
+                known_hypothesis_names=known_hypothesis_names,
             )
             hypothesis_records.extend(proposed)
+            # CC-1 directive, item B1: grow the known-names set with every
+            # hypothesis THIS session just finalized, so a LATER turn can
+            # validly declare derived_from against something proposed
+            # earlier in this SAME session (the one practically-achievable
+            # REFINEMENT case today -- see run_session's own docstring).
+            known_hypothesis_names.update(
+                r["raw_hypothesis"].get("hypothesis_name")
+                for r in proposed
+                if isinstance(r.get("raw_hypothesis"), dict) and r["raw_hypothesis"].get("hypothesis_name")
+            )
             # CC-1 Master Directive, Phase 1.1a: persist THIS turn's
             # newly-finalized hypotheses immediately, not once at the very
             # end -- a crash on a LATER turn must not erase hypotheses this

@@ -305,5 +305,193 @@ class SelfDerivativeExcludedFromFdrFamilyTest(unittest.TestCase):
         self.assertEqual(updated[0]["verdict_oos"], "SURVIVED")
 
 
+class ValidateDerivedFromTest(unittest.TestCase):
+    """CC-1 directive, item B1 (2026-08-06): a declared derived_from must
+    be either absent or fully real -- never partial, never naming an
+    invented parent."""
+
+    def test_none_is_always_valid(self) -> None:
+        ok, reason = scoring.validate_derived_from({"hypothesis_name": "X"}, {"SOME_PARENT"})
+        self.assertTrue(ok)
+        self.assertEqual(reason, "")
+
+    def test_non_dict_derived_from_is_invalid(self) -> None:
+        ok, reason = scoring.validate_derived_from({"derived_from": "not a dict"}, {"SOME_PARENT"})
+        self.assertFalse(ok)
+        self.assertIn("must be a JSON object", reason)
+
+    def test_partial_derived_from_is_a_hard_error(self) -> None:
+        ok, reason = scoring.validate_derived_from(
+            {"derived_from": {"parent_hypothesis_name": "SOME_PARENT", "what_changed": "tightened the RSI threshold"}},
+            {"SOME_PARENT"},
+        )
+        self.assertFalse(ok)
+        self.assertIn("parent_session_id", reason)
+        self.assertIn("why_this_change", reason)
+
+    def test_all_four_fields_present_and_real_parent_is_valid(self) -> None:
+        ok, reason = scoring.validate_derived_from(
+            {
+                "derived_from": {
+                    "parent_hypothesis_name": "SOME_PARENT",
+                    "parent_session_id": "eve-20260803T095520Z-394385c7",
+                    "what_changed": "tightened the RSI threshold from 30 to 25",
+                    "why_this_change": "the original fired too often on shallow pullbacks",
+                }
+            },
+            {"SOME_PARENT"},
+        )
+        self.assertTrue(ok)
+        self.assertEqual(reason, "")
+
+    def test_naming_a_never_proposed_parent_is_a_hard_error(self) -> None:
+        # The core anti-hallucination check: the whole point of REFINEMENT
+        # tagging is that the declared parent is verified real, not just
+        # claimed.
+        ok, reason = scoring.validate_derived_from(
+            {
+                "derived_from": {
+                    "parent_hypothesis_name": "INVENTED_HYPOTHESIS_THAT_NEVER_EXISTED",
+                    "parent_session_id": "eve-fake",
+                    "what_changed": "x",
+                    "why_this_change": "y",
+                }
+            },
+            {"SOME_PARENT"},
+        )
+        self.assertFalse(ok)
+        self.assertIn("INVENTED_HYPOTHESIS_THAT_NEVER_EXISTED", reason)
+        self.assertIn("never invented", reason)
+
+    def test_empty_known_names_rejects_any_declared_parent(self) -> None:
+        ok, reason = scoring.validate_derived_from(
+            {
+                "derived_from": {
+                    "parent_hypothesis_name": "SOME_PARENT",
+                    "parent_session_id": "eve-x",
+                    "what_changed": "x",
+                    "why_this_change": "y",
+                }
+            },
+            set(),
+        )
+        self.assertFalse(ok)
+
+
+class RefinementVsSelfDerivativeTest(unittest.TestCase):
+    """CC-1 directive, item B1: apply_self_derivative_tags splits a
+    similarity match into REFINEMENT (declared, validated parent) vs
+    SELF_DERIVATIVE (no declared parent, or a match against something
+    OTHER than the declared parent) -- and apply_fdr_correction must
+    treat only the latter as exclusion-worthy."""
+
+    def _record(self, name: str, mechanism: str, derived_from: dict | None = None) -> dict:
+        raw = {"hypothesis_name": name, "mechanism": mechanism}
+        if derived_from is not None:
+            raw["derived_from"] = derived_from
+        return {"raw_hypothesis": raw, "contamination_tags": []}
+
+    def test_declared_and_similar_parent_is_tagged_refinement_not_self_derivative(self) -> None:
+        prior = {"hypothesis_name": "RSI_DIP_BUY", "mechanism": "buy when rsi14 drops below 30 in an uptrend"}
+        child = self._record(
+            "RSI_DIP_BUY_TIGHTER", "buy when rsi14 drops below 30 in an uptrend",
+            derived_from={
+                "parent_hypothesis_name": "RSI_DIP_BUY", "parent_session_id": "eve-x",
+                "what_changed": "tightened threshold", "why_this_change": "fewer false positives",
+            },
+        )
+        updated = scoring.apply_self_derivative_tags([child], eve_history=[prior])
+        tags = updated[0]["contamination_tags"]
+        self.assertEqual(len(tags), 1)
+        self.assertEqual(tags[0]["tag"], "REFINEMENT")
+        self.assertFalse(scoring.is_self_derivative(updated[0]))
+        self.assertTrue(scoring.is_refinement(updated[0]))
+
+    def test_similar_but_undeclared_stays_self_derivative(self) -> None:
+        # Same similarity shape as the REFINEMENT case above, but no
+        # derived_from at all -- unchanged, pre-B1 behavior.
+        prior = {"hypothesis_name": "RSI_DIP_BUY", "mechanism": "buy when rsi14 drops below 30 in an uptrend"}
+        child = self._record("RSI_DIP_BUY_TIGHTER", "buy when rsi14 drops below 30 in an uptrend")
+        updated = scoring.apply_self_derivative_tags([child], eve_history=[prior])
+        self.assertTrue(scoring.is_self_derivative(updated[0]))
+        self.assertFalse(scoring.is_refinement(updated[0]))
+
+    def test_declared_parent_that_does_not_match_the_similarity_hit_stays_self_derivative(self) -> None:
+        # The declared parent must be the SAME hypothesis the similarity
+        # engine actually matched -- declaring an unrelated real name does
+        # not launder an unrelated similarity hit.
+        prior_a = {"hypothesis_name": "RSI_DIP_BUY", "mechanism": "buy when rsi14 drops below 30 in an uptrend"}
+        prior_b = {"hypothesis_name": "UNRELATED_OTHER_IDEA", "mechanism": "completely different mechanism about volume spikes"}
+        child = self._record(
+            "RSI_DIP_BUY_TIGHTER", "buy when rsi14 drops below 30 in an uptrend",
+            derived_from={
+                "parent_hypothesis_name": "UNRELATED_OTHER_IDEA", "parent_session_id": "eve-x",
+                "what_changed": "x", "why_this_change": "y",
+            },
+        )
+        updated = scoring.apply_self_derivative_tags([child], eve_history=[prior_a, prior_b])
+        self.assertTrue(scoring.is_self_derivative(updated[0]))
+        self.assertFalse(scoring.is_refinement(updated[0]))
+
+    def test_refinement_tagged_record_is_not_excluded_from_fdr_family(self) -> None:
+        # The whole point: REFINEMENT stays IN the family, unlike
+        # SELF_DERIVATIVE (see SelfDerivativeExcludedFromFdrFamilyTest
+        # above for the contrasting excluded case).
+        record = {
+            "hypothesis_name": "RSI_DIP_BUY_TIGHTER", "p_value_oos": 0.001, "p_value_is": 0.001,
+            "contamination_tags": [{"tag": "REFINEMENT", "matched_hypothesis_name": "RSI_DIP_BUY", "similarity": 0.7, "method": "x"}],
+        }
+        updated = scoring.apply_fdr_correction([record], field="p_value_oos")
+        self.assertTrue(updated[0]["fdr_survives_oos"])
+        self.assertNotIn("excluded_from_fdr_family_reason", updated[0])
+
+    def test_a_record_with_both_a_refinement_and_an_unrelated_self_derivative_tag_is_still_excluded(self) -> None:
+        # Declaring one real parent does not launder an UNRELATED
+        # undeclared near-duplicate the same record also happens to match.
+        record = {
+            "hypothesis_name": "X", "p_value_oos": 0.001, "p_value_is": 0.001,
+            "contamination_tags": [
+                {"tag": "REFINEMENT", "matched_hypothesis_name": "DECLARED_PARENT", "similarity": 0.7, "method": "x"},
+                {"tag": "SELF_DERIVATIVE", "matched_hypothesis_name": "SOME_OTHER_PRIOR", "similarity": 0.65, "method": "x"},
+            ],
+        }
+        updated = scoring.apply_fdr_correction([record], field="p_value_oos")
+        self.assertIsNone(updated[0]["fdr_survives_oos"])
+        self.assertEqual(updated[0]["excluded_from_fdr_family_reason"], "self_derivative")
+
+    def test_fdr_family_size_grows_when_a_refinement_joins_it_making_the_bar_harder_not_easier(self) -> None:
+        # Statistical note the directive requires addressing explicitly:
+        # moving a REFINEMENT record back into the family means Benjamini-
+        # Hochberg corrects over a LARGER family -- the bar gets harder,
+        # never easier, than if that same record had stayed excluded as
+        # SELF_DERIVATIVE. Confirmed arithmetically: a marginal p-value
+        # that survives in the smaller family fails once a REFINEMENT
+        # record with a large p-value joins.
+        fresh = [{"hypothesis_name": f"F{i}", "p_value_oos": 0.04, "p_value_is": 0.04, "contamination_tags": []} for i in range(3)]
+
+        excluded_as_self_derivative = fresh + [{
+            "hypothesis_name": "R", "p_value_oos": 0.5, "p_value_is": 0.5,
+            "contamination_tags": [{"tag": "SELF_DERIVATIVE", "matched_hypothesis_name": "P", "similarity": 0.9, "method": "x"}],
+        }]
+        included_as_refinement = fresh + [{
+            "hypothesis_name": "R", "p_value_oos": 0.5, "p_value_is": 0.5,
+            "contamination_tags": [{"tag": "REFINEMENT", "matched_hypothesis_name": "P", "similarity": 0.9, "method": "x"}],
+        }]
+
+        result_excluded = scoring.apply_fdr_correction(excluded_as_self_derivative, field="p_value_oos", alpha=0.05)
+        result_included = scoring.apply_fdr_correction(included_as_refinement, field="p_value_oos", alpha=0.05)
+
+        family_size_excluded = sum(1 for r in result_excluded if r["fdr_survives_oos"] is not None)
+        family_size_included = sum(1 for r in result_included if r["fdr_survives_oos"] is not None)
+        self.assertEqual(family_size_excluded, 3)  # the 3 fresh records only
+        self.assertEqual(family_size_included, 4)  # + the refinement record itself
+
+        fresh_survivals_excluded = [r["fdr_survives_oos"] for r in result_excluded[:3]]
+        fresh_survivals_included = [r["fdr_survives_oos"] for r in result_included[:3]]
+        # A larger family with a large-p-value member never makes the SAME
+        # fresh p-values MORE likely to survive BH correction.
+        self.assertGreaterEqual(sum(fresh_survivals_excluded), sum(fresh_survivals_included))
+
+
 if __name__ == "__main__":
     unittest.main()
