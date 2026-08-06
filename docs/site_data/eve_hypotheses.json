@@ -1058,5 +1058,496 @@
       "result": "unscoreable_pre_citation",
       "hypothesis_name": "PAXG_PREMIUM_FADE_DYNAMIC_EXIT"
     }
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260806T180819Z-e777cdef",
+    "turn_index": 0,
+    "tool_use_id": "toolu_01WMyeLP69E4WK4Eh7ztFxZr",
+    "proposed_at": "2026-08-06T18:08:19.156769+00:00",
+    "raw_hypothesis": {
+      "hypothesis_name": "ADX_EXHAUSTION_FADE_SOL_4H",
+      "mechanism": "A very high ADX reading marks a mature, extended trend; when ADX then rolls back down through a high threshold (e.g. from above 40 to below 40) it signals the trend's directional strength is decaying even though price itself may still be extended. Combining this exhaustion signal with a price that is statistically stretched from its 20-period mean (high |zscore20|) targets the point where a trend is both extended AND losing momentum -- a higher-probability mean-reversion fade than trading price extension alone, since it requires momentum confirmation of exhaustion rather than just a static overbought/oversold reading. This differs from Adam's ADX_REGIME_IGNITION (which trades ADX rising from LOW as a trend-START signal) by trading the opposite transition -- ADX falling from HIGH as a trend-COOLING signal -- and differs from the graveyard's RANGE_MEAN_REVERSION and RANGE_MATURITY mechanisms by requiring an active momentum-decay trigger (a cross) rather than a static range/maturity filter.",
+      "asset": "SOL",
+      "timeframe": "4h",
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "adx14",
+            "op": "cross_below",
+            "value": 40
+          },
+          {
+            "field": "zscore20",
+            "op": "gt",
+            "value": 1.5
+          }
+        ],
+        "conditions_short_note": "long entry fades an extended-up/exhausting trend by expecting reversion down; short mirror below"
+      },
+      "structured_entry_rule_short": {
+        "conditions": [
+          {
+            "field": "adx14",
+            "op": "cross_below",
+            "value": 40
+          },
+          {
+            "field": "zscore20",
+            "op": "lt",
+            "value": -1.5
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_atr_multiple": 1.5,
+        "target_r_multiple": 1.5,
+        "max_holding_hours": 48
+      },
+      "supporting_source_urls": [],
+      "generated_at": "2026-08-06T18:08:19.156769+00:00"
+    },
+    "testability": "TESTABLE",
+    "verdict_is": null,
+    "verdict_oos": null,
+    "verdict_combined": "SKIPPED",
+    "contamination_tags": [],
+    "supporting_source_urls": [],
+    "citation_status": "no_sources_claimed",
+    "supporting_source_urls_validated": [],
+    "supporting_source_urls_invalid": [],
+    "per_hypothesis_freshness": {
+      "result": "nothing_to_check",
+      "hypothesis_name": "ADX_EXHAUSTION_FADE_SOL_4H"
+    },
+    "origin_agent": "eve",
+    "origin_chain": null,
+    "testability_reason": "structured_entry_rule and structured_exit_plan both parse via rule_dsl",
+    "p_value_is": null,
+    "p_value_oos": null,
+    "frequency_classification": "TOO_SLOW",
+    "measured_trades_per_year": 9.465446692430097,
+    "candle_data_source": "research_export",
+    "candle_row_count": 4400,
+    "freshness_disqualified": true,
+    "freshness_disqualification_reason": [
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "ADX_EXHAUSTION_FADE_SOL_4H",
+        "turn_index": 0,
+        "offending_source_url": "https://changelly.com/blog/overbought-vs-oversold/",
+        "parsed_pub_date": "2026-07-23T18:08:19.156769+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '2 weeks ago' (parsed 2026-07-23) is within 30 days of this session's own start (2026-08-06) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "ADX_EXHAUSTION_FADE_SOL_4H",
+        "turn_index": 4,
+        "offending_source_url": "https://www.dukascopy.com/swiss/english/marketwatch/articles/reversal-candlestick-patterns/",
+        "parsed_pub_date": "2026-08-04T18:08:19.156769+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '2 days ago' (parsed 2026-08-04) is within 30 days of this session's own start (2026-08-06) -- Variant C binding disqualification"
+      }
+    ],
+    "fdr_survives_oos": null,
+    "fdr_survives_is": null
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260806T180819Z-e777cdef",
+    "turn_index": 1,
+    "tool_use_id": "toolu_01NwwqYmVNZuueoCK7Zh9Z6x",
+    "proposed_at": "2026-08-06T18:08:19.156769+00:00",
+    "raw_hypothesis": {
+      "hypothesis_name": "VOL_CONFIRMED_CHANNEL_BREAKOUT_BTC_4H",
+      "mechanism": "A close breaking above its own 20-period high is more likely to be a genuine, continuing directional move rather than a false break if it occurs while the market's own recent volatility (ATR14) is already elevated relative to a normal-range threshold, since high realized volatility at the moment of a range breakout indicates strong participation and energy behind the move, not a listless drift that happens to tag a new high. This is distinct from the BB_SQUEEZE_BREAKOUT_PAXG_4H mechanism (which requires prior COMPRESSION before the breakout) and from VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H (which filters by volume, not ATR) -- here the filter is that volatility is already running hot at breakout time, i.e. trading breakouts that occur amid an already-active regime rather than waiting for calm-before-storm compression. On BTC's fast 4h chart, 20-bar-high breakouts combined with an ATR14 floor should recur often enough to be tradeable at volume.",
+      "asset": "BTC",
+      "timeframe": "4h",
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "close",
+            "op": "cross_above",
+            "field_is_high": false,
+            "compare_to_field": "high20"
+          },
+          {
+            "field": "atr14",
+            "op": "gt",
+            "value": 0
+          }
+        ]
+      },
+      "structured_entry_rule_note": "atr14 gt 0 is a placeholder floor; real filter intent is atr14 elevated vs its own recent norm, but DSL has no rolling-ATR-baseline field, so this tests the raw breakout trigger with a valid-ATR guard",
+      "structured_entry_rule_short": {
+        "conditions": [
+          {
+            "field": "close",
+            "op": "cross_below",
+            "compare_to_field": "low20"
+          },
+          {
+            "field": "atr14",
+            "op": "gt",
+            "value": 0
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_atr_multiple": 2.0,
+        "target_r_multiple": 2.0,
+        "max_holding_hours": 72
+      },
+      "supporting_source_urls": [],
+      "generated_at": "2026-08-06T18:08:19.156769+00:00"
+    },
+    "testability": "TESTABLE",
+    "verdict_is": "PROMISING_WATCHLIST",
+    "verdict_oos": "DIED",
+    "verdict_combined": "DIED",
+    "contamination_tags": [
+      {
+        "tag": "DERIVATIVE",
+        "matched_hypothesis_name": "VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H",
+        "similarity": 0.6279,
+        "method": "term-frequency cosine similarity (lexical, not semantic)"
+      }
+    ],
+    "supporting_source_urls": [],
+    "citation_status": "no_sources_claimed",
+    "supporting_source_urls_validated": [],
+    "supporting_source_urls_invalid": [],
+    "per_hypothesis_freshness": {
+      "result": "nothing_to_check",
+      "hypothesis_name": "VOL_CONFIRMED_CHANNEL_BREAKOUT_BTC_4H"
+    },
+    "origin_agent": "eve",
+    "origin_chain": null,
+    "testability_reason": "structured_entry_rule and structured_exit_plan both parse via rule_dsl",
+    "p_value_is": 0.6238155611216798,
+    "p_value_oos": 0.06322263047216214,
+    "frequency_classification": "FAST",
+    "measured_trades_per_year": 247.59615821777675,
+    "candle_data_source": "research_export",
+    "candle_row_count": 4400,
+    "freshness_disqualified": true,
+    "freshness_disqualification_reason": [
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "VOL_CONFIRMED_CHANNEL_BREAKOUT_BTC_4H",
+        "turn_index": 0,
+        "offending_source_url": "https://changelly.com/blog/overbought-vs-oversold/",
+        "parsed_pub_date": "2026-07-23T18:08:19.156769+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '2 weeks ago' (parsed 2026-07-23) is within 30 days of this session's own start (2026-08-06) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "VOL_CONFIRMED_CHANNEL_BREAKOUT_BTC_4H",
+        "turn_index": 4,
+        "offending_source_url": "https://www.dukascopy.com/swiss/english/marketwatch/articles/reversal-candlestick-patterns/",
+        "parsed_pub_date": "2026-08-04T18:08:19.156769+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '2 days ago' (parsed 2026-08-04) is within 30 days of this session's own start (2026-08-06) -- Variant C binding disqualification"
+      }
+    ],
+    "fdr_survives_oos": false,
+    "fdr_survives_is": false
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260806T180819Z-e777cdef",
+    "turn_index": 2,
+    "tool_use_id": "toolu_01Kbb8V8QeGyUCboWvJNo9p7",
+    "proposed_at": "2026-08-06T18:08:19.156769+00:00",
+    "raw_hypothesis": {
+      "hypothesis_name": "CHANNEL_BREAKOUT_HIGH20_BTC_4H",
+      "mechanism": "A close breaking above its own trailing 20-period high (high20) marks a genuine range expansion; requiring RSI to already be above the midline (rsi14 gt 50) confirms the breakout is occurring alongside positive momentum rather than as an isolated spike against a weak backdrop, which should filter out some low-quality breakouts without requiring the multi-bar compression precondition used in BB_SQUEEZE_BREAKOUT_PAXG_4H. This is a corrected, DSL-valid version of a volatility/momentum-confirmed breakout idea (the previous submission used an invalid ATR-baseline placeholder condition that amounted to a no-op filter); here the real filter is a momentum confirmation (rsi14) rather than a volatility-level confirmation, since the DSL has no rolling-ATR-baseline field to test the original volatility-confirmation mechanism directly.",
+      "asset": "BTC",
+      "timeframe": "4h",
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "close",
+            "op": "cross_above",
+            "compare_to_field": "high20"
+          },
+          {
+            "field": "rsi14",
+            "op": "gt",
+            "value": 50
+          }
+        ]
+      },
+      "structured_entry_rule_short": {
+        "conditions": [
+          {
+            "field": "close",
+            "op": "cross_below",
+            "compare_to_field": "low20"
+          },
+          {
+            "field": "rsi14",
+            "op": "lt",
+            "value": 50
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_atr_multiple": 2.0,
+        "target_r_multiple": 2.0,
+        "max_holding_hours": 72
+      },
+      "derived_from": {
+        "parent_hypothesis_name": "VOL_CONFIRMED_CHANNEL_BREAKOUT_BTC_4H",
+        "parent_session_id": "this_session",
+        "what_changed": "Replaced the invalid/no-op ATR-floor condition (atr14 gt 0, which is true almost always and doesn't test a volatility-elevated premise) with a valid, DSL-supported momentum confirmation condition (rsi14 vs 50) applied at the same close-crosses-high20 breakout trigger.",
+        "why_this_change": "The original attempt tried to encode 'ATR already elevated vs its own norm' but the DSL has no rolling-ATR-baseline field, so the condition as written was a placeholder that could not test the intended mechanism and risked being scored as a meaningless filter; substituting a genuinely testable momentum-confirmation condition preserves the spirit of 'confirm the breakout has real backing' while being properly gradeable."
+      },
+      "supporting_source_urls": [],
+      "generated_at": "2026-08-06T18:08:19.156769+00:00"
+    },
+    "testability": "TESTABLE",
+    "verdict_is": "PROMISING_WATCHLIST",
+    "verdict_oos": "DIED",
+    "verdict_combined": "DIED",
+    "contamination_tags": [],
+    "supporting_source_urls": [],
+    "citation_status": "no_sources_claimed",
+    "supporting_source_urls_validated": [],
+    "supporting_source_urls_invalid": [],
+    "per_hypothesis_freshness": {
+      "result": "nothing_to_check",
+      "hypothesis_name": "CHANNEL_BREAKOUT_HIGH20_BTC_4H"
+    },
+    "origin_agent": "eve",
+    "origin_chain": null,
+    "testability_reason": "structured_entry_rule and structured_exit_plan both parse via rule_dsl",
+    "p_value_is": 0.6238155611216798,
+    "p_value_oos": 0.06322263047216214,
+    "frequency_classification": "FAST",
+    "measured_trades_per_year": 247.59615821777675,
+    "candle_data_source": "research_export",
+    "candle_row_count": 4400,
+    "freshness_disqualified": true,
+    "freshness_disqualification_reason": [
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "CHANNEL_BREAKOUT_HIGH20_BTC_4H",
+        "turn_index": 0,
+        "offending_source_url": "https://changelly.com/blog/overbought-vs-oversold/",
+        "parsed_pub_date": "2026-07-23T18:08:19.156769+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '2 weeks ago' (parsed 2026-07-23) is within 30 days of this session's own start (2026-08-06) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "CHANNEL_BREAKOUT_HIGH20_BTC_4H",
+        "turn_index": 4,
+        "offending_source_url": "https://www.dukascopy.com/swiss/english/marketwatch/articles/reversal-candlestick-patterns/",
+        "parsed_pub_date": "2026-08-04T18:08:19.156769+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '2 days ago' (parsed 2026-08-04) is within 30 days of this session's own start (2026-08-06) -- Variant C binding disqualification"
+      }
+    ],
+    "fdr_survives_oos": false,
+    "fdr_survives_is": false
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260806T180819Z-e777cdef",
+    "turn_index": 3,
+    "tool_use_id": "toolu_018dFG37GnKqbyo1nQcTmTcn",
+    "proposed_at": "2026-08-06T18:08:19.156769+00:00",
+    "raw_hypothesis": {
+      "hypothesis_name": "RSI_BOUNCE_FADE_DOWNTREND_ETH_4H",
+      "mechanism": "In a persistent downtrend, brief short-covering rallies produce sharp overbought RSI readings that tend to fail and resume lower because the dominant trend absorbs the bounce rather than reversing it -- the mirror image of Adam's RSI2_TREND_PULLBACK_PAXG_4H, which only tests the long/uptrend/oversold-bounce side. Gating an extreme overbought RSI reading (rsi14 crossing back below 70 from above) behind a confirmed downtrend (close below ma200, and ma20 below ma50) isolates shallow, trend-consistent bounces to short rather than genuine reversals, symmetric to the established logic that short-term oscillator extremes revert fastest when they run counter to the dominant trend. Testing the short side of this mechanism on a different, faster-moving asset (ETH) than Adam's long-only PAXG version checks whether the trend-gated RSI fade generalizes across both direction and asset.",
+      "asset": "ETH",
+      "timeframe": "4h",
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "close",
+            "op": "lt",
+            "compare_to_field": "ma200"
+          },
+          {
+            "field": "ma20",
+            "op": "lt",
+            "compare_to_field": "ma50"
+          },
+          {
+            "field": "rsi14",
+            "op": "cross_below",
+            "value": 70
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_atr_multiple": 1.5,
+        "target_r_multiple": 1.5,
+        "max_holding_hours": 48
+      },
+      "supporting_source_urls": [],
+      "generated_at": "2026-08-06T18:08:19.156769+00:00"
+    },
+    "testability": "TESTABLE",
+    "verdict_is": null,
+    "verdict_oos": null,
+    "verdict_combined": "SKIPPED",
+    "contamination_tags": [
+      {
+        "tag": "DERIVATIVE",
+        "matched_hypothesis_name": "RSI2_TREND_PULLBACK_PAXG_4H",
+        "similarity": 0.6438,
+        "method": "term-frequency cosine similarity (lexical, not semantic)"
+      }
+    ],
+    "supporting_source_urls": [],
+    "citation_status": "no_sources_claimed",
+    "supporting_source_urls_validated": [],
+    "supporting_source_urls_invalid": [],
+    "per_hypothesis_freshness": {
+      "result": "nothing_to_check",
+      "hypothesis_name": "RSI_BOUNCE_FADE_DOWNTREND_ETH_4H"
+    },
+    "origin_agent": "eve",
+    "origin_chain": null,
+    "testability_reason": "structured_entry_rule and structured_exit_plan both parse via rule_dsl",
+    "p_value_is": null,
+    "p_value_oos": null,
+    "frequency_classification": "TOO_SLOW",
+    "measured_trades_per_year": 17.43634917026597,
+    "candle_data_source": "research_export",
+    "candle_row_count": 4400,
+    "freshness_disqualified": true,
+    "freshness_disqualification_reason": [
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "RSI_BOUNCE_FADE_DOWNTREND_ETH_4H",
+        "turn_index": 0,
+        "offending_source_url": "https://changelly.com/blog/overbought-vs-oversold/",
+        "parsed_pub_date": "2026-07-23T18:08:19.156769+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '2 weeks ago' (parsed 2026-07-23) is within 30 days of this session's own start (2026-08-06) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "RSI_BOUNCE_FADE_DOWNTREND_ETH_4H",
+        "turn_index": 4,
+        "offending_source_url": "https://www.dukascopy.com/swiss/english/marketwatch/articles/reversal-candlestick-patterns/",
+        "parsed_pub_date": "2026-08-04T18:08:19.156769+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '2 days ago' (parsed 2026-08-04) is within 30 days of this session's own start (2026-08-06) -- Variant C binding disqualification"
+      }
+    ],
+    "fdr_survives_oos": null,
+    "fdr_survives_is": null
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260806T180819Z-e777cdef",
+    "turn_index": 4,
+    "tool_use_id": "toolu_01SqoCufZMhkekjrizqeWDLd",
+    "proposed_at": "2026-08-06T18:08:19.156769+00:00",
+    "raw_hypothesis": {
+      "hypothesis_name": "VOLUME_CAPITULATION_REVERSAL_SOL_4H",
+      "mechanism": "A price touching a new 20-period low accompanied by a volume spike well above its recent average reflects forced or panic selling reaching a climax rather than orderly distribution; such capitulation volume tends to exhaust the selling pressure quickly, especially on a liquid, retail-heavy asset like SOL, producing a higher-probability bounce than a low touch on ordinary volume. This differs mechanistically from IBS_INTRADAY_REVERSION (which uses intrabar close location, not volume) and from RANGE_MEAN_REVERSION (which is range-based without a volume-climax trigger) by requiring an explicit volume anomaly coinciding with the price extreme as the entry trigger -- the volume spike is the signal that the low is being rejected by exhausted supply, not just that price is statistically stretched.",
+      "asset": "SOL",
+      "timeframe": "4h",
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "close",
+            "op": "lte",
+            "compare_to_field": "low20"
+          },
+          {
+            "field": "volume",
+            "op": "gt",
+            "compare_to_field": "vol_ma20"
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_atr_multiple": 1.5,
+        "target_r_multiple": 2.0,
+        "max_holding_hours": 48
+      },
+      "supporting_source_urls": [
+        "https://www.tradingview.com/script/LCwLc4PZ-Volume-Climax-Reversal-VCR-Catch-Exhaustion-Tops-Bottoms/"
+      ],
+      "generated_at": "2026-08-06T18:08:19.156769+00:00"
+    },
+    "testability": "TESTABLE",
+    "verdict_is": "DIED",
+    "verdict_oos": "DIED",
+    "verdict_combined": "DIED",
+    "contamination_tags": [
+      {
+        "tag": "DERIVATIVE",
+        "matched_hypothesis_name": "VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H",
+        "similarity": 0.6079,
+        "method": "term-frequency cosine similarity (lexical, not semantic)"
+      },
+      {
+        "tag": "DERIVATIVE",
+        "matched_hypothesis_name": "VOLWEIGHTED_MA_CROSS_ETH_4H",
+        "similarity": 0.6065,
+        "method": "term-frequency cosine similarity (lexical, not semantic)"
+      },
+      {
+        "tag": "SELF_DERIVATIVE",
+        "matched_hypothesis_name": null,
+        "similarity": 0.6469,
+        "method": "term-frequency cosine similarity (lexical, not semantic)"
+      }
+    ],
+    "supporting_source_urls": [
+      "https://www.tradingview.com/script/LCwLc4PZ-Volume-Climax-Reversal-VCR-Catch-Exhaustion-Tops-Bottoms/"
+    ],
+    "citation_status": "cited",
+    "supporting_source_urls_validated": [
+      "https://www.tradingview.com/script/LCwLc4PZ-Volume-Climax-Reversal-VCR-Catch-Exhaustion-Tops-Bottoms/"
+    ],
+    "supporting_source_urls_invalid": [],
+    "per_hypothesis_freshness": {
+      "result": "checked_clean",
+      "hypothesis_name": "VOLUME_CAPITULATION_REVERSAL_SOL_4H"
+    },
+    "origin_agent": "eve",
+    "origin_chain": null,
+    "testability_reason": "structured_entry_rule and structured_exit_plan both parse via rule_dsl",
+    "p_value_is": 0.031101399344160452,
+    "p_value_oos": 0.8634876798924076,
+    "frequency_classification": "FAST",
+    "measured_trades_per_year": 173.86531029779493,
+    "candle_data_source": "research_export",
+    "candle_row_count": 4400,
+    "freshness_disqualified": true,
+    "freshness_disqualification_reason": [
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "VOLUME_CAPITULATION_REVERSAL_SOL_4H",
+        "turn_index": 0,
+        "offending_source_url": "https://changelly.com/blog/overbought-vs-oversold/",
+        "parsed_pub_date": "2026-07-23T18:08:19.156769+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '2 weeks ago' (parsed 2026-07-23) is within 30 days of this session's own start (2026-08-06) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "VOLUME_CAPITULATION_REVERSAL_SOL_4H",
+        "turn_index": 4,
+        "offending_source_url": "https://www.dukascopy.com/swiss/english/marketwatch/articles/reversal-candlestick-patterns/",
+        "parsed_pub_date": "2026-08-04T18:08:19.156769+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '2 days ago' (parsed 2026-08-04) is within 30 days of this session's own start (2026-08-06) -- Variant C binding disqualification"
+      }
+    ],
+    "fdr_survives_oos": null,
+    "excluded_from_fdr_family_reason": "self_derivative",
+    "fdr_survives_is": null
   }
 ]
