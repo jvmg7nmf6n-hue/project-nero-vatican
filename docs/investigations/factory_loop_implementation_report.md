@@ -3203,3 +3203,89 @@ committing, no rebase needed.
    candidates, the real absence of `docs/site_data/repair_attempts.json`)
    matched what was independently recomputed or verified against live
    repo state — no other staleness found.
+
+---
+
+# CC-1 DIRECTIVE — "Close the streaming pre-first-byte gap, fix the structured_entry_rule schema gap" (2026-08-06)
+
+Real run `e0a6e6d6-10c1-4fa9-94d1-84d9aa43ac32` (Adam) surfaced two distinct, real bugs: a `ConnectionError` with no `(read timeout=N)` suffix (a class the Phase 1a streaming fix doesn't cover), and both of the run's 2 generated hypotheses rejected `UNMEASURABLE` with `structured_entry_rule: null`. Format per item, as requested: **FINDING → CONFIDENCE → RECOMMENDATION/WHAT SHIPPED**.
+
+## Item 1 — the pre-first-byte streaming gap
+
+**1a. Call site and timeout configuration.**
+FINDING: `nero_core/research_agent/hypothesis_gen.py:546-556` (`_call_claude`, the shared streaming call both the scanner and web-search paths use) issues `requests.post(..., timeout=params.claude_timeout_seconds, stream=True)` — a single scalar, `180` (`HypothesisGenParameters.claude_timeout_seconds`, line 217), applied by `requests` as `(connect_timeout, read_timeout) = (180, 180)`. There is **no separate value anywhere in this codebase** for "waiting for the first response byte" versus "idle gap between two already-arrived SSE lines" — both are the exact same 180s ceiling; `_iter_sse_events` (line 426) only gets a chance to reset that clock once `response.iter_lines()` yields its first line.
+CONFIDENCE: confirmed-from-code.
+
+**1b/1c. Options considered, chosen, and implemented.**
+Checked Anthropic's own docs before assuming Phase 1's justification carried over, per the directive's instruction — `platform.claude.com/docs/en/api/errors` ("Long requests") and `.../build-with-claude/streaming` ("Error recovery"):
+- Anthropic's own text: "Some networks may drop idle connections after a variable period of time, which can cause the request to fail or time out without receiving a response from Anthropic... If you are building a direct API integration, setting a TCP socket keep-alive can reduce the impact of idle connection timeouts on some networks." This codebase uses raw `requests`, not the official SDK — the exact integration shape that guidance addresses. Their own SDKs "set a socket option for TCP keep-alive" automatically; this codebase doesn't get that for free.
+- Their streaming guide's "Error recovery" section documents an official retry/resume pattern for a network-interrupted streaming request (capture partial content, construct a continuation request, resume) — directionally endorsing retry as Anthropic's own recommended response to this failure class.
+- The docs name no separate, shorter "first-byte" timeout as a recommended pattern anywhere — that option (1b's first bullet) is not something Anthropic itself suggests, and given web-search calls have inherently variable, sometimes-long latency, an artificially short first-byte timeout risks killing calls that would have succeeded, which is worse than the status quo, not better.
+
+RECOMMENDATION (chosen): a **bounded, single retry**, scoped to exactly this failure signature. `_is_pre_first_byte_connection_error` (`hypothesis_gen.py`) distinguishes it precisely: a genuine urllib3 `ReadTimeoutError` (surfaced by `requests` as `ReadTimeout`, the mid-stream idle-gap case Phase 1a already resets on every line) **always** stringifies with a `(read timeout=N)` suffix — confirmed against the real historical data: both 2026-08-04 incidents (90s, then 180s) carried it; this run's `ConnectionError` didn't, at the same 180s ceiling. Its absence is the real, code-verifiable signal, not a guess.
+WHAT SHIPPED: `call_claude_with_bounded_retry` (new, shared by both `generate_hypotheses` and `generate_web_hypotheses`) makes 1 or 2 real attempts, returning every attempt's outcome — never just the last — so callers count `calls_made`/`calls_with_unknown_cost`/errors for **each** real network call. Never retries a genuine `ReadTimeout` (already covered; retrying risks paying twice for a response Anthropic may already be generating), a `ResponseParseError`, or a `RejectedBeforeTokenProcessingError` (both already-determinate outcomes). TCP keep-alive was **not** implemented this pass — it's cross-platform-inconsistent (`TCP_KEEPIDLE` doesn't exist on Windows' `socket` module) and, per Anthropic's own hedged language ("can reduce... on some networks"), addresses a different root cause (silent network-layer drops) than a genuinely slow server-side tool call — noted as a candidate follow-up, not implemented.
+
+**1d. Tests distinguishing the two failure classes.**
+WHAT SHIPPED: `tests/test_research_agent_web_hypothesis_gen.py` — `PreFirstByteConnectionErrorClassifierTest` (4 tests: the classifier on a suffix-less `ConnectionError`, a suffix-bearing one, a real `ReadTimeout`, and an unrelated `HTTPError`) and `CallClaudeWithBoundedRetryTest` (6 tests: success-first-try, pre-first-byte-then-recover, pre-first-byte-twice-bounded-at-two, genuine-`ReadTimeout`-never-retried, 401-never-retried, unparseable-2xx-never-retried), plus 2 end-to-end tests in `GenerateWebHypothesesTest` confirming real accounting (retry recovers → `calls_made=2`, `calls_with_unknown_cost=1`, 1 hypothesis produced, cost not double-counted; retry also fails → `calls_made=2`, `calls_with_unknown_cost=2`, 0 hypotheses, `$0.00`). 3 pre-existing tests across `test_research_agent_hypothesis_gen.py` and `test_research_agent_secret_handling.py` used a bare `ConnectionError` fixture that, under the new classifier, now legitimately earns a retry — updated their call-count/error-count assertions (their actual security/cost-honesty properties under test are unchanged).
+
+**1e. Honest assessment: closed or bounded?**
+Better-bounded, **not fully closed** — matching the same rigor Phase 1's own "proven against one real call" framing used. A retry only helps if the second attempt clears the same wall the first one hit. If Anthropic's server-side tool execution is genuinely, persistently slow on a specific request (not a one-off blip), two consecutive pre-first-byte failures still end in `calls_with_unknown_cost`, exactly as before this fix — just correctly counted as 2 real attempts instead of 1. This directive does not claim the pre-first-byte case can no longer happen; it claims a plausible one-off transient failure now gets one real second chance, cheaply, without any risk of double-billing a mid-stream response.
+
+## Item 2 — the structured_entry_rule schema gap
+
+**2a. Real prompt/schema mechanism.**
+FINDING: `hypothesis_gen.py:337-352` (scanner path) and the equivalent web-search prompt (~line 1039) instruct the model, in plain prose (**not** Claude's native tool-use/function-calling JSON Schema — there is no `input_schema`/`tools` definition enforcing this shape anywhere), to return `structured_entry_rule` shaped as `{"conditions": [...]}` using a fixed field/op vocabulary (`close, ma20, ma50, ma200, zscore20, atr14, rsi14, ret_1, volume`; `gt, gte, lt, lte, eq, cross_above, cross_below`), and explicitly: "If the entry condition genuinely cannot be expressed with these fields/ops, set structured_entry_rule to null -- do NOT force an approximate mapping." There is no API-level "required" enforcement possible here — this is a free-text-JSON prompt, not structured tool calling — so directive option 2c-1 (require it in a tool-use schema) doesn't apply to this codebase's actual architecture.
+CONFIDENCE: confirmed-from-code.
+
+**2b. Real null-rate.**
+FINDING: `docs/site_data/agent_hypotheses.json`: **3/7 (43%)** have `structured_entry_rule: null` — `VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H`, `DAILY_HOUR_SEASONALITY_BTC_4H`, `STREAK_PULLBACK_UPTREND_ETH_4H`. `docs/site_data/eve_hypotheses.json`: **0/16** null, but 4/16 (25%) are `UNTESTABLE_BY_DSL` — a different failure shape (a present-but-malformed structure, e.g. "condition must set exactly one of value/compare_to_field"), since Eve's own prompt (`nero_core/eve/session.py`) has no null escape hatch. This is a frequent, real, non-trivial failure mode within Adam specifically, not a rare edge case — justifying real engineering attention.
+CONFIDENCE: confirmed-from-data (`python3` census against both real files).
+
+**2c/2d. Options considered, chosen, and implemented, with the real cost tradeoff.**
+Inspected all 3 real Adam nulls individually against the DSL's actual field/op vocabulary: `VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H` needs a rolling-max/highest-high field and a volume-moving-average field (neither exists); `DAILY_HOUR_SEASONALITY_BTC_4H` needs an hour-of-day/wall-clock field (none exists); `STREAK_PULLBACK_UPTREND_ETH_4H` needs a consecutive-candle streak-count primitive (none exists). **All three are genuinely inexpressible in the current DSL**, not cases of the model failing to comply with an achievable schema. This finding directly rules out two of the three proposed options:
+- Option 1 (require the field) would force the model to fabricate an approximate mapping on all 3 real cases — directly violating the prompt's own existing, deliberate "do NOT force an approximate mapping" principle. Actively harmful, not neutral.
+- Option 2 (a follow-up retry call asking for the structured translation) would, on this real evidence, very likely fail identically on all 3 — retrying can't invent a new DSL field or a streak-counting operator. Real cost tradeoff, reported as asked: each retry would cost roughly the same **$0.65-$1.06** this run's own 2 successful calls actually cost (real historical range across this run and the 2026-08-06T04:15 run: $0.25-$1.06/call) — for an outcome no more measurable than before. Not "cheaper than losing the idea" — it's spending real money to very likely reproduce the exact same null.
+- Option 3 (clearer rejection reason) is the one the real evidence supports.
+
+WHAT SHIPPED: `nero_core/research_agent/frequency_gate.py`'s `measure_entry_frequency` now checks `structured_entry_rule is None` **before** calling `parse_structured_rule`, returning a distinct reason ("structured_entry_rule is null -- the model explicitly reported this entry rule cannot be expressed in the current DSL's field/op vocabulary... This is a DSL-expressiveness gap in the mechanism itself, not a data problem, and not a case where the model failed to comply with an achievable schema") instead of the generic "entry_rule ambiguous: entry_rule must be a dict with a 'conditions' list, got NoneType" — which previously read identically to an actually-malformed (non-null) `structured_entry_rule`. The **classification** (`UNMEASURABLE`) is unchanged, per the directive's own option 3 wording — only the `reason` text. `tools/research_agent_run_summary.py` passes `reason` through verbatim (confirmed by reading its source, no reformatting step exists) — every real consumer (`agent_run_summaries.json`, the CLI's own printed report) gets the clearer text automatically; no separate fix needed there.
+
+**2e. Regression test.**
+WHAT SHIPPED: `tests/test_research_agent_frequency_gate.py` — `test_null_structured_entry_rule_gets_a_distinct_dsl_gap_reason_not_the_generic_ambiguous_message` (using the real `DAILY_HOUR_SEASONALITY_BTC_4H`/`STREAK_PULLBACK_UPTREND_ETH_4H` shape, asserting the new reason text and the absence of "NoneType"/"ambiguous") and `test_null_and_malformed_structured_entry_rule_get_distinguishable_reasons` (asserting the null case and a genuinely malformed case now produce **different** reason strings).
+
+## Item 3 — reconciling run e0a6e6d6's uncommitted data
+
+**3a. Current real state.**
+FINDING: still genuinely uncommitted at the start of this directive — `git status` showed `agent_performance.json`, `agent_test_results.json`, `agent_scanner_state.json` modified, matching the exact real diff (`hypotheses_generated` 5→7, cost $2.128866→$3.836948, the 2 new `DAILY_HOUR_SEASONALITY_BTC_4H`/`STREAK_PULLBACK_UPTREND_ETH_4H` test-result rows) described in the prior session's own closing note. Not lost, not committed by anything else in between.
+CONFIDENCE: confirmed-from-data.
+
+**3b. Committed, no duplication.**
+WHAT SHIPPED: commit `2fe5cc6`, as its own clean commit (not bundled with items 1-2's code). Verified before committing: both `DAILY_HOUR_SEASONALITY_BTC_4H` and `STREAK_PULLBACK_UPTREND_ETH_4H` appear **exactly once** in `agent_test_results.json` and **exactly once** in `agent_hypotheses.json` (7 total entries each, no duplicates) — confirmed via direct `python3` count, not assumed. `agent_hypotheses.json` itself stays uncommitted, per this project's own standing "raw LLM proposal text needs human review first" rule (unchanged, out of scope for this directive).
+
+## Test counts, before and after this directive
+
+Python (`python -m unittest discover -s tests`): **2607 → 2621, all pass** (14 new: 12 in `test_research_agent_web_hypothesis_gen.py`, 2 in `test_research_agent_frequency_gate.py`). One real regression was caught and fixed mid-directive: 4 pre-existing tests (`test_api_error_is_recorded_and_counts_against_call_budget`, `test_transport_failure_never_reports_a_fabricated_cost`, `test_connection_error_on_the_real_call_also_increments_calls_with_unknown_cost`, `test_key_absent_from_result_on_connection_error`) used a bare, suffix-less `ConnectionError` fixture that legitimately earns a retry under the new classifier — their call-count/error-count assertions were updated to match the new, correct real behavior; the security/cost-honesty properties they actually test were unaffected. Final real result: `Ran 2621 tests in 665.016s` / `OK`.
+
+Website (`npm test` in `website/`): **630 passed, 2 failed, 632 total**, unchanged by this directive (Python-only changes) — the 2 failures are the same pre-existing, unrelated `siteDataSchema.test.ts` failures against `failure_patterns.json` (9 duplicate family names, 3 missing `fix_rationale` entries, none involving anything this directive touched) already documented in this repo's own prior closing notes.
+
+## git log origin/main --oneline -3, per commit this directive
+
+After Item 3's push:
+```
+2fe5cc6 CC-1: commit real Adam run e0a6e6d6's results (agent_performance/test_results/scanner_state)
+917699b CC-1: fix graveyard/failure_patterns test-logic bug and Eve-origin source_doc/fix_rationale schema gap
+1f028c6 Update live scheduler execution log
+```
+
+After Items 1-2's push:
+```
+31cc364 CC-1 directive: close the streaming pre-first-byte gap, fix the structured_entry_rule schema gap
+2fe5cc6 CC-1: commit real Adam run e0a6e6d6's results (agent_performance/test_results/scanner_state)
+917699b CC-1: fix graveyard/failure_patterns test-logic bug and Eve-origin source_doc/fix_rationale schema gap
+```
+
+Both pushes were plain fast-forwards — `origin/main` had not moved between this directive's own commits, no rebase needed.
+
+## Figures in this directive found to be stale, and the real values
+
+1. The directive's own framing treated its 3 proposed options for item 2c as open, roughly-equal alternatives pending investigation. Real per-hypothesis inspection found this wasn't a neutral 3-way choice: options 1 and 2 are actively counter-indicated by the actual data (all 3 real nulls are genuinely DSL-inexpressible, not compliance failures), narrowing this to effectively one defensible choice, not a close call.
+2. No other figure carried into this directive (the $1.708082 cost floor, the 3/3-then-1/3-then-1/3 ReadTimeout escalation history, the `llm_calls_made=3`/`hypotheses_generated=2` counts) was found stale — all independently re-verified against `docs/site_data/agent_performance.json`'s own real `runs` history before being used in this report.
