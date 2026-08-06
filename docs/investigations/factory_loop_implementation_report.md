@@ -3289,3 +3289,83 @@ Both pushes were plain fast-forwards — `origin/main` had not moved between thi
 
 1. The directive's own framing treated its 3 proposed options for item 2c as open, roughly-equal alternatives pending investigation. Real per-hypothesis inspection found this wasn't a neutral 3-way choice: options 1 and 2 are actively counter-indicated by the actual data (all 3 real nulls are genuinely DSL-inexpressible, not compliance failures), narrowing this to effectively one defensible choice, not a close call.
 2. No other figure carried into this directive (the $1.708082 cost floor, the 3/3-then-1/3-then-1/3 ReadTimeout escalation history, the `llm_calls_made=3`/`hypotheses_generated=2` counts) was found stale — all independently re-verified against `docs/site_data/agent_performance.json`'s own real `runs` history before being used in this report.
+
+---
+
+# CC-1 DIRECTIVE — "Implement the Three Cheap DSL Fixes (defer streak-count)" (2026-08-06)
+
+Implements the sizing report's own recommendation (b): the two cheap, precedent-backed fixes now, streak-count deferred. Format per item: **FINDING → CONFIDENCE → WHAT SHIPPED**.
+
+## Item 1 — prompt/ALLOWED_FIELDS desync fix
+
+**Before** (scanner-path prompt, `hypothesis_gen.py`, commit `76b4d49`):
+```
+Allowed fields: close, ma20, ma50, ma200, zscore20, atr14, rsi14, ret_1, volume.
+Allowed ops: gt, gte, lt, lte, eq, cross_above, cross_below.
+```
+(missing `adx14`, `bb_lower`, `bb_upper` — all 3 real, already-computed `rule_dsl.ALLOWED_FIELDS` entries at the time.)
+
+**After** (both prompts, live):
+```
+Allowed fields: close, ma20, ma50, ma200, zscore20, atr14, rsi14, adx14, bb_lower,
+bb_upper, ret_1, volume, hour_of_day, high20, low20, vol_ma20.
+Allowed ops: gt, gte, lt, lte, eq, cross_above, cross_below.
+```
+
+WHAT SHIPPED: `_DSL_FIELDS_PROMPT_TEXT`/`_DSL_OPS_PROMPT_TEXT` (new module-level constants in `hypothesis_gen.py`, joined directly from `rule_dsl.ALLOWED_FIELDS`/`ALLOWED_OPS`), both prompts now interpolate these instead of hand-typed lists — structurally closes this drift class, not a one-time sync. `tests/test_research_agent_rule_dsl_prompt_sync.py` (new, 4 tests) is insurance against a future revert.
+CONFIDENCE: confirmed-from-code (`python3` prompt-string assertions against the real `ALLOWED_FIELDS`/`ALLOWED_OPS` tuples, both before and after).
+Commit `32d4bcb`.
+
+## Item 2 — `hour_of_day`
+
+WHAT SHIPPED: `rule_dsl.py` — `frame["hour_of_day"] = frame["date"].dt.hour` (real precedent: `nero_core/strategies/funding_extreme.py:133`'s own `.dt.hour` comparison), added to `ALLOWED_FIELDS`. No new operator (`eq` already sufficient). Regression test confirms a `DAILY_HOUR_SEASONALITY_BTC_4H`-shaped rule (`{"field": "hour_of_day", "op": "eq", "value": 0.0}`) is measurable end-to-end via `frequency_gate.measure_entry_frequency` — no longer `UNMEASURABLE`.
+CONFIDENCE: confirmed-from-code + confirmed-from-data (real test run).
+Commit `ecab3a8`.
+
+## Item 3 — `high20`/`low20` + `vol_ma20`
+
+**Real period confirmed, not assumed:** read `VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H`'s own recorded `entry_rule` text directly from `docs/site_data/agent_hypotheses.json` — "highest close of the prior 20 candles" / "lowest close of the prior 20 candles" / "1.3x the 20-period average volume." Period is genuinely 20 for both.
+FINDING: the real hypothesis says **close**, not high/low candle wicks — "highest CLOSE," not "highest high." The directive's own cited precedent (`breakout_momentum.py:110`, `donchian_breakout_bracket.py:176-177`) channels the `high`/`low` **columns**. Computing from those columns instead of `close` would not actually have fixed this real case, so `high20`/`low20` deviate from that precedent's computation basis (while keeping its naming and its `shift(1)` convention) — `high20`/`low20` = `close.shift(1).rolling(20).max()`/`.min()`. `vol_ma20` = `volume.rolling(20).mean()`, no shift (matching `ma20`'s own no-shift convention — the hypothesis's own wording, "the 20-period average volume," carries no "prior" qualifier, unlike the channel fields).
+CONFIDENCE: confirmed-from-data (real hypothesis text) + confirmed-from-code (naming/shift decisions documented inline in `rule_dsl.py`).
+
+**Honest limitation, found and not hidden:** the DSL's `compare_to_field` has no scalar multiplier. `VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H`'s literal "volume ≥ **1.3x** the average" still can't be expressed exactly — only approximated as `{"field": "volume", "op": "gt", "compare_to_field": "vol_ma20"}` (dropping the 1.3x factor). The channel-breakout half (`close > high20`) is now **exactly** expressible with zero approximation; the volume-confirmation half is only **approximately** expressible. This directive's own framing ("ship both together" to fully close the real case) undersold this — adding `vol_ma20` makes the mechanism *partially* expressible, not *fully*, without also adding multiplier support (explicitly out of scope here). The regression test uses this same closest-achievable approximation, not a claim of exact fidelity.
+
+WHAT SHIPPED: both fields added to `ALLOWED_FIELDS`. Regression test confirms a `VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H`-shaped rule (`close > high20` AND `volume > vol_ma20`) is measurable end-to-end, no longer `UNMEASURABLE`.
+CONFIDENCE: confirmed-from-code + confirmed-from-data (real test run, 90 synthetic candles, a genuine strictly-increasing breakout with periodic volume spikes).
+Commit `ecab3a8` (bundled with Item 2 — both edit the same `ALLOWED_FIELDS` tuple and `compute_indicator_frame` region; see that commit's own message for the full split rationale).
+
+**A real bug this surfaced and fixed before it could break anything:** `nero_core/eve/` maintains two REINLINED, isolation-required copies of `ALLOWED_FIELDS` — `nero_core/eve/session.py`'s `DSL_ALLOWED_FIELDS` and `nero_core/eve/random_baseline.py`'s `ALLOWED_FIELDS_COPY` — each with its own pre-existing drift test (`test_eve_llm_client.py`, `test_eve_random_baseline.py`) asserting byte-identical equality to the real `rule_dsl.ALLOWED_FIELDS`. Both would have started failing the moment `rule_dsl.ALLOWED_FIELDS` changed, had they not been updated in this same commit. `random_baseline.py` additionally required real categorization decisions (not just the tuple copy): `high20`/`low20` added to `_FIELD_VS_FIELD_ONLY` (price-scale, like `close`/`ma20`), `vol_ma20` added to `_VALUE_RANGES` matching `volume`'s own existing `(0.0, 1.0)` range, `hour_of_day` added to `_VALUE_RANGES` with its own real `(0.0, 23.0)` range rather than silently falling through to the meaningless `(-1.0, 1.0)` default.
+
+## Deferred, confirmed not implemented
+
+Streak-count and arbitrary-period rolling fields — no `Condition`/`StructuredRule` shape changes made, `STREAK_PULLBACK_UPTREND_ETH_4H`-shaped hypotheses remain rejected exactly as before. Confirmed via `git diff --stat` on both commits: only `hypothesis_gen.py`, `rule_dsl.py`, `session.py`, `random_baseline.py`, and their test files changed — no changes to `trial.py`, `repair_to_trial.py`, `graveyard_distillation.py`, or scoring/verdict logic anywhere, matching this directive's own out-of-scope list.
+
+## Test counts, before and after this directive
+
+Python (`python -m unittest discover -s tests`): **2621 → 2633, all pass** (12 new: 6 in `test_research_agent_rule_dsl.py`, 2 in `test_research_agent_frequency_gate.py`, 4 in the new `test_research_agent_rule_dsl_prompt_sync.py`). Real result: `Ran 2633 tests in 705.222s` / `OK`.
+
+Website (`npm test` in `website/`): **630 passed, 2 failed, 632 total**, unchanged (this directive is Python-only) — same 2 pre-existing, unrelated `siteDataSchema.test.ts` failures documented in this repo's own prior closing notes.
+
+## `git log origin/main --oneline -3`, per commit this directive
+
+After Item 1's push:
+```
+32d4bcb CC-1 directive Item 1: fix the prompt/ALLOWED_FIELDS desync (zero-cost, structural)
+4f3f364 Update live scheduler execution log
+76b4d49 CC-1 directive: closing report for the streaming pre-first-byte gap and structured_entry_rule schema gap directive
+```
+
+After Items 2-3's push:
+```
+ecab3a8 CC-1 directive Items 2-3: add hour_of_day, high20/low20, vol_ma20 to the DSL (fixed-period only, streak-count deferred)
+32d4bcb CC-1 directive Item 1: fix the prompt/ALLOWED_FIELDS desync (zero-cost, structural)
+4f3f364 Update live scheduler execution log
+```
+
+Item 1's push hit the same recurring automated-commit conflict (`origin/main` gained an `Update live scheduler execution log` commit between the sizing-report session and this one) — resolved with `git rebase origin/main`, clean, no conflicts. Item 2-3's push was a plain fast-forward.
+
+## Figures in this directive found to be stale, and the real values
+
+1. The directive's own item 3 framed `high20`/`low20` as computed "via the existing precedent pattern from `breakout_momentum.py:110`/`donchian_breakout_bracket.py:176-177`" — that precedent channels the `high`/`low` **columns**. Real per-hypothesis verification (checking `VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H`'s own recorded text, not assuming the precedent applied as-is) found the real blocking case says "highest **close**," requiring a deviation from that precedent's computation basis to actually fix the real case — implemented and documented inline; not a silent substitution.
+2. The directive's own framing of item 3 ("ship both together... sizing either alone understates it") implicitly assumed shipping both fields would fully close `VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H`'s gap. Real analysis of the DSL's `compare_to_field` model found a scalar-multiplier limitation this directive didn't anticipate — the volume-confirmation half of that hypothesis (the literal "1.3x") remains only approximately expressible even with `vol_ma20` added. Reported above, not implemented (multiplier support is a real DSL-shape change, out of this directive's explicit scope).
+3. Not previously flagged in any prior session: the two reinlined `ALLOWED_FIELDS` copies in `nero_core/eve/` (`session.py`, `random_baseline.py`) would have silently broken 2 existing tests had this directive's `rule_dsl.ALLOWED_FIELDS` change shipped without updating them — caught and fixed before committing, confirmed via a full test run of the affected files before proceeding.
