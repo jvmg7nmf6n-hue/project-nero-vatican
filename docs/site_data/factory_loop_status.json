@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-06T04:44:12.165978+00:00",
+  "last_updated": "2026-08-06T11:44:45.473979+00:00",
   "forward_trial": {
     "count": 10,
     "by_origin": {
@@ -11,9 +11,9 @@
     "unmeasurable_count": 1
   },
   "graveyard": {
-    "count": 21,
+    "count": 25,
     "distilled_this_period": 0,
-    "pending_review": 1
+    "pending_review": 0
   },
   "repair": {
     "count": 0,

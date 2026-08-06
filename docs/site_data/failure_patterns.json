@@ -160,5 +160,21 @@
     "fixable": true,
     "fix_rationale": "Stage 2's diagnosis found real, mechanistically-corroborated value in a 'confirmation' filter (exit mix shifted from 32% to 68% REVERSION_TARGET on BTC/1d), but every variant tested it on the thinnest, most sample-starved config (BTC/1d, 7-19 trades) rather than on RMR's own best, least-thin results (GOLD/1week and SILVER/1week, already on the live watchlist). Applying the same diagnosis-justified confirmation logic to the weekly-metals configs tests whether it concentrates an already-real edge instead of further diluting an already-thin one.",
     "source_doc": "docs/rmr_variant_research_closing_report.md"
+  },
+  {
+    "name": "RANGE_MEAN_REVERSION_GRAVEYARD",
+    "family": "Range Mean Reversion",
+    "failure_pattern": "sample-too-thin",
+    "fixable": true,
+    "source_doc": "eve-origin graveyard review: PAXG_PEG_REVERSION, BTC_VOL_EXPANSION_BREAKOUT, SOL_TREND_ALIGNED_PULLBACK, PAXG_PREMIUM_FADE_DYNAMIC_EXIT",
+    "covers": [
+      "PAXG_PEG_REVERSION",
+      "BTC_VOL_EXPANSION_BREAKOUT",
+      "SOL_TREND_ALIGNED_PULLBACK",
+      "PAXG_PREMIUM_FADE_DYNAMIC_EXIT"
+    ],
+    "origin_agent_breakdown": {
+      "eve": 4
+    }
   }
 ]

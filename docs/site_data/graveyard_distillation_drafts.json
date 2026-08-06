@@ -21,7 +21,7 @@
       "SOL_TREND_ALIGNED_PULLBACK": "eve",
       "PAXG_PREMIUM_FADE_DYNAMIC_EXIT": "eve"
     },
-    "review_status": "pending_human_approval",
+    "review_status": "approved",
     "drafted_at": "2026-08-06T04:44:12.131358+00:00",
     "fixable_note": "Corrected 2026-08-06 from the original draft's fixable=false: 2 of the 4 records were PROMISING_WATCHLIST in-sample (BTC_VOL_EXPANSION_BREAKOUT, PAXG_PREMIUM_FADE_DYNAMIC_EXIT) -- a real positive in-sample signal a thin out-of-sample sample could not confirm or deny, matching this project's own established 'sample-too-thin is the most fixable failure_pattern' precedent (the original hand-curated RANGE_MEAN_REVERSION entry, repair_candidates.json's own RMR_CONFIRMATION_METALS_WEEKLY). A human reviewer may still disagree -- this is a corrected recommendation, not a final decision; review_status stays pending_human_approval.",
     "correction_provenance": {
@@ -29,6 +29,7 @@
       "reason": "CC-1 directive item 1: original draft claimed 'two had no OOS p-value' -- real count is three (PAXG_PEG_REVERSION, SOL_TREND_ALIGNED_PULLBACK, PAXG_PREMIUM_FADE_DYNAMIC_EXIT all have p_value_oos=None); original draft also collapsed two distinct failure shapes (IS-promising/OOS-died vs. died-on-both-halves) into one narrative. Root cause: the LLM was shown the correct p_value_oos data (confirmed via the real reconstructed prompt) but miscounted in its own free-text synthesis; verdict_is/verdict_oos were never in the prompt at all. Hand-corrected rather than re-drafted via a second LLM call -- see this script's own module docstring for the full reasoning.",
       "original_why_it_died": "Across a physically-arbitraged asset (PAXG long and short) and two crypto variants (BTC volatility breakout, SOL trend pullback), none produced usable evidence: two had no OOS p-value at all and the one that reported a p-value (0.26) failed significance, meaning the plausible economic stories (redemption arbitrage, volatility regime shift, trend-confirmed pullback) were never actually tested against enough data to distinguish real edge from noise. The family dies not because the mechanisms are disproven but because they were asserted via narrative and never survived contact with sufficient out-of-sample trades.",
       "original_fixable": false
-    }
+    },
+    "approved_at": "2026-08-06T11:11:02.209869+00:00"
   }
 ]
