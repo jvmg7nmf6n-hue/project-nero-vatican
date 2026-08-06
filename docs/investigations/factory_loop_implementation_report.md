@@ -2510,8 +2510,11 @@ it — confirmed via a real, successful `validate_api_key` call and a real
 streamed hypothesis-generation call, `IBS_CLOSE_LOCATION_REVERSION_GOLD_4H`,
 $0.251694, no ReadTimeout, max inter-event gap 30.065s).
 
-**This directive's own commits:** Item 2 = `4e5568e`, Item 3's bug fix =
-`a79f3aa`, Item 3's real data = `edf3df8`.
+**This directive's own commits (item 0, filled in after each push):** Item
+2 = `4e5568e`, Item 3's bug fix = `a79f3aa`, Item 3's real data =
+`edf3df8`, this closing report = `dd5ead3`. All four verified on
+`origin/main` via `git log origin/main --oneline` immediately after
+pushing.
 
 ## ITEM 1 — Where did IBS_CLOSE_LOCATION_REVERSION_GOLD_4H land?
 
