@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-06T03:28:29.258771+00:00",
+  "last_updated": "2026-08-06T03:31:10.718988+00:00",
   "rows": [
     {
       "timestamp": "2026-08-06T03:28:04.012973+00:00",
@@ -177,6 +177,61 @@
       "exit_price": 1873.46,
       "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=1.4996",
       "candle_timestamp": "2026-08-05T05:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-08-06T03:30:39.130840+00:00",
+      "strategy": "VOLATILITY_SQUEEZE",
+      "strategy_version": "volatility-squeeze-v1.1.0-ma100-silver-calibrated-24h",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "CLOSE_NOT_ABOVE_TREND_MA",
+      "candle_timestamp": "2026-08-05T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-08-06T03:30:39.130840+00:00",
+      "strategy": "VOLATILITY_SQUEEZE",
+      "strategy_version": "volatility-squeeze-v1.1.0-ma150-silver-calibrated-24h",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "CLOSE_NOT_ABOVE_TREND_MA",
+      "candle_timestamp": "2026-08-05T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-08-06T03:30:39.130840+00:00",
+      "strategy": "VOLATILITY_SQUEEZE",
+      "strategy_version": "volatility-squeeze-v1.1.0-ma200-silver-calibrated-24h",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "CLOSE_NOT_ABOVE_TREND_MA",
+      "candle_timestamp": "2026-08-05T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-08-06T03:30:39.130840+00:00",
+      "strategy": "TREND_PULLBACK",
+      "strategy_version": "trend-pullback-v1.5.0-silver-calibrated-24h",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NOT_IN_ESTABLISHED_UPTREND, NO_RECENT_PULLBACK_TO_MA50, CLOSE_NOT_BACK_ABOVE_MA50",
+      "candle_timestamp": "2026-08-05T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-08-06T03:30:39.130840+00:00",
+      "strategy": "BREAKOUT_MOMENTUM",
+      "strategy_version": "breakout-momentum-v1.6.0-silver-calibrated-24h",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "CLOSE_NOT_ABOVE_BREAKOUT_HIGH, CLOSE_NOT_ABOVE_MA200",
+      "candle_timestamp": "2026-08-05T04:00:00+00:00"
     },
     {
       "timestamp": "2026-08-05T03:27:19.373729+00:00",
