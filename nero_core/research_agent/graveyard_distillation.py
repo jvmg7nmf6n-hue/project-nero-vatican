@@ -289,7 +289,19 @@ def build_distillation_prompt(family: str, members: list[DiedRecord]) -> str:
     """AGGREGATE STATS ONLY -- names, mechanisms (short prose already on
     each hypothesis record, not a raw trade-by-trade dump), origin_agent,
     p-values. Mirrors repair_lab.build_diagnosis_prompt's own "diagnosis
-    sees aggregate stats it was actually shown" discipline."""
+    sees aggregate stats it was actually shown" discipline.
+
+    Does NOT ask the LLM for `source_doc` (real incident, 2026-08-06: an
+    approved draft's LLM-invented source_doc ("eve-origin graveyard
+    review: ...") was neither a real docs/*.md path nor any other
+    schema-valid provenance -- it broke both the failure_patterns.json
+    regex test and the live graveyard page's "Source report" link, which
+    unconditionally renders source_doc as a GitHub blob URL). A
+    distillation entry is ALWAYS synthesized straight from DiedRecord
+    aggregate stats, never from a written report, so source_doc is a
+    structural/provenance fact -- computed here from real data by
+    _no_report_source_doc, same discipline as `covers`/`origin_agent_
+    breakdown` below, never trusted from the LLM's own free text."""
     lines = [
         f"You are drafting a graveyard distillation entry for the mechanism family {family!r}.",
         f"{len(members)} hypotheses in this family have now DIED. Their details:",
@@ -304,12 +316,25 @@ def build_distillation_prompt(family: str, members: list[DiedRecord]) -> str:
         '"why_it_died": one or two sentences synthesizing WHY this family of mechanisms fails, in plain '
         'language, from the aggregate evidence above (not a template -- explain the real mechanism), '
         '"fixable": true or false, whether a repair (a bounded, single modification) could plausibly address this, '
-        '"source_doc": a short human-readable reference string for where this diagnosis came from, '
+        '"fix_rationale": ONLY if fixable is true, one sentence naming the specific mechanism-justified '
+        'improvement that could address the diagnosed weakness (omit this key entirely if fixable is false), '
         '"n_no_oos_pvalue": the exact COUNT of the hypotheses listed above whose p_value_oos is "n/a" -- '
         "count them yourself from the list, do not estimate}. "
         "Return ONLY the JSON object, no other text."
     )
     return "\n".join(lines)
+
+
+def _no_report_source_doc(family: str, members: list[DiedRecord]) -> str:
+    """Honest, schema-valid provenance for an LLM-drafted distillation
+    entry, which never has an underlying written report (see
+    build_distillation_prompt's own docstring). A real docs/*.md path
+    would be a fabrication; this sentinel format ("no written report --
+    ...") is what website/__tests__/siteDataSchema.test.ts's regex and
+    GraveyardCard.tsx's link-rendering both explicitly recognize as the
+    non-report case."""
+    names = ", ".join(m.hypothesis_name for m in members)
+    return f"no written report -- LLM-drafted synthesis of {len(members)} DIED hypotheses in the {family!r} family ({names})"
 
 
 @dataclass(frozen=True)
@@ -401,13 +426,14 @@ def draft_distillation_entry(
     for m in members:
         origin_breakdown[m.origin_agent] = origin_breakdown.get(m.origin_agent, 0) + 1
 
+    fixable = bool(data.get("fixable", False))
     entry = {
         "name": str(data.get("name", "")).strip(),
         "family": family,
         "failure_pattern": failure_pattern,
         "why_it_died": str(data.get("why_it_died", "")).strip(),
-        "fixable": bool(data.get("fixable", False)),
-        "source_doc": str(data.get("source_doc", "")).strip(),
+        "fixable": fixable,
+        "source_doc": _no_report_source_doc(family, members),
         "covers": [m.hypothesis_name for m in members],
         "origin_agent_breakdown": origin_breakdown,
         # item 2a: tag every graveyard entry this produces with its OWN
@@ -420,6 +446,8 @@ def draft_distillation_entry(
         "review_status": REVIEW_PENDING,
         "drafted_at": datetime.now(timezone.utc).isoformat(),
     }
+    if fixable:
+        entry["fix_rationale"] = str(data.get("fix_rationale", "")).strip()
     note = f" (preflight note: {preflight_note})" if preflight_note else None
     return DistillationDraftResult(entry, usage, cost, note)
 
@@ -520,8 +548,12 @@ def _public_failure_pattern_fields(entry: dict) -> dict:
     already enforces) plus item 6's additions (covers, origin_agent_
     breakdown) -- drops the review-workflow-only fields (review_status,
     drafted_at) that have no reason to persist in the committed file once
-    approved."""
-    return {
+    approved. `fix_rationale` is included only when fixable (website's own
+    "never attaches a fix_rationale to a non-fixable entry" test) -- prior
+    to this fix, this function silently dropped `fix_rationale` even when
+    present on `entry`, which combined with build_distillation_prompt never
+    asking for it meant no LLM-drafted entry could ever carry one."""
+    fields = {
         "name": entry["name"],
         "family": entry["family"],
         "failure_pattern": entry["failure_pattern"],
@@ -530,6 +562,9 @@ def _public_failure_pattern_fields(entry: dict) -> dict:
         "covers": entry.get("covers", [entry["name"]]),
         "origin_agent_breakdown": entry.get("origin_agent_breakdown", {}),
     }
+    if entry.get("fixable") and entry.get("fix_rationale"):
+        fields["fix_rationale"] = entry["fix_rationale"]
+    return fields
 
 
 def load_survived_trial_context(path: Path = DEFAULT_FORWARD_TRIAL_PATH) -> list[dict]:

@@ -166,7 +166,7 @@
     "family": "Range Mean Reversion",
     "failure_pattern": "sample-too-thin",
     "fixable": true,
-    "source_doc": "eve-origin graveyard review: PAXG_PEG_REVERSION, BTC_VOL_EXPANSION_BREAKOUT, SOL_TREND_ALIGNED_PULLBACK, PAXG_PREMIUM_FADE_DYNAMIC_EXIT",
+    "source_doc": "no written report -- LLM-drafted synthesis of 4 DIED hypotheses in the 'Range Mean Reversion' family (PAXG_PEG_REVERSION, BTC_VOL_EXPANSION_BREAKOUT, SOL_TREND_ALIGNED_PULLBACK, PAXG_PREMIUM_FADE_DYNAMIC_EXIT)",
     "covers": [
       "PAXG_PEG_REVERSION",
       "BTC_VOL_EXPANSION_BREAKOUT",
@@ -175,6 +175,7 @@
     ],
     "origin_agent_breakdown": {
       "eve": 4
-    }
+    },
+    "fix_rationale": "2 of the 4 records (BTC_VOL_EXPANSION_BREAKOUT, PAXG_PREMIUM_FADE_DYNAMIC_EXIT) were PROMISING_WATCHLIST in-sample but died on a thin out-of-sample sample -- a real positive signal a fuller out-of-sample sample could still confirm, matching this project's own precedent that 'sample-too-thin' is its most fixable failure pattern (see the original RANGE_MEAN_REVERSION entry, repair_candidates.json's RMR_CONFIRMATION_METALS_WEEKLY)."
   }
 ]

@@ -39,7 +39,13 @@ describe("docs/site_data/failure_patterns.json", () => {
     expect(VALID_FAILURE_PATTERNS).toContain(entry.failure_pattern);
     expect(typeof entry.fixable).toBe("boolean");
     expect(typeof entry.source_doc).toBe("string");
-    expect(entry.source_doc).toMatch(/^docs\/.+\.md$/);
+    // A real docs/*.md path (hand-curated entries), OR the honest "no
+    // written report" sentinel graveyard_distillation.py's own
+    // _no_report_source_doc computes for LLM-drafted entries (which are
+    // synthesized straight from aggregate DiedRecord stats, never from a
+    // written report -- a fabricated .md path would be dishonest, so the
+    // schema accepts this alternative instead of forcing one).
+    expect(entry.source_doc).toMatch(/^(docs\/.+\.md|no written report --.+)$/);
   });
 
   it("gives every fixable entry a non-empty fix_rationale", () => {

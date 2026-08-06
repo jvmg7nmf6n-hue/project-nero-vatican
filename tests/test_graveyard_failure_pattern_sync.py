@@ -67,6 +67,18 @@ class GraveyardFailurePatternSyncTest(unittest.TestCase):
         self.graveyard = json.loads(GRAVEYARD_PATH.read_text(encoding="utf-8"))
         self.failure_patterns = json.loads(FAILURE_PATTERNS_PATH.read_text(encoding="utf-8"))
         self.failure_pattern_names = {e["name"] for e in self.failure_patterns}
+        # `covers`-aware, mirroring _coverage_counts() below -- a failure_
+        # patterns entry can represent a graveyard name via its own `covers`
+        # list, not just its own `name` (real as of the RANGE_MEAN_REVERSION_
+        # GRAVEYARD entry, 2026-08-06: a family distilled straight from 4
+        # DIED hypotheses into ONE entry, none of which share its `name`).
+        # Before this fix, this set was name-only, so any entry using
+        # `covers` for something other than the cap-merge path was
+        # (wrongly) reported as "not represented" -- a bug in this test's
+        # own logic, not in the data.
+        self.represented_names = set(self.failure_pattern_names)
+        for e in self.failure_patterns:
+            self.represented_names.update(e.get("covers") or [e["name"]])
 
     def _coverage_counts(self) -> dict:
         # Every failure_patterns entry covers itself by default (`covers`
@@ -85,7 +97,7 @@ class GraveyardFailurePatternSyncTest(unittest.TestCase):
         # The actual invariant that broke: Adam/Eve's own context (built
         # exclusively from failure_patterns.json) must never be missing a
         # real, already-diagnosed graveyard entry.
-        missing = [e["name"] for e in self.graveyard if e["name"] not in self.failure_pattern_names]
+        missing = [e["name"] for e in self.graveyard if e["name"] not in self.represented_names]
         self.assertEqual(
             missing, [],
             f"{len(missing)} graveyard.json entries have no failure_patterns.json counterpart -- "

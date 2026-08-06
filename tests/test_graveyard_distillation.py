@@ -209,6 +209,51 @@ class DraftDistillationEntryTest(unittest.TestCase):
         mock_post.assert_not_called()
         self.assertIsNone(result.entry)
 
+    def test_source_doc_is_computed_never_trusted_from_the_llm(self) -> None:
+        # Real incident, 2026-08-06: an approved draft's LLM-invented
+        # source_doc ("eve-origin graveyard review: ...") was neither a
+        # real docs/*.md path nor any other schema-valid provenance -- it
+        # broke the failure_patterns.json regex test AND the live
+        # graveyard page's "Source report" link (GraveyardCard.tsx builds
+        # a GitHub blob URL from it unconditionally). A distillation entry
+        # is always synthesized from aggregate stats, never a written
+        # report, so source_doc must never be LLM free text -- even if the
+        # LLM supplies one, it's ignored.
+        payload = _claude_payload({
+            "name": "FVG_CROSS_ASSET", "failure_pattern": "edge-over-random-negative",
+            "why_it_died": "x", "fixable": False,
+            "source_doc": "totally made up reference, not a real path",
+            "n_no_oos_pvalue": 0,
+        })
+        with patch("nero_core.research_agent.graveyard_distillation.requests.post", return_value=_FakeResponse(payload)):
+            result = gd.draft_distillation_entry("Fair Value Gap", self._members(), "fake-key")
+
+        self.assertIsNone(result.error)
+        self.assertNotIn("totally made up reference", result.entry["source_doc"])
+        self.assertTrue(result.entry["source_doc"].startswith("no written report --"))
+        self.assertIn("Fair Value Gap", result.entry["source_doc"])
+        for name in ("A", "B", "C"):
+            self.assertIn(name, result.entry["source_doc"])
+
+    def test_fix_rationale_present_only_when_fixable(self) -> None:
+        fixable_payload = _claude_payload({
+            "name": "FVG_CROSS_ASSET", "failure_pattern": "edge-over-random-negative",
+            "why_it_died": "x", "fixable": True, "fix_rationale": "gate the trigger behind a volatility filter",
+            "n_no_oos_pvalue": 0,
+        })
+        with patch("nero_core.research_agent.graveyard_distillation.requests.post", return_value=_FakeResponse(fixable_payload)):
+            result = gd.draft_distillation_entry("Fair Value Gap", self._members(), "fake-key")
+        self.assertEqual(result.entry["fix_rationale"], "gate the trigger behind a volatility filter")
+
+        not_fixable_payload = _claude_payload({
+            "name": "FVG_CROSS_ASSET", "failure_pattern": "edge-over-random-negative",
+            "why_it_died": "x", "fixable": False,
+            "n_no_oos_pvalue": 0,
+        })
+        with patch("nero_core.research_agent.graveyard_distillation.requests.post", return_value=_FakeResponse(not_fixable_payload)):
+            result = gd.draft_distillation_entry("Fair Value Gap", self._members(), "fake-key")
+        self.assertNotIn("fix_rationale", result.entry)
+
 
 class CommitGraveyardEntryTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -279,6 +324,28 @@ class CommitGraveyardEntryTest(unittest.TestCase):
         self.assertEqual(set(merged["covers"]), {"OLD_0", "A", "B", "C"})
         self.assertEqual(merged["origin_agent_breakdown"]["adam"], 1 + 2)
         self.assertEqual(merged["origin_agent_breakdown"]["eve"], 1)
+
+    def test_fix_rationale_is_committed_when_fixable(self) -> None:
+        # Prior bug: _public_failure_pattern_fields silently dropped
+        # fix_rationale even when present on the approved entry -- combined
+        # with the LLM prompt never asking for it, no LLM-drafted entry
+        # could ever carry a fix_rationale in the committed file.
+        self.graveyard_path.write_text("[]")
+        self.failure_patterns_path.write_text("[]")
+        entry = self._approved_entry(fixable=True, fix_rationale="gate the trigger behind a volatility filter")
+        gd.commit_graveyard_entry(entry, self.graveyard_path, self.failure_patterns_path, cap=30)
+
+        failure_patterns = json.loads(self.failure_patterns_path.read_text())
+        self.assertEqual(failure_patterns[0]["fix_rationale"], "gate the trigger behind a volatility filter")
+
+    def test_fix_rationale_absent_when_not_fixable_even_if_supplied(self) -> None:
+        self.graveyard_path.write_text("[]")
+        self.failure_patterns_path.write_text("[]")
+        entry = self._approved_entry(fixable=False, fix_rationale="should never surface")
+        gd.commit_graveyard_entry(entry, self.graveyard_path, self.failure_patterns_path, cap=30)
+
+        failure_patterns = json.loads(self.failure_patterns_path.read_text())
+        self.assertNotIn("fix_rationale", failure_patterns[0])
 
     def test_at_cap_with_no_matching_family_raises_rather_than_guessing(self) -> None:
         self.graveyard_path.write_text("[]")

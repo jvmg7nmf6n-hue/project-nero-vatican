@@ -5,7 +5,7 @@
     "failure_pattern": "sample-too-thin",
     "why_it_died": "Across four Eve hypotheses on this family (two testing PAXG's own redemption-arbitrage mechanism long and short, one on BTC volatility expansion, one on SOL trend-aligned pullback), the real evidence splits into two distinct failure shapes, not one: SOL_TREND_ALIGNED_PULLBACK and PAXG_PEG_REVERSION failed outright without ever producing a usable out-of-sample read (SOL died on both the in-sample and out-of-sample halves; PAXG_PEG_REVERSION died in-sample and never accumulated enough out-of-sample trades to reach a verdict at all). BTC_VOL_EXPANSION_BREAKOUT and PAXG_PREMIUM_FADE_DYNAMIC_EXIT looked promising in-sample (both PROMISING_WATCHLIST) but both died out-of-sample -- BTC_VOL_EXPANSION_BREAKOUT's own out-of-sample p-value (0.2599) explicitly failed significance, and PAXG_PREMIUM_FADE_DYNAMIC_EXIT produced no out-of-sample p-value at all. Three of the four records carry no real out-of-sample p-value whatsoever -- only BTC_VOL_EXPANSION_BREAKOUT reported one, and it failed. The plausible economic stories (redemption arbitrage, volatility regime shift, trend-confirmed pullback) were never actually tested against enough out-of-sample data to distinguish real edge from noise, and the two that looked promising in-sample did not survive contact with fresh data.",
     "fixable": true,
-    "source_doc": "eve-origin graveyard review: PAXG_PEG_REVERSION, BTC_VOL_EXPANSION_BREAKOUT, SOL_TREND_ALIGNED_PULLBACK, PAXG_PREMIUM_FADE_DYNAMIC_EXIT",
+    "source_doc": "no written report -- LLM-drafted synthesis of 4 DIED hypotheses in the 'Range Mean Reversion' family (PAXG_PEG_REVERSION, BTC_VOL_EXPANSION_BREAKOUT, SOL_TREND_ALIGNED_PULLBACK, PAXG_PREMIUM_FADE_DYNAMIC_EXIT)",
     "covers": [
       "PAXG_PEG_REVERSION",
       "BTC_VOL_EXPANSION_BREAKOUT",
@@ -30,6 +30,12 @@
       "original_why_it_died": "Across a physically-arbitraged asset (PAXG long and short) and two crypto variants (BTC volatility breakout, SOL trend pullback), none produced usable evidence: two had no OOS p-value at all and the one that reported a p-value (0.26) failed significance, meaning the plausible economic stories (redemption arbitrage, volatility regime shift, trend-confirmed pullback) were never actually tested against enough data to distinguish real edge from noise. The family dies not because the mechanisms are disproven but because they were asserted via narrative and never survived contact with sufficient out-of-sample trades.",
       "original_fixable": false
     },
-    "approved_at": "2026-08-06T11:11:02.209869+00:00"
+    "approved_at": "2026-08-06T11:11:02.209869+00:00",
+    "fix_rationale": "2 of the 4 records (BTC_VOL_EXPANSION_BREAKOUT, PAXG_PREMIUM_FADE_DYNAMIC_EXIT) were PROMISING_WATCHLIST in-sample but died on a thin out-of-sample sample -- a real positive signal a fuller out-of-sample sample could still confirm, matching this project's own precedent that 'sample-too-thin' is its most fixable failure pattern (see the original RANGE_MEAN_REVERSION entry, repair_candidates.json's RMR_CONFIRMATION_METALS_WEEKLY).",
+    "source_doc_correction_provenance": {
+      "corrected_at": "2026-08-06T00:00:00+00:00",
+      "reason": "CC-1 directive: original source_doc ('eve-origin graveyard review: ...') was free text, not a real docs/*.md path or the no-written-report sentinel. Replaced with the same _no_report_source_doc computation graveyard_distillation.py now uses for every future LLM-drafted entry. fix_rationale added (was entirely absent -- the drafting prompt never asked for one until this same directive).",
+      "original_source_doc": "eve-origin graveyard review: PAXG_PEG_REVERSION, BTC_VOL_EXPANSION_BREAKOUT, SOL_TREND_ALIGNED_PULLBACK, PAXG_PREMIUM_FADE_DYNAMIC_EXIT"
+    }
   }
 ]
