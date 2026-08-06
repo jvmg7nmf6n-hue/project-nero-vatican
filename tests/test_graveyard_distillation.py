@@ -137,6 +137,7 @@ class DraftDistillationEntryTest(unittest.TestCase):
             "name": "FVG_CROSS_ASSET", "failure_pattern": "edge-over-random-negative",
             "why_it_died": "the gap-touch trigger adds no value beyond randomly-timed entries",
             "fixable": True, "source_doc": "doc.md",
+            "n_no_oos_pvalue": 0,  # all 3 fixture members have a real p_value_oos
         })
         with patch("nero_core.research_agent.graveyard_distillation.requests.post", return_value=_FakeResponse(payload)):
             result = gd.draft_distillation_entry("Fair Value Gap", self._members(), "fake-key")
@@ -147,6 +148,49 @@ class DraftDistillationEntryTest(unittest.TestCase):
         self.assertEqual(entry["family"], "Fair Value Gap")
         self.assertEqual(set(entry["covers"]), {"A", "B", "C"})
         self.assertEqual(entry["origin_agent_breakdown"], {"adam": 2, "eve": 1})
+
+    def test_miscounted_no_oos_pvalue_claim_is_rejected_not_trusted(self) -> None:
+        # CC-1 directive item 1c: regression guard on the real 2026-08-06
+        # "Range Mean Reversion" incident -- the LLM was shown the correct
+        # data but still miscounted in its own free-text prose. This is the
+        # ONE claim in the drafted output that's mechanically checkable, so
+        # it must never be trusted from the LLM's own arithmetic.
+        members = [
+            gd.DiedRecord("A", "m", "adam", "Fair Value Gap", None),
+            gd.DiedRecord("B", "m", "eve", "Fair Value Gap", None),
+            gd.DiedRecord("C", "m", "adam", "Fair Value Gap", 0.3),
+        ]
+        payload = _claude_payload({
+            "name": "FVG_CROSS_ASSET", "failure_pattern": "edge-over-random-negative",
+            "why_it_died": "x", "fixable": True, "source_doc": "d",
+            "n_no_oos_pvalue": 1,  # real count is 2 (A and B both have p_value_oos=None)
+        })
+        with patch("nero_core.research_agent.graveyard_distillation.requests.post", return_value=_FakeResponse(payload)):
+            result = gd.draft_distillation_entry("Fair Value Gap", members, "fake-key")
+
+        self.assertIsNone(result.entry)
+        self.assertIn("real count", result.error)
+        self.assertIn("2", result.error)
+        # Still billed -- the call reached Anthropic and was processed,
+        # matching this module's own existing "rejected but billed" pattern
+        # for an invalid failure_pattern.
+        self.assertGreater(result.cost_usd, 0.0)
+
+    def test_correct_no_oos_pvalue_claim_with_some_none_and_some_real_is_accepted(self) -> None:
+        members = [
+            gd.DiedRecord("A", "m", "adam", "Fair Value Gap", None),
+            gd.DiedRecord("B", "m", "eve", "Fair Value Gap", 0.5),
+        ]
+        payload = _claude_payload({
+            "name": "FVG_CROSS_ASSET", "failure_pattern": "edge-over-random-negative",
+            "why_it_died": "x", "fixable": True, "source_doc": "d",
+            "n_no_oos_pvalue": 1,  # correct: only A has p_value_oos=None
+        })
+        with patch("nero_core.research_agent.graveyard_distillation.requests.post", return_value=_FakeResponse(payload)):
+            result = gd.draft_distillation_entry("Fair Value Gap", members, "fake-key")
+
+        self.assertIsNone(result.error)
+        self.assertIsNotNone(result.entry)
 
     def test_failure_pattern_outside_closed_vocabulary_is_rejected_not_coerced(self) -> None:
         payload = _claude_payload({

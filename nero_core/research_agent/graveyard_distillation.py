@@ -304,7 +304,9 @@ def build_distillation_prompt(family: str, members: list[DiedRecord]) -> str:
         '"why_it_died": one or two sentences synthesizing WHY this family of mechanisms fails, in plain '
         'language, from the aggregate evidence above (not a template -- explain the real mechanism), '
         '"fixable": true or false, whether a repair (a bounded, single modification) could plausibly address this, '
-        '"source_doc": a short human-readable reference string for where this diagnosis came from}. '
+        '"source_doc": a short human-readable reference string for where this diagnosis came from, '
+        '"n_no_oos_pvalue": the exact COUNT of the hypotheses listed above whose p_value_oos is "n/a" -- '
+        "count them yourself from the list, do not estimate}. "
         "Return ONLY the JSON object, no other text."
     )
     return "\n".join(lines)
@@ -369,6 +371,30 @@ def draft_distillation_entry(
             None, usage, cost,
             f"LLM returned failure_pattern={failure_pattern!r}, outside the closed vocabulary "
             f"{sorted(ALLOWED_FAILURE_PATTERN_VALUES)} -- draft rejected, call WAS billed (${cost:.6f}).",
+        )
+
+    # CC-1 directive, item 1c: a real, confirmed incident (the "Range Mean
+    # Reversion" draft, 2026-08-06) had the LLM given the correct p_value_oos
+    # for every member (verified directly against the real prompt) but still
+    # miscounted "two" when the real answer was three in its own free-text
+    # "why_it_died" prose. Free-text claims aren't mechanically checkable,
+    # but THIS one count is -- so the prompt now also asks for it as a
+    # structured integer, cross-checked here against the real data the LLM
+    # was actually shown (never trusted from the LLM's own arithmetic, same
+    # discipline as failure_pattern's closed-vocabulary check above). A
+    # mismatch rejects the draft the same way an invalid failure_pattern
+    # does -- still billed, no draft written, a clear reason returned. This
+    # does not (and cannot, being free text) validate the rest of the prose;
+    # see this module's own closing-report entry for why a full prose
+    # cross-check stays a human-review catch, not an automated one.
+    real_no_pvalue_count = sum(1 for m in members if not isinstance(m.p_value_oos, (int, float)))
+    claimed_no_pvalue_count = data.get("n_no_oos_pvalue")
+    if claimed_no_pvalue_count != real_no_pvalue_count:
+        return DistillationDraftResult(
+            None, usage, cost,
+            f"LLM claimed n_no_oos_pvalue={claimed_no_pvalue_count!r}, but the real count from the "
+            f"{len(members)} member record(s) actually shown to it is {real_no_pvalue_count} -- draft "
+            f"rejected (a factual miscount, not just a vocabulary mismatch), call WAS billed (${cost:.6f}).",
         )
 
     origin_breakdown: dict[str, int] = {}
