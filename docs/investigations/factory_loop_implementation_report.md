@@ -2806,9 +2806,9 @@ was needed for any of the three pushes above, unlike the prior directive.
 # CC-1 DIRECTIVE — "Fix the draft, then close the loop's missing link: Repair Chain Launch" (2026-08-06)
 
 **This directive's own commits (item 0, filled in after each push):** Item
-1 = `6bc18b8`, Item 2 = `5e9887d`, this closing report = `[filled in below,
-after push]`. All verified on `origin/main` via `git log origin/main
---oneline` immediately after pushing, not assumed from `git commit` alone.
+1 = `6bc18b8`, Item 2 = `5e9887d`, this closing report = `449f9b8`. All
+verified on `origin/main` via `git log origin/main --oneline` immediately
+after pushing, not assumed from `git commit` alone.
 
 ## ITEM 1 — Fix the Range Mean Reversion draft
 
