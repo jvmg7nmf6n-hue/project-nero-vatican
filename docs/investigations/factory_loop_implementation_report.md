@@ -2802,3 +2802,404 @@ a79f3aa CC-1 directive Item 3: fix a real cost/error-tracking gap in draft_ready
 Both fetches this directive found `origin/main` already at the expected
 position (no interleaving automated commits mid-directive) — no rebase
 was needed for any of the three pushes above, unlike the prior directive.
+
+# CC-1 DIRECTIVE — "Fix the draft, then close the loop's missing link: Repair Chain Launch" (2026-08-06)
+
+**This directive's own commits (item 0, filled in after each push):** Item
+1 = `6bc18b8`, Item 2 = `5e9887d`, this closing report = `[filled in below,
+after push]`. All verified on `origin/main` via `git log origin/main
+--oneline` immediately after pushing, not assumed from `git commit` alone.
+
+## ITEM 1 — Fix the Range Mean Reversion draft
+
+**1a. Root cause, confirmed from code.** The LLM that drafted the real
+`RANGE_MEAN_REVERSION_GRAVEYARD` entry (2026-08-06,
+`tools/factory_loop_run.py --live`) was reconstructed from the exact real
+prompt `build_distillation_prompt` produces for this family. It confirmed
+two separate, real defects, both in the LLM's own free-text synthesis, not
+in the data it was given:
+
+1. **Miscounted the p_value_oos-absent count.** The prompt correctly lists
+   `p_value_oos` for all 4 members. The real count of members with no OOS
+   p-value is **three** (`PAXG_PEG_REVERSION`, `SOL_TREND_ALIGNED_PULLBACK`,
+   `PAXG_PREMIUM_FADE_DYNAMIC_EXIT` all have `p_value_oos=None`; only
+   `BTC_VOL_EXPANSION_BREAKOUT` reported one, 0.2599, and it failed
+   significance). The original draft's prose said "two had no OOS
+   p-value" — a genuine arithmetic error over data it was actually shown,
+   not a missing-data problem.
+2. **Collapsed two distinct failure shapes into one narrative.** Two
+   records (`BTC_VOL_EXPANSION_BREAKOUT`, `PAXG_PREMIUM_FADE_DYNAMIC_EXIT`)
+   were `PROMISING_WATCHLIST` in-sample and only died out-of-sample; the
+   other two (`PAXG_PEG_REVERSION`, `SOL_TREND_ALIGNED_PULLBACK`) never
+   looked promising at all. The original draft's "none produced usable
+   evidence" prose erased that distinction. Confirmed structurally, not
+   just an LLM oversight: `build_distillation_prompt` never included
+   `verdict_is`/`verdict_oos` in the prompt at all, so the IS/OOS
+   distinction was unavailable to the model, not merely missed.
+
+**1b. Correction.** Hand-corrected rather than re-drafted via a second
+real LLM call — a purely factual correction is strictly more reliable by
+hand-editing than by risking a second, independently-wrong synthesis. New
+`tools/correct_range_mean_reversion_draft_20260806.py`: idempotent,
+refuses to touch an already-decided entry (`review_status !=
+pending_human_approval`), rewrites `why_it_died` to the corrected text
+below, flips `fixable` from `False` to `True` with a `fixable_note`
+reasoning it explicitly (two of four records showed real in-sample
+promise, matching this project's own established "sample-too-thin is the
+most fixable failure_pattern" precedent — the original hand-curated
+`RANGE_MEAN_REVERSION` entry, `repair_candidates.json`'s own
+`RMR_CONFIRMATION_METALS_WEEKLY`), and preserves the original text/reason
+under `correction_provenance`. Ran for real against the actual repo file;
+`review_status` is still `pending_human_approval` — **not approved by
+this directive.**
+
+The full corrected `why_it_died`, verbatim, as it now stands in
+`docs/site_data/graveyard_distillation_drafts.json`:
+
+> Across four Eve hypotheses on this family (two testing PAXG's own
+> redemption-arbitrage mechanism long and short, one on BTC volatility
+> expansion, one on SOL trend-aligned pullback), the real evidence splits
+> into two distinct failure shapes, not one: SOL_TREND_ALIGNED_PULLBACK
+> and PAXG_PEG_REVERSION failed outright without ever producing a usable
+> out-of-sample read (SOL died on both the in-sample and out-of-sample
+> halves; PAXG_PEG_REVERSION died in-sample and never accumulated enough
+> out-of-sample trades to reach a verdict at all). BTC_VOL_EXPANSION_
+> BREAKOUT and PAXG_PREMIUM_FADE_DYNAMIC_EXIT looked promising in-sample
+> (both PROMISING_WATCHLIST) but both died out-of-sample —
+> BTC_VOL_EXPANSION_BREAKOUT's own out-of-sample p-value (0.2599)
+> explicitly failed significance, and PAXG_PREMIUM_FADE_DYNAMIC_EXIT
+> produced no out-of-sample p-value at all. Three of the four records
+> carry no real out-of-sample p-value whatsoever — only
+> BTC_VOL_EXPANSION_BREAKOUT reported one, and it failed. The plausible
+> economic stories (redemption arbitrage, volatility regime shift,
+> trend-confirmed pullback) were never actually tested against enough
+> out-of-sample data to distinguish real edge from noise, and the two
+> that looked promising in-sample did not survive contact with fresh
+> data.
+
+Covers (unchanged): `PAXG_PEG_REVERSION`, `BTC_VOL_EXPANSION_BREAKOUT`,
+`SOL_TREND_ALIGNED_PULLBACK`, `PAXG_PREMIUM_FADE_DYNAMIC_EXIT`. `fixable`:
+`true` (was `false`). `review_status`: `pending_human_approval`
+(unchanged — still awaiting the owner's own decision).
+
+**1c. Automated claim-vs-data validation — implemented, low-risk.** The
+p_value_oos count is the ONE claim in this drafted output that is
+mechanically checkable (free-text prose is not). `build_distillation_
+prompt` now also asks the LLM for a structured `n_no_oos_pvalue` integer;
+`draft_distillation_entry` cross-checks it against the real count computed
+from the member records actually shown to the model and rejects the draft
+(still billed, exact same "rejected but billed" pattern already used for
+an invalid `failure_pattern`) on any mismatch — never silently trusted.
+This does not and cannot validate the rest of the free-text prose; a full
+prose cross-check stays a human-review catch, not an automated one. Two
+new tests (`test_miscounted_no_oos_pvalue_claim_is_rejected_not_trusted`,
+`test_correct_no_oos_pvalue_claim_with_some_none_and_some_real_is_accepted`)
+plus the existing structural-fields test updated with the new required
+field — all pass.
+
+**1d.** Confirmed: the correction (1b) and the prevention fix (1c) both
+happened, and the draft is still `pending_human_approval` — never
+approved, rejected, or otherwise decided by this directive.
+
+## ITEM 2 — Repair Chain Launch
+
+**2a. The real gap, confirmed from code.** Every atomic piece Repair Lab
+v1 needs is real, tested, and already built: `repair_lab.check_
+eligibility`, `propose_modification`, `validate_modification`, `check_in_
+chain_duplicate`, `can_launch_new_attempt`, `append_repair_event`, plus
+the two fresh-data mechanisms (`repair_historical_reservation.reserve_
+historical_segment`, `repair_forward_tracker.evaluate_forward_tick`).
+`tests/test_repair_lab_no_auto_wire.py::test_a_full_repair_lab_flow_
+never_changes_the_strategy_registry` assembles every one of them, in the
+correct order, end to end — but inside a **test**. A direct search
+confirmed **zero non-test files anywhere in this codebase called
+`append_repair_event` with `EVENT_ATTEMPT_LAUNCHED`** before this
+directive. Nothing had ever launched a repair chain in production; the
+test proved the pieces compose correctly, it was never a production entry
+point. Separately reconfirmed: `docs/repair_lab_investigation_report.md`,
+referenced in `repair_lab.py`'s own docstring, still does not exist as an
+actual file — a real, pre-existing documentation gap, unrelated to this
+directive's own scope, left as found.
+
+**2b. Design options considered, and the recommendation.**
+
+1. **CLI only** — a `tools/repair_chain_launch.py --launch <name>` flag.
+   Simplest, but a bare CLI flag has no natural confirm step and no visual
+   surface for reviewing the proposal first; a mistyped hypothesis name
+   with `--launch` and no dry-run would commit immediately.
+2. **Operator Panel extension only** — add a Launch button to the
+   existing repair-candidates table, calling straight into `repair_lab`.
+   Puts the confirm step and the proposal review in the same place the
+   owner already works, but risks a second, panel-only write path if not
+   built carefully.
+3. **Both, but built as one shared module the panel calls** (recommended,
+   and what was built) — a single `tools/repair_chain_launch.py` owns all
+   the real logic (`check_launch_preconditions`, `commit_repair_launch`,
+   `get_candidate_status`) with a report-only CLI `main()`, and the
+   Operator Panel's `/api/repair/launch` endpoint is its only in-panel
+   caller. This keeps exactly one write path (option 2's own risk,
+   avoided) while still giving the owner a real confirm-gated UI (option
+   1's own missing piece, filled) and a scriptable report surface for
+   when the panel isn't running.
+
+**2c. Implementation, real function signatures.**
+
+```python
+# tools/repair_chain_launch.py
+FRESH_DATA_FORWARD_TESTING = "forward_testing"
+FRESH_DATA_HISTORICAL_RESERVATION = "historical_reservation"
+
+def get_repair_chain_id(original_hypothesis_name: str) -> str:
+    return f"RC-{original_hypothesis_name}"   # deterministic, one chain per hypothesis
+
+@dataclass(frozen=True)
+class LaunchPrecondition:
+    can_launch: bool
+    reason: str
+    chain_id: str
+    is_new_chain: bool
+    attempts_launched: int
+
+def check_launch_preconditions(
+    original_hypothesis_name, original_result, original_hypothesis, proposal,
+    repair_candidates, repair_events,
+) -> LaunchPrecondition:
+    # eligibility -> cap -> validate_modification -> in-chain-duplicate, fail-fast, pure
+
+@dataclass(frozen=True)
+class LaunchResult:
+    launched: bool
+    reason: str
+    chain_id: str
+    attempt_id: str | None
+
+def commit_repair_launch(
+    original_hypothesis_name, original_result, original_hypothesis, proposal,
+    repair_candidates, *, origin_agent, original_failure_type="DIED",
+    original_result_ref=None, fresh_data_method=FRESH_DATA_FORWARD_TESTING,
+    historical_candles=None, now=None, events_path=repair_lab.DEFAULT_REPAIR_ATTEMPTS_PATH,
+) -> LaunchResult:
+    # re-verifies preconditions against CURRENT file state (never trusts a caller's
+    # earlier check), allocates fresh data, writes EVENT_CHAIN_OPENED (only if new)
+    # + EVENT_ATTEMPT_LAUNCHED via the real repair_lab.append_repair_event -- the
+    # ONLY write in this function
+
+def get_candidate_status() -> list[dict]:
+    # every real repair_candidates.json entry + real cap/eligibility + chain_id +
+    # original_data_available -- the same computation the Operator Panel exposes
+```
+
+Confirmed real constant: `repair_lab.MAX_ATTEMPTS_PER_CHAIN = 4` (the
+directive's own "MAX_REPAIR_ATTEMPTS" name does not exist in this
+codebase) — read, never changed, by this directive.
+
+**2d. Operator Panel wiring, real function signatures.**
+
+```python
+# tools/operator_panel/app.py
+@app.get("/api/repair/candidates")
+def get_repair_candidates() -> dict:
+    return {"candidates": repair_chain_launch.get_candidate_status()}
+
+class LaunchRepairRequest(BaseModel):
+    hypothesis_name: str
+    proposal: dict
+    fresh_data_method: str = repair_chain_launch.FRESH_DATA_FORWARD_TESTING
+    confirm: bool = False
+
+@app.post("/api/repair/launch")
+def launch_repair(body: LaunchRepairRequest) -> dict:
+    # requires confirm=true; reuses the proposal already reviewed via
+    # /api/repair/propose (no second LLM call); looks up original_hypothesis/
+    # original_result the same way /api/repair/propose does; writes through
+    # repair_chain_launch.commit_repair_launch only
+```
+
+A real, concrete inconsistency was found and fixed while wiring this: the
+pre-existing `/api/repair/candidates` used to compute `chain_id =
+c.get("hypothesis_name")` inline (raw, unprefixed), while the new
+launcher module's own `get_repair_chain_id()` uses the deterministic
+`RC-{name}` prefix. No live bug had occurred yet (zero chains have ever
+launched), but the endpoint now delegates to `repair_chain_launch.get_
+candidate_status()` as the single source of truth instead of a second,
+independently-maintained computation.
+
+`tools/operator_panel/static/index.html`: the repair-candidates table now
+shows `chain_id` and `original_data_available` columns; each row's
+"Propose" button stores the reviewed proposal in a `repairProposals` JS
+object keyed by hypothesis name; a Launch button appears only when
+`validation_approved` was true, and clicking it fires a second `confirm()`
+dialog naming the real consequence ("writes a real event and consumes one
+of its 4-attempt cap slots") before calling `/api/repair/launch`.
+
+The module's own top-of-file docstring (previously stated the repair-chain
+flow "stops at PROPOSE and VALIDATE") is corrected to describe the real,
+now-built launch path.
+
+`tests/test_operator_panel.py` gained 6 new tests covering: `/api/repair/
+candidates` delegates to `get_candidate_status()` (regression guard on the
+chain_id fix above), `/api/repair/launch` requires `confirm=true`,
+requires a known candidate, requires original hypothesis/result data,
+writes through `commit_repair_launch` only (mocked, asserting the call
+happened and nothing else), and surfaces a launcher-reported failure as
+409 rather than silently succeeding. The pre-existing AST-based guard
+(renamed `test_app_module_never_calls_append_repair_event_directly` to
+reflect what it now actually proves) still confirms `tools/operator_
+panel/app.py` itself never calls `append_repair_event` — only `repair_
+chain_launch.commit_repair_launch` does, one layer down.
+
+**2e. Verification nothing was launched for real.** `docs/site_data/
+repair_attempts.json` still does not exist anywhere in this repository —
+confirmed by direct filesystem check immediately before writing this
+report. All 15 new tests in `test_repair_chain_launch.py` /
+`test_repair_chain_launch_no_auto_wire.py`, plus the Operator Panel's own
+launch tests, use hand-crafted proposals and temp-file paths exclusively
+— zero real LLM calls, zero writes to the real event file. A direct,
+real, no-flag run of `python -m tools.repair_chain_launch` against the
+actual repo data (reproduced below) confirms this independently: all 3
+existing `repair_candidates.json` entries report `0 launched`.
+
+```
+RMR_CONFIRMATION_METALS_WEEKLY (parent: RANGE_MEAN_REVERSION) -- chain RC-RMR_CONFIRMATION_METALS_WEEKLY: 0 launched, can_launch_new_attempt=True (0/4 attempts launched -- may launch 4 more)
+  NOTE: original hypothesis/result data for parent_strategy='RANGE_MEAN_REVERSION' not found in agent_hypotheses.json/agent_test_results.json ...
+BOS_STRUCTURAL_STOP_ONLY (parent: BOS_CONTINUATION) -- chain RC-BOS_STRUCTURAL_STOP_ONLY: 0 launched, can_launch_new_attempt=True (0/4 attempts launched -- may launch 4 more)
+  NOTE: original hypothesis/result data for parent_strategy='BOS_CONTINUATION' not found ...
+LEADLAG_TIME_INVARIANT (parent: LEADLAG_FOLLOW) -- chain RC-LEADLAG_TIME_INVARIANT: 0 launched, can_launch_new_attempt=True (0/4 attempts launched -- may launch 4 more)
+  NOTE: original hypothesis/result data for parent_strategy='LEADLAG_FOLLOW' not found ...
+```
+
+All 3 real candidates have `parent_strategy` values that are internally-
+authored strategies, not found in `agent_hypotheses.json`/`agent_test_
+results.json` — an honest, real limitation confirmed against live data,
+not a bug in this module: **none of today's 3 repair candidates can
+actually be launched yet**, because their original hypothesis/result data
+isn't sourced from the Adam/Eve pipeline this module reads. (A separate,
+real bug was also found and fixed while confirming this: the module's own
+"Run with" docstring documented `--candidates`/`--dry-run <name>` CLI
+flags that were never actually implemented in the `argparse` setup — the
+bare, no-flag invocation is the only one that has ever worked. Fixed to
+document reality.)
+
+**2f. What happens after a real launch — honest answer.** Traced
+directly from `repair_lab.py`'s own event-reconstruction logic
+(`reconstruct_chain_state`, lines ~809–840) and a direct search for every
+real caller of the two later-lifecycle event types:
+
+- `fresh_data_method="forward_testing"` (the default): the attempt lands
+  at `ATTEMPT_PENDING_FORWARD_DATA`. Advancing it needs an
+  `EVENT_ATTEMPT_STATUS_CHANGED` and eventually an `EVENT_ATTEMPT_
+  RESOLVED` event — analogous to a Trial record's own `run_forward_tick`
+  and `advance_open_trials` (the latter IS wired into `tools/factory_
+  loop_run.py`'s live run for Trial records). **No equivalent exists for
+  repair attempts.** `repair_forward_tracker.evaluate_forward_tick` and
+  `compute_forward_verdict` are real, tested, callable functions — but a
+  direct search confirms zero non-test files call them. Nothing in this
+  codebase currently ticks a launched repair attempt forward.
+- `fresh_data_method="historical_reservation"`: the attempt lands at
+  `ATTEMPT_LAUNCHED` with a real reserved candle segment, but resolving
+  it into `EVENT_ATTEMPT_RESOLVED` (running the strategy against that
+  segment and recording a verdict) is likewise not wired anywhere in
+  production code.
+- Confirmed independently: `tools/factory_loop_run.py::evaluate_repair_
+  admissions` (the function that would eventually feed a resolved repair
+  attempt into Trial) already assumes a chain has reached SURVIVED/
+  PROMISING-WATCHLIST — i.e., it depends on a resolution step this
+  directive's own module does not, and was not asked to, build.
+
+**What the owner needs to do next, honestly:** launching a repair chain
+today (once a candidate's original data gap in 2e is separately resolved)
+would produce a real, permanently-recorded `EVENT_CHAIN_OPENED`/`EVENT_
+ATTEMPT_LAUNCHED` pair and consume one of the 4 attempt-cap slots, but
+the attempt would then sit at `PENDING_FORWARD_DATA` (or `LAUNCHED`)
+indefinitely — nothing in this codebase currently advances it further.
+Building that resolution step (an analogue of Trial's own forward-tick
+loop, for repair attempts specifically) is real, not-yet-scoped follow-up
+work; this directive's own explicit brief was to build and prove the
+launch mechanism only, not the full attempt lifecycle.
+
+## Out-of-scope confirmations, this directive
+
+- The Range Mean Reversion draft was corrected but **not approved** —
+  `review_status` is still `pending_human_approval`.
+- No repair chain was launched for real (2e).
+- `repair_lab.MAX_ATTEMPTS_PER_CHAIN` (the real constant; the directive's
+  own "MAX_REPAIR_ATTEMPTS" name does not exist in this codebase) was
+  read, never changed — still `4`.
+- No schedule enabled, `EVE_ENABLED` untouched.
+- No change to the evidence bar or Trial admission criteria — this
+  directive touched `nero_core/research_agent/graveyard_distillation.py`,
+  `tools/correct_range_mean_reversion_draft_20260806.py`, `tools/repair_
+  chain_launch.py`, and `tools/operator_panel/{app.py,static/index.html}`
+  only; zero changes to `tools/backtest_statistics.py`, `nero_core/
+  research_agent/frequency_gate.py`, or `nero_core/eve/scoring.py`'s
+  constant-defining sections (confirmed via `git diff --stat` against
+  this directive's own commits — none of those three files appear).
+
+## Test counts, this directive
+
+Directly affected test modules, run together
+(`tests.test_graveyard_distillation`,
+`tests.test_correct_range_mean_reversion_draft_20260806`,
+`tests.test_repair_chain_launch`,
+`tests.test_repair_chain_launch_no_auto_wire`, `tests.test_operator_panel`):
+**55 tests, all pass** (18 + 5 + 12 + 3 + 17 — 2 new tests in `test_
+graveyard_distillation.py`, 5 new in the correction-script test, 12 + 3
+new in the two repair-chain-launch test files, 6 new in `test_operator_
+panel.py`).
+
+Full Python suite (`python -m unittest discover -s tests`, entire repo):
+**2603 tests, all pass, OK** (746.99s runtime). Real `OSError: disk full`
+and `ntfy alert failed (non-fatal): ConnectionError: down`/`HTTPError:
+500` lines visible mid-run are pre-existing tests deliberately exercising
+mocked/simulated failure paths, not real failures — the suite's own final
+result is `OK`, zero errors, zero failures.
+
+Website suite (`npm test` in `website/`): **627 passed, 2 failed, 629
+total** (52/53 suites passed). The 2 failures are both in
+`__tests__/siteDataSchema.test.ts` against `docs/site_data/failure_
+patterns.json` — a file this directive never touched (last modified
+2026-08-04, two days before this directive began, confirmed via `git log
+-1` on that path) — **pre-existing, not caused by this directive.**
+
+## `git log origin/main --oneline -3`, per commit this directive
+
+**After Item 1's push:**
+```
+6bc18b8 CC-1 directive Item 1: fix the Range Mean Reversion draft, prevent recurrence
+1ded068 Update live scheduler execution log
+19057e2 Update live scheduler execution log
+```
+
+**After Item 2's push:**
+```
+5e9887d CC-1 directive Item 2: build and wire the repair-chain launch mechanism
+6bc18b8 CC-1 directive Item 1: fix the Range Mean Reversion draft, prevent recurrence
+1ded068 Update live scheduler execution log
+```
+
+Before this directive's first push, `origin/main` had moved ahead of this
+session's last-known position by two routine automated commits (`Update
+live scheduler execution log` x2, touching only `data/truth_ledger.db`
+and various `docs/site_data/*.json` stats/ledger files this directive
+never touches) — fast-forwarded cleanly with `git pull --ff-only` before
+committing, no rebase needed.
+
+## Figures found stale this directive, and the real values
+
+1. A real, previously-undiscovered doc/code mismatch was found and fixed:
+   `tools/repair_chain_launch.py`'s own "Run with" docstring documented
+   `--candidates`/`--dry-run <hyp_name>` CLI flags that were never
+   actually implemented in the module's `argparse` setup (confirmed by
+   directly running `python -m tools.repair_chain_launch --candidates`
+   against the real repo — it errors with `unrecognized arguments`). The
+   bare, no-flag invocation is the only one that has ever worked. Fixed
+   the docstring to describe reality rather than adding the undocumented
+   flags (out of scope: this directive's own CLI surface was deliberately
+   left report-only, per item 2e).
+2. Every other figure checked this directive (the real `p_value_oos`
+   counts and verdicts for all 4 Range Mean Reversion family members, the
+   real `MAX_ATTEMPTS_PER_CHAIN=4` constant, the real (empty)
+   `repair_candidates.json`-derived launch status for all 3 existing
+   candidates, the real absence of `docs/site_data/repair_attempts.json`)
+   matched what was independently recomputed or verified against live
+   repo state — no other staleness found.
