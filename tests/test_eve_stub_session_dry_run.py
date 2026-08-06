@@ -66,6 +66,14 @@ class Phase0DryRunTest(unittest.TestCase):
         self.assertTrue(ledger_entries)
         self.assertTrue(all(e["status"] == "actual" for e in ledger_entries))
 
+        # CC-1 directive, item B0b/B0c (2026-08-06): every NEW session
+        # record is stamped with the current inheritance regime at
+        # creation, not left for a later manual annotation step.
+        import json
+        session_record = json.loads(session_file.read_text(encoding="utf-8"))
+        self.assertEqual(session_record["regime"], session.CURRENT_SESSION_REGIME)
+        self.assertEqual(session_record["regime"], session.SESSION_REGIME_POST_INHERITANCE)
+
 
 if __name__ == "__main__":
     unittest.main()

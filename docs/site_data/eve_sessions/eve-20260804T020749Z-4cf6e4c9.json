@@ -1621,5 +1621,6 @@
   "lookahead_risk_flags": [],
   "session_label": "Session 1 of 8 -- first countable session",
   "counts_toward_pre_registered_8": true,
-  "counting_reason": "First session run to completion under the fully-corrected system (DSL vocabulary, approved-research-universe list, frequency-gate/SURVIVED-bar prompt additions, generated_at server-side injection, self-dedup). 5/6 hypotheses reached the real backtest harness for the first time ever; 1/6 was rejected TOO_SLOW by the frequency gate (a real, expected outcome, not a defect). 0/5 SURVIVED. 2/6 caught and correctly excluded from the FDR family as SELF_DERIVATIVE against Session 0-B's own prior proposals. This is Session 1 of the pre-registered 8 -- recorded machine-readably in docs/site_data/eve_session_registry.json."
+  "counting_reason": "First session run to completion under the fully-corrected system (DSL vocabulary, approved-research-universe list, frequency-gate/SURVIVED-bar prompt additions, generated_at server-side injection, self-dedup). 5/6 hypotheses reached the real backtest harness for the first time ever; 1/6 was rejected TOO_SLOW by the frequency gate (a real, expected outcome, not a defect). 0/5 SURVIVED. 2/6 caught and correctly excluded from the FDR family as SELF_DERIVATIVE against Session 0-B's own prior proposals. This is Session 1 of the pre-registered 8 -- recorded machine-readably in docs/site_data/eve_session_registry.json.",
+  "regime": "pre_inheritance"
 }

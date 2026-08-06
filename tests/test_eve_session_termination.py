@@ -266,6 +266,10 @@ class CrashSafetyTest(_IsolatedStorageTestCase):
         self.assertTrue(partial["partial"])
         self.assertEqual(len(partial["hypothesis_records"]), 1)
         self.assertEqual(partial["hypothesis_records"][0]["raw_hypothesis"]["hypothesis_name"], "SURVIVES_THE_CRASH")
+        # CC-1 directive, item B0b (2026-08-06): a crashed session's partial
+        # record still gets the regime tag -- it isn't only the clean-
+        # completion path that needs to know which regime a session ran under.
+        self.assertEqual(partial["regime"], session.CURRENT_SESSION_REGIME)
 
     def test_the_crashed_turns_reservation_is_marked_not_released(self) -> None:
         # Phase 1.1c: a ReadTimeout's real cost is genuinely UNKNOWN -- the

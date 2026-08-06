@@ -93,6 +93,21 @@ TERMINATION_REJECTED_BEFORE_TOKEN_PROCESSING = "rejected_before_token_processing
 # below) that is NOT one of the two handled outcomes above.
 TERMINATION_CRASHED = "crashed_mid_session"
 
+# CC-1 directive, item B0b (2026-08-06): every session record from this
+# commit forward is stamped with the inheritance regime it ran under --
+# see docs/site_data/eve_session_registry.json's own pre_registration.
+# inheritance_regime_provenance (item B0a) for the full reasoning. Session
+# 1 (eve-20260804T020749Z-4cf6e4c9) and the 2 earlier non-countable
+# sessions all predate this change and are backfilled to
+# SESSION_REGIME_PRE_INHERITANCE by tools/backfill_session_regime_tags_
+# 20260806.py, never left untagged. This module only ever stamps the
+# CURRENT regime -- it is not a parameter, because retroactively claiming
+# a session ran under a regime it didn't is exactly the kind of silent
+# rewrite this directive's own B0 exists to prevent.
+SESSION_REGIME_PRE_INHERITANCE = "pre_inheritance"
+SESSION_REGIME_POST_INHERITANCE = "post_inheritance"
+CURRENT_SESSION_REGIME = SESSION_REGIME_POST_INHERITANCE
+
 # --- DSL vocabulary (spec item 2, post-Session-0 fix) -----------------------
 # REINLINED from nero_core.research_agent.rule_dsl.ALLOWED_FIELDS/ALLOWED_OPS
 # -- nero_core/eve/session.py may not import nero_core.research_agent (see
@@ -700,6 +715,7 @@ def run_session(
             "session_spent_usd": session_spent,
             "stub_mode": llm_client.is_stub_mode() if stub is None else stub,
             "partial": True,
+            "regime": CURRENT_SESSION_REGIME,
         }
         storage.atomic_write_json_dict(storage.session_record_path(session_id), partial_record)
         raise
@@ -755,6 +771,7 @@ def run_session(
         "ablation_metadata": ablation_metadata,
         "session_spent_usd": session_spent,
         "stub_mode": llm_client.is_stub_mode() if stub is None else stub,
+        "regime": CURRENT_SESSION_REGIME,
     }
 
     # CC-1 Master Directive, Phase 1.1a: the bulk

@@ -131,6 +131,49 @@ class RegistryShapeTest(unittest.TestCase):
         self.assertEqual(provenance["superseded_prior_value"], 5)
         self.assertTrue(provenance["reason"])
 
+    def test_inheritance_regime_provenance_is_recorded(self) -> None:
+        # CC-1 directive, item B0a (2026-08-06): "Making the Loop
+        # Evolutionary" changed what Eve inherits between sessions --
+        # Session 1 ran before any of it existed; Sessions 2-8 run after.
+        # This provenance entry must never silently disappear, mirroring
+        # freshness_gate_reversal_provenance's own style -- but this is a
+        # permanent regime SPLIT, not a same-day revert, so it must state
+        # that explicitly (never let a future reader assume homogeneity
+        # the way the freshness-gate entry could honestly claim).
+        provenance = self.registry["pre_registration"]["inheritance_regime_provenance"]
+        self.assertEqual(provenance["session_1_regime"], "pre_inheritance")
+        self.assertEqual(provenance["sessions_2_through_8_regime"], "post_inheritance")
+        self.assertTrue(provenance["reason"])
+        self.assertIn("permanent regime split", provenance["reason"])
+        self.assertIn("cannot cleanly falsify", provenance["reason"])
+        self.assertTrue(provenance["kill_criterion_unchanged"])
+        self.assertIn("UNCHANGED", provenance["kill_criterion_unchanged"].upper())
+
+
+class SessionRegimeTagTest(unittest.TestCase):
+    """CC-1 directive, item B0c: every real, already-committed Eve session
+    record must carry a regime tag -- backfilled by tools.backfill_session_
+    regime_tags_20260806, never left untagged."""
+
+    def test_every_committed_session_file_has_a_regime_tag(self) -> None:
+        sessions_dir = storage.REPO_ROOT / "docs" / "site_data" / "eve_sessions"
+        session_files = sorted(sessions_dir.glob("eve-*.json"))
+        self.assertGreater(len(session_files), 0, "no real session files found -- test fixture assumption broken")
+        for path in session_files:
+            record = json.loads(path.read_text(encoding="utf-8"))
+            self.assertIn("regime", record, f"{path.name} has no regime tag")
+            self.assertIn(record["regime"], ("pre_inheritance", "post_inheritance"))
+
+    def test_every_real_committed_session_predates_inheritance_and_is_tagged_pre(self) -> None:
+        # All 3 real session files under docs/site_data/eve_sessions/ (the
+        # only ones that exist as of this directive) ran before B1/B2
+        # shipped -- every one must be pre_inheritance, not just the one
+        # that counts toward the pre-registered 8.
+        sessions_dir = storage.REPO_ROOT / "docs" / "site_data" / "eve_sessions"
+        for path in sorted(sessions_dir.glob("eve-*.json")):
+            record = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(record["regime"], "pre_inheritance", f"{path.name} should be pre_inheritance")
+
 
 class RegistryMatchesRealLedgerTest(unittest.TestCase):
     """Cross-checks the registry's session_ids against the real, actual

@@ -17,7 +17,13 @@
         "eve_survived_combined": 0,
         "eve_promising_watchlist_combined": 0,
         "eve_note": "0/0 by COMBINED verdict (verdict_combined, the harness's own single train+test judgment) across all 16 eve_hypotheses.json records -- but 3 sub-verdict (verdict_is/verdict_oos) PROMISING_WATCHLIST occurrences exist within Session 1, all with verdict_combined=DIED: BTC_VOL_EXPANSION_BREAKOUT (verdict_is), BTC_MOMENTUM_IGNITION (verdict_oos, p_value_is=0.0044 FDR-significant but p_value_oos=0.224 fails), PAXG_PREMIUM_FADE_DYNAMIC_EXIT (verdict_is).",
-        "random_baseline_k200_promising_watchlist": {"BTC_4h": 0, "ETH_4h": 3, "SOL_4h": 0, "PAXG_4h": 8, "BTC_24h": 0},
+        "random_baseline_k200_promising_watchlist": {
+          "BTC_4h": 0,
+          "ETH_4h": 3,
+          "SOL_4h": 0,
+          "PAXG_4h": 8,
+          "BTC_24h": 0
+        },
         "random_baseline_source": "docs/investigations/{asset}_4h_random_baseline_result.json / btc_24h_random_baseline_result.json, verdict_counts field, K=200 each"
       }
     },
@@ -45,6 +51,18 @@
       "superseded_prior_value": 5,
       "superseded_prior_value_source": "docs/investigations/eve_engine_v1_report.md's original 'Pre-registered kill criterion' section, written before the 3 Aug 2026 pre-registration existed",
       "reason": "The original N=5 was chosen under a ~$1.50/session budget planning figure ('small enough to fit comfortably inside a $20/month ceiling'). Session 0's real spend came in at $0.7129 -- roughly half that -- so at the real per-session cost, ~28 sessions fit inside the $20/month ceiling, not 13, and the original budget constraint that capped N at 5 no longer binds. N=8 fits comfortably and gives a firmer result than N=5 (less exposure to one unusually lucky or unlucky session deciding the outcome). This reconciliation was made and recorded here BEFORE any countable session had run under it -- see docs/investigations/eve_engine_v1_report.md's own appended correction note (original N=5 text left byte-identical, never deleted) for the full narrative."
+    },
+    "inheritance_regime_provenance": {
+      "dated": "2026-08-06",
+      "shipped_items": [
+        "B0 (this entry + per-session regime tagging)",
+        "B1 (REFINEMENT vs SELF_DERIVATIVE split via declared derived_from)",
+        "B2 (near-miss feedback channel into session context)"
+      ],
+      "reason": "CC-1 directive: 'Making the Loop Evolutionary' shipped a real change to what Eve inherits between sessions -- REFINEMENT tagging (B1) moves a declared, validated refinement of a prior hypothesis back INTO the FDR family instead of excluding it as SELF_DERIVATIVE, and B2 supplies near-miss hypotheses (real p_value_is FDR-significant, p_value_oos not) as session context, an inheritance channel that read an empty set before this directive. Session 1 (eve-20260804T020749Z-4cf6e4c9) ran before any of this existed. Sessions 2-8 (not yet run) will run under the changed regime. This mirrors the freshness_gate_reversal_provenance entry's own homogeneity concern (see above) but is NOT the same shape: that reversal made Session 1 and Sessions 2-8 IDENTICAL again (same-day revert, no countable session ran under the binding gate). This change does NOT revert -- it is a permanent regime split. Session 1 is pre_inheritance; Sessions 2-8 are post_inheritance. The 8-session result, once complete, spans two regimes and cannot cleanly falsify either alone -- see this same directive's own closing report (docs/investigations/factory_loop_implementation_report.md) for the honest reading of what the combined result can and cannot support.",
+      "session_1_regime": "pre_inheritance",
+      "sessions_2_through_8_regime": "post_inheritance",
+      "kill_criterion_unchanged": "The pre-registered kill criterion itself (5% OOS survival, FDR-corrected PER SESSION -- see eve_must_clear above) is completely unchanged by this directive. Only what Eve is shown/permitted to declare between sessions changed, never what counts as proof of survival."
     }
   },
   "counting_rule": "A session counts toward the pre-registered 8 only once it produces at least one hypothesis that was actually eligible to be scored against real data (i.e. the session ran to completion and the DSL vocabulary / pre-submit validator fix, both landed 2026-08-03, were in place). A session that crashed before completion, or whose every hypothesis was UNTESTABLE_BY_DSL purely because of a since-fixed spec defect (the DSL vocabulary was withheld from Eve, not just strategy examples), produces no data point toward the 5% OOS bar -- an unscoreable hypothesis is not a survival rate of zero, it is an unknown. The 5%/8-session bar itself is UNCHANGED; only what qualifies as a countable session is defined here, before any survival data exists under the fixed system.",
