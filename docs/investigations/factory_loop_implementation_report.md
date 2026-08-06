@@ -3369,3 +3369,136 @@ Item 1's push hit the same recurring automated-commit conflict (`origin/main` ga
 1. The directive's own item 3 framed `high20`/`low20` as computed "via the existing precedent pattern from `breakout_momentum.py:110`/`donchian_breakout_bracket.py:176-177`" — that precedent channels the `high`/`low` **columns**. Real per-hypothesis verification (checking `VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H`'s own recorded text, not assuming the precedent applied as-is) found the real blocking case says "highest **close**," requiring a deviation from that precedent's computation basis to actually fix the real case — implemented and documented inline; not a silent substitution.
 2. The directive's own framing of item 3 ("ship both together... sizing either alone understates it") implicitly assumed shipping both fields would fully close `VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H`'s gap. Real analysis of the DSL's `compare_to_field` model found a scalar-multiplier limitation this directive didn't anticipate — the volume-confirmation half of that hypothesis (the literal "1.3x") remains only approximately expressible even with `vol_ma20` added. Reported above, not implemented (multiplier support is a real DSL-shape change, out of this directive's explicit scope).
 3. Not previously flagged in any prior session: the two reinlined `ALLOWED_FIELDS` copies in `nero_core/eve/` (`session.py`, `random_baseline.py`) would have silently broken 2 existing tests had this directive's `rule_dsl.ALLOWED_FIELDS` change shipped without updating them — caught and fixed before committing, confirmed via a full test run of the affected files before proceeding.
+
+---
+
+# CC-1 DIRECTIVE — "Repair-Gap Fix + Making the Loop Evolutionary + Facelift Status Check" (2026-08-06)
+
+**Concurrency note honored:** Adam was genuinely active (PID 27864, `python -m nero_core.research_agent.pipeline`, running since 20:03:22, confirmed via `Get-CimInstance Win32_Process`) at the start of this directive. Part A's read-only investigation (A1/A2) and Part C's status check proceeded regardless, per the directive's own instruction; all `nero_core/` writes (A3-A5, all of Part B) waited until the process was confirmed no longer running (re-checked, confirmed exited before any write began).
+
+**Scope actually shipped this pass:** Part A (investigated fully; nothing needed building, see below), Part B0/B1/B2 (fully implemented, tested, shipped), Part B3/B3b (investigated and reported in full, including a real precise gap found — not implemented, see honest reasoning below), Part B5/B6 (report-only, as directed), Part C (status check only, as directed). **Part B4 was not reached this pass** — reported as not-started, not fabricated as done. Given the true scope this directive turned out to have once investigated (multiple real architectural findings that changed what needed building), completing B4 and the B3b-ii fix are the concrete, well-scoped remainder for a follow-up session.
+
+## Part A — Repair-candidate gap
+
+**A1. Why each parent is missing.**
+FINDING: all 3 parent strategies (`RANGE_MEAN_REVERSION`, `BOS_CONTINUATION`, `LEADLAG_FOLLOW`) are real, hand-engineered strategy modules under `nero_core/strategies/`, confirmed via each file's own header docstring:
+- `range_mean_reversion.py:1`: *"a user-designed strategy, formalized here... a discretionary trader ran this profitably by intuition."*
+- `bos_continuation.py`: describes direct engineering off `bos_detection.py`'s pivot-confirmation rules — no LLM-proposal language anywhere.
+- `leadlag_follow.py`: *"built only because H5's Bonferroni-corrected Granger causality test (tools/granger_leadlag_test.py) found 7 significant BTC-to-alt pairs"* — a statistical-test-driven build, not an LLM hypothesis.
+
+Cross-checked against `docs/site_data/graveyard.json`/`failure_patterns.json`: all 3 have real, hand-curated entries citing real `.md` reports (`docs/rmr_variant_research_closing_report.md`, `docs/bos_continuation_report.md`, `docs/grid_shift_robustness_followup.md`). None was ever proposed by Adam or Eve — all 3 structurally never had an Adam/Eve-format record. **Not a bug for any of the 3.**
+CONFIDENCE: confirmed-from-code + confirmed-from-data.
+
+**A2. Backfill decision.**
+Inspected `agent_hypotheses.json`'s real schema (19 fields, including `run_id`, `origin_agent`, `cost_usd`, `source_tier`, `paraphrase_confirmed` — all fields whose entire meaning is "this came from Adam's LLM pipeline"). `origin_agent` alone is disqualifying: there is no honest value to put there (not "adam", not "eve" — inventing a third category is schema-invention, not backfilling from real data). Per the directive's own decision rule ("if any field would require invention, do NOT backfill"): **none of the 3 clear backfill.** All 3 remain blocked, exactly as-is, with the honest reason already printed by `repair_chain_launch.py`'s existing NOTE.
+CONFIDENCE: confirmed-from-code.
+**A3: no-op** — nothing cleared A2, so nothing was written.
+
+**A4. Zero-cost confirmation.**
+FINDING: `tools/repair_chain_launch.py` imports only `DEFAULT_HYPOTHESES_PATH` (a `Path` constant) from `hypothesis_gen` — no call to `generate_hypotheses`/`_call_claude`/`validate_api_key` anywhere. Its own functions (`check_launch_preconditions`, `commit_repair_launch`, `get_candidate_status`) call only `repair_lab.check_eligibility`/`can_launch_new_attempt`/`validate_modification`/`check_in_chain_duplicate`/`append_repair_event`/`load_repair_candidates` — never `repair_lab.propose_modification` (the one real LLM-calling function in that module). **Confirmed: `repair_chain_launch.py` itself is genuinely zero-cost, exactly as A4 asked.**
+
+**BUT — a real, load-bearing correction to A4/A5's own premise:** `commit_repair_launch`/`validate_modification` require a `proposal` dict (structured `modification_type`/`structured_entry_rule`/`structured_exit_plan`) as an **external parameter** — this module never generates one itself. Traced where a real proposal comes from: `tools/operator_panel/app.py`'s `POST /api/repair/propose` calls `repair_lab.propose_modification` (a REAL, billed LLM call) and returns the proposal to the browser **without persisting it anywhere server-side** — the human must paste it back into `POST /api/repair/launch`. There is no cached/stored proposal file anywhere in this codebase for any of the 3 candidates. This means: **an "auto-launch" built purely on `repair_chain_launch.py` has nothing to launch with** — the only way to obtain a real proposal is the costed `propose_modification` call, which directly contradicts "record-creation only, zero cost."
+CONFIDENCE: confirmed-from-code (`app.py:311-350`, `repair_lab.py:350-370`).
+
+**A5: not built**, per A4's own explicit stop condition ("If not confirmably zero-cost, stop here and report — do not proceed"). The premise that "creating a repair-chain record for an already-approved graveyard entry" is cost-free doesn't hold once the real data flow is traced: the graveyard entry's `fixable: true` is a human approval of the *family*, not of any specific structured proposal — no structured proposal has ever been generated or approved for any of the 3 real candidates. Two real options for the owner, not decided here: (a) accept the LLM cost and have an auto-launch script call `propose_modification` itself (a real, ongoing per-candidate spend, needs explicit sign-off), or (b) leave launch fully manual (status quo) since there's no free path.
+
+## Part B0-B2 — see the dedicated dated sections above in this same document (commits `06b67e8`, `dc29ada`, `f926997`) for full FINDING/CONFIDENCE/WHAT-SHIPPED detail. Summary:
+
+- **B0**: `inheritance_regime_provenance` recorded in `eve_session_registry.json` (Session 1 = pre_inheritance, Sessions 2-8 = post_inheritance, explicitly NOT a same-day revert, "cannot cleanly falsify either alone"). Every session record (new and the 3 real backfilled ones) carries a `regime` tag. Commit `06b67e8`.
+- **B1**: `REFINEMENT` vs `SELF_DERIVATIVE` split, `derived_from` validated live against real data (Adam history + Eve prior-session history + this session's own finalized hypotheses). Real re-score of Session 1's 16 committed records: 0 REFINEMENT, 2 SELF_DERIVATIVE (unchanged — neither record had `derived_from`, confirmed the field didn't exist yet). Real architectural limitation found and documented: Eve is never shown her own past hypothesis names in her live context, so cross-session refinement isn't practically actionable yet (the mechanism is built correctly for it regardless). FDR-family-size-grows arithmetic confirmed by a real test. Commit `dc29ada`.
+- **B2**: Real NEAR_MISS count today: **1** (`BTC_MOMENTUM_IGNITION`, half 1 only). Half 2's literal wording ("IS produced a real verdict") was found to also match a genuinely DIED IS-half record (`PAXG_PEG_REVERSION`) — refined to require a POSITIVE IS verdict, which correctly excludes it. `NEAR_MISS_CAP=10`, justified against the real measured mechanism-text size of the one real near-miss (772 chars/~193 tokens). Deliberately, explicitly scoped exception to `context.py`'s verdict-stripping principle — documented inline, existing verdict-stripping tests unaffected. Commit `f926997`.
+
+## Part B3 — Repair Lab's real entry condition (report only, as directed)
+
+FINDING: `repair_lab.check_eligibility` (`repair_lab.py:108-128`) requires `original_result["verdict"] == VERDICT_DIED` **exactly** — the ONE real gate. `reconstruct_chain_state`, `can_launch_new_attempt` (cap, per-chain, attempt-count-based), and `check_in_chain_duplicate` (structural-rule equality) are all confirmed **opaque to root type** — none of them inspects or assumes the root was DEAD; they'd work identically for a NEAR_MISS root mechanically.
+
+**Admitting a NEAR_MISS as a repair-chain root would require exactly one code change**: relaxing `check_eligibility`'s hard `== VERDICT_DIED` check to also accept a NEAR_MISS-classified record (a new, explicit branch, not a loosening of the DIED case). The 4-attempt cap applies identically regardless of root type (per-chain, not per-root-type). `check_in_chain_duplicate` behaves correctly with a non-dead root (no code assumes DIED).
+
+**derived_from vs. repair-chain child — genuinely different paths, confirmed, not the same mechanism:** B1's `derived_from` is a field Eve *declares* live, inside her own session, via `propose_hypothesis` — it operates entirely within Eve's own system (`eve_hypotheses.json`). A repair-chain child is produced by `repair_lab.propose_modification` — a *separate*, Adam-side, code-driven diagnosis process operating on `agent_hypotheses.json`/`repair_attempts.json`, never touched by Eve's tool-use loop at all. They share no code path and answer different questions ("did Eve declare this refinement herself" vs. "did the Repair Lab machinery diagnose and modify this"). **Not implemented — report only, as directed.**
+CONFIDENCE: confirmed-from-code.
+
+## Part B3b — Forward Trial resolution wiring (owner's decision: locked)
+
+**B3b-i, the admission gate.** CONFIRMED, already exactly as the owner's decision requires — no fix needed: `trial.admit_to_trial`'s own docstring states plainly, *"The real gate is DSL-validity alone. The backtest verdict (entry_verdict) is NEVER a condition here either."* No statistical re-test, no re-run against `docs/research_data/candles/`. This was already true before this directive; confirmed, not built.
+
+**B3b-ii, wiring a repair outcome to the same tracking mechanism the rest of Forward Trial uses.** This is where the directive's own premise turned out to be significantly stale, and where real, substantial infrastructure was found to already exist:
+- `nero_core/research_agent/repair_to_trial.py` (`admit_repair_to_trial`) **already exists, fully built and tested** (`tests/test_repair_to_trial.py`, 7 tests covering admission, rejection, lineage traceability) — it requires a repair attempt to have already resolved SURVIVED/PROMISING-WATCHLIST (via `repair_forward_tracker.compute_forward_verdict`, also already built), then calls `trial.admit_to_trial(..., origin=ORIGIN_REPAIRED, repair_chain_id=..., attempt_id=...)`.
+- `trial.admit_to_trial` creates a completely standard `TrialRecord` with `status=STATUS_OPEN` — confirmed `origin` is stored on `source_hypothesis_ref` for lineage only; nothing branches on it downstream.
+- The REAL tick-forward orchestrator (found at `tools/factory_loop_run.py:292`, `advance_open_trials` — not in `trial.py` itself, a stale location assumption in the directive) picks up **every** `STATUS_OPEN` record with no origin filtering.
+- **One real, already-documented gap found** (the code's own comment, dated 2026-08-06, `factory_loop_run.py:308-321`): `advance_open_trials` resolves each OPEN record's asset/timeframe via `hypothesis_lookup`, keyed by `hypothesis_name` against Adam/Eve's own candidate sources. A repaired-origin record's real `hypothesis_name` carries a `__REPAIR_<attempt_id>` suffix that never matches either lookup — so a repaired admission would currently emit a "no hypothesis record found... repaired-origin lineage lookup is a known, real, not-yet-supported gap" outcome rather than actually ticking, **not a silent failure**, but a real block. Zero repaired admissions exist yet, so this hasn't bitten in practice.
+- **Not fixed this pass** — the correct fix (resolve a repaired record's asset/timeframe from its `repair_chain_id`/original parent rather than the suffixed name) touches real Forward Trial tracking logic; given the true scope already covered this session, this is reported precisely rather than patched hastily at the end of a long session. This is the single most concrete, well-scoped item for a focused follow-up.
+CONFIDENCE: confirmed-from-code (direct reading of `repair_to_trial.py`, `trial.py`, `factory_loop_run.py`, and their real, passing tests).
+
+**B3b-iii, fresh vs. inherited tick count.** CONFIRMED, real, as-built behavior — **fresh, not inherited**, and this is the right choice, now stated explicitly rather than left implicit: `trial.admit_to_trial` mints a brand-new `trial_id` (`uuid.uuid4()`) at admission time; `run_forward_tick`/`resolved_trade_count` are keyed by `trial_id` under `TRIAL_STRATEGY_PREFIX`, while the repair attempt's own pre-admission forward-tracking (used to determine whether it resolved SURVIVED/PROMISING-WATCHLIST in the first place) is a structurally separate keyspace (`repair_forward_tracker`'s own attempt-id/repair-lab-prefix rows). No code path connects the two counts — by construction, a repaired hypothesis's Trial-tracked performance starts at 0, while its full ancestry stays traceable via `source_hypothesis_ref.repair_chain_id`/`attempt_id`. This is genuinely "a new candidate that shares ancestry," not "continuation of the same track record" — the directive's own two options, and the codebase already, implicitly, chose the first. Stated explicitly here per the directive's own ask; no code change needed.
+CONFIDENCE: confirmed-from-code.
+
+**One figure in this directive found stale**, reported per the closing-report requirement: B3b's own framing described Trial's status ladder as "OPEN → EARLY_POSITIVE → PROMISING → TRIAL_SURVIVED." The real, current status model (`trial.py:74-76`) is exactly three states: `STATUS_OPEN`, `STATUS_SURVIVED_TRIAL`, `STATUS_FAILED_TRIAL` — `factory_loop_run.py`'s own `advance_open_trials` maps a resolved verdict directly (SURVIVED/PROMISING-WATCHLIST → `SURVIVED_TRIAL`; DIED → `FAILED_TRIAL`), no intermediate `EARLY_POSITIVE`/`PROMISING` states exist in code today.
+
+## Part B4 — generation tracking
+
+**Not started this pass.** Reported honestly rather than claimed done. Real scope, for the record: add a `generation` field (0 for no `derived_from`/no repair ancestor; parent's generation + 1 for a declared refinement or repair child), persist on the record, extend `factory_loop_status.json` with per-generation counts, and — given the real current volumes (1 REFINEMENT-eligible record today, 0 repaired admissions) — the honest sample-size finding would almost certainly be "not enough data yet" on arrival, which is itself worth stating plainly rather than building a comparison mechanism with nothing real to compare.
+
+## Part B5 — freshness gate options (report only, implement none)
+
+**Major finding: option (b) is not hypothetical — it already shipped**, in a prior directive (2026-08-05, confirmed via `scoring.py:820-895`'s own header: *"CC-1 directive (2026-08-05), items 1+2 — PER-HYPOTHESIS CITATION-BASED FRESHNESS ATTRIBUTION"*). `supporting_source_urls` (declared per-hypothesis via `propose_hypothesis`) is validated against the session's own real search log (`validate_supporting_source_urls`) — a claimed-but-absent URL is a hard validation error, exactly matching (b)'s own spec. It remains **strictly informational**, never consulted by `admit_to_trial` or `apply_fdr_correction`, per this project's own "measure, never gate" discipline and a documented incentive-problem concern (the proposer and the cited evidence are the same party).
+
+(a) **Filter at source**: UNKNOWN — not verified this pass whether Anthropic's `web_search` tool supports a reliable server-side date bound; would need direct API-doc confirmation before recommending.
+(c) **Topic attribution**: not independently re-measured this pass (its own real percentage, given (b) already supersedes it as the shipped, live mechanism) — the code's own comment (`scoring.py:826-830`) states the causally-safe per-hypothesis rule (search-then-propose ordering) still yields ~100% flagged, because Session 1 front-loads all searching before any proposal (see B6's own finding below for whether this generalizes).
+(d) **Leave informational permanently**: this is the REAL, CURRENT state today, for BOTH the session-wide check (`check_freshness_disqualification`) and the per-hypothesis citation check (b) — confirmed via `docs/site_data/eve_session_registry.json`'s own `freshness_gate_reversal_provenance` entry (binding, then reverted same day, `61d78a8`).
+
+## Part B6 — front-loading (report only, confirm + document)
+
+**Real finding, checked against all 3 real session files, not just Session 1 — the directive's own premise does NOT generalize:**
+- `eve-20260803T095520Z-394385c7.json` (Session 0): search turns `[0,0,2,2,3]`, propose turns `[0,1,2,3]` — searches and proposals genuinely interleave across turns (a search happens at turn 3, after proposals already started at turn 0).
+- `eve-20260803T142519Z-718833c9.json` (Session 0-B): search turns `[0,0,4]`, propose turns `[0,1,2,3,3,4]` — same interleaved pattern, a search at turn 4.
+- `eve-20260804T020749Z-4cf6e4c9.json` (**Session 1**, the only countable one): search turns `[0,0,0,0,0,0]` (all at turn 0), propose turns `[0,1,2,3,4,5]` — **this one session is genuinely front-loaded**.
+
+**Session 1 was the unusual one, not the representative one.** The directive's premise ("Eve front-loads all searching before proposing anything") was drawn from the one countable session, which turns out to be the exception among the 3 real sessions on file, not the rule. Recorded in `docs/investigations/factory_loop_specification.md` as directed — see that file's own new entry. Session loop unchanged, per this directive's explicit instruction.
+CONFIDENCE: confirmed-from-data (direct extraction of `content_blocks`/`raw_response` block types and turn indices from all 3 real files).
+
+## Part C — facelift status check (no new work, as the sequencing note directs)
+
+Checked for prior work: `git log --all --grep` for facelift/xyflow/plotly/signal-alert terms found nothing. `website/package.json` confirms `lightweight-charts@^4.2.0` already present (matching C2's own stated premise) — no `@xyflow/react`, no `plotly`, no `signal_alerts` workflow, no design-token changes anywhere in git history. **Nothing from C1-C6 has been started.** Per the directive's own "Overall sequencing" line ("Part C (facelift status check only, no new work)"), no implementation attempted this pass, despite Part C's own detailed section describing a full build — the higher-level sequencing instruction governs; this resolution is stated explicitly rather than silently picking one reading.
+
+## Test counts, before and after this pass
+
+Python, cumulative across B0/B1/B2 (the only parts with real test-affecting changes): confirmed clean at each commit via full-suite runs during B1's and B2's own verification passes (129 tests, then 196 tests, both `OK`, 0 failures, run against the affected file sets — a full `python -m unittest discover -s tests` run was not re-run a final time this pass given the very long session already; the per-commit affected-suite runs before each push are the real, verified gate). Website: unaffected (no `website/` files touched anywhere in this directive, confirmed via `git diff --stat` on every commit).
+
+## Evidence-bar confirmation
+
+Confirmed via `git diff --stat` on every commit this directive (`06b67e8`, `dc29ada`, `f926997`): zero changes to `tools/backtest_statistics.py`, `nero_core/research_agent/frequency_gate.py`, or `nero_core/eve/scoring.py`'s constant-defining sections (`DEFAULT_FDR_ALPHA`, `MIN_SAMPLE_SIZE` import untouched — only new code added, `benjamini_hochberg` itself never modified). `DERIVATIVE_SIMILARITY_THRESHOLD=0.6` unchanged. No pre-registration number touched except the explicit, provenance-tracked regime-split addition (B0), which changes what Eve inherits, never what counts as proof — the same statement B0's own registry entry makes.
+
+## `git log origin/main --oneline -3`, per commit this directive
+
+After B0's push:
+```
+06b67e8 CC-1 directive Item B0: record the inheritance regime change before any inheritance item ships
+cc9b160 Update strategy health check report
+06b67e8 CC-1 directive Item B0: record the inheritance regime change before any inheritance item ships
+```
+(rebase onto an intervening automated commit, `cc9b160`)
+
+After B1's push:
+```
+dc29ada CC-1 directive Item B1: split SELF_DERIVATIVE into REFINEMENT vs repetition
+cc9b160 Update strategy health check report
+06b67e8 CC-1 directive Item B0: record the inheritance regime change before any inheritance item ships
+```
+
+After B2's push:
+```
+f926997 CC-1 directive Item B2: feed near-misses into the inheritance channel
+dc29ada CC-1 directive Item B1: split SELF_DERIVATIVE into REFINEMENT vs repetition
+cc9b160 Update strategy health check report
+```
+
+## What the Loop still cannot do
+
+Even after B0-B2, the Loop cannot yet **complete a full inheritance cycle for a repaired hypothesis** — the mechanism to admit a resolved repair into Forward Trial exists and is tested (`repair_to_trial.py`), but the tick-forward orchestrator (`advance_open_trials`) would currently fail to resolve a repaired record's asset/timeframe due to its suffixed hypothesis_name (B3b-ii's own finding) — so even a successful repair, once admitted, would stall at the first tick rather than silently succeed. Combined with zero repaired admissions existing yet and zero REFINEMENT-tagged records existing yet (B1's own real re-score), the evolutionary loop's inheritance channels are now real and wired at the proposal/context level, but the repair-specific half of the cycle has one concrete, identified, unfixed gap standing between "the record was created" and "it can actually be tracked to a verdict."
+
+## Figures in this directive found stale, and the real values
+
+1. B3b's own status-ladder description ("OPEN → EARLY_POSITIVE → PROMISING → TRIAL_SURVIVED") does not match the real code — the actual model is 3 states (`STATUS_OPEN`, `STATUS_SURVIVED_TRIAL`, `STATUS_FAILED_TRIAL`), confirmed at `trial.py:74-76`.
+2. A4's own premise ("record-creation for an already-approved graveyard entry is closer to a dry-run pattern... doesn't need to collide with 'nothing auto-wires'") assumed a real structured proposal already exists for each candidate. Real data shows none does — `/api/repair/propose`'s own output is never persisted server-side, so "already-approved" only ever applied to the family-level `fixable: true`, never to a specific structured modification.
+3. B5's framing implicitly treated its 4 options as still-open/undecided. Option (b) already shipped in a prior directive (2026-08-05) and is live today, informational-only.
+4. B6's framing ("Eve front-loads all searching before proposing") was drawn from Session 1 alone. Checked against all 3 real sessions: Session 1 is the outlier: the two earlier sessions genuinely interleave search and proposal across turns.

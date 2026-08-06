@@ -171,3 +171,21 @@ Before designing the loop, four load-bearing facts, all confirmed directly from 
 | B6 | Three variants scored against real data, a recommendation (Variant C) | The exact recency threshold, and confirmation this generalizes past one session's data |
 | B7 | Confirmation the data layer is already timeframe-generic; identification of the ONE stage (FDR family scope) that genuinely needs a decision | Per-(asset,timeframe) vs per-asset FDR family scope, at rollout time |
 | B8 | Confirmed real precedents for both options, a naming collision to resolve, confirmed Eve has zero public presence today, and a concrete (b) data-source sketch matching the site's existing `fetchJson` pattern exactly | Whether to rename the existing "Repair Workbench" now vs. later; whether to ship (b) as soon as B1–B3 exist or wait for non-zero real data |
+
+---
+
+## Addendum, 2026-08-06 — Eve's session structure: search/proposal ordering is NOT consistently front-loaded
+
+CC-1 directive ("Making the Loop Evolutionary," item B6): checked whether Eve front-loading all web searches before any hypothesis proposal (a property earlier freshness-attribution work, 2026-08-05, assumed and built around based on Session 1's own data) actually holds across all 3 real session files on disk, not just the one countable session.
+
+Real result, extracted directly from each session's own `turns[*].raw_response.content` block types/indices:
+
+| Session file | Search turn indices | Propose turn indices | Front-loaded? |
+|---|---|---|---|
+| `eve-20260803T095520Z-394385c7.json` (Session 0) | 0, 0, 2, 2, 3 | 0, 1, 2, 3 | No — a search happens at turn 3, after proposals already started at turn 0 |
+| `eve-20260803T142519Z-718833c9.json` (Session 0-B) | 0, 0, 4 | 0, 1, 2, 3, 3, 4 | No — a search happens at turn 4, well after proposals started |
+| `eve-20260804T020749Z-4cf6e4c9.json` (Session 1, the only countable one) | 0, 0, 0, 0, 0, 0 | 0, 1, 2, 3, 4, 5 | Yes — every search is in turn 0 |
+
+**Session 1 is the outlier, not the representative case.** Both earlier sessions genuinely interleave searching and proposing across turns; only the one countable session happened to front-load. Any future work whose design assumes front-loading (e.g. a causally-safe per-hypothesis freshness rule, or an ordering-based attribution scheme) should not treat that as a stable property of Eve's session structure without re-checking against real data first — this addendum exists so a future reader doesn't have to re-derive it.
+
+The session loop itself was NOT changed by this finding (out of scope for the directive that raised it) — this is a documentation-only addendum.
