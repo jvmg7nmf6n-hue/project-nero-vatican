@@ -2497,3 +2497,305 @@ because the underlying number was never persisted anywhere to read.
    ZSCORE_FADE ENTRY signal, ORDERFLOW_IMBALANCE/PEAD's real 87/4 ledger
    rows) matched what was already stated or was newly, honestly reported —
    no other staleness found.
+---
+
+# CC-1 DIRECTIVE — "Verify, Run Adam, Turn the Factory (post-streaming)" (2026-08-06)
+
+New directive, same initiative — continues directly from the prior "CC-1
+DIRECTIVE — Turn the factory for real..." section above (commits `1652ffe`
+through `9d51c6d`), plus the mid-conversation API-key investigation (the
+local `ANTHROPIC_API_KEY` shell-level variable held a different, invalid
+key than the real one in `.env`; removing the shell-level override fixed
+it — confirmed via a real, successful `validate_api_key` call and a real
+streamed hypothesis-generation call, `IBS_CLOSE_LOCATION_REVERSION_GOLD_4H`,
+$0.251694, no ReadTimeout, max inter-event gap 30.065s).
+
+**This directive's own commits:** Item 2 = `4e5568e`, Item 3's bug fix =
+`a79f3aa`, Item 3's real data = `edf3df8`.
+
+## ITEM 1 — Where did IBS_CLOSE_LOCATION_REVERSION_GOLD_4H land?
+
+**FINDING:** it was never persisted anywhere. **CONFIDENCE:**
+confirmed-from-data (three independent checks, this directive):
+1. `grep -rl "IBS_CLOSE_LOCATION_REVERSION_GOLD_4H" docs/ data/` — zero
+   matches, anywhere in the repo.
+2. `docs/site_data/agent_hypotheses.json` (read directly): 2 entries, both
+   pre-dating this hypothesis (`RSI2_TREND_PULLBACK_PAXG_4H`, `ADX_REGIME_
+   IGNITION_SOL_4H`) — the GOLD/4h one is not among them.
+3. The diagnostic script that produced it (`real_web_search_call.py`,
+   written for the prior directive's Item 3) calls `hypothesis_gen.
+   generate_web_hypotheses` directly and only prints the in-memory
+   `GenerationRunResult` — it never calls `persist_hypotheses`, confirmed
+   by a direct grep of the script's own source (zero matches for
+   `persist`).
+
+**Did the repeat-flag stop it from being written?** No — confirmed from
+code, not inferred: `nero_core/research_agent/pipeline.py`'s `run_pipeline`
+calls `hypothesis_gen.persist_hypotheses(web_generation.hypotheses)`
+(line 324) **unconditionally**, with no check on `graveyard_check.
+is_likely_repeat` anywhere in that call. Had this same generation gone
+through the real production entrypoint instead of my ad-hoc diagnostic
+script, it WOULD have been persisted, `is_likely_repeat: True` and all —
+this project's own "measure, never gate" discipline applies here exactly
+as it does to the frequency gate and Trial admission: the graveyard-match
+flag is advisory metadata attached to the record, never a gate on whether
+the record exists.
+
+**Did it silently enter the graveyard, Trial, or any other downstream
+file?** No — confirmed by the same repo-wide grep (finding 1 above): zero
+matches anywhere, including `graveyard.json`, `forward_trial.json`, and
+`graveyard_distillation_drafts.json`.
+
+**Is it "simply discarded" or "sitting somewhere waiting on a decision
+nobody has made"?** Neither, precisely — it never reached a state where
+either description applies. It exists only in this conversation's
+transcript and in my own scratchpad output file (outside the repo, not
+part of the project). There is no queue, no pending record, nothing for a
+human to act on. The reason is procedural (a diagnostic script skipped a
+step a real pipeline run never would), not a gap in the self-dedup
+discipline itself.
+
+## ITEM 2 — Run Adam for real, a full run
+
+**Command:** `python -m nero_core.research_agent.pipeline`
+(`RESEARCH_AGENT_ENABLED=true`, the real `.env` key — the same fixed
+credential from the API-key investigation).
+
+**Real result, run_id `ffd8dc0b-f3d5-444d-9e7f-c25e6b9276b9`:**
+```
+status=clean enabled=True reason='' run_id=ffd8dc0b-f3d5-444d-9e7f-c25e6b9276b9
+hypotheses_generated=3 duplicates_skipped=0
+llm_calls_made=3 total_llm_cost_usd=1.570826 cost_limit_hit=True
+  of which web_search: web_hypotheses_generated=3 web_llm_calls_made=3 web_total_llm_cost_usd=1.570826 web_cost_limit_hit=True web_calls_with_unknown_cost=0
+too_slow_rejected=0 unmeasurable_rejected=1
+survived=0 promising_watchlist=0 died=2 untestable=0
+no_candles_available=0 data_source_refused=0
+errors=none
+```
+
+**Real per-hypothesis detail** (from `tools/research_agent_run_summary.py`,
+also run for real this directive):
+
+| Hypothesis | Asset/tf | Cost | Verdict | Note |
+|---|---|---|---|---|
+| `INTRADAY_TSMOM_BTC_4H` | BTC/4h | $0.340650 | DIED | measured 673.0 trades/yr vs. claimed 90.0 |
+| `BB_SQUEEZE_BREAKOUT_PAXG_4H` | PAXG/4h | $0.323794 | DIED | measured 75.2 trades/yr vs. claimed 45.0 |
+| `VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H` | ETH/4h | $0.906382 | SKIPPED/UNMEASURABLE | `entry_rule` not a valid dict (see Item 3) |
+
+**Answering the directive's own explicit questions:**
+- **ReadTimeouts:** zero. `errors=none` (the literal print when
+  `result.errors` is empty), `calls_with_unknown_cost` absent from the
+  scanner total and `web_calls_with_unknown_cost=0` explicitly.
+- **Real total cost:** $1.570826 (scanner path made 0 calls this run — no
+  new scan findings — so all 3 calls and all cost is web-search-channel).
+- **`calls_with_unknown_cost`:** 0, confirmed on both the aggregate and
+  the web-search-specific field.
+- **Frequency calibration, still real and still overestimating:** average
+  claim/measured ratio 18.41x this run (n=4, median 1.63x) — carries the
+  same "direction real, magnitude untrustworthy" caveat already
+  established; not a new finding, a re-confirmation with fresh data.
+
+**`agent_run_summaries.json` — confirmed updated**, committed `4e5568e`.
+`agent_hypotheses.json` stays uncommitted, per this project's own standing
+rule (raw LLM proposal text needs human review before entering the
+permanent record) — `agent_test_results.json`/`agent_performance.json`/
+`agent_scanner_state.json` committed alongside the run summary, matching
+this project's own existing "test results, unlike raw hypotheses, are a
+deterministic computation, committed unconditionally" precedent.
+
+**Live `/agents` page — actually checked, not assumed** (the repo's own
+GitHub metadata `homepage` field, `https://project-nero-vatican.vercel.app`
+— never previously found; this directive located it via the GitHub API's
+own repo metadata, not a guess):
+
+```
+Pre-registration progress: "Session 1 of 8 · 7 remaining · 0 SURVIVED · $4.2705 recorded"
+Cost — Eve: "$2.1416 recorded" (+ 6 unknown-cost calls, $1.2737 projected)
+Cost — Adam: "$2.1289 recorded" (+ 4 unknown-cost calls)
+```
+
+**Confirmed real and current:** $2.1289 = the pre-existing $0.55804
+(`RSI2_TREND_PULLBACK_PAXG_4H` + `ADX_REGIME_IGNITION_SOL_4H`, both
+pre-dating this directive) + this run's real $1.570826 = **$2.128866** —
+matches the live site's displayed $2.1289 to the cent. The live page is
+reading the real, just-committed data, not a stale cache.
+
+## ITEM 3 — Run the Factory Loop live again, end to end
+
+**Dry-run first**, confirmed the prediction matched exactly: 2 new
+admissions expected (`INTRADAY_TSMOM_BTC_4H`, `BB_SQUEEZE_BREAKOUT_PAXG_4H`),
+`VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H` correctly predicted DSL-invalid
+("`entry_rule` must be a dict with a 'conditions' list, got NoneType") —
+directly consistent with `research_agent_run_summary.py`'s own UNMEASURABLE
+reason for the same hypothesis. No divergence between dry-run prediction
+and the live result that followed.
+
+**`tools/factory_loop_run.py --live`, real output:**
+```
+Fresh admissions: 2 admitted, 9 not admitted, out of 11 candidates considered.
+  [ADMITTED] INTRADAY_TSMOM_BTC_4H (adam): projected_time_to_min_sample: 0.0 years (673.04 trades/year)
+  [ADMITTED] BB_SQUEEZE_BREAKOUT_PAXG_4H (adam): projected_time_to_min_sample: 0.3 years (75.23 trades/year)
+  [skipped] VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H (adam): DSL-invalid -- not admitted
+
+Graveyard distillation: 1 family/families at or past the trigger: Range Mean Reversion: 4 DIED
+Forward Trial ticks: 10 OPEN record(s) -- all NO_TRADE this cycle (real live-fetched candles)
+
+2 new Trial record(s) written.
+1 distillation draft(s) written to graveyard_distillation_drafts.json at review_status=REVIEW_PENDING.
+
+factory_loop_status.json regenerated:
+  Forward Trial: 10 (adam=4 eve=6 repaired=0, unmeasurable=1)
+  Graveyard: 21 (distilled_this_period=0 pending_review=1)
+  Repair: 0 chains (open=0 resolved=0)
+```
+
+**Real before/after:**
+
+| | Before | After |
+|---|---|---|
+| Forward Trial count | 8 | **10** |
+| — by origin | adam=2, eve=6, repaired=0 | **adam=4**, eve=6, repaired=0 |
+| — unmeasurable_count | 1 | 1 (unchanged — still only `RSI2_TREND_PULLBACK_PAXG_4H`) |
+| Graveyard count | 21 | 21 (unchanged — nothing committed) |
+| — pending_review | 0 | **1** (real, see below) |
+| Repair chains | 0 | 0 (unchanged) |
+
+**A real, significant divergence from the last live run (`1652ffe`),
+flagged per this item's own instruction, not pushed through silently:**
+the "Range Mean Reversion" distillation draft — which failed with a real
+401 last time (the stale-key issue, since fixed) — **succeeded this time.**
+This is the first real graveyard-distillation entry this project has ever
+drafted: `RANGE_MEAN_REVERSION_GRAVEYARD`, family "Range Mean Reversion",
+`failure_pattern: sample-too-thin`, covering 4 Eve hypotheses
+(`PAXG_PEG_REVERSION`, `BTC_VOL_EXPANSION_BREAKOUT`, `SOL_TREND_ALIGNED_
+PULLBACK`, `PAXG_PREMIUM_FADE_DYNAMIC_EXIT`), `review_status: pending_
+human_approval`. **Not approved — out of scope, confirmed by re-reading
+this directive's own OUT OF SCOPE section before committing anything.**
+
+**A second, real finding surfaced by investigating this same run:**
+`tools/factory_loop_run.py`'s own `draft_ready_distillations` silently
+discarded the real drafting call's cost (and would have silently
+discarded any per-family error too) — fixed this directive (`a79f3aa`,
+3 new regression tests; see its own commit message for the full account).
+**Consequence: this specific draft's real dollar cost is genuinely
+unrecoverable** — the process that made the call exited before the fix
+existed to capture it. Reported as UNKNOWN, not estimated or guessed, per
+this branch's own accuracy standard. Every future distillation draft will
+report its real cost.
+
+**Live `/factory-loop` page — checked before AND after the push, catching
+the real propagation delay directly rather than assuming it:**
+
+*Before pushing `edf3df8`* (04:48 UTC check, the live page was still
+serving the LAST pushed state, `1652ffe`'s data):
+```
+Total count: 8 hypotheses currently in Forward Trial
+By-origin: Adam: 2, Eve: 6, Repaired: 0
+Unmeasurable: "1 of these 8 project a measurement time beyond..."
+Graveyard: 21. Repair: 0 chains.
+```
+This is EXPECTED, not a bug — `edf3df8` had not been pushed yet at the
+time of that check.
+
+**Re-checked three more times after the push** (`edf3df8` pushed ~04:48
+UTC; re-checks at 04:53, 04:56, and 04:57 UTC — 5, 8, and 9 minutes after
+push, each with a distinct cache-busting query parameter to rule out
+`WebFetch`'s own documented 15-minute response cache as the cause): **all
+three still show 8, not 10** — the pre-push state, unchanged. This exceeds
+the code's own configured `revalidate: 300` (5 minutes) window on the
+last two checks. **CONFIDENCE: confirmed-from-data that the live page has
+not yet reflected `edf3df8` as of 9 minutes post-push; unable-to-verify
+the root cause** — plausibly a Vercel-edge-CDN cache layer with a longer
+effective TTL than the Next.js-level `revalidate` config implies (this
+would sit in front of the Next.js server itself, independent of
+`WebFetch`'s own cache), but this cannot be confirmed without Vercel
+dashboard access, which this session does not have. **Contrast with
+Item 2's own live check**, which DID show fresh data (Adam's real
+$2.1289) — that check happened against a push (`4e5568e`) that had had
+more real wall-clock time to propagate before it was checked. Reported
+honestly as a real, unresolved timing question, not silently assumed
+either way.
+
+## Out-of-scope confirmations, this directive
+
+- The `RANGE_MEAN_REVERSION_GRAVEYARD` draft was NOT approved — confirmed
+  by re-reading this directive's own OUT OF SCOPE section before any
+  write; the Operator Panel's own Approve button was never clicked.
+- No schedule enabled, `EVE_ENABLED` untouched.
+- No repair chain launched.
+- No evidence-bar constant changed — this directive touched
+  `tools/factory_loop_run.py`, `tools/operator_panel/app.py`, and real
+  data files only; zero changes to `tools/backtest_statistics.py`,
+  `nero_core/research_agent/frequency_gate.py`, or `nero_core/eve/
+  scoring.py`'s constant-defining sections (confirmed via `git diff
+  --stat` across both this directive's commits).
+- Trial admission criteria unchanged — `INTRADAY_TSMOM_BTC_4H`/`BB_
+  SQUEEZE_BREAKOUT_PAXG_4H` were admitted under the exact same
+  DSL-valid-only gate as every prior admission; `VOLCONFIRM_CHANNEL_
+  BREAKOUT_ETH_4H` was rejected by that same unchanged gate.
+- Binding freshness disqualification not re-enabled.
+
+## Real budget consumed this directive (report only, not a decision point)
+
+Since the API-key fix, real confirmed spend: ~$0.25 (the first, uncaptured
+GOLD/4h test call, estimated from the second identical call's real
+$0.251694 — the first figure itself is genuinely lost, see the earlier
+API-key-investigation exchange) + $0.251694 (the second, captured GOLD/4h
+call) + $1.570826 (Item 2's real Adam run) + an UNKNOWN amount (Item 3's
+real distillation draft, lost to the now-fixed cost-tracking bug) ≈
+**at least $2.07 confirmed, plus one genuinely unknown amount.** Against
+the $14 pre-registration envelope's own prior $10.5847-remaining figure,
+that leaves **at most $8.51** — an upper bound, not a precise number,
+specifically because of the one uncaptured cost. This is a different
+reference point from the owner's own separately-stated "$13.95 credit
+available" (the real Anthropic account balance at the moment the key was
+confirmed fixed, mentioned in conversation, not read from any committed
+file) — the two numbers track different things (a project-internal
+budget envelope vs. the real account balance) and are not directly
+comparable without knowing the account balance's own starting point
+relative to the $14 figure.
+
+## Figures found stale this directive, and the real values
+
+1. **Every hypothesis/cost/count figure in this directive's own "Context"
+   section matched real, re-verified data** — `IBS_CLOSE_LOCATION_
+   REVERSION_GOLD_4H`'s $0.251694 and `is_likely_repeat: True` both
+   confirmed unchanged.
+2. **The live `/factory-loop` page, as of this report's own writing, is
+   stale relative to the real, pushed `edf3df8` data** — real, current,
+   unresolved (see Item 3's own live-check section above): 8 shown, 10
+   real. Not silently glossed over; flagged as the one item in this
+   directive that could not be fully closed out.
+3. Every other figure checked against real, current data this directive
+   (Adam's exact per-hypothesis costs, the DSL-validity rejection reason
+   for `VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H`, the real distillation draft's
+   full content, the live `/agents` page's real $2.1289/$2.1416 figures)
+   matched what was independently computed or was newly, honestly
+   reported — no other staleness found.
+
+## `git log origin/main --oneline -3`, per commit this directive
+
+**After Item 2's push:**
+```
+4e5568e CC-1 directive Item 2: real full Adam run, post-streaming-fix
+75e6056 Update live scheduler execution log
+3b704a6 Update live scheduler execution log
+```
+
+**After Item 3's bug-fix push:**
+```
+a79f3aa CC-1 directive Item 3: fix a real cost/error-tracking gap in draft_ready_distillations
+4e5568e CC-1 directive Item 2: real full Adam run, post-streaming-fix
+75e6056 Update live scheduler execution log
+```
+
+**After Item 3's real-data push:**
+```
+edf3df8 CC-1 directive Item 3: real Factory Loop live run against the new Adam data
+a79f3aa CC-1 directive Item 3: fix a real cost/error-tracking gap in draft_ready_distillations
+4e5568e CC-1 directive Item 2: real full Adam run, post-streaming-fix
+```
+
+Both fetches this directive found `origin/main` already at the expected
+position (no interleaving automated commits mid-directive) — no rebase
+was needed for any of the three pushes above, unlike the prior directive.
