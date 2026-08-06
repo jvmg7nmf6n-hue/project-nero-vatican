@@ -1,7 +1,40 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-05T23:11:00.399262+00:00",
+  "last_updated": "2026-08-06T03:28:29.258771+00:00",
   "rows": [
+    {
+      "timestamp": "2026-08-06T03:28:04.012973+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
+      "asset": "ETH",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 1899.21,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=0.4818",
+      "candle_timestamp": "2026-08-06T02:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-08-06T03:28:04.012973+00:00",
+      "strategy": "RANGE_MEAN_REVERSION",
+      "strategy_version": "range-mean-reversion-v1.3.0-confirmation",
+      "asset": "BTC",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NO_CONFIRMATION_PATTERN",
+      "candle_timestamp": "2026-08-05T23:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-08-06T03:28:04.012973+00:00",
+      "strategy": "RANGE_MEAN_REVERSION",
+      "strategy_version": "range-mean-reversion-v1.1.0-long-only",
+      "asset": "BTC",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NO_BAND_BREACH",
+      "candle_timestamp": "2026-08-05T23:59:59.999000+00:00"
+    },
     {
       "timestamp": "2026-08-05T23:10:56.875571+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
@@ -166,6 +199,17 @@
       "exit_price": null,
       "reasoning": "direction=LONG stop_loss=63708.10000000 imbalance_ratio=50.2653",
       "candle_timestamp": "2026-08-05T02:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-08-06T03:28:04.012973+00:00",
+      "strategy": "GOLD_SILVER_RATIO_MR",
+      "strategy_version": "gold-silver-ratio-mr-v1.0.0",
+      "asset": "GOLD-SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "RATIO_WITHIN_BAND",
+      "candle_timestamp": "2026-08-05T00:00:00+00:00"
     },
     {
       "timestamp": "2026-08-05T00:12:14.443670+00:00",

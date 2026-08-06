@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-05T23:11:00.401883+00:00",
+  "last_updated": "2026-08-06T03:28:29.262044+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -177,7 +177,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 15
+        "NO_TRADE": 16
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -195,7 +195,7 @@
         "ENTRY": 1,
         "EXIT": 1,
         "WATCH": 0,
-        "NO_TRADE": 14
+        "NO_TRADE": 15
       },
       "open_position": null,
       "unverified_open_entries": 0
@@ -258,22 +258,18 @@
       "strategy": "ORDERFLOW_IMBALANCE",
       "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "ETH",
-      "resolved_trades": 18,
+      "resolved_trades": 19,
       "unverified_trades": 25,
-      "win_rate": 0.5,
-      "expectancy_r": 0.1210982149502481,
-      "avg_return_pct": 0.0680627227461862,
+      "win_rate": 0.47368421052631576,
+      "expectancy_r": 0.09906237933089636,
+      "avg_return_pct": 0.043365574348026556,
       "signal_counts": {
         "ENTRY": 44,
-        "EXIT": 43,
+        "EXIT": 44,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": {
-        "entry_price": 1906.86,
-        "entry_timestamp": "2026-08-05T23:10:56.875571+00:00",
-        "candle_timestamp": "2026-08-05T22:59:59.999000+00:00"
-      },
+      "open_position": null,
       "unverified_open_entries": 0
     },
     {
@@ -289,7 +285,7 @@
         "ENTRY": 0,
         "EXIT": 0,
         "WATCH": 0,
-        "NO_TRADE": 5
+        "NO_TRADE": 6
       },
       "open_position": null,
       "unverified_open_entries": 0
