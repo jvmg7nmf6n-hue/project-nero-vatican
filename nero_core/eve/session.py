@@ -122,9 +122,14 @@ TERMINATION_CRASHED = "crashed_mid_session"
 # express at all; those are still recorded and scored honestly as
 # UNTESTABLE_BY_DSL (spec's own words: "whether her creativity outruns the
 # DSL is real capability data").
+# hour_of_day/high20/low20/vol_ma20 added (CC-1 directive, 2026-08-06) --
+# kept in sync with rule_dsl.ALLOWED_FIELDS's own real addition; see that
+# module's own comment for what real hypothesis each field fixes and why
+# high20/low20 are computed from close, not the high/low columns.
 DSL_ALLOWED_FIELDS = (
     "close", "ma20", "ma50", "ma200", "zscore20", "atr14", "rsi14", "adx14",
-    "bb_lower", "bb_upper", "ret_1", "volume",
+    "bb_lower", "bb_upper", "ret_1", "volume", "hour_of_day", "high20",
+    "low20", "vol_ma20",
 )
 DSL_ALLOWED_OPS = ("gt", "gte", "lt", "lte", "eq", "cross_above", "cross_below")
 

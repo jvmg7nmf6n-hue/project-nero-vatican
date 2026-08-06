@@ -51,9 +51,21 @@ DEFAULT_SEED = 20260718  # same seed VALUE tools.backtest_statistics uses -- coi
 # byte-identity test is meaningful (a set-equality check would hide a
 # harmless-looking reorder that nonetheless means this copy silently
 # diverged from a hand-edit rather than a deliberate change).
+#
+# hour_of_day/high20/low20/vol_ma20 added (CC-1 directive, 2026-08-06) --
+# kept in sync with rule_dsl.ALLOWED_FIELDS's own real addition. high20/
+# low20 are price-scale (computed from close, see rule_dsl.py's own
+# comment) -- added to _FIELD_VS_FIELD_ONLY below, same as close/ma20/etc.
+# vol_ma20 is volume-scale -- added to _VALUE_RANGES with the SAME range
+# `volume` itself already uses, since it's a derived quantity in the same
+# units. hour_of_day is a genuine, meaningful value-comparable field
+# (0-23, not price/volume-scale) -- added to _VALUE_RANGES with its own
+# real range, not the (-1.0, 1.0) fallback (which would be meaningless for
+# an hour).
 ALLOWED_FIELDS_COPY = (
     "close", "ma20", "ma50", "ma200", "zscore20", "atr14", "rsi14", "adx14",
-    "bb_lower", "bb_upper", "ret_1", "volume",
+    "bb_lower", "bb_upper", "ret_1", "volume", "hour_of_day", "high20",
+    "low20", "vol_ma20",
 )
 
 _VALUE_OPS = ("gt", "gte", "lt", "lte")
@@ -61,7 +73,7 @@ _CROSS_OPS = ("cross_above", "cross_below")
 
 # Fields with no fixed universal scale -- sampled ONLY field-vs-field (see
 # module docstring), never against a fabricated constant `value`.
-_FIELD_VS_FIELD_ONLY = frozenset({"close", "ma20", "ma50", "ma200", "atr14", "bb_lower", "bb_upper"})
+_FIELD_VS_FIELD_ONLY = frozenset({"close", "ma20", "ma50", "ma200", "atr14", "bb_lower", "bb_upper", "high20", "low20"})
 
 # Plausible per-field ranges for the fields that ARE sampled against a fixed
 # value -- see module docstring on why these are field-specific.
@@ -71,6 +83,8 @@ _VALUE_RANGES = {
     "adx14": (0.0, 60.0),
     "ret_1": (-0.05, 0.05),
     "volume": (0.0, 1.0),
+    "vol_ma20": (0.0, 1.0),
+    "hour_of_day": (0.0, 23.0),
 }
 
 

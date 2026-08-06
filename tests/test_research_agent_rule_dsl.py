@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime, timezone
 
 import pandas as pd
 
@@ -130,6 +131,26 @@ class ParseStructuredRuleTest(unittest.TestCase):
         with self.assertRaises(RuleAmbiguousError):
             parse_structured_rule({"conditions": [{"field": "ma20", "op": "gt", "compare_to_field": "ma20"}]})
 
+    def test_hour_of_day_is_an_allowed_field(self) -> None:
+        # CC-1 directive (2026-08-06): DAILY_HOUR_SEASONALITY_BTC_4H's own
+        # real blocker -- a wall-clock-hour trigger had no DSL field at all
+        # before this.
+        rule = parse_structured_rule({"conditions": [{"field": "hour_of_day", "op": "eq", "value": 0.0}]})
+        self.assertEqual(rule.conditions[0].field, "hour_of_day")
+
+    def test_high20_and_low20_are_allowed_fields(self) -> None:
+        # CC-1 directive (2026-08-06): VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H's
+        # own real blocker (one half of it -- see vol_ma20 below for the
+        # other half).
+        rule = parse_structured_rule({"conditions": [{"field": "close", "op": "cross_above", "compare_to_field": "high20"}]})
+        self.assertEqual(rule.conditions[0].compare_to_field, "high20")
+        rule = parse_structured_rule({"conditions": [{"field": "close", "op": "cross_below", "compare_to_field": "low20"}]})
+        self.assertEqual(rule.conditions[0].compare_to_field, "low20")
+
+    def test_vol_ma20_is_an_allowed_field(self) -> None:
+        rule = parse_structured_rule({"conditions": [{"field": "volume", "op": "gt", "compare_to_field": "vol_ma20"}]})
+        self.assertEqual(rule.conditions[0].compare_to_field, "vol_ma20")
+
 
 class IndicatorFrameTest(unittest.TestCase):
     def test_missing_required_column_raises(self) -> None:
@@ -217,6 +238,43 @@ class IndicatorFrameTest(unittest.TestCase):
         self.assertTrue(frame["bb_upper"].iloc[:19].isna().all())
         self.assertFalse(pd.isna(frame["bb_lower"].iloc[19]))
         self.assertFalse(pd.isna(frame["bb_upper"].iloc[19]))
+
+    def test_hour_of_day_matches_the_real_utc_hour_of_close_time(self) -> None:
+        # CC-1 directive (2026-08-06). Explicit epoch timestamps (not the
+        # shared _candles helper's own arbitrary start) so the expected UTC
+        # hour is unambiguous.
+        rows = []
+        for hour in (0, 4, 8, 13, 23):
+            ts = datetime(2026, 1, 1, hour, 0, tzinfo=timezone.utc)
+            ms = int(ts.timestamp() * 1000)
+            rows.append({"close_time": ms, "high": 101.0, "low": 99.0, "close": 100.0})
+        frame = compute_indicator_frame(pd.DataFrame(rows))
+        self.assertEqual(list(frame["hour_of_day"]), [0, 4, 8, 13, 23])
+
+    def test_high20_low20_are_the_rolling_extreme_of_close_over_the_prior_20_candles(self) -> None:
+        # CC-1 directive (2026-08-06): computed from CLOSE (matching
+        # VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H's own "highest close"/"lowest
+        # close" wording), not the high/low columns -- see rule_dsl.py's own
+        # comment on why this deviates from the breakout_momentum.py/
+        # donchian_breakout_bracket.py precedent it's otherwise modeled on.
+        closes = [100.0 + i for i in range(25)]  # strictly increasing
+        frame = compute_indicator_frame(_candles(len(closes), closes=closes))
+        # shift(1) excludes the current row -- at index 20 (the 21st candle,
+        # closes[20]=120.0), the prior 20 closes are closes[0:20] = 100..119,
+        # so high20 must be 119.0 (closes[19]), NOT 120.0 (its own close).
+        self.assertEqual(frame["high20"].iloc[20], 119.0)
+        self.assertEqual(frame["low20"].iloc[20], 100.0)
+        self.assertTrue(frame["high20"].iloc[:20].isna().all())
+
+    def test_vol_ma20_is_a_plain_trailing_average_including_the_current_row(self) -> None:
+        # CC-1 directive (2026-08-06): unlike high20/low20, NO shift -- matches
+        # ma20's own convention (the real hypothesis's own wording, "the
+        # 20-period average volume," carries no "prior" qualifier).
+        closes = [100.0] * 25
+        frame = compute_indicator_frame(_candles(len(closes), closes=closes))
+        # the shared _candles() helper gives every row volume=10.0
+        self.assertAlmostEqual(frame["vol_ma20"].iloc[19], 10.0)
+        self.assertTrue(frame["vol_ma20"].iloc[:19].isna().all())
 
 
 class FieldVsFieldEvaluationTest(unittest.TestCase):

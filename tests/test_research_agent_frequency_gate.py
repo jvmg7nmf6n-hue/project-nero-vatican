@@ -125,6 +125,70 @@ class FrequencyClassificationTest(unittest.TestCase):
         self.assertNotIn("NoneType", result.reason)
         self.assertNotIn("ambiguous", result.reason.lower())
 
+    def test_daily_hour_seasonality_btc_4h_shaped_rule_is_now_measurable(self) -> None:
+        # CC-1 directive (2026-08-06): DAILY_HOUR_SEASONALITY_BTC_4H's own
+        # real entry rule ("go long at the open of the 00:00 UTC 4h candle")
+        # -- previously structured_entry_rule=None (no hour_of_day field
+        # existed at all); now expressible exactly, no approximation.
+        four_hour_ms = 4 * 60 * 60 * 1000
+        start = int(datetime(2020, 1, 1, tzinfo=timezone.utc).timestamp() * 1000)
+        rows = []
+        for i in range(150):
+            close = 100.0 + (i % 5)
+            rows.append({"close_time": start + i * four_hour_ms, "close": close, "high": close + 1, "low": close - 1})
+        candles = pd.DataFrame(rows)
+        generated_at = datetime(2020, 1, 1, tzinfo=timezone.utc) + timedelta(hours=4 * 200)
+
+        rule = {"conditions": [{"field": "hour_of_day", "op": "eq", "value": 0.0}]}
+        result = measure_entry_frequency(candles, rule, generated_at)
+
+        self.assertNotEqual(result.classification, UNMEASURABLE)
+        self.assertGreater(result.triggers_counted, 0)
+
+    def test_volconfirm_channel_breakout_eth_4h_shaped_rule_is_now_measurable(self) -> None:
+        # CC-1 directive (2026-08-06): VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H's
+        # own real entry rule ("closes above the highest close of the prior
+        # 20 candles AND volume >= 1.3x the 20-period average volume") --
+        # previously structured_entry_rule=None (neither field existed).
+        # The channel-breakout half (high20) is now exactly expressible;
+        # the volume half is only approximately expressible as a plain
+        # "volume > vol_ma20" -- the DSL's compare_to_field has no scalar
+        # multiplier, so the literal "1.3x" threshold still can't be
+        # expressed exactly. This test uses that same closest-achievable
+        # approximation, honestly reflecting what a real hypothesis could
+        # now submit -- not a claim the exact original semantics are
+        # fully expressible.
+        four_hour_ms = 4 * 60 * 60 * 1000
+        start = int(datetime(2020, 1, 1, tzinfo=timezone.utc).timestamp() * 1000)
+        rows = []
+        for i in range(90):
+            # Strictly increasing close -- every post-warmup row is a genuine
+            # new 20-candle high, so close cross_above high20 fires
+            # reliably; volume spikes every 5th candle, comfortably above
+            # the mostly-10.0 trailing 20-average, so both conditions align.
+            close = 100.0 + i
+            volume = 50.0 if i % 5 == 0 else 10.0
+            rows.append({"close_time": start + i * four_hour_ms, "close": close, "high": close + 1, "low": close - 1, "volume": volume})
+        candles = pd.DataFrame(rows)
+        generated_at = datetime(2020, 1, 1, tzinfo=timezone.utc) + timedelta(hours=4 * 200)
+
+        # "closes above the highest close of the prior 20 candles" maps to a
+        # plain gt, not cross_above -- high20 already excludes the current
+        # candle (shift(1)), so a simple greater-than IS the breakout
+        # signal, matching donchian_breakout_bracket.py's own real strategy
+        # logic precedent (a plain > comparison against its shifted channel,
+        # not a crossing check).
+        rule = {
+            "conditions": [
+                {"field": "close", "op": "gt", "compare_to_field": "high20"},
+                {"field": "volume", "op": "gt", "compare_to_field": "vol_ma20"},
+            ]
+        }
+        result = measure_entry_frequency(candles, rule, generated_at)
+
+        self.assertNotEqual(result.classification, UNMEASURABLE)
+        self.assertGreater(result.triggers_counted, 0)
+
     def test_null_and_malformed_structured_entry_rule_get_distinguishable_reasons(self) -> None:
         # The two real UNMEASURABLE causes (a deliberate null vs. a
         # present-but-malformed dict, e.g. Eve's own "must set exactly one

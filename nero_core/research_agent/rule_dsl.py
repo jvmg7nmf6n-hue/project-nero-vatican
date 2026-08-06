@@ -94,9 +94,28 @@ from nero_core.strategies.range_mean_reversion import adx as _range_mean_reversi
 # sample std) -- computed inline below (reusing this module's own ma20 column
 # as the SMA) rather than importing that whole function, since Bollinger bands
 # have no standalone reusable function there the way adx()/rsi() do.
+# hour_of_day / high20 / low20 / vol_ma20 added (CC-1 directive, 2026-08-06):
+# hour_of_day is DAILY_HOUR_SEASONALITY_BTC_4H's own real blocker (a
+# wall-clock-hour trigger with no prior DSL field); high20/low20/vol_ma20
+# are VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H's own real blocker -- that
+# hypothesis needed BOTH a rolling price-channel field AND a volume moving
+# average, confirmed by reading its own recorded text (docs/site_data/
+# agent_hypotheses.json): "highest close of the prior 20 candles" / "lowest
+# close of the prior 20 candles" / "20-period average volume" -- sizing
+# either field alone would have understated this one real case. high20/
+# low20 are named after this codebase's existing rolling-channel precedent
+# (nero_core.strategies.breakout_momentum.py/donchian_breakout_bracket.py's
+# own `.shift(1).rolling(N).max()`/`.min()`), but -- unlike that precedent,
+# which channels the HIGH/LOW columns -- these are computed from CLOSE (see
+# compute_indicator_frame), matching this specific hypothesis's own literal
+# wording ("highest CLOSE," not "highest high"); computing from high/low
+# instead would not actually have fixed the real blocking case. Fixed-
+# period only (matching the ma20/ma50/ma200 convention), no arbitrary-
+# period support -- deferred per this directive's own explicit scope note.
 ALLOWED_FIELDS = (
     "close", "ma20", "ma50", "ma200", "zscore20", "atr14", "rsi14", "adx14",
-    "bb_lower", "bb_upper", "ret_1", "volume",
+    "bb_lower", "bb_upper", "ret_1", "volume", "hour_of_day", "high20",
+    "low20", "vol_ma20",
 )
 ALLOWED_OPS = ("gt", "gte", "lt", "lte", "eq", "cross_above", "cross_below")
 
@@ -520,7 +539,23 @@ def compute_indicator_frame(candles: pd.DataFrame) -> pd.DataFrame:
     frame["bb_lower"] = frame["ma20"] - BOLLINGER_STD * bollinger_std
     frame["bb_upper"] = frame["ma20"] + BOLLINGER_STD * bollinger_std
 
+    # high20/low20 (CC-1 directive, 2026-08-06): rolling extreme of CLOSE
+    # (see ALLOWED_FIELDS' own comment on why close, not the high/low
+    # columns) over the PRIOR 20 candles -- shift(1) excludes the current
+    # row, matching VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H's own "prior 20
+    # candles" wording and this codebase's existing rolling-channel
+    # precedent's identical shift(1) choice (a candle can't break out of a
+    # channel that includes itself).
+    frame["high20"] = close.shift(1).rolling(20).max()
+    frame["low20"] = close.shift(1).rolling(20).min()
+
     frame["volume"] = frame["volume"].astype(float) if "volume" in frame.columns else float("nan")
+
+    # vol_ma20 (CC-1 directive, 2026-08-06): a plain trailing 20-period
+    # volume average, matching ma20's own convention exactly (no shift --
+    # the real blocking hypothesis's own wording, "the 20-period average
+    # volume," carries no "prior" qualifier, unlike high20/low20 above).
+    frame["vol_ma20"] = frame["volume"].rolling(20).mean()
 
     # Matches every other candle schema in this codebase (e.g.
     # nero_core.data_sources.market_data.CANDLE_COLUMNS) -- added so
@@ -528,6 +563,12 @@ def compute_indicator_frame(candles: pd.DataFrame) -> pd.DataFrame:
     # tools.backtest_statistics.random_entry_baseline_single_asset unmodified,
     # both of which read candle["date"] directly.
     frame["date"] = pd.to_datetime(frame["close_time"], unit="ms", utc=True)
+
+    # hour_of_day (CC-1 directive, 2026-08-06): UTC wall-clock hour of the
+    # candle's own close_time -- real precedent nero_core.strategies.
+    # funding_extreme.py's own `.dt.hour` comparison. No lookahead risk (a
+    # property of the row's own timestamp, not a rolling computation).
+    frame["hour_of_day"] = frame["date"].dt.hour
 
     return frame
 
