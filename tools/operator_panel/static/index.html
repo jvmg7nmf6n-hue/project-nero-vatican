@@ -70,7 +70,7 @@
 
 <section>
   <h2>Repair chain candidates</h2>
-  <div class="muted">Propose &amp; validate only -- this panel does not launch/commit a repair chain (see the closing report for why).</div>
+  <div class="muted">Propose a modification (real LLM call), review it, then Launch to actually commit the repair chain (real write, counts against the 4-attempt cap).</div>
   <div id="repair-candidates">loading…</div>
   <button onclick="loadRepairCandidates()">Refresh</button>
 </section>
@@ -155,22 +155,42 @@ async function loadApprovalQueue() {
 async function approve(name) { await api(`/api/approval-queue/${encodeURIComponent(name)}/approve`, {method: 'POST'}); loadApprovalQueue(); }
 async function reject(name) { await api(`/api/approval-queue/${encodeURIComponent(name)}/reject`, {method: 'POST'}); loadApprovalQueue(); }
 
+const repairProposals = {}; // hypothesis_name -> last proposal object reviewed from /api/repair/propose
+
 async function loadRepairCandidates() {
   const r = await api('/api/repair/candidates');
-  document.getElementById('repair-candidates').innerHTML = '<table><tr><th>Hypothesis</th><th>Parent</th><th>Attempts</th><th>Can launch?</th><th></th></tr>' +
+  document.getElementById('repair-candidates').innerHTML = '<table><tr><th>Hypothesis</th><th>Parent</th><th>Chain</th><th>Attempts</th><th>Can launch?</th><th>Original data?</th><th></th></tr>' +
     r.candidates.map(c => `<tr>
-      <td>${c.hypothesis_name}</td><td>${c.parent_strategy}</td>
-      <td>${c.attempts_launched}/4</td><td>${c.can_launch_new_attempt}</td>
+      <td>${c.hypothesis_name}</td><td>${c.parent_strategy}</td><td>${c.chain_id}</td>
+      <td>${c.attempts_launched}/4</td><td>${c.can_launch_new_attempt}</td><td>${c.original_data_available}</td>
       <td><button onclick="proposeRepair('${c.hypothesis_name}')">Propose (real LLM call)</button></td>
-    </tr>`).join('') + '</table><pre id="repair-proposal"></pre>';
+    </tr>`).join('') + '</table><pre id="repair-proposal"></pre><div id="repair-launch-controls"></div>';
 }
 async function proposeRepair(name) {
   if (!confirm('This makes one real LLM call. Continue?')) return;
   try {
     const r = await api('/api/repair/propose', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({hypothesis_name: name})});
+    repairProposals[name] = r.proposal;
     document.getElementById('repair-proposal').innerText = JSON.stringify(r, null, 2);
+    document.getElementById('repair-launch-controls').innerHTML = r.validation_approved ?
+      `<button class="danger" onclick="launchRepair('${name}')">Launch this repair chain (real write, costs one attempt slot)</button>` :
+      `<span class="muted">Validation did not approve this proposal (${r.validation_reason}) -- launch is disabled for it.</span>`;
   } catch (e) {
     document.getElementById('repair-proposal').innerText = 'Error: ' + e.message;
+    document.getElementById('repair-launch-controls').innerHTML = '';
+  }
+}
+async function launchRepair(name) {
+  const proposal = repairProposals[name];
+  if (!proposal) { alert('No reviewed proposal for this hypothesis -- click Propose first.'); return; }
+  if (!confirm(`Launch a real repair chain for ${name}? This writes a real event and consumes one of its 4-attempt cap slots.`)) return;
+  try {
+    const r = await api('/api/repair/launch', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({hypothesis_name: name, proposal, fresh_data_method: 'forward_testing', confirm: true})});
+    document.getElementById('repair-launch-controls').innerText = 'Launched: ' + JSON.stringify(r, null, 2);
+    loadRepairCandidates();
+  } catch (e) {
+    document.getElementById('repair-launch-controls').innerText = 'Error: ' + e.message;
   }
 }
 

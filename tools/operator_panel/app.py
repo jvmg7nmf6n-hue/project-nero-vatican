@@ -12,18 +12,19 @@ file is what actually ships it.
 EVERY WRITE GOES THROUGH AN EXISTING FUNCTION -- no new write path, no gate
 bypass (per this directive's own explicit instruction). Each endpoint's own
 docstring below names exactly which existing nero_core/tools function it
-calls. The one deliberate exception, reported rather than silently built:
-committing a NEW repair-chain launch (choosing a fresh-data mechanism and
-calling repair_lab.append_repair_event with EVENT_ATTEMPT_LAUNCHED) has no
-existing single entry point anywhere in this codebase to call through --
-nothing has ever launched one in production (confirmed, prior directive's
-own finding). Assembling that commit sequence for the first time inside
-this panel would BE a new write path, which this directive explicitly says
-to stop and report on rather than build. This file therefore implements
-the repair-chain flow up through PROPOSING and VALIDATING a modification
-(both real, existing, tested functions: repair_lab.propose_modification,
-repair_lab.validate_modification) and stops there -- see /api/repair/propose's
-own docstring.
+calls. A prior directive's pass through this file left the repair-chain
+flow stopping at PROPOSE + VALIDATE only, because no single entry point
+existed anywhere in this codebase to actually commit (launch) a chain --
+nothing had ever launched one in production. A later CC-1 directive
+("Repair Chain Launch") built that missing entry point as its own module,
+tools/repair_chain_launch.py (with its own test suite, including a
+no-auto-wire test proving nothing but a human -- this panel's confirm-gated
+button, or a human running that module's CLI -- can call it). This file's
+POST /api/repair/launch endpoint below is that module's only caller from
+inside the panel; it requires confirm=true and reuses (never re-fetches)
+the proposal the owner already reviewed from /api/repair/propose's own
+response, so the one real-money step (propose) and the one real write
+(launch) stay two separately-confirmed clicks.
 
 Run with (from the repo root):
     pip install -r requirements.txt -r requirements-operator-panel.txt
@@ -48,7 +49,7 @@ from nero_core.eve import config as eve_config
 from nero_core.research_agent import graveyard_distillation, repair_lab, trial
 from nero_core.research_agent.hypothesis_gen import DEFAULT_HYPOTHESES_PATH, DEFAULT_PARAMETERS
 from nero_core.research_agent.storage import read_json_list, append_json_list
-from tools import factory_loop_run, factory_loop_status_summary
+from tools import factory_loop_run, factory_loop_status_summary, repair_chain_launch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -280,24 +281,27 @@ def reject_draft(name: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Repair chain -- candidates + real eligibility/cap status (read-only), and
-# a propose-and-validate step using the real, existing repair_lab functions.
-# Does NOT launch (commit) a chain -- see module docstring for why.
+# Repair chain -- candidates + real eligibility/cap status (read-only), a
+# propose-and-validate step (real LLM call), and a real launch/commit step
+# (CC-1 directive item 2d) that writes through tools.repair_chain_launch's
+# own commit_repair_launch -- the same function the CLI uses, no separate
+# write path for the panel.
 # ---------------------------------------------------------------------------
+
+
+def _lookup_original(parent_name: str) -> tuple[dict | None, dict | None]:
+    hypotheses_by_name = {h.get("hypothesis_name"): h for h in read_json_list(DEFAULT_HYPOTHESES_PATH) if h.get("hypothesis_name")}
+    results_by_name = {r.get("hypothesis_name"): r for r in read_json_list(AGENT_TEST_RESULTS_PATH) if r.get("hypothesis_name")}
+    return hypotheses_by_name.get(parent_name), results_by_name.get(parent_name)
 
 
 @app.get("/api/repair/candidates")
 def get_repair_candidates() -> dict:
-    candidates = repair_lab.load_repair_candidates()
-    repair_events = read_json_list(repair_lab.DEFAULT_REPAIR_ATTEMPTS_PATH)
-    out = []
-    for c in candidates:
-        chain_id = c.get("hypothesis_name")  # one candidate == one chain, by this project's own convention
-        state = repair_lab.reconstruct_chain_state(chain_id, repair_events) if repair_events else None
-        attempts = state["attempts"] if state else []
-        can_launch, cap_reason = repair_lab.can_launch_new_attempt(attempts)
-        out.append({**c, "attempts_launched": len(attempts), "can_launch_new_attempt": can_launch, "cap_reason": cap_reason})
-    return {"candidates": out}
+    """Real eligibility/cap status per candidate -- reuses tools.
+    repair_chain_launch.get_candidate_status directly (the SAME function
+    the CLI's own report mode calls) rather than a second, independently-
+    maintained computation that could silently drift from it."""
+    return {"candidates": repair_chain_launch.get_candidate_status()}
 
 
 class ProposeRepairRequest(BaseModel):
@@ -306,25 +310,21 @@ class ProposeRepairRequest(BaseModel):
 
 @app.post("/api/repair/propose")
 def propose_repair(body: ProposeRepairRequest) -> dict:
-    """Item 4's own explicit scope boundary (see module docstring): calls
-    the real repair_lab.propose_modification (ONE real LLM call -- this IS
-    real spend, the owner must click knowing that) and repair_lab.
+    """Calls the real repair_lab.propose_modification (ONE real LLM call --
+    this IS real spend, the owner must click knowing that) and repair_lab.
     validate_modification -- both existing, tested functions -- and returns
-    the proposal for human review. Does NOT call repair_lab.append_repair_event
-    or launch anything -- that commit step has no existing single entry
-    point in this codebase to call through, and assembling one for the
-    first time here would be a new write path, which this directive says to
-    report rather than build."""
+    the proposal for human review. Does NOT call append_repair_event itself
+    -- the browser holds this response's own `proposal` and passes it back
+    to POST /api/repair/launch (below) once the owner explicitly confirms,
+    so the one real-money call (this endpoint) and the one real write
+    (that one) stay two distinct, separately-confirmed steps."""
     candidates = repair_lab.load_repair_candidates()
     candidate = next((c for c in candidates if c.get("hypothesis_name") == body.hypothesis_name), None)
     if candidate is None:
         raise HTTPException(404, f"{body.hypothesis_name!r} is not a known repair candidate")
 
-    hypotheses_by_name = {h.get("hypothesis_name"): h for h in read_json_list(DEFAULT_HYPOTHESES_PATH) if h.get("hypothesis_name")}
-    results_by_name = {r.get("hypothesis_name"): r for r in read_json_list(AGENT_TEST_RESULTS_PATH) if r.get("hypothesis_name")}
     parent_name = candidate.get("parent_strategy")
-    original_hypothesis = hypotheses_by_name.get(parent_name)
-    original_result = results_by_name.get(parent_name)
+    original_hypothesis, original_result = _lookup_original(parent_name)
     if original_hypothesis is None or original_result is None:
         raise HTTPException(
             422,
@@ -351,8 +351,48 @@ def propose_repair(body: ProposeRepairRequest) -> dict:
         "cost_usd": result.cost_usd,
         "validation_approved": validation.approved,
         "validation_reason": validation.reason,
-        "note": "PROPOSED AND VALIDATED ONLY -- this panel does not launch/commit a repair chain (see /api/repair/propose's own docstring)",
+        "note": "Review this proposal, then POST it to /api/repair/launch with confirm=true to actually launch -- this endpoint alone commits nothing.",
     }
+
+
+class LaunchRepairRequest(BaseModel):
+    hypothesis_name: str
+    proposal: dict
+    fresh_data_method: str = repair_chain_launch.FRESH_DATA_FORWARD_TESTING
+    confirm: bool = False
+
+
+@app.post("/api/repair/launch")
+def launch_repair(body: LaunchRepairRequest) -> dict:
+    """CC-1 directive item 2d: the real launch/commit step. Takes the
+    `proposal` the owner already reviewed from /api/repair/propose's own
+    response (never re-fetched or re-generated here -- no second LLM call)
+    and requires confirm=true. Writes through tools.repair_chain_launch.
+    commit_repair_launch ONLY -- the exact same function the CLI and this
+    directive's own test suite exercise; no separate write path for the
+    panel. Defaults to fresh_data_method=forward_testing (no candle-fetch
+    dependency at launch time -- see that module's own docstring for why)."""
+    if not body.confirm:
+        raise HTTPException(400, "confirm=true required -- this spends the repair attempt's own budget like any other hypothesis test and consumes one of the 4-attempt cap slots")
+
+    candidates = repair_lab.load_repair_candidates()
+    candidate = next((c for c in candidates if c.get("hypothesis_name") == body.hypothesis_name), None)
+    if candidate is None:
+        raise HTTPException(404, f"{body.hypothesis_name!r} is not a known repair candidate")
+
+    parent_name = candidate.get("parent_strategy")
+    original_hypothesis, original_result = _lookup_original(parent_name)
+    if original_hypothesis is None or original_result is None:
+        raise HTTPException(422, f"original hypothesis/result data for parent_strategy={parent_name!r} not found -- cannot launch")
+
+    result = repair_chain_launch.commit_repair_launch(
+        body.hypothesis_name, original_result, original_hypothesis, body.proposal, candidates,
+        origin_agent=original_hypothesis.get("origin_agent", "adam"),
+        fresh_data_method=body.fresh_data_method,
+    )
+    if not result.launched:
+        raise HTTPException(409, result.reason)
+    return {"launched": True, "chain_id": result.chain_id, "attempt_id": result.attempt_id, "reason": result.reason}
 
 
 # ---------------------------------------------------------------------------

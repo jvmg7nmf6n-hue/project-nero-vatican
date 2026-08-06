@@ -115,12 +115,15 @@ class OperatorPanelEndpointTest(unittest.TestCase):
             response = self.client.post("/api/repair/propose", json={"hypothesis_name": "NOT_REAL"})
         self.assertEqual(response.status_code, 404)
 
-    def test_repair_propose_never_calls_append_repair_event(self) -> None:
-        # Item 4's own explicit scope boundary: propose+validate only, this
-        # panel must never launch/commit a chain. AST-based (not a substring
-        # scan) so this survives the module's own docstring/comments naming
-        # append_repair_event in PROSE to explain why it is deliberately
-        # absent -- that prose must not itself trip this guard.
+    def test_app_module_never_calls_append_repair_event_directly(self) -> None:
+        # Regression guard on item 4/2d's "no new write path" requirement:
+        # even now that this panel CAN launch (commit) a repair chain, the
+        # actual append_repair_event write must happen only inside tools.
+        # repair_chain_launch.commit_repair_launch -- this file itself must
+        # never call append_repair_event directly. AST-based (not a
+        # substring scan) so this survives the module's own docstring/
+        # comments naming append_repair_event in PROSE to explain the
+        # design -- that prose must not itself trip this guard.
         import ast
         import inspect
 
@@ -132,6 +135,87 @@ class OperatorPanelEndpointTest(unittest.TestCase):
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
         ]
         self.assertNotIn("append_repair_event", calls)
+
+    def test_repair_candidates_uses_get_candidate_status(self) -> None:
+        # /api/repair/candidates must be a thin wrapper around
+        # repair_chain_launch.get_candidate_status -- the SAME function the
+        # CLI uses -- not a second, independently-maintained computation
+        # that could silently drift from it (this was a real inconsistency
+        # found and fixed in this directive: chain_id used to be computed
+        # inline here as the raw hypothesis_name, while the launcher module
+        # used the prefixed RC-{name} convention).
+        fake_status = [{"hypothesis_name": "H1", "parent_strategy": "P1", "chain_id": "RC-H1",
+                         "attempts_launched": 0, "can_launch_new_attempt": True, "cap_reason": "ok",
+                         "original_data_available": False}]
+        with patch.object(self.app_module.repair_chain_launch, "get_candidate_status", return_value=fake_status) as mock_status:
+            response = self.client.get("/api/repair/candidates")
+        self.assertEqual(response.status_code, 200)
+        mock_status.assert_called_once()
+        self.assertEqual(response.json(), {"candidates": fake_status})
+
+    def test_repair_launch_requires_explicit_confirm(self) -> None:
+        response = self.client.post("/api/repair/launch", json={
+            "hypothesis_name": "H1", "proposal": {}, "confirm": False,
+        })
+        self.assertEqual(response.status_code, 400)
+
+    def test_repair_launch_requires_a_known_candidate(self) -> None:
+        with patch.object(self.app_module.repair_lab, "load_repair_candidates", return_value=[]):
+            response = self.client.post("/api/repair/launch", json={
+                "hypothesis_name": "NOT_REAL", "proposal": {}, "confirm": True,
+            })
+        self.assertEqual(response.status_code, 404)
+
+    def test_repair_launch_requires_original_data(self) -> None:
+        candidate = {"hypothesis_name": "H1", "parent_strategy": "MISSING_PARENT"}
+        with patch.object(self.app_module.repair_lab, "load_repair_candidates", return_value=[candidate]), \
+             patch.object(self.app_module, "DEFAULT_HYPOTHESES_PATH", self.tmp / "no_such_hyp.json"), \
+             patch.object(self.app_module, "AGENT_TEST_RESULTS_PATH", self.tmp / "no_such_res.json"):
+            response = self.client.post("/api/repair/launch", json={
+                "hypothesis_name": "H1", "proposal": {"hypothesis_name": "X"}, "confirm": True,
+            })
+        self.assertEqual(response.status_code, 422)
+
+    def test_repair_launch_writes_through_commit_repair_launch_only(self) -> None:
+        # Regression guard: launching must call the REAL tools.
+        # repair_chain_launch.commit_repair_launch -- never append_
+        # repair_event directly, never a second write path.
+        candidate = {"hypothesis_name": "H1", "parent_strategy": "PARENT1"}
+        hyp_path = self.tmp / "hyps.json"
+        res_path = self.tmp / "results.json"
+        hyp_path.write_text(json.dumps([{"hypothesis_name": "PARENT1", "origin_agent": "adam"}]), encoding="utf-8")
+        res_path.write_text(json.dumps([{"hypothesis_name": "PARENT1", "verdict": "DIED"}]), encoding="utf-8")
+        fake_result = self.app_module.repair_chain_launch.LaunchResult(
+            launched=True, reason="ok", chain_id="RC-H1", attempt_id="attempt-1",
+        )
+        with patch.object(self.app_module.repair_lab, "load_repair_candidates", return_value=[candidate]), \
+             patch.object(self.app_module, "DEFAULT_HYPOTHESES_PATH", hyp_path), \
+             patch.object(self.app_module, "AGENT_TEST_RESULTS_PATH", res_path), \
+             patch.object(self.app_module.repair_chain_launch, "commit_repair_launch", return_value=fake_result) as mock_commit:
+            response = self.client.post("/api/repair/launch", json={
+                "hypothesis_name": "H1", "proposal": {"hypothesis_name": "PARENT1_V2"}, "confirm": True,
+            })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"launched": True, "chain_id": "RC-H1", "attempt_id": "attempt-1", "reason": "ok"})
+        mock_commit.assert_called_once()
+
+    def test_repair_launch_failure_from_launcher_is_409_not_silently_ok(self) -> None:
+        candidate = {"hypothesis_name": "H1", "parent_strategy": "PARENT1"}
+        hyp_path = self.tmp / "hyps.json"
+        res_path = self.tmp / "results.json"
+        hyp_path.write_text(json.dumps([{"hypothesis_name": "PARENT1", "origin_agent": "adam"}]), encoding="utf-8")
+        res_path.write_text(json.dumps([{"hypothesis_name": "PARENT1", "verdict": "DIED"}]), encoding="utf-8")
+        fake_result = self.app_module.repair_chain_launch.LaunchResult(
+            launched=False, reason="cap reached", chain_id="RC-H1", attempt_id=None,
+        )
+        with patch.object(self.app_module.repair_lab, "load_repair_candidates", return_value=[candidate]), \
+             patch.object(self.app_module, "DEFAULT_HYPOTHESES_PATH", hyp_path), \
+             patch.object(self.app_module, "AGENT_TEST_RESULTS_PATH", res_path), \
+             patch.object(self.app_module.repair_chain_launch, "commit_repair_launch", return_value=fake_result):
+            response = self.client.post("/api/repair/launch", json={
+                "hypothesis_name": "H1", "proposal": {"hypothesis_name": "PARENT1_V2"}, "confirm": True,
+            })
+        self.assertEqual(response.status_code, 409)
 
     def test_kill_unknown_run_id_is_404(self) -> None:
         response = self.client.post("/api/kill/not-a-real-run-id")
