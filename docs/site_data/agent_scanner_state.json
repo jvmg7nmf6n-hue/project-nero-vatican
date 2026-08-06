@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-06T11:12:48.838690+00:00",
+  "last_updated": "2026-08-06T15:03:23.384622+00:00",
   "last_regime": {
     "AAPL|1day": "HIGH",
     "AMZN|1day": "EXTREME",
@@ -25,8 +25,8 @@
     "BNB|4h": "NORMAL",
     "BTC|4h": "NORMAL",
     "EUR/USD|1day": "NORMAL",
-    "EUR/USD|4h": "NORMAL",
-    "GOLD|4h": "NORMAL",
+    "EUR/USD|4h": "LOW",
+    "GOLD|4h": "HIGH",
     "GOOGL|4h": "HIGH",
     "META|4h": "HIGH",
     "MSFT|4h": "HIGH",

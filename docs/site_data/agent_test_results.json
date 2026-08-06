@@ -176,5 +176,87 @@
     "train": null,
     "test": null,
     "tested_at": "2026-08-06T11:12:48.838690+00:00"
+  },
+  {
+    "hypothesis_name": "VOLWEIGHTED_MA_CROSS_ETH_4H",
+    "asset": "ETH",
+    "timeframe": "4h",
+    "verdict": "SKIPPED",
+    "review_status": "rejected_too_slow",
+    "frequency_classification": "TOO_SLOW",
+    "measured_trades_per_year": 12.45453512161855,
+    "expected_time_to_30_trades_months": 28.905133470225874,
+    "reason": "Measured 25 trigger(s) over 733 eligible days (12.45 trades/year) -> ~28.9 months to 30 resolved trades -> TOO_SLOW.",
+    "train": null,
+    "test": null,
+    "tested_at": "2026-08-06T15:03:23.384622+00:00"
+  },
+  {
+    "hypothesis_name": "CHANNEL_LOW_PULLBACK_UPTREND_SOL_4H",
+    "asset": "SOL",
+    "timeframe": "4h",
+    "verdict": "DIED",
+    "review_status": "dead",
+    "frequency_classification": "VIABLE",
+    "measured_trades_per_year": 58.28722436917481,
+    "expected_time_to_30_trades_months": 6.1763105705610855,
+    "reason": "train: N=26 ExpR=0.004; test: N=7 ExpR=-1.068 -> DIED",
+    "train": {
+      "trades": 26,
+      "expectancy_r": 0.004410457749823325,
+      "bootstrap_ci": {
+        "sample_size": 26,
+        "mean_r": 0.004410457749823325,
+        "lower_2_5": -0.5588964850213866,
+        "upper_97_5": 0.6072384059483513,
+        "crosses_zero": true
+      },
+      "random_baseline": {
+        "real_expectancy_r": 0.004410457749823325,
+        "mean_random_expectancy_r": -0.051758378887415975,
+        "p95_random_expectancy_r": 0.4543606448055444,
+        "edge_over_random": 0.0561688366372393,
+        "target_trade_count": 26,
+        "realized_mean_trade_count": 21.715,
+        "n_runs": 200,
+        "caveat": null
+      }
+    },
+    "test": {
+      "trades": 7,
+      "expectancy_r": -1.067506348557162,
+      "bootstrap_ci": {
+        "sample_size": 7,
+        "mean_r": -1.067506348557162,
+        "lower_2_5": -1.0820798898351287,
+        "upper_97_5": -1.0558102896781363,
+        "crosses_zero": false
+      },
+      "random_baseline": {
+        "real_expectancy_r": -1.067506348557162,
+        "mean_random_expectancy_r": -0.17104313423696518,
+        "p95_random_expectancy_r": 0.9965063072483757,
+        "edge_over_random": -0.8964632143201969,
+        "target_trade_count": 7,
+        "realized_mean_trade_count": 6.365,
+        "n_runs": 200,
+        "caveat": null
+      }
+    },
+    "tested_at": "2026-08-06T15:03:23.384622+00:00"
+  },
+  {
+    "hypothesis_name": "IBS_INTRABAR_REVERSION_ETH_4H",
+    "asset": "ETH",
+    "timeframe": "4h",
+    "verdict": "SKIPPED",
+    "review_status": "rejected_unmeasurable",
+    "frequency_classification": "UNMEASURABLE",
+    "measured_trades_per_year": null,
+    "expected_time_to_30_trades_months": null,
+    "reason": "structured_entry_rule is null -- the model explicitly reported this entry rule cannot be expressed in the current DSL's field/op vocabulary (see hypothesis_gen.py's own prompt instruction to set structured_entry_rule to null rather than force an approximate mapping). This is a DSL-expressiveness gap in the mechanism itself, not a data problem, and not a case where the model failed to comply with an achievable schema.",
+    "train": null,
+    "test": null,
+    "tested_at": "2026-08-06T15:03:23.384622+00:00"
   }
 ]
