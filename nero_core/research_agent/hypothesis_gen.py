@@ -64,8 +64,22 @@ from pathlib import Path
 
 import requests
 
+from nero_core.research_agent.rule_dsl import ALLOWED_FIELDS as _DSL_ALLOWED_FIELDS
+from nero_core.research_agent.rule_dsl import ALLOWED_OPS as _DSL_ALLOWED_OPS
 from nero_core.research_agent.scanner import ScanFinding
 from nero_core.research_agent.storage import append_json_list, read_json_list
+
+# CC-1 directive (2026-08-06): both prompts below used to hand-list the DSL's
+# allowed fields/ops as literal prose, independently of rule_dsl.py's own
+# ALLOWED_FIELDS/ALLOWED_OPS -- real incident, confirmed-from-code: this
+# drifted silently (the scanner prompt was missing adx14/bb_lower/bb_upper;
+# the web-search prompt was missing bb_lower/bb_upper), so the model was
+# never told about 2-3 real, already-computed DSL fields it could have used.
+# Interpolating these two strings (rather than hand-typing the list) makes
+# that drift structurally impossible going forward, not just tested for --
+# see test_research_agent_rule_dsl_prompt_sync.py for the regression guard.
+_DSL_FIELDS_PROMPT_TEXT = ", ".join(_DSL_ALLOWED_FIELDS)
+_DSL_OPS_PROMPT_TEXT = ", ".join(_DSL_ALLOWED_OPS)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_HYPOTHESES_PATH = REPO_ROOT / "docs" / "site_data" / "agent_hypotheses.json"
@@ -340,8 +354,8 @@ Return STRICT JSON only, with exactly these keys and no others:
 - entry_rule: a precise, human-readable entry condition
 - structured_entry_rule: a machine-checkable version of entry_rule, shaped exactly as
   {{"conditions": [{{"field": <field>, "op": <op>, "value": <number>}}, ...]}} (multiple
-  conditions are ANDed together). Allowed fields: close, ma20, ma50, ma200, zscore20,
-  atr14, rsi14, ret_1, volume. Allowed ops: gt, gte, lt, lte, eq, cross_above, cross_below.
+  conditions are ANDed together). Allowed fields: {_DSL_FIELDS_PROMPT_TEXT}. Allowed ops:
+  {_DSL_OPS_PROMPT_TEXT}.
   Each condition's right-hand side is EITHER a fixed "value" (a number) OR a
   "compare_to_field" naming another one of the allowed fields above -- exactly one of
   the two, never both. Use "compare_to_field" for a moving-average crossover or any
@@ -1119,9 +1133,8 @@ and no others:
 - entry_rule: a precise, human-readable entry condition
 - structured_entry_rule: a machine-checkable version of entry_rule, shaped exactly as
   {{"conditions": [{{"field": <field>, "op": <op>, "value": <number>}}, ...]}} (multiple
-  conditions are ANDed together). Allowed fields: close, ma20, ma50, ma200, zscore20,
-  atr14, rsi14, adx14, ret_1, volume. Allowed ops: gt, gte, lt, lte, eq, cross_above,
-  cross_below. Each condition's right-hand side is EITHER a fixed "value" (a number) OR a
+  conditions are ANDed together). Allowed fields: {_DSL_FIELDS_PROMPT_TEXT}. Allowed ops:
+  {_DSL_OPS_PROMPT_TEXT}. Each condition's right-hand side is EITHER a fixed "value" (a number) OR a
   "compare_to_field" naming another one of the allowed fields above -- exactly one of the
   two, never both. If the entry condition genuinely cannot be expressed with these
   fields/ops, set structured_entry_rule to null -- do NOT force an approximate mapping.
