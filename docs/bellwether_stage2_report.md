@@ -133,6 +133,138 @@ specific field: funding wiring is closer to "genuine new evidence" than
 `correlation.py`'s hardcoded (and, per that module's own comment, always-
 synthetic) coefficients.
 
+## Part C — retarget and build the macro_conflicted overlay
+
+### C1 — the original GOLD-1wk Momentum overlay rule is void, confirmed
+
+Queried `data/truth_ledger.db` directly: `BREAKOUT_MOMENTUM/GOLD` has exactly
+2 `execution_log` rows, both `NO_TRADE` — zero `ENTRY` rows, ever.
+`TREND_PULLBACK/BNB` (20 rows) and `COINTEGRATION_PAIRS/BTC-ETH` (20 rows)
+are the same: 100% `NO_TRADE`, zero entries. The "~6 trades/year" figure
+from earlier Stage 5 planning is confirmed wrong — the real number is zero
+for all three. An overlay rule keyed to any of them would annotate nothing.
+
+### C2 — retargeted to `ORDERFLOW_IMBALANCE/BTC`, confirmed fit
+
+**Real cadence** (54 `ENTRY` rows, 2026-07-19 to 2026-08-06, 17.9-day span):
+mean gap between entries **8.09h**, median **6.14h** (min 1.17h, max
+23.50h) — roughly 89 entries/month. Every entry has a matching `EXIT`
+(fully round-tripped, no stuck open position); median hold duration
+**2.28h**, mean **2.99h**.
+
+**Cadence alignment vs Bellwether's read frequency**: Bellwether's real
+inputs are daily-resolution (DFII10, DX-Y.NYB, ^VIX close) except BTC
+funding rate, which settles every 8h (Binance's fixed 00:00/08:00/16:00 UTC
+schedule) — the fastest-changing real input by construction. Given the
+overlay job runs every 8h (see C4), and `ORDERFLOW_IMBALANCE`'s median
+inter-entry gap (6.14h) is close to that same window, a macro read used to
+evaluate an entry is, in the worst case, about as stale as the strategy's
+own typical time between decisions — reasonably current, not stale by an
+order of magnitude. Running the overlay MORE often than every 8h would not
+buy any freshness on real_yield/DXY/VIX (still same trading-day value) and
+would only add cost.
+
+**`ORDERFLOW_IMBALANCE/ETH` is NOT annotated, explicitly** — Bellwether's
+own `Asset` enum (`vatican/bellwether/bellwether/schemas.py`) has exactly
+two values, `GOLD` and `BITCOIN`. There is no ETH read to annotate ETH
+entries with; this isn't a scoping choice made for this directive, it's a
+hard constraint of what Bellwether currently computes.
+
+**Honest status, stated plainly (not buried)**: `ORDERFLOW_IMBALANCE` is
+EXPERIMENTAL, snapshot-based, forward-testing only — **no backtest exists
+at all** (Binance's public order-book endpoint has no historical replay;
+confirmed directly in `nero_core/strategies/orderflow_imbalance.py`'s own
+module docstring). Annotating it is a weaker experiment than annotating a
+verified survivor would have been — the annotation records whether a macro
+conflict preceded a real forward-test entry, not whether it preceded a
+statistically-verified edge.
+
+### C3 — the three verified survivors stay in the design as a dormant path
+
+`_evaluate_entry`'s threshold logic (C4) is asset/strategy-agnostic in
+shape — it takes an entry's parsed direction and the latest macro read
+before its timestamp, with no special-casing for which strategy produced
+the entry. If `BREAKOUT_MOMENTUM/GOLD` or the other two ever fire a real
+`ENTRY` row, `process_orderflow_conflicts`' own strategy/asset filter would
+need a one-line extension to include them (currently filtered to
+`ORDERFLOW_ID`/BTC only, deliberately, since they're the primary
+experiment) — the RULE itself doesn't need redesigning, confirmed by
+inspection rather than assumed.
+
+### C4 — the overlay, built
+
+**Schema** (`nero_core/truth_ledger/macro_reads.py`, structurally separate
+tables in the same SQLite file `execution_log.py` already uses — same
+precedent that module itself established): `macro_reads` (one row per
+run_id+asset, both GOLD and BITCOIN persisted every run for transparency)
+and `macro_conflict_flags` (one row per `ORDERFLOW_IMBALANCE`/BTC `ENTRY`
+row EVER EVALUATED — a full audit trail, not just positive hits — with
+`status` in `evaluated`/`insufficient_data`/`circuit_breaker_open`).
+`UNIQUE(execution_log_id)` on the flags table makes evaluation idempotent:
+an entry is judged exactly once, ever. Both tables are immutable/append-only,
+same discipline as `execution_log.py`.
+
+**No lookahead**: `get_latest_macro_read_before(asset, before)` only ever
+returns a read with `timestamp <= before` — an entry is judged against
+whatever Bellwether had already said at or before that entry's own
+timestamp, never a read computed later. Tested directly
+(`tests/test_macro_reads.py`, `tests/test_bellwether_overlay.py`).
+**Known, honest limitation on first deployment**: every one of the 54
+existing historical `ORDERFLOW_IMBALANCE/BTC` entries predates this
+overlay's first-ever macro read, so all 54 come back `insufficient_data`
+the first time the job runs (confirmed via a smoke test against a COPY of
+the real ledger, never the production file) — this is correct behavior,
+not a bug: only entries that fire AFTER a macro read already exists can
+ever be meaningfully evaluated.
+
+**The threshold** (`nero_core/execution/bellwether_overlay.py`), expressed
+in `agreement`/`coverage` per A1, not the old blended confidence: flag
+`conflicted=True` only when (1) the read's BITCOIN bias directionally
+OPPOSES the entry (BEARISH/STRONG_BEARISH vs LONG; BULLISH/STRONG_BULLISH
+vs SHORT), AND (2) `bitcoin_agreement >= 0.6`, AND (3)
+`bitcoin_coverage >= 0.15`, AND (4) the read's own `bitcoin_analysis`
+provenance is REAL or MIXED. **0.6** is chosen meaningfully ABOVE the
+current live-wiring mean bitcoin_agreement (~0.52, measured in the Part
+A/B sweep above) — only more-aligned-than-typical reads get to flag
+anything. **0.15** sits above the ~0.135 floor the sweep showed as a
+single-signal discretization artifact (real signal count, not genuine
+agreement) — requires roughly 2+ real-provenance BTC signals actually
+contributing. Both are proposed with this reasoning, not fitted to produce
+a target flag rate.
+
+**Cadence**: `.github/workflows/bellwether_overlay.yml`, every 8h
+(`17 0,8,16 * * *`, offset from `:00` per the same GitHub-Actions-congestion
+lesson `live_scheduler.yml` already documents), justified in C2 above.
+
+**Circuit breaker** (`run_bellwether_with_circuit_breaker`): ANY exception
+from the Bellwether run, a timeout (60s), OR a `bitcoin_analysis`
+provenance of `synthetic`/`unavailable` raises
+`BellwetherCircuitBreakerOpen` internally, caught by `main()` — logged,
+zero writes, zero notifications, workflow step marked `continue-on-error`.
+Tested directly (`CircuitBreakerTest`, mocking both the exception path and
+the synthetic-provenance path).
+
+**Surfacing**: ntfy.sh (same public topic `notify_ntfy.py` already uses,
+`Terminal3039`) fires one message per newly-flagged conflict; static JSON
+export to `docs/site_data/macro_reads.json` (same `schema_version`/
+`last_updated` convention as `export_site_data.py`), containing every
+`macro_reads` row and every `macro_conflict_flags` row — read-only over
+the ledger, matching that module's own discipline.
+
+**Tests**: 8 (`tests/test_macro_reads.py`) + 12
+(`tests/test_bellwether_overlay.py`) = 20 new tests, all passing. Smoke-
+tested end-to-end against a COPY of the real production ledger (never the
+tracked file itself) — confirmed the circuit breaker correctly closes on a
+real usable BTC read (STRONG_BULLISH, agreement 0.771, coverage 0.461,
+2026-08-07), and `process_orderflow_conflicts` correctly marks all 54
+existing entries `insufficient_data` per the no-lookahead guarantee above.
+
+**Annotate only, confirmed by design**: nothing in
+`bellwether_overlay.py` calls into `orderflow_imbalance.py`'s own entry/exit
+logic, `live_scheduler.py`, or `execution_log`'s insert path — it only
+reads `execution_log` (via `list_execution_log`, already read-only) and
+writes to its own two new tables.
+
 ---
 
 # Bellwether Stage 1 + Stage 2 Report

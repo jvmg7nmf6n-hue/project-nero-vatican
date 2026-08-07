@@ -101,8 +101,17 @@ unit-mismatch fix above.
 ## What this is NOT doing (as of Stage 1 — vendoring only)
 
 - **No trade-log writes.** Bellwether's own `PredictionStore`
-  (`bellwether/store/memory.py`) is separate from Vatican's Truth Ledger
-  (`nero_core/truth_ledger/`) and stays that way — no cross-write.
+  (`bellwether/store/memory.py`, used for ITS OWN learning-loop accuracy
+  tracking) is separate from Vatican's Truth Ledger (`nero_core/
+  truth_ledger/`) and stays that way — no cross-write. **Updated, Stage 2
+  Part C**: this does NOT rule out `nero_core/execution/
+  bellwether_overlay.py`, a deliberately new and separate integration point
+  that runs Bellwether and writes to its OWN structurally-separate tables
+  (`macro_reads`, `macro_conflict_flags` — see
+  `nero_core/truth_ledger/macro_reads.py`) — never into `execution_log`
+  itself, never mutating a price-action row, annotate-only. See
+  `docs/bellwether_stage2_report.md`'s Part C section for the full design
+  and circuit breaker.
 - **No position sizing or order execution.** Bellwether outputs a bias with
   assumptions/risks, never a sized trade. It does not touch live execution
   of Vatican's verified survivors, per the master command's own ground rule.
