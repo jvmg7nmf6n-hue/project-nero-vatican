@@ -1,7 +1,29 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-07T11:53:57.443735+00:00",
+  "last_updated": "2026-08-07T13:23:18.704950+00:00",
   "rows": [
+    {
+      "timestamp": "2026-08-07T13:22:42.196803+00:00",
+      "strategy": "COINTEGRATION_PAIRS",
+      "strategy_version": "cointegration-pairs-v1.0.0",
+      "asset": "BTC-ETH",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "|z|=0.58 below entry threshold 2.0",
+      "candle_timestamp": "2026-08-07T11:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T13:22:42.196803+00:00",
+      "strategy": "TREND_PULLBACK",
+      "strategy_version": "trend-pullback-v1.0.0",
+      "asset": "BNB",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NOT_IN_ESTABLISHED_UPTREND, NO_RECENT_PULLBACK_TO_MA50",
+      "candle_timestamp": "2026-08-07T11:59:59.999000+00:00"
+    },
     {
       "timestamp": "2026-08-07T09:12:07.558961+00:00",
       "strategy": "VOLATILITY_SQUEEZE",
