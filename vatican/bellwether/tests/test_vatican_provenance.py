@@ -231,10 +231,14 @@ def test_real_vix_wiring_if_yfinance_available():
 
 
 async def test_liquidity_agent_mixed_once_vix_real_stablecoin_still_mock():
-    """liquidity.py reads vix (soon real) AND onchain's stablecoin figure
-    (still mock, no live OnChainProvider exists) for its BTC signal — so
-    even with vix REAL, the honest overall provenance is MIXED, not REAL,
-    at this per-agent granularity (see the comment in liquidity.py itself)."""
+    """liquidity.py reads vix AND onchain's stablecoin figure for its BTC
+    signal — both CAN be real now (CC-1 directive, 2026-08-07,
+    VaticanRealOnChain), but this test deliberately builds a MOCK data hub
+    (MockOnChain, whose provenance_of always reports SYNTHETIC) to isolate
+    the vix-real/stablecoin-still-synthetic case: the honest overall
+    provenance must be MIXED, not REAL, at this per-agent granularity (see
+    the comment in liquidity.py itself; see test_vatican_onchain.py for the
+    now-real stablecoin cases)."""
     market = _snapshot(vix=DataProvenance.REAL)
     hub = build_data_hub(Settings(data_mode="mock", seed=1))
     ctx = AnalysisContext(events=[], market=market, data=hub, settings=Settings(data_mode="live", seed=1))

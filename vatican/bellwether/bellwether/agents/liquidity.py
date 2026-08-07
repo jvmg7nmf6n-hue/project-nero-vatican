@@ -47,16 +47,25 @@ class LiquidityAgent(BaseAgent):
         ]
         # VATICAN INTEGRATION: this agent's own honest provenance. The GOLD
         # signal depends only on vix; the BTC signal ALSO depends on
-        # oc["stablecoin_supply_chg_pct"] (still mock — no live OnChainProvider
-        # exists yet). AgentResult.provenance is a single value for the whole
-        # agent (not per-signal), so once vix is real this is honestly MIXED
-        # (not REAL) even though the GOLD signal alone doesn't touch the
-        # still-mock stablecoin figure — a known, deliberate coarseness at
-        # this provenance granularity, same as monetary_policy's own
-        # real_yield-real/dxy-still-mock MIXED state before dxy was wired.
+        # oc["stablecoin_supply_chg_pct"] -- now ALSO real (CC-1 directive,
+        # 2026-08-07, "wire the 2 safest agents real": VaticanRealOnChain's
+        # own DefiLlama fetch). AgentResult.provenance is a single value for
+        # the whole agent (not per-signal), so this combines BOTH real inputs
+        # the SAME way monetary_policy.py already combines its own two real
+        # inputs (real_yield_10y, dxy): both real -> REAL, either real ->
+        # MIXED, neither -> SYNTHETIC. Before this directive, stablecoin
+        # provenance was always SYNTHETIC (MockOnChain never overrode
+        # provenance_of), so this agent could only ever reach MIXED at best --
+        # now it can genuinely reach REAL.
         vix_provenance = m.provenance_of("vix")
-        provenance = (DataProvenance.MIXED if vix_provenance == DataProvenance.REAL
-                     else DataProvenance.SYNTHETIC)
+        stablecoin_provenance = ctx.data.onchain.provenance_of("stablecoin_supply_chg_pct")
+        if vix_provenance == DataProvenance.REAL and stablecoin_provenance == DataProvenance.REAL:
+            provenance = DataProvenance.REAL
+        elif vix_provenance == DataProvenance.REAL or stablecoin_provenance == DataProvenance.REAL:
+            provenance = DataProvenance.MIXED
+        else:
+            provenance = DataProvenance.SYNTHETIC
         return self.result(signals=signals, facts=facts, confidence=0.65, provenance=provenance,
                            meta={"vix_z": round(vix_z, 3), "risk_on": round(risk_on, 3),
-                                 "vix_provenance": vix_provenance.value})
+                                 "vix_provenance": vix_provenance.value,
+                                 "stablecoin_supply_provenance": stablecoin_provenance.value})

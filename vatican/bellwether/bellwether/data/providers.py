@@ -56,6 +56,16 @@ class OnChainProvider(ABC):
     @abstractmethod
     def metrics(self) -> dict[str, float]: ...
 
+    def provenance_of(self, field: str):
+        """CC-1 directive (2026-08-07, "wire the 2 safest agents real"): mirrors
+        DerivativesProvider.provenance_of's convention exactly -- a concrete,
+        non-abstract default here means MockOnChain needs no change at all, it
+        simply never overrides this method, so every field it produces stays
+        honestly SYNTHETIC."""
+        from ..schemas import DataProvenance
+
+        return DataProvenance.SYNTHETIC
+
 
 class DerivativesProvider(ABC):
     @abstractmethod
@@ -468,6 +478,104 @@ def _fetch_real_btc_funding_bps() -> float:
     return latest_rate * 10_000.0
 
 
+class VaticanRealOnChain(OnChainProvider):
+    """Real `stablecoin_supply_chg_pct` via DefiLlama's free, no-key
+    `stablecoincharts/all` endpoint (CC-1 directive, 2026-08-07: "wire the 2
+    safest agents real" -- confirmed live same day: HTTP 200, 3174+ daily
+    UTC-midnight-stamped rows, current total ~$306B across all USD-pegged
+    stablecoins). Wired the SAME shape as VaticanRealDerivatives: wraps a
+    MockOnChain instance so every OTHER field (exchange_netflow_btc,
+    lth_supply_chg_pct, mvrv_z, funding_rate_bps -- none of which have a
+    confirmed free source, per the scoping directive's own Item 1b findings)
+    stays on the identical mock draw; falls back to the mock draw and reports
+    SYNTHETIC on any fetch failure, never guesses a substitute value.
+
+    liquidity.py's own GOLD signal uses vix only; its BTC signal uses vix AND
+    stablecoin_supply_chg_pct -- see liquidity.py's own updated provenance
+    combination (both real -> REAL, one real -> MIXED, neither -> SYNTHETIC),
+    the same pattern monetary_policy.py already uses for its own two real
+    inputs."""
+
+    def __init__(self, rng: random.Random) -> None:
+        self.rng = rng
+        self._mock = MockOnChain(rng)
+        self._last_provenance = None
+
+    def metrics(self) -> dict[str, float]:
+        from ..schemas import DataProvenance
+
+        base = self._mock.metrics()
+        try:
+            base["stablecoin_supply_chg_pct"] = _fetch_real_stablecoin_supply_chg_pct_cached()
+            self._last_provenance = DataProvenance.REAL
+        except Exception:
+            self._last_provenance = DataProvenance.SYNTHETIC
+        return base
+
+    def provenance_of(self, field: str):
+        from ..schemas import DataProvenance
+
+        if field != "stablecoin_supply_chg_pct":
+            return DataProvenance.SYNTHETIC
+        # metrics() always sets _last_provenance before any agent can read it
+        # (DataHub is built once per Orchestrator, metrics() is called from
+        # within the same cycle) -- default SYNTHETIC only guards the
+        # theoretical case of provenance_of() called before metrics().
+        return self._last_provenance or DataProvenance.SYNTHETIC
+
+
+# Same process-lifetime-cache rationale as _DXY_CACHE/_VIX_CACHE/
+# _BTC_FUNDING_CACHE above -- DefiLlama's own chart updates at most daily,
+# doesn't move within a single sweep/run.
+_STABLECOIN_CACHE: dict[str, float] = {}
+
+# CC-1 directive (2026-08-07), item 1c: DefiLlama's own `stablecoincharts/all`
+# includes a still-forming "today" row (confirmed live 2026-08-07: the last
+# row was UTC-midnight-stamped for the CURRENT day, at a time when that day
+# had not yet elapsed) -- a 1-day lag (treat the row BEFORE the most recent
+# one as "current," matching this project's own closed-candle discipline,
+# the same shape as _DXY_LAG_BUSINESS_DAYS/_VIX_LAG_BUSINESS_DAYS above)
+# avoids treating a still-accumulating day's number as final. Not a
+# "business day" concept like the dollar/DFII10 lags above -- stablecoin
+# supply moves every calendar day, weekends included, so this is a plain
+# calendar-day lag.
+_STABLECOIN_LAG_DAYS = 1
+
+
+def _fetch_real_stablecoin_supply_chg_pct_cached() -> float:
+    if "value" not in _STABLECOIN_CACHE:
+        _STABLECOIN_CACHE["value"] = _fetch_real_stablecoin_supply_chg_pct()
+    return _STABLECOIN_CACHE["value"]
+
+
+def _fetch_real_stablecoin_supply_chg_pct() -> float:
+    """Real day-over-day % change in total USD-stablecoin circulating supply
+    (`liquidity.py`'s own "dry powder entering crypto" proxy), via DefiLlama's
+    free `stablecoincharts/all` endpoint -- no API key, confirmed live
+    2026-08-07 (HTTP 200, `totalCirculatingUSD.peggedUSD` field, daily
+    UTC-midnight-stamped rows back through DefiLlama's own full history).
+    `requests` is a soft dependency here, exactly like `yfinance` for the
+    dxy/vix fetches above -- imported inside the function, degrading to the
+    mock draw on ImportError rather than raising it. Raises
+    MacroDataUnavailableError-equivalent (plain Exception, caught by the
+    caller) on any failure -- empty/malformed response, network error, or
+    too few rows to apply the lag -- never substitutes a guessed value."""
+    import requests
+
+    response = requests.get("https://stablecoins.llama.fi/stablecoincharts/all", timeout=10)
+    response.raise_for_status()
+    rows = response.json()
+    if not isinstance(rows, list) or len(rows) < _STABLECOIN_LAG_DAYS + 2:
+        raise ValueError("stablecoincharts/all returned too few rows to compute a lagged day-over-day change")
+    rows = sorted(rows, key=lambda r: int(r["date"]))
+    usable = rows[:-_STABLECOIN_LAG_DAYS] if _STABLECOIN_LAG_DAYS > 0 else rows
+    latest = float(usable[-1]["totalCirculatingUSD"]["peggedUSD"])
+    prior = float(usable[-2]["totalCirculatingUSD"]["peggedUSD"])
+    if prior == 0:
+        raise ValueError("prior day's total circulating stablecoin supply is zero -- cannot compute a % change")
+    return (latest - prior) / prior * 100.0
+
+
 # --------------------------------------------------------------------------- #
 # Hub
 # --------------------------------------------------------------------------- #
@@ -507,7 +615,7 @@ def build_data_hub(settings: Settings | None = None) -> DataHub:
         return DataHub(
             market=VaticanRealMarketData(rng),
             calendar=MockCalendar(rng),
-            onchain=MockOnChain(rng),
+            onchain=VaticanRealOnChain(rng),
             derivatives=VaticanRealDerivatives(rng),
             etf=MockEtfFlows(rng),
             rng=rng,
