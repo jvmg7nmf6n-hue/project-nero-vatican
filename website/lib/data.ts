@@ -21,6 +21,7 @@ import type {
   StatsExport,
   StrategiesExport,
   StrategyDescriptions,
+  TrialEntriesExport,
 } from "./types";
 
 export const GITHUB_RAW_BASE =
@@ -149,6 +150,14 @@ export function fetchFactoryLoopStatus(): Promise<FactoryLoopStatusExport | null
 // hypothesis has been admitted, same convention as every fetcher above.
 export function fetchForwardTrial(): Promise<ForwardTrialRecord[] | null> {
   return fetchJson<ForwardTrialRecord[]>("forward_trial.json");
+}
+
+// CC-1 Part D6: genuine Forward Trial ENTRY events (nero_core.execution.
+// export_trial_entries.py) -- distinct from fetchForwardTrial above, which
+// reflects Trial ADMISSION status, not a live market position. Null until
+// the export has run at least once.
+export function fetchTrialEntries(): Promise<TrialEntriesExport | null> {
+  return fetchJson<TrialEntriesExport>("trial_entries.json");
 }
 
 // CC-1 Master Directive, Phase 2.1: Eve's own three fetchable files -- see

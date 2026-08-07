@@ -574,6 +574,31 @@ export interface ForwardTrialSourceRef {
   attempt_id?: string;
 }
 
+// CC-1 Part D6/D6a: nero_core/execution/export_trial_entries.py's own output
+// shape. A genuine Forward Trial ENTRY (an execution_log row with strategy
+// TRIAL:<trial_id> and signal_type ENTRY) -- distinct from ForwardTrialRecord
+// above, which reflects Trial ADMISSION status, not a live market position.
+export interface TrialEntry {
+  execution_log_id: number;
+  trial_id: string;
+  hypothesis_name: string | null;
+  origin_agent: "adam" | "eve" | null;
+  asset: string;
+  timeframe: string | null;
+  direction: "LONG" | "SHORT" | null;
+  entry_price: number | null;
+  stop_loss: number | null;
+  target: number | null;
+  timestamp: string;
+  candle_timestamp: number;
+}
+
+export interface TrialEntriesExport {
+  schema_version: number;
+  last_updated: string;
+  entries: TrialEntry[];
+}
+
 export interface ForwardTrialRecord {
   trial_id: string;
   source_hypothesis_ref: ForwardTrialSourceRef;
