@@ -7,6 +7,7 @@ jest.mock("@/lib/data");
 
 const mockFetchStrategies = jest.mocked(data.fetchStrategies);
 const mockFetchQuantCrossAsset = jest.mocked(data.fetchQuantCrossAsset);
+const mockFetchCandleData = jest.mocked(data.fetchCandleData);
 
 const ROSTER: StrategiesExport = {
   schema_version: 1,
@@ -38,6 +39,15 @@ const CROSS_ASSET: QuantCrossAssetExport = {
 };
 
 describe("QuantPage", () => {
+  beforeEach(() => {
+    // CC-1 Part D4/D5: every test below predates the 3D correlation surface
+    // section, which fetches 7 equities' candle data independently of the
+    // pre-existing correlation_matrix mocks above -- default to "not_found"
+    // (the honest "no candle file for this asset/timeframe" case) so those
+    // tests keep exercising exactly what they always tested, undisturbed.
+    mockFetchCandleData.mockResolvedValue({ status: "not_found" });
+  });
+
   afterEach(() => {
     jest.resetAllMocks();
   });

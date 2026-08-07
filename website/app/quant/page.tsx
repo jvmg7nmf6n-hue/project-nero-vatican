@@ -1,9 +1,20 @@
 import CorrelationHeatmap from "@/components/CorrelationHeatmap";
+import Correlation3DSurface from "@/components/Correlation3DSurface";
 import PageHeader from "@/components/PageHeader";
 import SectionHeader from "@/components/SectionHeader";
-import { fetchQuantCrossAsset, fetchStrategies } from "@/lib/data";
+import type { Candle } from "@/lib/candleData";
+import { fetchCandleData, fetchQuantCrossAsset, fetchStrategies } from "@/lib/data";
 import { TABLE_BODY_CELL, TABLE_BODY_ROW, TABLE_HEADER_CELL, TABLE_HEADER_ROW } from "@/lib/designTokens";
 import { buildMarketAssetList } from "@/lib/marketsOverview";
+
+// CC-1 Part D4/D5: the 7-equity 1day group -- confirmed via docs/site_data/
+// quant_cross_asset.json that every pair among these 7 already has a real,
+// non-null correlation (fully overlapping calendar, unlike most cross-asset-
+// class pairs, e.g. SILVER's business-days-only futures grid vs BTC's 24/7
+// one) -- the best real candidate for a gap-free 3D surface. See
+// docs/investigations/website_3d4d_correlation_d4d5.md.
+const SURFACE_ASSETS = ["AAPL", "AMZN", "GOOGL", "META", "MSFT", "NVDA", "TSLA"];
+const SURFACE_TIMEFRAME = "1day";
 
 export const revalidate = 300;
 
@@ -16,12 +27,26 @@ function formatPvalue(pvalue: number | null): string {
 }
 
 export default async function QuantPage() {
-  const [strategiesExport, quantCrossAsset] = await Promise.all([fetchStrategies(), fetchQuantCrossAsset()]);
+  const [strategiesExport, quantCrossAsset, surfaceCandleResults] = await Promise.all([
+    fetchStrategies(),
+    fetchQuantCrossAsset(),
+    Promise.all(SURFACE_ASSETS.map((asset) => fetchCandleData(asset, SURFACE_TIMEFRAME))),
+  ]);
   const roster = strategiesExport?.strategies ?? [];
   const assets = buildMarketAssetList(roster).map((spec) => spec.asset);
   const pairs = quantCrossAsset?.correlation_matrix ?? [];
   const cointegration = quantCrossAsset?.cointegration ?? [];
   const leadLag = quantCrossAsset?.lead_lag ?? [];
+
+  // Only assets whose candle fetch actually succeeded -- fetchCandleData never
+  // throws (see lib/data.ts), so a single asset's fetch failing narrows the
+  // surface rather than blanking the whole section.
+  const surfaceCandlesByAsset: Record<string, Candle[]> = {};
+  SURFACE_ASSETS.forEach((asset, i) => {
+    const result = surfaceCandleResults[i];
+    if (result.status === "ok") surfaceCandlesByAsset[asset] = result.data.candles;
+  });
+  const surfaceAssetsAvailable = SURFACE_ASSETS.filter((a) => surfaceCandlesByAsset[a]);
 
   return (
     <div className="flex flex-col gap-10">
@@ -44,6 +69,25 @@ export default async function QuantPage() {
         ) : (
           <p data-testid="quant-page-unavailable" className="text-muted text-sm">
             Cross-asset data coming soon.
+          </p>
+        )}
+      </section>
+
+      <section>
+        <SectionHeader
+          title="3D correlation surface (animated over time)"
+          description={`Same rolling 30-return-period Pearson correlation as the matrix above, computed
+          across ${surfaceAssetsAvailable.length} mega-cap tech equities (${surfaceAssetsAvailable.join(", ")}) --
+          the one group in this project's roster where every pair shares a fully-overlapping
+          real calendar grid, so the surface has no N/A gaps to render. Drag the slider for a
+          real 4th dimension: each frame is an independently computed rolling window ending at
+          a different real historical date -- never interpolated between two real points.`}
+        />
+        {surfaceAssetsAvailable.length >= 2 ? (
+          <Correlation3DSurface assets={surfaceAssetsAvailable} candlesByAsset={surfaceCandlesByAsset} />
+        ) : (
+          <p data-testid="correlation-3d-unavailable-page" className="text-muted text-sm">
+            Not enough candle data available yet for the 3D surface.
           </p>
         )}
       </section>

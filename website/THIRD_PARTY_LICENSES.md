@@ -7,6 +7,7 @@ is a pinned exact version, license-verified before use.
 |---|---|---|---|---|
 | `lightweight-charts` | 4.2.3 (already present) | Apache-2.0 | Candlestick charts | Pre-existing dependency, listed here for completeness of the license inventory. |
 | `@xyflow/react` | 12.11.2 | MIT | Factory Loop pipeline diagram (D3) | Free core package only — no `@xyflow/react-pro` or any Pro-tier import anywhere in this repo. `proOptions.hideAttribution` is used, which the MIT license permits (attribution is a courtesy watermark, not a license term). |
+| `plotly.js-dist` | 3.7.0 | MIT | 3D/4D correlation surface on `/quant` (D4/D5) | Loaded via client-side dynamic import only (`components/Correlation3DSurface.tsx`) — not SSR'd. `@types/plotly.js` (dev dependency, 3.0.13, MIT) provides types via a small shim (`types/plotly-js-dist.d.ts`), since `plotly.js-dist` ships no bundled declarations and the types package declares a different module specifier. |
 
 `npm audit` (run after adding `@xyflow/react`) reports 6 pre-existing high-
 severity advisories, all in `next`/`eslint-config-next`'s own transitive
