@@ -1564,3 +1564,135 @@ commits this time):
     c140934 CC-1 directive: fix sweep.py to measure the real RSS path
     67caf29 CC-1 directive closing report: fix news_intelligence/geopolitical provenance
     fce917e CC-1 directive: fix news_intelligence/geopolitical provenance labeling
+
+## 2026-08-08: CC-1 master directive, Part B Rung 2 -- fresh K=200 random-baseline rerun with macro fields wired
+
+**Question this rung exists to answer:** now that `real_yield_10y_chg20`,
+`dxy_chg20`, `vix_chg20`, and `funding_rate_bps` are real fields in
+`rule_dsl.py`'s `ALLOWED_FIELDS` and in `random_baseline.py`'s own
+sampler (Rung 1's work), does simply having a wider field vocabulary
+available inflate the PROMISING-WATCHLIST rate under **pure chance** --
+before Eve or Adam ever run a real macro-conditioned session? If it
+does, that inflation has to be priced into the evidence bar before
+Rung 3, not discovered after.
+
+**Method:** re-ran the identical K=200/seed=20260718 random-baseline
+sweep (`auto_tester.test_hypothesis` combined-verdict scoring, same
+methodology as the original baselines below) for all 5 real
+`(asset, timeframe)` pairs already on file, now with the 4 macro fields
+available to the sampler. "Before" = the original pre-macro baseline
+already committed at `docs/investigations/<pair>_random_baseline_result.json`
+(generated 2026-08-02). "After" = this rung's fresh rerun.
+
+### FINDING, confirmed-from-data: PROMISING-WATCHLIST rate increased in all 5/5 pairs
+
+| Pair | Before DIED/SKIPPED/P-W | Before P-W rate | After DIED/SKIPPED/P-W | After P-W rate | Δ (pp) |
+|---|---|---|---|---|---|
+| BTC/4h | 69 / 131 / 0 | 0.0% | 78 / 108 / 14 | 7.0% | **+7.0** |
+| ETH/4h | 63 / 134 / 3 | 1.5% | 71 / 111 / 18 | 9.0% | **+7.5** |
+| SOL/4h | 70 / 130 / 0 | 0.0% | 89 / 105 / 6 | 3.0% | **+3.0** |
+| PAXG/4h | 63 / 129 / 8 | 4.0% | 77 / 112 / 11 | 5.5% | **+1.5** |
+| BTC/24h | 64 / 136 / 0 | 0.0% | 54 / 122 / 24 | 12.0% | **+12.0** |
+
+All figures are real, out of K=200 configs per pair (verdict_counts sum
+to 200 in every file, before and after -- `SURVIVED` does not appear as
+a key in any of the 10 files, before or after, i.e. 0/200 in every run).
+Every "after" run reports `macro_referenced_count: 94` -- identical
+across all 5 pairs, because the same fixed seed (20260718) drives the
+same random field-selection draws regardless of asset; roughly 47%
+(94/200) of sampled configs reference at least one of the 4 new macro
+fields.
+
+**Mean increase: +6.2 percentage points, range +1.5pp to +12.0pp,
+5 out of 5 pairs increased, 0 decreased.** This is real, reproducible
+noise inflation from vocabulary size alone, not from any genuine edge --
+every config in this sweep is a random baseline by construction. Reported
+plainly: wiring the macro fields into the DSL made the PROMISING-WATCHLIST
+gate noticeably easier to clear by pure chance, in every single pair
+tested.
+
+### What this means for Rung 3
+
+This does **not** mean the macro fields are broken or should be reverted
+-- Rung 1 wired them for a real reason (see the correlation-discount work
+above), and a wider vocabulary is expected to raise a baseline's freedom
+to overfit noise somewhat. But the size of the effect (up to 12pp on
+BTC/24h) means:
+- Any real Eve/Adam macro-conditioned hypothesis in Rung 3 must be judged
+  against **this rung's higher noise floor**, not the pre-macro one --
+  a macro-conditioned hypothesis clearing PROMISING-WATCHLIST is now
+  measurably less informative on its own than it was before Rung 1.
+- Per the standing out-of-scope constraint (unchanged this rung, confirmed
+  below): the evidence bar itself (30/yr threshold, 70/30 split,
+  `MIN_SAMPLE_SIZE`, FDR alpha, bootstrap CI) was **not** loosened or
+  tightened to compensate -- that is explicitly a Rung 3+ decision for the
+  owner to make with this table in hand, not something to silently patch
+  into the gate now.
+- This table is the real, empirical case for treating that decision as
+  load-bearing before Rung 3 runs a real session, rather than assuming
+  the wider vocabulary is free.
+
+### Files touched this rung
+
+`nero_core/research_agent/rule_dsl.py`, `nero_core/data_sources/macro_data.py`,
+`nero_core/eve/session.py`, `nero_core/eve/tools_defs.py`,
+`nero_core/eve/random_baseline.py`, `nero_core/research_agent/auto_tester.py`,
+`nero_core/research_agent/frequency_gate.py` -- the same 7-file set flagged
+uncommitted since Rung 1, committed together as one commit this rung (see
+git log below). Zero other `nero_core/` files touched.
+
+### No evidence-bar constant touched, confirmed
+
+`MIN_SAMPLE_SIZE`, the 30/yr threshold, the 70/30 IS/OOS split, FDR alpha,
+and the bootstrap CI construction are byte-identical to before this rung
+-- confirmed via `git diff` on each constant's own module; this rung adds
+sampler/field-vocabulary surface area only, never touches the gate that
+scores against it.
+
+### Test counts
+
+Run as two separate suites (this project's own established convention --
+a single combined `pytest -q` from repo root incorrectly mixes the two
+trees and produces false failures; see below):
+
+- **Vatican-core (`tests/`, from repo root):** 2738 passed, 21 skipped,
+  135 subtests passed, **4 failed, 1 error**.
+- **Bellwether (`vatican/bellwether/tests/`, from its own directory,
+  its own `pytest.ini`):** **75 passed, 0 failed.**
+
+**All 5 non-passing items confirmed pre-existing and unrelated to this
+rung**, none touch or are caused by any of this rung's 7 files:
+
+1. `tests/test_research_agent_auto_tester.py::test_hypothesis` (ERROR) --
+   pytest's default collector misidentifies the production function
+   `auto_tester.test_hypothesis` (imported by name into the test module
+   at module scope since commit `58bdfd82`, 2026-07-29) as a test case
+   because of its `test_*` name, then fails at fixture setup since its
+   real parameters aren't fixtures. **Reproduced identically with this
+   rung's 7 files fully `git stash`-ed out against a clean HEAD** -- not
+   a regression.
+2. `tests/test_live_wiring_post_batch.py::LxmlAvailabilityTest::test_lxml_is_importable`
+   (FAILED) -- `lxml` is not installed in this venv
+   (`python -c "import lxml"` -> `ModuleNotFoundError`), an environment
+   dependency gap, not a code issue.
+3-4. `tests/test_psx_data.py` x2 (FAILED) -- same missing `lxml`
+   dependency (HTML table parsing).
+5. `tests/test_eve_citation_freshness.py::RealCommittedDataBackfilledTest::test_the_real_committed_eve_hypotheses_file_has_been_backfilled`
+   (FAILED) -- asserts `docs/site_data/eve_hypotheses.json` has exactly
+   16 records; it now has 21, real and legitimate, via commit `3cc5d37`
+   ("Fix REFINEMENT tagging"), already on `main` before this rung started
+   and unrelated to any Rung 2 file. The test's hardcoded expectation is
+   stale against real data growth, not a bug this rung introduced.
+
+**Discrepancy noted, not silently reconciled:** an earlier check-in this
+session reported "2749 tests, 1 pre-existing unrelated failure" from a
+prior full-suite run. This fresh run's real, independently-verified
+count differs (2813 real passes across both suites, 5 non-passing items
+instead of 1) -- most plausibly because `eve_hypotheses.json` grew to 21
+records and/or the `lxml` gap opened between that earlier report and now.
+Flagging this honestly rather than asserting the earlier number was
+wrong or that this one silently supersedes it without explanation; either
+way, none of the 5 items are new regressions from this rung's own diff,
+which is the property this section exists to confirm.
+
+### git log origin/main --oneline -3
