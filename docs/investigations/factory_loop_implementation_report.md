@@ -4753,3 +4753,200 @@ Commit `ba0adf8`: `website/app/agents/page.tsx`,
 `website/lib/agentsPage.ts`, `website/__tests__/agentsPage.test.ts` --
 3 files, no other diff.
 
+## 2026-08-07: CC-1 directive -- Fix the REFINEMENT tagging mechanism gap
+
+A real gap found during the Learning Curve scoping directive: `REFINEMENT`
+was only ever applied as a reclassification of an already-raised
+`SELF_DERIVATIVE` flag, so a genuinely declared, valid refinement could
+carry zero contamination tags at all. Fixed. `trial.py`/`repair_to_trial.py`/
+`graveyard_distillation.py` untouched; no evidence-bar/FDR-threshold
+constant touched (confirmed below).
+
+### Item 1 -- exact mechanism, confirmed scope
+
+**1a.** Traced `nero_core/eve/scoring.py::apply_self_derivative_tags`
+(lines 584-627 before this fix). It calls `tag_derivative(raw, eve_history,
+tag_name=SELF_DERIVATIVE_TAG_NAME)` (line 619), where `eve_history` is
+**prior sessions only** -- `nero_core/eve/pipeline.py::
+_load_eve_history_excluding_session` explicitly filters out the current
+session's own records (its own docstring: "an unfiltered read would
+compare every hypothesis against itself and flag 100% of them"). Only a
+flag `tag_derivative` actually produces (similarity >= `
+DERIVATIVE_SIMILARITY_THRESHOLD = 0.6`, scoring.py:147) whose
+`matched_hypothesis_name` equals the declared `derived_from.
+parent_hypothesis_name` gets reclassified from `SELF_DERIVATIVE` to
+`REFINEMENT` (lines 620-623, before this fix). If the declared parent is
+never even compared against -- because it's in the SAME session as the
+child, and therefore structurally absent from `eve_history` -- no flag is
+ever produced for it, so there is nothing to reclassify. **CONFIDENCE:
+confirmed-from-code.**
+
+**A correction to the directive's own framing, found while tracing this
+precisely:** the real, confirmed root cause for `CHANNEL_BREAKOUT_HIGH20_
+BTC_4H` is **same-session exclusion, not a sub-threshold similarity miss**.
+Computed directly before writing any fix: the real lexical similarity
+between `CHANNEL_BREAKOUT_HIGH20_BTC_4H`'s and its declared parent `VOL_
+CONFIRMED_CHANNEL_BREAKOUT_BTC_4H`'s full mechanism text is **0.6638**,
+ABOVE the 0.6 threshold. Both hypotheses are in the same session
+(`eve-20260806T180819Z-e777cdef`), confirmed directly from `docs/site_data/
+eve_hypotheses.json`'s own `session_id` field on both records -- so
+`tag_derivative` never had the parent in its comparison pool at all,
+regardless of what the similarity score would have been. **CONFIDENCE:
+confirmed-from-data** (both the similarity computation and the session-id
+match were run directly against the real committed file before this fix).
+
+**1b.** Checked all 21 real Eve hypotheses on file (`eve_hypotheses.json`)
+for any `derived_from` declaration, not just the one already known.
+**Exactly one exists**: `CHANNEL_BREAKOUT_HIGH20_BTC_4H`. Also confirmed
+(`grep -rl derived_from docs/site_data/*.json`) that no other committed
+site-data file contains real `derived_from` data, and Adam's own hypothesis
+schema (`hypothesis_gen.py`'s `HYPOTHESIS_JSON_KEYS`/`WEB_HYPOTHESIS_JSON_
+KEYS`) has no `derived_from` concept at all -- this gap can only ever
+affect Eve. **This is the only real instance today. CONFIDENCE:
+confirmed-from-data.**
+
+### Item 2 -- the fix
+
+**2a.** New `nero_core/eve/scoring.py::apply_declared_refinement_tags
+(scored_records, known_hypothesis_names)`. For each record with a
+`derived_from` present, re-runs the SAME `validate_derived_from` check
+session.py's own pre-submit gate already ran (structural completeness +
+parent membership in `known_hypothesis_names`) -- if valid, appends a
+REFINEMENT tag directly, tagged `method: "declared_derived_from (validated
+structurally, independent of the similarity threshold)"` so it's
+distinguishable from a similarity-based reclassification. Purely additive:
+never removes/alters an existing tag, and skips adding a duplicate
+REFINEMENT entry if `apply_self_derivative_tags`'s own reclassification
+already credited the same declared parent (tested,
+`test_does_not_duplicate_a_tag_already_added_by_reclassification`). An
+"inert" derived_from (session.py's own documented retry-exhaustion case --
+structurally incomplete, or naming a parent that was never real) is
+correctly never tagged (tested,
+`test_invalid_derived_from_naming_a_never_proposed_parent_is_never_tagged_refinement`).
+`SELF_DERIVATIVE` itself is completely untouched -- confirmed by
+`test_genuinely_undeclared_near_duplicate_is_still_self_derivative_unaffected_by_the_fix`.
+
+Wired into `nero_core/eve/pipeline.py::run_pipeline`, called immediately
+after `apply_self_derivative_tags` and before `apply_fdr_correction`.
+`known_hypothesis_names` is built the same way `session.py`'s own
+pre-submit validator builds it -- Adam's history | Eve's prior sessions |
+this session's own now-finalized batch (`scored`) -- so a same-session
+parent (exactly the real case) validates correctly here too, unlike
+`eve_history` alone.
+
+**2b -- the real edge case, surfaced not silently resolved.** Yes: a
+hypothesis can have both a valid `derived_from` AND high lexical similarity
+to a DIFFERENT, undeclared hypothesis. This was already structurally
+possible before this fix (`apply_self_derivative_tags`'s own pre-existing
+docstring already describes it), and this fix does not change how it's
+represented: the record gets **both** tags -- `REFINEMENT` (for the
+declared, credited parent, via the new independent path) and
+`SELF_DERIVATIVE` (for the unrelated, undeclared match, unchanged) --
+and stays **excluded** from the FDR family, because `apply_fdr_correction`'s
+exclusion check (`is_self_derivative`) only ever looks for a
+`SELF_DERIVATIVE` tag, never a `REFINEMENT` one. Declaring one real parent
+still does not launder an unrelated undeclared near-duplicate. Proven end
+to end by `test_declared_refinement_plus_unrelated_similarity_gets_both_tags_and_stays_excluded_from_fdr`.
+No threshold change was needed or made.
+
+**2c -- FDR family membership, confirmed unaffected.**
+`apply_fdr_correction`'s exclusion condition (scoring.py) is `is_self_
+derivative(r)` -- it has never read `is_refinement()` at all, and this fix
+adds no new call site that would change that. A record tagged REFINEMENT
+**only** via the new independent path (no similarity-based tag on it at
+all) is confirmed, by a dedicated new test
+(`test_declared_refinement_alone_no_similarity_flag_at_all_is_not_excluded_from_fdr`),
+to receive a real, non-null `fdr_survives_oos` and no `excluded_from_fdr_
+family_reason` -- exactly B1's original design intent, unchanged.
+
+**2d -- real before/after, `CHANNEL_BREAKOUT_HIGH20_BTC_4H`.** One-time,
+idempotent backfill (`tools/backfill_refinement_tags_20260807.py`, mirrors
+`tools/backfill_session_regime_tags_20260806.py`'s own established
+convention) run against the real committed `docs/site_data/eve_hypotheses.
+json`:
+
+```
+CHANNEL_BREAKOUT_HIGH20_BTC_4H (eve-20260806T180819Z-e777cdef):
+  contamination_tags [] -> [{'tag': 'REFINEMENT',
+    'matched_hypothesis_name': 'VOL_CONFIRMED_CHANNEL_BREAKOUT_BTC_4H',
+    'method': 'declared_derived_from (validated structurally, independent
+    of the similarity threshold)'}]
+```
+
+Re-run a second time immediately after: `"Every record already carries the
+tags its own derived_from declaration earns -- no-op."` -- confirmed
+idempotent. Confirmed byte-unaffected: `fdr_survives_is=False`,
+`fdr_survives_oos=False`, `excluded_from_fdr_family_reason=None` -- the
+record was already tested and genuinely did not clear FDR significance on
+its own p-value merits; this fix only corrects its tag, never its verdict
+or FDR outcome.
+
+**2e -- regression tests.** 6 new tests added to `tests/test_eve_scoring_fdr.py`
+(`DeclaredRefinementIndependentOfSimilarityTest`):
+`test_the_real_confirmed_case_same_session_parent_above_threshold_gets_refinement`
+(reproduces the exact real mechanism text and names, confirms the real
+0.6638 similarity independently, confirms `apply_self_derivative_tags`
+alone produces nothing, confirms the fix produces REFINEMENT),
+`test_genuinely_undeclared_near_duplicate_is_still_self_derivative_unaffected_by_the_fix`,
+`test_invalid_derived_from_naming_a_never_proposed_parent_is_never_tagged_refinement`,
+`test_does_not_duplicate_a_tag_already_added_by_reclassification`,
+`test_declared_refinement_plus_unrelated_similarity_gets_both_tags_and_stays_excluded_from_fdr`
+(item 2b), `test_declared_refinement_alone_no_similarity_flag_at_all_is_not_excluded_from_fdr`
+(item 2c).
+
+### Item 3 -- corrected real numbers
+
+**3a.** Re-tallied directly against the real, now-backfilled `eve_
+hypotheses.json` (21 records): **SELF_DERIVATIVE=3** (unchanged),
+**DERIVATIVE=3** (unchanged -- Adam-comparison tag, entirely unaffected by
+this fix), **REFINEMENT=1** (was 0 before this fix).
+
+**3b.** The mechanism is now honestly correct -- the one real declared
+refinement in this project's history is finally credited. Real number:
+**1 of 21 hypotheses (4.8%) carry a REFINEMENT tag**, or equivalently
+**1 of 1 real `derived_from` declarations (100%) is now correctly
+recognized** (was 0%). Honest recommendation, unchanged from the prior
+scoping report: **this is now a sample-size problem, not a mechanism-bug
+problem** -- real progress, but n=1 is still too small to chart a
+meaningful "rate" on its own. The Refinement Rate chart should wait for
+more real declared refinements to accumulate, now that the mechanism
+crediting them is confirmed correct.
+
+### Test counts
+
+`tests/test_eve_scoring_fdr.py`: 40 -> 46 tests (confirmed via `git stash`/
+re-run before writing this section), all passing.
+`tests/test_eve_contamination_tags.py` + `tests/test_eve_scoring_fdr.py`
+together: 71 tests, all passing. Full `test_eve*.py` sweep: 367 tests, 1
+failure -- confirmed pre-existing and unrelated (see below), not caused by
+this directive.
+
+### Stale figure found, unrelated to this directive's own scope
+
+`tests/test_eve_citation_freshness.py::RealCommittedDataBackfilledTest`
+asserts `len(eve_hypotheses.json) == 16` -- stale since commit `2baa7f1`
+(Eve Session 2) added 5 more real records. **Real current count: 21.**
+This predates this directive (the assertion was last touched in commit
+`c7f4df9`, 2026-08-05, before Session 2 landed) and is unrelated to the
+REFINEMENT mechanism -- confirmed via `git diff --stat` that this
+directive's own backfill changed only one record's `contamination_tags`
+(8 lines), never the record count. Not fixed here.
+
+### Shipped
+
+```
+git log origin/main --oneline -3
+3cc5d37 Fix REFINEMENT tagging: independent of the SELF_DERIVATIVE similarity check
+c7ee216 Update signal alerts state
+221e23a Update live scheduler execution log
+```
+
+Commit `3cc5d37`: `nero_core/eve/scoring.py`, `nero_core/eve/pipeline.py`,
+`docs/site_data/eve_hypotheses.json`, `tests/test_eve_scoring_fdr.py`,
+`tools/backfill_refinement_tags_20260807.py` -- 5 files, no other diff.
+Rebased onto 2 intervening automated data-only bot commits
+(`signal-alerts`, `live-scheduler`, confirmed via `git diff --stat`
+before rebasing); Rung 2's own 7 uncommitted `nero_core/` files were
+stashed first and restored unchanged after, verified via `git status
+--short` before and after.
+
