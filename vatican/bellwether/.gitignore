@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+.bellwether_store.json
+*.egg-info/
+dist/
+build/
+.venv/

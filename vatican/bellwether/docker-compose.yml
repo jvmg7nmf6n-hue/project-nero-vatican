@@ -1,0 +1,23 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Set your key here (or via an .env file) to enable live Claude reasoning.
+      - BELLWETHER_ANTHROPIC_API_KEY=${BELLWETHER_ANTHROPIC_API_KEY:-}
+      - BELLWETHER_LLM_MODEL=${BELLWETHER_LLM_MODEL:-claude-sonnet-4-6}
+      - BELLWETHER_DATA_MODE=${BELLWETHER_DATA_MODE:-mock}
+      - BELLWETHER_STORE_PATH=/data/.bellwether_store.json
+    volumes:
+      - bellwether_data:/data
+    restart: unless-stopped
+
+  # Reserved for the production build (Celery broker / signal cache).
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+
+volumes:
+  bellwether_data:

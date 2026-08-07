@@ -1,0 +1,22 @@
+# Pinned, exact-version lock for vatican/bellwether, resolved 2026-08-07
+# against Vatican's own environment (Python 3.14.6) with no conflicts found
+# against Vatican's own requirements.txt (pandas/numpy/pydantic>=2,<3/
+# statsmodels/yfinance/requests/lxml/empyrical-reloaded) — pydantic 2.13.4
+# satisfies Vatican's own `pydantic>=2.0,<3` pin, no downgrade needed either
+# direction.
+#
+# requirements.txt (above, unmodified from upstream) is the vendored
+# package's own declared range; this file is what Stage 1 actually verified
+# runs clean, install this one for a reproducible environment.
+pydantic==2.13.4
+pydantic-settings==2.14.2
+pydantic_core==2.46.4
+httpx==0.28.1
+anyio==4.14.2
+h11==0.16.0
+python-dotenv==1.2.2
+fastapi==0.141.1
+starlette==1.4.1
+uvicorn==0.52.1
+pytest==9.1.1
+pytest-asyncio==1.4.0
