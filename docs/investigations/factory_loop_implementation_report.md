@@ -4008,3 +4008,232 @@ at 68.1% via GitHub's own API rather than 61% via the `execution_metadata`
 proxy) is a real, independent problem, not the direct cause of that
 specific number.
 
+---
+
+## 2026-08-07: CC-1 directive -- fix the weekday-mismatch bug; restate the clustered-drops options
+
+### Part 1 -- the weekday mismatch, fixed
+
+**1a. FINDING** (confirmed-from-code, two independent paths, plus
+confirmed-from-data across all 4 affected configs). The data source labels
+its real weekly candle **Monday** (`weekday() == 0`), not Friday.
+`WEEKLY_CLOSE_WEEKDAY` is defined at `nero_core/execution/
+candle_schedule.py:85` and consumed at exactly one site,
+`candle_schedule.py:111` (`candle_boundary_due`'s `"1week"` branch).
+Traced the mechanism precisely, in two independent Twelve-Data fetch
+paths that both confirm the same convention: `nero_core/data_sources/
+market_data.py::_load_twelve_data` (GOLD's native `"1week"`) and
+`nero_core/data_sources/forex_data.py::_normalize_frame` (EUR/USD/GBP/USD/
+USD/JPY's `"1week"`, via `DONCHIAN_TREND`) both treat Twelve Data's own
+raw `datetime` field as the bar's `close_time` directly (`frame
+["close_time"] = frame["date"]...`, `frame["open_time"] = frame
+["close_time"] - interval_ms`) — this is Twelve Data's own real vendor
+convention for these 4 instruments' native weekly bars, not a bug in
+either fetch function. Every one of the 4 configs' real, already-logged
+`candle_timestamp` values (5 rows checked) fell on a Monday, 00:00:00 UTC,
+with zero exceptions.
+
+**A separate, real, GOLD-specific bug found while verifying 1a's own data
+source — flagged, NOT fixed (out of this directive's explicit scope, a
+different bug from the one asked for).** While cross-checking against
+`docs/site_data/candles/GOLD_1week.json`, its exported `"time"` field
+showed **Sunday**, not Monday — a further, separate 1-day discrepancy.
+Traced exactly: `export_candle_data.py::_row_to_candle` writes
+`open_time`, not `close_time`, for its `"time"` field
+(`"time": int(row["open_time"]) // 1000`). `market_data.py`'s own
+`_twelve_data_interval_milliseconds` helper (used only by GOLD's path) has
+**no `"1week"` entry**, silently falling back to its 1-day default —
+confirmed by direct comparison against `forex_data.py`'s own, separate
+`TWELVE_DATA_INTERVAL_MILLISECONDS` dict, which correctly has
+`"1week": 604_800_000`. This makes GOLD's exported `open_time` (and
+therefore its price-chart display) wrong by 6 days — Sunday
+(close-1-day) instead of the correct Monday (close-7-days, which happens
+to land on the same weekday as close for a 7-day interval). Confirmed
+this does NOT affect anything already fixed: `candle_boundary_due`, the
+scheduler's own due-check, and `execution_log.candle_timestamp` all use
+`close_time`, computed directly from Twelve Data's own timestamp with no
+dependency on this separate, missing dict entry. Recommend fixing
+`_twelve_data_interval_milliseconds` to add `"1week": 604_800_000`
+(matching `forex_data.py`'s own dict exactly) in a future, separately-
+scoped change — not implemented here.
+
+**1b. WHAT SHIPPED.** One constant, one config, confirmed shared by all 4
+affected assets (no per-asset override exists anywhere —
+`SINGLE_ASSET_CONFIGS`' GOLD entries and `DONCHIAN_FOREX_CONFIGS`'
+EUR/USD, GBP/USD, USD/JPY entries all route through the identical
+`candle_boundary_due("1week", now)` call). `WEEKLY_CLOSE_WEEKDAY` changed
+from `4` (Friday) to `0` (Monday), `candle_schedule.py:85`,
+`WEEKLY_CLOSE_HOUR_UTC` left unchanged (already correctly `0`, matching
+every observed real candle's exact `00:00:00 UTC` timestamp). Fixes all 4
+configs simultaneously, and requires zero change to
+`.github/workflows/live_scheduler.yml` — the existing `00:00-03:59 UTC`
+dense cron window already runs every day of the week (its own cron
+pattern is `5,25,45 0-3 * * *`, no weekday restriction), so it already
+covers Monday exactly as densely as it previously (incorrectly) covered
+Friday.
+
+Existing tests hardcoding the old Friday assumption were updated to their
+real Monday equivalents, not just left broken: `tests/
+test_candle_schedule.py` (3 assertions: due-near-midnight, not-due-on-the-
+day-before/Sunday, not-due-in-the-afternoon, plus the "actually observed
+delayed run time" regression pair), `tests/test_live_scheduler.py`
+(`FRIDAY_MIDNIGHT_UTC` renamed to `WEEKLY_BOUNDARY_MIDNIGHT_UTC` and
+redated 2026-07-17→2026-07-13, both real Mondays, used at 17 call sites —
+"24h" doesn't care which weekday, so only the date needed to change, not
+any test's shape or assertions), and `tests/test_export_candle_data.py`
+(`NOW_1WEEK_DUE` redated 2026-07-24→2026-07-20, a real Monday, kept
+distinct from `NOW_24H_DUE`).
+
+**1c. WHAT SHIPPED.** `tests/test_weekly_close_weekday_matches_real_data.py`,
+two tests: (1) a permanent, hardcoded assertion that `WEEKLY_CLOSE_WEEKDAY
+== 0`, citing this investigation — catches an accidental revert even with
+no live data available; (2) a live cross-check (skipped, not failed, if
+`data/truth_ledger.db` isn't present) that pulls every real, already-
+logged `candle_timestamp` for all 4 named `(strategy, asset)` pairs and
+asserts every single one falls on `WEEKLY_CLOSE_WEEKDAY` — deliberately
+sourced from `execution_log`'s own `candle_timestamp` (confirmed reliable,
+`close_time`-based), NOT from `docs/site_data/candles/*.json` (confirmed
+unreliable for GOLD specifically, per the separate bug found above). A
+prominent comment marks exactly where to add a 5th config's `(strategy,
+asset)` pair if one is ever added.
+
+**1d. FINDING.** Real expected staleness going forward: once this fix is
+deployed, a normal week's GOLD/EUR-USD/GBP-USD/USD-JPY evaluation should
+land within the intended `SINGLE_SHOT_TOLERANCE_MINUTES` = 240 minutes (4
+hours) of the real Monday `00:00:00 UTC` close — a ~24x reduction from the
+~96-99h figures measured under the Friday mismatch. **This has NOT been
+confirmed against a real post-fix evaluation yet** — this fix is landing
+today (Friday, 2026-08-07); the next real Monday boundary is 2026-08-10.
+**What to check, once that date has passed**: query
+`data/truth_ledger.db`'s `execution_log` for the most recent
+`BREAKOUT_MOMENTUM`/`GOLD` row and recompute `_last_evaluation_gap_hours`
+(or simply re-check `docs/site_data/health_check.json`'s own
+`evaluation_gap_hours` for GOLD) — expect a value under 4.0h, not
+`freshness_flagged: true`. **One real caveat, not eliminated by this fix**:
+Part 2's own cron-drop-rate finding (68.1%) is a separate, still-
+unresolved problem — if every tick in the Monday `00:00-03:59 UTC` window
+happens to be dropped on a given week (a real, if lower-probability,
+possibility per Part 2's own clustered-drops finding below), that week's
+evaluation would still land late, for the OLD probabilistic reason, not
+the deterministic one this fix removes. The two problems are independent;
+this fix addresses only the deterministic one.
+
+### Part 2 -- clustered drops, options restated in full (report only, nothing implemented)
+
+Per explicit instruction, restating the three options from the prior
+report in full, unchanged, for review:
+
+**Option 1 — retry/catch-up for a missed window.** Confirmed via
+`candle_boundary_due` (`candle_schedule.py:95`) that no such mechanism
+exists today: the function is a strict boolean gate (`now` inside the
+tolerance window, or not); a fully-missed window is silently skipped
+forever (`assets_skipped.append({..., "classification": "NOT_DUE"})`,
+`live_scheduler.py:836`), with no state tracking "did this period's
+window ever get hit" to trigger a late catch-up run on a subsequent tick.
+Adding one would mean: track the last successfully-evaluated
+`candle_timestamp` per config (already available via
+`latest_logged_candle_timestamp`), and if a NEW real candle boundary has
+passed with zero matching log row, allow evaluation on the next run
+regardless of the normal tolerance window. **Tradeoff**: this is
+independent of, and does not conflict with, Part 1's fix — it would only
+address genuinely-missed windows going forward. A catch-up run would still
+correctly evaluate whichever candle the (now-fixed) data source calls
+"most recent," so it composes cleanly with today's fix rather than needing
+to be reconciled against it.
+
+**Option 2 — a different scheduling mechanism** (self-hosted runner, or
+an external cron service calling `workflow_dispatch` via the API instead
+of relying on the native `schedule:` event). Real cost/complexity: a
+self-hosted runner needs a persistently-running machine (real
+infrastructure cost, ongoing OS/security maintenance) — a meaningfully
+bigger operational burden for a project that is otherwise fully
+GitHub-Actions-native. An external cron service (e.g. a free-tier cron
+trigger calling `POST .../actions/workflows/{id}/dispatches`) is cheaper
+and needs no persistent server, but introduces a NEW external dependency
+and a new credential (a PAT/GitHub App token with `actions:write`, living
+outside GitHub's own secret store) — a real, if bounded, new security
+surface. `workflow_dispatch` triggered by a direct API call is plausibly
+more reliable than the native `schedule:` event specifically because it's
+a synchronous, acknowledged API request rather than a "best effort"
+internal cron match — but this is an inference from GitHub's own
+documented distinction between the two trigger types, not something
+measured directly in either investigation.
+
+**Option 3 — widen the tolerance window further.** Mechanically increases
+the number of nominal ticks per window, which — under the SAME
+independence-style math the original `:03/:33` fix used — would lower
+miss probability. Real consequence, stated precisely: a genuinely
+important caveat found in the prior investigation is that **the
+independence assumption behind that math is itself wrong**. At the
+measured 68.1% per-tick drop rate, treating drops as independent Bernoulli
+trials predicts a 16-tick window should be entirely missed only once
+every ~465 weeks — but 3 gaps exceeding the 240-minute tolerance were
+directly observed in just 9 days. Real drops are clustered/bursty (a
+platform incident drops a contiguous run of ticks), not independently
+random — meaning the tolerance-window math this codebase has relied on
+since the original 2026-07-28/29 fix systematically UNDERESTIMATES the
+real risk of a fully-missed window. Widening the window helps, but by
+less than the independence-based math would suggest, and doesn't target
+the actual clustering behavior at all.
+
+**2b. RECOMMENDATION, with reasoning (report only, not implemented).**
+Of the three, **Option 1 (retry/catch-up) is the most promising to
+implement first**, for three concrete reasons: (i) it's the only option
+that directly addresses the ACTUAL observed failure mode (a fully-missed
+window leaves the strategy stale until the next period, with no recovery
+mechanism at all) rather than trying to reduce the PROBABILITY of that
+failure mode occurring; (ii) it requires zero new infrastructure,
+external credentials, or ongoing cost — it's a bounded, local code change
+using data already being tracked (`latest_logged_candle_timestamp`);
+(iii) it composes correctly with today's Part 1 fix and would not need to
+be re-verified against a further scheduling change. Option 2 (external
+trigger) is the more principled fix for the underlying cause (GitHub's own
+`schedule:` event unreliability) and worth real consideration, but its new
+external credential is a genuine security-surface increase that deserves
+its own deliberate review, separate from a quick pick here. Option 3
+(wider tolerance) is the weakest of the three on its own — the clustered-
+drops finding means it would need to be widened by more than the
+independence-model math suggests to achieve the same real-world
+reliability, and even then it only reduces the probability of a miss
+rather than ever recovering from one. **Recommend Option 1 as a first
+step, Option 2 as a longer-term consideration, Option 3 only as a
+supplement to Option 1 (a wider window makes a catch-up run's own next
+opportunity arrive sooner), not a replacement for it.**
+
+### Test counts, Python (Part 1 fix + Part 2 restatement, no website changes this directive)
+
+Before this directive: 2693 (per the prior closing report). After:
+**2695** (+2: `tests/test_weekly_close_weekday_matches_real_data.py`).
+Same 4 pre-existing, unrelated failures throughout (2x missing `lxml`, 1
+PSX test depending on the same, 1 real-data-drift assertion in
+`test_eve_citation_freshness.py`) — confirmed via a scoped rerun covering
+every file this directive touched or could plausibly affect
+(`test_candle_schedule`, `test_live_scheduler`, `test_health_check`,
+`test_export_candle_data`, `test_weekly_close_weekday_matches_real_data`
+— 111 tests, all passing) before the full-suite confirmation. Website:
+unchanged this directive — still 671 tests, 669 passing, same 2
+pre-existing failures.
+
+### No evidence-bar constant touched, confirmed
+
+This directive touches exactly `nero_core/execution/candle_schedule.py`
+(one constant), three existing test files' own fixture dates (no
+assertion LOGIC changed, only which real calendar date each fixture
+uses), and one new test file. Zero changes to `trial.py`,
+`repair_to_trial.py`, `graveyard_distillation.py`, or any Adam/Eve scoring
+path this directive (confirmed: none of those files appear in this
+directive's diff at all). Zero changes to any admission criterion,
+frequency-gate constant, or FDR/bootstrap parameter.
+
+### Stale figures found this directive, and the real values
+
+The prior report's own Part 1/1a groundwork (WEEKLY_CLOSE_WEEKDAY should
+be Monday) is confirmed correct and is now shipped, not stale. One new
+stale figure found and NOT corrected in this directive (out of scope,
+flagged for a future fix): `docs/site_data/candles/GOLD_1week.json`'s
+exported `"time"` field is off by 6 days for every historical GOLD weekly
+candle (Sunday instead of the correct Monday), due to
+`market_data.py::_twelve_data_interval_milliseconds`'s missing `"1week"`
+entry -- a separate, real, GOLD-specific bug, distinct from the
+WEEKLY_CLOSE_WEEKDAY fix this directive shipped.
+
