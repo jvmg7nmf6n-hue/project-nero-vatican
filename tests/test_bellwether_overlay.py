@@ -217,8 +217,12 @@ class BuildRealMacroEventsTest(unittest.TestCase):
         event = matching[0]
         self.assertEqual(event.source, "Reuters")
         self.assertEqual(str(event.url), fake_item.link)
-        from bellwether.schemas import Category
+        from bellwether.schemas import Category, DataProvenance
         self.assertEqual(event.category, Category.MONETARY_POLICY)  # "Central Banks" -> MONETARY_POLICY
+        # CC-1 directive (2026-08-07, "fix news_intelligence/geopolitical
+        # provenance"): every event this function builds must be REAL -- it
+        # only ever builds from a confirmed-live RSS match.
+        self.assertEqual(event.provenance, DataProvenance.REAL)
 
     def test_fallback_result_produces_zero_events_never_fabricated_ones(self) -> None:
         """The exact honesty requirement: a fallback/no-match result must

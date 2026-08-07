@@ -124,10 +124,20 @@ def build_real_macro_events(limit_per_asset: int = 8) -> list:
     via the standard library (`email.utils.parsedate_to_datetime`) --
     real, not guessed. Falls back to the current ingestion time (never a
     fabricated PAST time) only if that specific item's pubDate is missing or
-    unparseable, which is disclosed here rather than silently swallowed."""
+    unparseable, which is disclosed here rather than silently swallowed.
+
+    CC-1 directive (2026-08-07, "fix news_intelligence/geopolitical
+    provenance"): every event this function builds gets
+    `provenance=DataProvenance.REAL` -- correct because, per the "never
+    fabricated ones" rule above, EVERY event reaching this point already
+    came from a confirmed-live RSS match, never a fallback. This is the one
+    real producer of REAL-provenance MacroEvents in this codebase;
+    `tools/sweep.py`'s own hand-authored scenario headlines and the FastAPI
+    `/analyze` route's caller-supplied events correctly stay on
+    `MacroEvent`'s own SYNTHETIC default, unaffected by this change."""
     from email.utils import parsedate_to_datetime
 
-    from bellwether.schemas import Category, MacroEvent
+    from bellwether.schemas import Category, DataProvenance, MacroEvent
 
     from nero_core.data_sources.news_feed import NewsFeedClient
 
@@ -156,6 +166,7 @@ def build_real_macro_events(limit_per_asset: int = 8) -> list:
             kwargs: dict = {
                 "headline": item.title, "source": item.source,
                 "url": item.link or None, "category": category,
+                "provenance": DataProvenance.REAL,
             }
             try:
                 if item.published:

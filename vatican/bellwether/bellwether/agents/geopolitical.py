@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 
 from ..llm import LLMUnavailable
-from ..schemas import AgentResult, Asset, Bias, Category, Signal
+from ..schemas import AgentResult, Asset, Bias, Category, DataProvenance, Signal
 from .base import AnalysisContext, BaseAgent
 
 _ESCALATION = ("war", "invasion", "strike", "missile", "sanction", "escalation",
@@ -25,11 +25,37 @@ class GeopoliticalAgent(BaseAgent):
                       if e.category == Category.GEOPOLITICS
                       or any(k in f"{e.headline} {e.summary}".lower() for k in _ESCALATION + _DEESCALATION)]
         if not geo_events:
-            return self.result(confidence=0.3, facts=["No material geopolitical events detected."])
+            # CC-1 directive (2026-08-07): UNAVAILABLE, not the SYNTHETIC
+            # default -- no geopolitically-relevant event existed this cycle
+            # to consume at all (even if ctx.events had OTHER, unrelated
+            # real events), matching combined_provenance's own "empty means
+            # UNAVAILABLE" precedent (_synthesis.py).
+            return self.result(confidence=0.3, facts=["No material geopolitical events detected."],
+                               provenance=DataProvenance.UNAVAILABLE)
         try:
             return await self._llm(ctx, geo_events)
         except LLMUnavailable:
             return self._heuristic(geo_events)
+
+    @staticmethod
+    def _events_provenance(events) -> DataProvenance:
+        """CC-1 directive (2026-08-07, "fix news_intelligence/geopolitical
+        provenance"): provenance of whichever events THIS agent actually
+        used (the filtered geo_events subset, not all of ctx.events) --
+        per-cycle, per the real MacroEvent.provenance each one carries.
+        Same all-real/any-real/none-real combination as
+        NewsIntelligenceAgent._events_provenance -- see that method's own
+        docstring for why _synthesis.weakest_provenance is the wrong tool
+        here (it never synthesizes MIXED from a genuine REAL/SYNTHETIC
+        blend, only propagates an already-MIXED value if one exists)."""
+        if not events:
+            return DataProvenance.UNAVAILABLE
+        provenances = [e.provenance for e in events]
+        if all(p == DataProvenance.REAL for p in provenances):
+            return DataProvenance.REAL
+        if any(p == DataProvenance.REAL for p in provenances):
+            return DataProvenance.MIXED
+        return DataProvenance.SYNTHETIC
 
     async def _llm(self, ctx: AnalysisContext, events) -> AgentResult:
         items = [{"headline": e.headline, "region": e.region.value} for e in events]
@@ -55,7 +81,8 @@ class GeopoliticalAgent(BaseAgent):
             pass
         return self.result(signals=signals, facts=list(data.get("facts", []))[:6],
                            confidence=min(0.85, 0.5 + tension / 2), used_llm=True,
-                           meta={"tension": tension, "direction": data.get("direction")})
+                           meta={"tension": tension, "direction": data.get("direction")},
+                           provenance=self._events_provenance(events))
 
     def _heuristic(self, events) -> AgentResult:
         text = " ".join(f"{e.headline} {e.summary}".lower() for e in events)
@@ -74,4 +101,5 @@ class GeopoliticalAgent(BaseAgent):
                    rationale="near-term risk-off proxy"),
         ]
         return self.result(signals=signals, confidence=0.4 + tension / 3,
-                           meta={"tension": tension})
+                           meta={"tension": tension},
+                           provenance=self._events_provenance(events))

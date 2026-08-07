@@ -82,20 +82,6 @@ class Bias(str, Enum):
         return cls.STRONG_BULLISH
 
 
-# --------------------------------------------------------------------------- #
-# Inputs
-# --------------------------------------------------------------------------- #
-class MacroEvent(BaseModel):
-    """A single ingested headline / data release / development."""
-    headline: str
-    summary: str = ""
-    source: str = "unknown"
-    region: Region = Region.GLOBAL
-    category: Category = Category.OTHER
-    url: str | None = None
-    published_at: datetime = Field(default_factory=_now)
-
-
 class DataProvenance(str, Enum):
     """VATICAN INTEGRATION (added Stage 2, see docs/bellwether_audit.md):
     labels whether a value came from a real data feed, a mock/synthetic
@@ -120,6 +106,33 @@ class DataProvenance(str, Enum):
     SYNTHETIC = "synthetic"
     MIXED = "mixed"
     UNAVAILABLE = "unavailable"
+
+
+# --------------------------------------------------------------------------- #
+# Inputs
+# --------------------------------------------------------------------------- #
+class MacroEvent(BaseModel):
+    """A single ingested headline / data release / development.
+
+    CC-1 directive (2026-08-07, "fix news_intelligence/geopolitical
+    provenance"): `provenance` defaults to SYNTHETIC, matching every other
+    provenance-labeled value in this schema module (MarketSnapshot's own
+    `field_provenance` dict, `AgentResult.provenance`) -- "missing/unset
+    means never assumed real." `nero_core.execution.bellwether_overlay
+    .build_real_macro_events` is the one real producer that sets this to
+    REAL, and only for an event it built from a genuine, confirmed-live RSS
+    match (never for a fallback/no-match result -- see that function's own
+    docstring). `tools/sweep.py`'s own hand-authored scenario headlines and
+    the FastAPI `/analyze` route's caller-supplied events are NOT real by
+    construction and correctly stay on this default."""
+    headline: str
+    summary: str = ""
+    source: str = "unknown"
+    region: Region = Region.GLOBAL
+    category: Category = Category.OTHER
+    url: str | None = None
+    published_at: datetime = Field(default_factory=_now)
+    provenance: DataProvenance = DataProvenance.SYNTHETIC
 
 
 class MarketSnapshot(BaseModel):
