@@ -3502,3 +3502,87 @@ Even after B0-B2, the Loop cannot yet **complete a full inheritance cycle for a 
 2. A4's own premise ("record-creation for an already-approved graveyard entry is closer to a dry-run pattern... doesn't need to collide with 'nothing auto-wires'") assumed a real structured proposal already exists for each candidate. Real data shows none does — `/api/repair/propose`'s own output is never persisted server-side, so "already-approved" only ever applied to the family-level `fixable: true`, never to a specific structured modification.
 3. B5's framing implicitly treated its 4 options as still-open/undecided. Option (b) already shipped in a prior directive (2026-08-05) and is live today, informational-only.
 4. B6's framing ("Eve front-loads all searching before proposing") was drawn from Session 1 alone. Checked against all 3 real sessions: Session 1 is the outlier: the two earlier sessions genuinely interleave search and proposal across turns.
+
+---
+
+## 2026-08-07: Part F — GOLD/BREAKOUT_MOMENTUM staleness (96.2h vs 4.0h expected)
+
+CC-1 comprehensive directive, Part F. `health_check.json` (`docs/site_data/health_check.json`,
+`last_updated: 2026-08-07T00:52:45.906059+00:00`) flags `BREAKOUT_MOMENTUM/GOLD`:
+`evaluation_gap_hours: 96.18848070888889`, `flag_reason: "most recent evaluation lagged its
+own candle close by 96.2h (expected within 4.0h)"`. Confirmed real and current, not stale
+reporting — matches the directive's own figure exactly.
+
+### F1 — real cause: confirmed residual of the SAME documented cron-drop incident, not a new 1week-specific problem
+
+Queried `execution_metadata` directly (every real scheduler run since the 2026-07-28/29
+tolerance-window fix landed, i.e. `start_time >= '2026-07-29'`):
+
+- **162 actual runs observed over an 8.99-day span** (2026-07-29T01:01 to
+  2026-08-07T00:44). The live scheduler's own cron (`.github/workflows/live_scheduler.yml`)
+  nominally fires ~46/day (13 hourly-baseline ticks outside the three dense windows + 12 +
+  9 + 12 inside them) → **~413 expected ticks over the same span. Observed/expected = 39.2%
+  — a ~61% drop rate**, squarely inside (in fact slightly worse than the low end of) the
+  originally-documented 63-77% range. This is not an improvement the 07-28/29 fix produced;
+  it's the same failure mode continuing.
+- **3 gaps exceeding 240 minutes (the exact `SINGLE_SHOT_TOLERANCE_MINUTES` window `1week`/
+  `24h` gates rely on) occurred in this 9-day window alone**:
+  `2026-08-03 03:22 -> 08:03` (281.5min), `2026-08-05 23:11 -> 2026-08-06 03:28` (257.1min),
+  and `2026-08-06 15:23 -> 2026-08-07 00:11` (528.7min, more than double the tolerance). The
+  third gap directly precedes the run (`2026-08-07T00:11:18`) that `health_check.json`
+  flagged as stale — the run happened, but the 1week candle boundary it needed to catch had
+  already been missed hours earlier because the run immediately before it fired at 15:23,
+  not inside the window that mattered.
+
+**Conclusion: this is a residual of the documented cron incident, not a new or
+1week-specific bug.** The 07-28/29 fix (widening `SINGLE_SHOT_TOLERANCE_MINUTES` to 240 and
+offsetting cron minutes from `:00`/`:30`) addressed the *tolerance-window math* correctly —
+if ticks fired at anything close to their nominal density, a 240-minute window would almost
+never be missed (the yml's own comment shows `0.77^12 ≈ 3.2%` miss probability at 12
+ticks/window). What it did NOT fix, and could not have fixed by construction, is GitHub
+Actions' own scheduled-trigger reliability — a ~61% drop rate means even a 12-tick nominal
+window frequently arrives with only 4-5 real ticks, and occasionally (confirmed 3 times in 9
+days) with a gap wide enough to blow through the whole window regardless of tolerance size.
+
+### F2 — was the drop rate re-measured after the fix? No, until this directive.
+
+**Confirmed: it had not been re-measured since the 07-28/29 fix landed until this
+investigation.** The number above (39.2% observed/expected, ~61% drop rate) IS that
+re-measurement, done now. It shows the fix did not resolve the underlying drop rate —
+because it targeted tolerance-window width, not trigger reliability, which were always two
+separate problems bundled under one incident name.
+
+### F3 — proposed fix (NOT implemented — reporting only, per explicit instruction)
+
+Two independent levers, since two independent problems are now confirmed distinct:
+
+1. **Re-densify** (partially reverse the 2026-08-03 cost-driven halving from ~114/day to
+   ~57/day, or target a step in between). Mechanically effective — the yml's own math holds:
+   more nominal ticks per window directly lowers miss probability at any given drop rate,
+   without touching tolerance logic at all. Cost: more GitHub Actions minutes on a private
+   repo (2,000 free/month) — needs an actual minutes-used check against the account's
+   current usage before picking a number, not assumed.
+2. **Investigate WHY GitHub Actions is dropping ~61% of `schedule` triggers**, rather than
+   only compensating for it. Two candidate root causes worth distinguishing, not yet
+   verified: (a) GitHub's own documented behavior that `schedule` events are best-effort and
+   silently skipped under platform load, particularly at high-traffic cron minutes (partially
+   mitigated already by the `:03/:33`-style offset, evidently not enough on its own); (b)
+   `concurrency: group: live-scheduler, cancel-in-progress: false` combined with a workflow
+   runtime (`pip install` + scheduler + notify + multiple exports + a rebase-and-push loop)
+   that may sometimes exceed the gap between scheduled ticks — a slow run wouldn't be
+   "dropped" by GitHub, it would still queue, but GitHub Actions has its own limits on how
+   many queued scheduled runs it retains, which could look identical to a drop rate from the
+   `execution_metadata` table's perspective. Distinguishing (a) from (b) would need reading
+   the actual GitHub Actions run history (successful/skipped/queued counts), not just this
+   repo's own execution_metadata, which only sees runs that completed.
+3. **A cache step for `pip install -r requirements.txt`** (pandas/numpy/statsmodels/scipy) —
+   if root cause (b) is real, shortening the workflow's own runtime reduces the chance of a
+   slow run crowding out the next scheduled tick, cheaper than either full re-densifying or
+   an infra migration.
+
+**Recommendation: (2) first, since it's nearly free (reading existing GitHub Actions run
+history) and would tell us whether (1) is even the right lever** — re-densifying blind
+repeats the exact reasoning gap this investigation just found (the 07-28/29 fix assumed a
+tolerance-window problem without checking whether trigger reliability was the actual
+bottleneck). Not implementing any of these three without that decision, per the directive's
+explicit instruction to report before implementing.
