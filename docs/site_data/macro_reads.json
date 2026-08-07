@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-07T09:15:33.499820+00:00",
+  "last_updated": "2026-08-07T17:07:04.971632+00:00",
   "macro_reads": [
     {
       "run_id": "bellwether-overlay-5df6a2126142",
@@ -195,6 +195,112 @@
           "probability": 0.5,
           "gold_bias": "NEUTRAL",
           "btc_bias": "BULLISH",
+          "narrative": "Current drivers persist; net reads play out modestly."
+        },
+        {
+          "name": "Risk-on / easier policy",
+          "probability": 0.25,
+          "gold_bias": "BULLISH",
+          "btc_bias": "STRONG_BULLISH",
+          "narrative": "Softer data + dovish repricing lifts liquidity assets; BTC outperforms."
+        },
+        {
+          "name": "Risk-off / hawkish shock",
+          "probability": 0.25,
+          "gold_bias": "BULLISH",
+          "btc_bias": "BEARISH",
+          "narrative": "Stronger dollar / vol spike; gold gets haven bid, BTC de-risks."
+        }
+      ],
+      "data_mode": "live"
+    },
+    {
+      "run_id": "bellwether-overlay-83b8b44e8998",
+      "timestamp": "2026-08-07T17:07:04.937334+00:00",
+      "asset": "GOLD",
+      "bias": "BULLISH",
+      "confidence": 0.388,
+      "agreement": 0.5,
+      "coverage": 0.7,
+      "probability_up": 0.75,
+      "provenance_breakdown": {
+        "news_intelligence": "real",
+        "economic_calendar": "synthetic",
+        "geopolitical": "real",
+        "monetary_policy": "mixed",
+        "liquidity": "real",
+        "onchain": "synthetic",
+        "derivatives_etf": "synthetic",
+        "correlation": "synthetic",
+        "historical_analog": "synthetic",
+        "learning": "real",
+        "gold_analysis": "mixed",
+        "bitcoin_analysis": "mixed",
+        "scenario": "mixed",
+        "risk": "mixed",
+        "trade_recommendation": "mixed"
+      },
+      "reasoning": "GOLD \u2014 Gold net bias BULLISH (score +1.00, P(up)\u224875%). Supporting: keyword match in: As Warsh and the Fed contemplate fewer meetings, markets brace for potential volatility ahead; keyword match in: Tourism price wars threaten to dim a rare bright spot in China's consumer spending; keyword match in: Fed officials who voted to hike rates say action is needed now against inflation. BITCOIN \u2014 Bitcoin net bias NEUTRAL (score -0.07, P(up)\u224848%). Supporting: VIX 15.2, stablecoin supply +0.04%. No scored history yet \u2014 confidence uncalibrated, defaulting to neutral prior.",
+      "risks": [],
+      "alternative_scenarios": [
+        {
+          "name": "Base case",
+          "probability": 0.5,
+          "gold_bias": "BULLISH",
+          "btc_bias": "NEUTRAL",
+          "narrative": "Current drivers persist; net reads play out modestly."
+        },
+        {
+          "name": "Risk-on / easier policy",
+          "probability": 0.25,
+          "gold_bias": "BULLISH",
+          "btc_bias": "STRONG_BULLISH",
+          "narrative": "Softer data + dovish repricing lifts liquidity assets; BTC outperforms."
+        },
+        {
+          "name": "Risk-off / hawkish shock",
+          "probability": 0.25,
+          "gold_bias": "BULLISH",
+          "btc_bias": "BEARISH",
+          "narrative": "Stronger dollar / vol spike; gold gets haven bid, BTC de-risks."
+        }
+      ],
+      "data_mode": "live"
+    },
+    {
+      "run_id": "bellwether-overlay-83b8b44e8998",
+      "timestamp": "2026-08-07T17:07:04.937334+00:00",
+      "asset": "BITCOIN",
+      "bias": "NEUTRAL",
+      "confidence": 0.388,
+      "agreement": 0.034,
+      "coverage": 0.375,
+      "probability_up": 0.481,
+      "provenance_breakdown": {
+        "news_intelligence": "real",
+        "economic_calendar": "synthetic",
+        "geopolitical": "real",
+        "monetary_policy": "mixed",
+        "liquidity": "real",
+        "onchain": "synthetic",
+        "derivatives_etf": "synthetic",
+        "correlation": "synthetic",
+        "historical_analog": "synthetic",
+        "learning": "real",
+        "gold_analysis": "mixed",
+        "bitcoin_analysis": "mixed",
+        "scenario": "mixed",
+        "risk": "mixed",
+        "trade_recommendation": "mixed"
+      },
+      "reasoning": "GOLD \u2014 Gold net bias BULLISH (score +1.00, P(up)\u224875%). Supporting: keyword match in: As Warsh and the Fed contemplate fewer meetings, markets brace for potential volatility ahead; keyword match in: Tourism price wars threaten to dim a rare bright spot in China's consumer spending; keyword match in: Fed officials who voted to hike rates say action is needed now against inflation. BITCOIN \u2014 Bitcoin net bias NEUTRAL (score -0.07, P(up)\u224848%). Supporting: VIX 15.2, stablecoin supply +0.04%. No scored history yet \u2014 confidence uncalibrated, defaulting to neutral prior.",
+      "risks": [],
+      "alternative_scenarios": [
+        {
+          "name": "Base case",
+          "probability": 0.5,
+          "gold_bias": "BULLISH",
+          "btc_bias": "NEUTRAL",
           "narrative": "Current drivers persist; net reads play out modestly."
         },
         {
@@ -809,6 +915,28 @@
       "status": "insufficient_data",
       "reason": "no macro read exists prior to this entry's timestamp",
       "evaluated_at": "2026-08-07T04:07:42.991739+00:00"
+    },
+    {
+      "execution_log_id": 383,
+      "macro_read_id": 4,
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "entry_direction": "LONG",
+      "conflicted": false,
+      "status": "evaluated",
+      "reason": "BTC bias BULLISH does not oppose a LONG entry",
+      "evaluated_at": "2026-08-07T17:07:04.966838+00:00"
+    },
+    {
+      "execution_log_id": 385,
+      "macro_read_id": 4,
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "entry_direction": "LONG",
+      "conflicted": false,
+      "status": "evaluated",
+      "reason": "BTC bias BULLISH does not oppose a LONG entry",
+      "evaluated_at": "2026-08-07T17:07:04.969234+00:00"
     }
   ]
 }
