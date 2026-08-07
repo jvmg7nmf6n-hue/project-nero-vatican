@@ -4237,3 +4237,255 @@ candle (Sunday instead of the correct Monday), due to
 entry -- a separate, real, GOLD-specific bug, distinct from the
 WEEKLY_CLOSE_WEEKDAY fix this directive shipped.
 
+---
+
+## 2026-08-07: CC-1 directive -- retry/catch-up for missed scheduler ticks
+
+CC-1 directive: "Retry/catch-up for missed scheduler ticks." Owner's decision from
+the prior report's restated options: implement Option 1 (retry/catch-up) first;
+Option 2 (external trigger) and Option 3 (wider tolerance) stay out of scope.
+
+### Item 1 -- design (report before building)
+
+**1a. FINDING** (confirmed-from-code, `nero_core/execution/replay.py`, full read).
+Today, when a scheduled tick is dropped, **nothing notices in real time** -- the
+only signal is `health_check.json`'s own post-hoc `evaluation_gap_hours` flag
+(`nero_core/execution/health_check.py:230`), which is diagnostic, not corrective:
+it reports staleness after the fact, it does not cause any evaluation to happen.
+Whether a missed tick self-heals depends entirely on whether `candle_boundary_due`
+ever returns `True` again for that config's OWN tolerance window before the window
+closes:
+- **If some tick inside the tolerance window still fires** (the common case, given
+  a 31.9% per-tick success rate over a ~16-tick 1week/24h window per the prior
+  directive's own math), the run that does fire self-heals automatically. Confirmed
+  in `replay_single_asset_events` (and the pairs/gold-silver-ratio/PEAD equivalents):
+  `should_emit = already_logged_close_time_ms is None or close_time > already_logged_close_time_ms`
+  -- this emits an event for EVERY candle strictly after the last logged one, not
+  just the newest, so even a run that's a few ticks late still catches anything
+  missed since the last successful run. This is real, pre-existing, and already
+  working -- not something this directive needed to build.
+- **If EVERY tick inside the entire tolerance window is dropped** (the prior
+  directive's own real data: 3 such gaps exceeding `SINGLE_SHOT_TOLERANCE_MINUTES`
+  = 240 minutes observed in 9 days, up to 528.7 minutes), `candle_boundary_due`
+  never returns `True` for that period at all, and per `live_scheduler.py`'s
+  existing gate structure (`if not candle_boundary_due(...): assets_skipped.append(...NOT_DUE...); continue`
+  at every one of the 5 replay-based gate sites), that config is skipped **every
+  single run** until the NEXT period's own window opens -- a genuine, permanent
+  gap for that period, confirmed via code inspection, not an assumption. This is
+  the actual, narrower problem this directive needed to solve: not "build a
+  backfill system" (one already exists in `replay.py`), but "make sure the
+  existing backfill-capable `process_*` functions actually get INVOKED even when
+  `candle_boundary_due` says no, once a real gap is confirmed."
+
+**1b. WHAT SHIPPED -- the design.** Added `catch_up_due()` to
+`nero_core/execution/candle_schedule.py`, as a **separate, later-firing check**
+alongside `candle_boundary_due` (not a modification to it -- widening tolerance
+as a substitute was explicitly out of scope). It fires only once a FULL EXTRA
+period-plus-tolerance has elapsed since the config's own last logged candle,
+using the SAME per-timeframe tolerance constants `candle_boundary_due` already
+uses (`SINGLE_SHOT_TOLERANCE_MINUTES` for 24h/1week, `MULTI_SHOT_TOLERANCE_MINUTES`
+for 12h, `DEFAULT_TOLERANCE_MINUTES` otherwise) -- confirmed via a dedicated test
+(`test_never_fires_while_candle_boundary_due_would_still_correctly_say_not_yet`,
+swept across all 7 weekdays) that there is no moment where `candle_boundary_due`
+is still correctly `False` for the CURRENT period and `catch_up_due` incorrectly
+fires early.
+- **Where it belongs**: inside the SAME `run_once()` gate sites `candle_boundary_due`
+  already occupies, OR'd together (`due = candle_boundary_due(...) or catch_up_due(...)`)
+  -- not a separate job, per 1c below.
+- **How far back to look before giving up**: `catch_up_due` itself has **no
+  explicit upper cutoff** -- once the threshold is crossed it stays `True`
+  indefinitely until a run succeeds. This was a deliberate choice, not an
+  oversight: the real, effective ceiling on how far back a catch-up run can
+  actually recover is already imposed by how much history `fetch_timeframe_candles`
+  pulls per call (`tools/timeframe_data.py`: `NATIVE_INTERVAL_CANDLES` =
+  2,000 weekly / 20,000 twelve-hourly candles, `DAILY_LOOKBACK_DAYS` = 8,000 days
+  -- 38, 27, and ~22 years respectively), which dwarfs any gap this project has
+  ever observed (hours, not years). Adding a second, artificial cutoff on top of
+  that real one would only create a scenario where a catch-up run fetches the data
+  it needs and then refuses to use it -- worse than the status quo, not better.
+  If a gap ever DID get old enough to fall outside the fetched window, replay
+  would simply have no candle old enough to backfill from that point and would
+  silently start from the earliest fetched candle instead -- an existing property
+  of the fetch/replay boundary, not new behavior this directive introduces.
+- **Per-strategy-type validity of a late catch-up evaluation** (checked, not
+  assumed, per strategy type):
+  - **Single-asset (BREAKOUT_MOMENTUM, TREND_PULLBACK, VOLATILITY_SQUEEZE,
+    RANGE_MEAN_REVERSION, DONCHIAN_TREND), pairs (COINTEGRATION_PAIRS), and
+    gold-silver-ratio (GOLD_SILVER_RATIO_MR)**: valid. All are backward-looking,
+    closed-candle-only indicator calculations replayed through the exact same
+    `replay_*_events` functions the backtest and normal live path both use --
+    there is no "current moment" dependency in the calculation itself, so a late
+    evaluation of an old candle produces the identical signal an on-time
+    evaluation would have.
+  - **PEAD**: valid for the case that matters here (an already-tracked, non-fresh
+    account that fell behind). Its `t+1`-next-trading-day-open execution rule
+    (`build_entry_plan`, called inside `replay_pead_events`) uses the SAME rule
+    live and in backtest -- a late catch-up still executes at the REAL
+    (historical) next-day open for the missed earnings date, not today's price.
+    The one pre-existing, already-documented exception (`replay_pead_events`'s own
+    docstring: a genuinely FRESH account with no prior inception uses "newest row
+    only," not full backfill) is unaffected by this directive -- `catch_up_due`
+    itself returns `False` whenever `last_logged_candle_close_ms is None`, so a
+    fresh account never reaches catch-up logic in the first place; this is a
+    property of the design, confirmed by
+    `test_none_last_logged_is_never_due_fresh_accounts_are_unaffected`.
+  - **Donchian forex (EUR/USD, GBP/USD, USD/JPY)**: valid -- shares
+    `process_single_asset`'s own generic `replay_single_asset_events` path, same
+    reasoning as single-asset above.
+  - **ORDERFLOW_IMBALANCE**: not applicable -- it has no `candle_boundary_due`
+    gate at all today (evaluated every run, per this file's own module
+    docstring), so there is no "missed window" for it to catch up on.
+  - **NEWS_SENTIMENT**: deliberately excluded from `catch_up_due`'s design.
+    Confirmed different in kind from the 5 replay-based types above: it is
+    gated by `daily_time_due` (a distinct function, untouched) plus
+    `has_news_sentiment_logged_today` (day-based dedup, not candle-timestamp-based),
+    and its inputs are CURRENT news search results, not an archived historical
+    series -- there is no way to ask "what would today's news sentiment model
+    have said about a search run 3 days ago," so a catch-up evaluation would be
+    searching TODAY's news under a stale date label, not a real backfill. Left
+    untouched, as the directive's own OUT OF SCOPE section implicitly expects
+    (no change requested to `daily_time_due`).
+
+**1c. FINDING + WHAT SHIPPED.** If GitHub Actions drops the SPECIFIC tick that
+would have run a catch-up check, nothing happens on that dropped tick -- trivially
+true, no tick that never fires can do anything. The design avoids this becoming a
+second silently-failing thing by construction, not by adding a second monitoring
+layer: `catch_up_due` is checked inside the SAME 5 gate sites `candle_boundary_due`
+already occupies inside `run_once()`, evaluated on **every single successful
+invocation of the scheduler, regardless of which of the workflow YAML's 4 cron
+entries triggered it**. There is no separate "catch-up job" with its own trigger
+that could itself be dropped -- any run that fires at all (for any reason)
+re-checks catch-up eligibility for all 5 replay-based config groups. This
+directly satisfies the directive's own suggested mitigation: as long as GitHub
+Actions ever fires ANY tick again (confirmed, per the prior directive's own
+9-day data, to always eventually happen -- worst observed gap between
+consecutive real runs was 528.7 minutes, never a multi-day total outage), that
+run closes the gap.
+
+### Item 2 -- implementation
+
+**2a. WHAT SHIPPED.** `nero_core/execution/candle_schedule.py`: added
+`catch_up_due(timeframe, now, last_logged_candle_close_ms, tolerance_minutes=None)`.
+`nero_core/execution/live_scheduler.py`: wired `catch_up_due` into all 5
+replay-based gate sites in `run_once()` (`SINGLE_ASSET_CONFIGS`, `PAIRS_TIMEFRAME`,
+`GOLD_SILVER_RATIO_TIMEFRAME`, `"24h"`/`PEAD_CONFIGS`, `DONCHIAN_FOREX_TIMEFRAME`/
+`DONCHIAN_FOREX_CONFIGS`), each now computing `is_catchup = not on_schedule and
+catch_up_due(...)` against that config's own `latest_logged_candle_timestamp` and
+gating on `on_schedule or is_catchup`. PEAD and Donchian-forex (previously gated
+by one shared `candle_boundary_due` check ahead of a per-ticker/per-pair loop) were
+restructured to check per-config, since each ticker/pair has its own independent
+`last_logged` cursor that can fall behind independently of the others.
+`is_catchup: bool = False` was added to all 5 `process_*` function signatures
+(`process_single_asset`, `process_pairs`, `process_gold_silver_ratio`,
+`process_pead_config`, `process_donchian_forex_config`), reusing the exact same
+`replay_*_events` call each already made -- no new evaluation logic, per the
+directive's own instruction to reuse existing code paths.
+
+**2b. WHAT SHIPPED.** `CATCHUP_REASONING_MARKER = "[CATCHUP]"` and
+`_mark_reasoning(reasoning, is_catchup)` added to `live_scheduler.py`, following
+this codebase's own established convention of encoding extra metadata into the
+existing `reasoning` TEXT column (the same pattern `_ORDERFLOW_DIRECTION_PATTERN`/
+`notify_ntfy.py`'s r_multiple parsing already use) rather than a new
+`execution_log` column -- no migration, no schema change, no change to any
+existing row-count test. Every one of the 5 `process_*` functions' own
+`insert_execution_log_row(...)` calls now passes
+`reasoning=_mark_reasoning(event.reasoning, is_catchup)`. A catch-up run can
+legitimately backfill multiple missed candles in one call (`replay.py`'s own
+self-healing already handles emitting all of them, not just the newest) -- every
+row logged during such a call gets the marker, not just the oldest, since the
+run itself is what makes all of them late.
+
+**2c. WHAT SHIPPED.** `tests/test_candle_schedule.py`: `CatchUpDueTest`, 7 new
+tests covering the core correctness property (never fires while
+`candle_boundary_due` would still correctly say not-yet), the fresh-account
+exclusion, and per-timeframe tolerance selection. `tests/test_live_scheduler.py`:
+new `CatchUpMechanismTest` class, 3 tests, simulating a genuine missed-tick gap
+(not just a delayed-but-in-window run) by manually seeding a stale
+`execution_log` row for BNB/TREND_PULLBACK far enough in the past that
+`catch_up_due` fires while `candle_boundary_due` alone is confirmed `False` at
+the test's chosen `now` (`NOT_DUE_UTC`) --
+`test_missed_tick_is_not_caught_up_without_the_mechanism_present` proves the gap
+is real, `test_catch_up_due_fires_and_process_single_asset_backfills_the_missed_candle`
+confirms BNB is evaluated (not skipped) and every newly-logged row carries the
+`[CATCHUP]` marker while the pre-existing seed row does not, and
+`test_a_normal_on_schedule_run_never_gets_the_catchup_marker` is the regression
+guard on the other branch -- an on-schedule run's own rows must stay unmarked.
+All 3 pass; a control assertion in the main test (`GOLD` stays a genuine
+`NOT_DUE` skip, since it has no seeded stale row) confirms this isn't
+`candle_boundary_due` itself changing behavior for every config.
+
+**2d. FINDING** (confirmed-from-data, reasoning from the prior directive's own
+real 9-day measurements -- no new data collection this directive). Catch-up does
+**not** reduce the 68.1% per-tick drop rate itself -- that number describes
+GitHub's own `schedule:`-event trigger-creation probability, a platform-side
+mechanism this directive's own OUT OF SCOPE section correctly excludes from any
+code-side fix. What catch-up changes is the CONSEQUENCE of a drop, specifically
+for the narrower failure mode where an entire tolerance window is dropped (the
+3 real incidents found in 9 days: gaps of 281.5, 257.1, and 528.7 minutes between
+consecutive actual runs). Before this directive, that failure mode meant a
+config stayed silently stale until its OWN next period's window opened -- up to
+168 hours later for a `"1week"` config, up to 24 hours for a `"24h"` config.
+After this directive, because `catch_up_due` is checked on every successful run
+of ANY kind (not just a matching-timeframe run), recovery is bounded by
+"time until the next real run of any kind," not "time until the next matching
+window." Per the same 9-day sample (162 real runs / 8.99 days, mean inter-run
+gap ~80 minutes, worst observed gap 528.7 minutes), all 3 of the real
+full-window-miss incidents found so far would have been picked up by the very
+next run that fired at all -- typically within roughly an hour, and within under
+9 hours in the worst case observed -- rather than remaining stale for up to a
+week. **This is a real but narrow claim, not a general guarantee**: it is
+inferred from a 3-incident, 9-day sample, not a statistically large one, and it
+assumes GitHub Actions never has a TOTAL outage (zero runs of any kind, any
+config) longer than the ~8.8 hours worst-case already observed -- a sustained
+multi-day total outage, never observed but not ruled out, would still leave a
+real gap for however long that outage lasts, since catch-up still requires at
+least one run to fire before it can do anything. It does not, and was never
+intended to, address the underlying 68.1% trigger-creation rate -- that remains
+Option 2's (external `workflow_dispatch` trigger) territory, explicitly out of
+scope here.
+
+### Test counts
+
+**Python.** Before this directive: 2695 (per the prior closing report). After:
+**2705** (+10: 7 `CatchUpDueTest` + 3 `CatchUpMechanismTest`). Full suite run:
+`Ran 2705 tests in 444.630s` -- 1 failure, 3 errors, 17 skipped, all 4
+pre-existing and unrelated (confirmed by name against the prior report's own
+list): `test_lxml_is_importable` and `FetchKse100DailyTest`'s 2 PSX tests (all 3
+depend on `lxml`, not installed in this environment), and
+`test_the_real_committed_eve_hypotheses_file_has_been_backfilled` (a real-data-drift
+assertion in `test_eve_citation_freshness.py`, unrelated to scheduling). Zero new
+failures from this directive's own changes.
+
+**Website.** Unchanged this directive -- 0 files under `website/` touched
+(confirmed via `git diff --name-only`), still 671 tests, 669 passing, same 2
+pre-existing failures as every prior report in this series.
+
+### No evidence-bar constant touched, confirmed
+
+This directive touches exactly `nero_core/execution/candle_schedule.py` (one new
+function, no existing function modified), `nero_core/execution/live_scheduler.py`
+(gate-site wiring and 5 function signatures, no strategy/indicator logic), and
+two test files. Zero diff this directive to `trial.py`, `repair_to_trial.py`,
+`graveyard_distillation.py`, or any Adam/Eve scoring path (confirmed via
+`git diff --name-only | grep -iE "trial\.py|repair_to_trial|graveyard_distillation|adam|eve"`
+-- no matches). Zero change to any admission criterion, frequency-gate constant,
+or FDR/bootstrap parameter. Nothing Bellwether-related touched.
+
+### git log origin/main --oneline -3, per commit this directive
+
+Code + tests commit, verified on `origin/main` immediately after pushing
+(one intervening automated `signal-alerts` bot commit, unrelated, rebased
+onto cleanly):
+
+    06ea34d CC-1 directive: retry/catch-up mechanism for missed scheduler ticks
+    c655049 Update signal alerts state
+    018458b CC-1 directive closing report: weekday-mismatch fix + clustered-drops options restated
+
+### Stale figures found this directive, and the real values
+
+None found. This directive's own real data (the 9-day, 162/168-run measurements)
+was already established and reported in the prior two directives' closing
+reports -- this directive reused those figures for 2d's estimate rather than
+re-measuring, and found no discrepancy against re-reading the same source code
+they were originally derived from.
+
