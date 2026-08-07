@@ -89,10 +89,88 @@ class BellwetherCircuitBreakerOpen(Exception):
     always logged, never silently swallowed."""
 
 
+def build_real_macro_events(limit_per_asset: int = 8) -> list:
+    """CC-1 directive (2026-08-07, "wire the 2 safest agents real"), Item 2:
+    real headlines from `nero_core.data_sources.news_feed`'s own RSS pipeline
+    (Reuters/CNBC/Yahoo Finance/CoinDesk/MarketWatch Economy -- already
+    tested, already in production for NEWS_SENTIMENT), transformed into
+    Bellwether's own MacroEvent shape. This is the ONLY change in this
+    directive to what `Orchestrator.analyze()` is actually called with in
+    production -- before this, every scheduled overlay run
+    (`.github/workflows/bellwether_overlay.yml`, every 8h) passed `events=[]`
+    literally, confirmed at this exact line.
+
+    NEVER passes through `news_feed.py`'s own FALLBACK_HEADLINES as if they
+    were real events: `NewsFeedResult.status` distinguishes a genuine live
+    match ("live (...)") from a fallback ("fallback: ..."), and a fallback
+    result for a given asset means ZERO real events for that asset this
+    cycle -- not fabricated ones. This is the same "never guess, degrade
+    honestly" discipline every other real provider in this codebase already
+    follows, applied to news content, which has no numeric provenance flag
+    of its own to lean on the way market/derivatives fields do.
+
+    `category` is a best-effort mapping from `news_feed.py`'s own keyword
+    categories to Bellwether's `Category` enum -- only mapped where there is
+    a clean, confident correspondence (Central Banks -> MONETARY_POLICY,
+    Geopolitics -> GEOPOLITICS, Sentiment -> RISK_SENTIMENT); every other tag
+    (Gold/Crypto/Macro/Stocks/Companies/Commodities/Forex) has no clean 1:1
+    Bellwether category and maps to OTHER rather than guessing one. This has
+    limited behavioral impact: news_intelligence.py's own `_heuristic` path
+    scores bullish/bearish purely from headline TEXT keywords, independent of
+    `category` (confirmed by reading that function) -- `category` here is
+    bookkeeping/display, not classification-critical.
+
+    `published_at` is parsed from the RSS feed's own RFC822 `pubDate` string
+    via the standard library (`email.utils.parsedate_to_datetime`) --
+    real, not guessed. Falls back to the current ingestion time (never a
+    fabricated PAST time) only if that specific item's pubDate is missing or
+    unparseable, which is disclosed here rather than silently swallowed."""
+    from email.utils import parsedate_to_datetime
+
+    from bellwether.schemas import Category, MacroEvent
+
+    from nero_core.data_sources.news_feed import NewsFeedClient
+
+    _CATEGORY_MAP = {
+        "Central Banks": Category.MONETARY_POLICY,
+        "Geopolitics": Category.GEOPOLITICS,
+        "Sentiment": Category.RISK_SENTIMENT,
+    }
+
+    client = NewsFeedClient()
+    events: list = []
+    seen_titles: set[str] = set()
+    for asset in ("GOLD", "BTC"):
+        result = client.load(asset, limit=limit_per_asset)
+        if not result.status.startswith("live"):
+            continue  # fallback or no real match this cycle -- zero real events, never fabricated ones
+        for item in result.headlines:
+            if item.title in seen_titles:
+                continue
+            seen_titles.add(item.title)
+            category = Category.OTHER
+            for tag in item.tags:
+                if tag in _CATEGORY_MAP:
+                    category = _CATEGORY_MAP[tag]
+                    break
+            kwargs: dict = {
+                "headline": item.title, "source": item.source,
+                "url": item.link or None, "category": category,
+            }
+            try:
+                if item.published:
+                    kwargs["published_at"] = parsedate_to_datetime(item.published)
+            except (TypeError, ValueError):
+                pass  # leave published_at on MacroEvent's own default_factory=_now
+            events.append(MacroEvent(**kwargs))
+    return events
+
+
 async def _run_bellwether_live() -> object:
     settings = Settings(data_mode="live", seed=int(datetime.now(timezone.utc).timestamp()))
     orch = Orchestrator(settings)
-    return await asyncio.wait_for(orch.analyze(events=[], persist=False), timeout=BELLWETHER_TIMEOUT_SECONDS)
+    events = build_real_macro_events()
+    return await asyncio.wait_for(orch.analyze(events=events, persist=False), timeout=BELLWETHER_TIMEOUT_SECONDS)
 
 
 def run_bellwether_with_circuit_breaker() -> object:

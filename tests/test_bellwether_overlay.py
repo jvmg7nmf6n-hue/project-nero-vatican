@@ -17,6 +17,7 @@ try:
     from nero_core.execution.bellwether_overlay import (
         BellwetherCircuitBreakerOpen,
         _evaluate_entry,
+        build_real_macro_events,
         process_orderflow_conflicts,
         run_bellwether_with_circuit_breaker,
     )
@@ -186,6 +187,108 @@ class CircuitBreakerTest(unittest.TestCase):
         with patch.object(overlay_mod, "_run_bellwether_live", _fake_output):
             with self.assertRaises(overlay_mod.BellwetherCircuitBreakerOpen):
                 overlay_mod.run_bellwether_with_circuit_breaker()
+
+
+@unittest.skipIf(_IMPORT_ERROR is not None, f"bellwether not importable in this environment: {_IMPORT_ERROR}")
+class BuildRealMacroEventsTest(unittest.TestCase):
+    """CC-1 directive (2026-08-07, "wire the 2 safest agents real"), Item 2e:
+    build_real_macro_events must produce real MacroEvents from a genuine RSS
+    match, and must NEVER pass through news_feed.py's own FALLBACK_HEADLINES
+    (illustrative, not real) as if they were real events."""
+
+    def test_live_result_produces_matching_macro_events(self) -> None:
+        from unittest.mock import patch
+
+        from nero_core.data_sources.news_feed import NewsFeedResult, NewsItem
+
+        fake_item = NewsItem(
+            title="Fed officials signal caution as markets reassess rate cut timing.",
+            source="Reuters", link="https://example.com/1",
+            published="Fri, 07 Aug 2026 12:00:00 GMT", tags=["Central Banks"],
+        )
+        fake_result = NewsFeedResult(headlines=[fake_item], status="live (1 matched)")
+
+        with patch("nero_core.data_sources.news_feed.NewsFeedClient.load", return_value=fake_result):
+            events = build_real_macro_events()
+
+        self.assertGreater(len(events), 0)
+        matching = [e for e in events if e.headline == fake_item.title]
+        self.assertEqual(len(matching), 1)
+        event = matching[0]
+        self.assertEqual(event.source, "Reuters")
+        self.assertEqual(str(event.url), fake_item.link)
+        from bellwether.schemas import Category
+        self.assertEqual(event.category, Category.MONETARY_POLICY)  # "Central Banks" -> MONETARY_POLICY
+
+    def test_fallback_result_produces_zero_events_never_fabricated_ones(self) -> None:
+        """The exact honesty requirement: a fallback/no-match result must
+        mean zero real events for that asset, never news_feed.py's own
+        FALLBACK_HEADLINES text passed through as if it were real."""
+        from unittest.mock import patch
+
+        from nero_core.data_sources.news_feed import FALLBACK_HEADLINES, NewsFeedResult, NewsItem
+
+        fallback_item = NewsItem(
+            title=FALLBACK_HEADLINES[0], source="Sample Macro Feed", link="",
+            published="", tags=[],
+        )
+        fallback_result = NewsFeedResult(headlines=[fallback_item], status="fallback: no matching headlines")
+
+        with patch("nero_core.data_sources.news_feed.NewsFeedClient.load", return_value=fallback_result):
+            events = build_real_macro_events()
+
+        headlines = {e.headline for e in events}
+        self.assertNotIn(FALLBACK_HEADLINES[0], headlines)
+        self.assertEqual(events, [])
+
+    def test_duplicate_headline_across_both_assets_is_deduped(self) -> None:
+        from unittest.mock import patch
+
+        from nero_core.data_sources.news_feed import NewsFeedResult, NewsItem
+
+        shared_item = NewsItem(
+            title="Shared macro headline appearing in both asset queries.",
+            source="CNBC", link="", published="", tags=[],
+        )
+        shared_result = NewsFeedResult(headlines=[shared_item], status="live (1 matched)")
+
+        with patch("nero_core.data_sources.news_feed.NewsFeedClient.load", return_value=shared_result):
+            events = build_real_macro_events()
+
+        matching = [e for e in events if e.headline == shared_item.title]
+        self.assertEqual(len(matching), 1)  # GOLD and BTC both surfaced it -- only one MacroEvent, not two
+
+    def test_unmapped_category_tag_defaults_to_other_not_guessed(self) -> None:
+        from unittest.mock import patch
+
+        from nero_core.data_sources.news_feed import NewsFeedResult, NewsItem
+
+        item = NewsItem(title="Some commodity headline.", source="MarketWatch Economy",
+                        link="", published="", tags=["Commodities"])
+        result = NewsFeedResult(headlines=[item], status="live (1 matched)")
+
+        with patch("nero_core.data_sources.news_feed.NewsFeedClient.load", return_value=result):
+            events = build_real_macro_events()
+
+        from bellwether.schemas import Category
+        matching = [e for e in events if e.headline == item.title]
+        self.assertEqual(matching[0].category, Category.OTHER)
+
+    def test_unparseable_pubdate_falls_back_to_default_factory_not_a_crash(self) -> None:
+        from unittest.mock import patch
+
+        from nero_core.data_sources.news_feed import NewsFeedResult, NewsItem
+
+        item = NewsItem(title="Headline with a malformed pubDate.", source="Reuters",
+                        link="", published="not-a-real-date", tags=[])
+        result = NewsFeedResult(headlines=[item], status="live (1 matched)")
+
+        with patch("nero_core.data_sources.news_feed.NewsFeedClient.load", return_value=result):
+            events = build_real_macro_events()  # must not raise
+
+        matching = [e for e in events if e.headline == item.title]
+        self.assertEqual(len(matching), 1)
+        self.assertIsNotNone(matching[0].published_at)
 
 
 if __name__ == "__main__":
