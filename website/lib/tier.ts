@@ -23,15 +23,41 @@ export const TIER_LABELS: Record<Tier, string> = {
 // collapses into "watchlist" and "forward-test-only" (no backtest exists)
 // collapses into "experimental" -- both are honest groupings of the
 // existing wording, not new claims about the strategy.
+//
+// CC-1 overnight directive, Part 3: the ONE list every real
+// verification_status prefix must appear in -- classifyTier and
+// isRecognizedVerificationStatus both derive from this single source, so
+// they can never silently disagree. Confirmed exhaustive against every
+// real value in docs/site_data/strategies.json as of 2026-08-08 (see
+// __tests__/tier.test.ts's own RealDataClosedVocabularyTest).
+const PREFIX_TO_TIER: ReadonlyArray<{ prefix: string; tier: Tier }> = [
+  { prefix: "experimental", tier: "experimental" },
+  { prefix: "forward-test-only", tier: "experimental" },
+  { prefix: "promising-watchlist", tier: "watchlist" },
+  { prefix: "watchlist", tier: "watchlist" },
+  { prefix: "triple-verified", tier: "verified" },
+  { prefix: "verified", tier: "verified" },
+];
+
+// Runtime behavior UNCHANGED from before this directive -- an unrecognized
+// value still safely falls through to "experimental" rather than crashing
+// the live site (a strategy's card must always render something). The real
+// enforcement against silent misclassification is isRecognizedVerificationStatus
+// below, checked by a test against every real committed value -- "fail loudly
+// in CI," never "fail loudly for a live visitor."
 export function classifyTier(verificationStatus: string): Tier {
   const status = verificationStatus.toLowerCase().trim();
-  if (status.startsWith("experimental")) return "experimental";
-  if (status.startsWith("forward-test-only")) return "experimental";
-  if (status.startsWith("watchlist") || status.startsWith("promising-watchlist")) {
-    return "watchlist";
-  }
-  if (status.startsWith("verified") || status.startsWith("triple-verified")) {
-    return "verified";
-  }
-  return "experimental";
+  const match = PREFIX_TO_TIER.find((p) => status.startsWith(p.prefix));
+  return match?.tier ?? "experimental";
+}
+
+// CC-1 overnight directive, Part 3: the closed-vocabulary check itself.
+// Returns false for anything classifyTier would have to silently default --
+// a typo'd or genuinely new verification_status wording that was never
+// added to PREFIX_TO_TIER. This function makes that silent case detectable
+// (and test-enforced against real data) without changing classifyTier's own
+// safe runtime fallback.
+export function isRecognizedVerificationStatus(verificationStatus: string): boolean {
+  const status = verificationStatus.toLowerCase().trim();
+  return PREFIX_TO_TIER.some((p) => status.startsWith(p.prefix));
 }
