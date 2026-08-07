@@ -3739,3 +3739,272 @@ pairwise relationship) -- surface built on `/quant` instead. The directive's
 "generic default styling" claim for the site is stale -- a distinctive
 palette already existed; the genuine gap was a formal token layer above it,
 not a wholesale redesign.
+
+---
+
+## 2026-08-07: CC-1 directive -- path leak fix, then the real cron drop rate
+
+### Part 1 -- forward_trial.json path leak
+
+**1a. FINDING** (confirmed-from-code and confirmed-from-data): the exact
+leaked value, in all 10 real committed records, was
+`C:\Users\HP\Documents\Codex\project-nero-vatican\data\repair_lab_forward_tracking.db`
+-- a full local absolute filesystem path, identical across every record.
+It lived in the `forward_tracking_db_ref` field. Write path traced exactly:
+`nero_core/research_agent/trial.py` (pre-fix) line 176's `admit_to_trial`
+parameter default (`forward_tracking_db_ref: Path =
+DEFAULT_FORWARD_TRACKING_DB_PATH`, an absolute path since
+`DEFAULT_FORWARD_TRACKING_DB_PATH = repair_forward_tracker.
+DEFAULT_FORWARD_TRACKING_DB_PATH = REPO_ROOT / "data" /
+"repair_lab_forward_tracking.db"`, `REPO_ROOT` derived via
+`Path(__file__).resolve().parents[...]`) flowed straight into
+`TrialRecord.to_dict()` (line 154, pre-fix) and was persisted verbatim by
+`persist_trial_records` directly to the PUBLIC
+`docs/site_data/forward_trial.json` (`DEFAULT_FORWARD_TRIAL_PATH`, line 61)
+-- no separate export/sanitization step exists for this file; `trial.py`
+writes the public JSON directly.
+
+**1b. WHAT SHIPPED.** Removed the field entirely (the directive's own
+1b option) rather than relativizing it -- confirmed non-load-bearing first
+(`grep`'d every real caller: `tools/factory_loop_run.py`,
+`nero_core/research_agent/repair_to_trial.py`, every test in
+`tests/test_trial_admission.py` -- none ever passed this parameter
+explicitly, all relied on the default; no code anywhere reads the field
+back out of a persisted record; `website/lib/types.ts`'s own `TrialEntry`
+type already documented omitting it as "not meaningful to a site reader").
+4 lines removed from `trial.py`: the `TrialRecord` dataclass field, its
+`to_dict()` entry, the `admit_to_trial` parameter, and the record
+construction call. **This required touching `trial.py`**, which the
+directive's own out-of-scope list names -- flagged explicitly: the change
+touches zero admission criteria, DSL-validity logic, freshness handling,
+or evidence-bar constants (confirmed: `AdmitToTrialNeverConsultsFreshnessTest`'s
+3 tests, including the one proving an unknown kwarg still raises
+`TypeError`, all still pass unmodified). This is the same category as the
+directive's own 1b instruction ("fix the write path"), which cannot be
+satisfied without editing the one file that writes it -- reported here
+rather than silently done, per the standing discipline on touching
+protected files.
+
+The 10 already-committed real records were separately scrubbed via a new,
+idempotent, one-time script (`tools/strip_forward_trial_path_leak_20260807.py`,
+matching this repo's own established migration-script convention, e.g.
+`tools/backfill_session_regime_tags_20260806.py`) -- run once for real
+against the live file (stripped 10/10 records; a second run correctly
+reported 0/no-op).
+
+**1c. FINDING** (confirmed-from-data): swept all of `docs/site_data/`
+(recursively, every `*.json`) for the same pattern (`C:\Users\`,
+`C:/Users/`, `/home/<user>/`, `/Users/<user>/` in raw or JSON-escaped
+form). Zero other files matched, before or after the fix -- `
+forward_trial.json` was the only offender.
+
+**1d. WHAT SHIPPED.** `tests/test_no_local_path_leak.py`: recursively
+scans every JSON file under `docs/site_data/` for the same path shapes,
+plus a self-check test proving the detector actually matches the real
+known leak shape (guards against the main test vacuously passing) and a
+false-positive check against ordinary site-data content (e.g. the word
+"Users" in prose, or a relative `docs/site_data/...` path). 3 new tests,
+all passing; the real sweep test currently passes against the now-cleaned
+file.
+
+### Part 2 -- the real cron drop rate
+
+**2a. FINDING** (confirmed-from-data, real GitHub Actions run history via
+the public REST API -- no `gh` CLI available in this environment, used
+`GET /repos/.../actions/workflows/{id}/runs` directly, unauthenticated,
+paginated across all 333 real runs on record for Live Scheduler since
+2026-07-17). Precisely, for the exact window this directive references
+(2026-07-29 01:01 to 2026-08-07 05:10, matching real run timestamps, not
+an assumed boundary): **168 real, completed GitHub Actions runs actually
+exist** — every single one with `status: completed`. Simulating the
+workflow's own 4 cron entries minute-by-minute across that identical
+window gives **527 true nominal trigger-minutes** (the workflow YAML's own
+comment estimate of "~57/day" undercounts slightly by ignoring that the
+hourly baseline `3 * * * *` ALSO fires inside the three dense windows,
+alongside those windows' own `5,25,45` entries — both are literally
+separate cron entries and each independently produces its own trigger).
+**168/527 = 31.9% actually ran → a 68.1% drop rate**, real ground truth
+from GitHub's own records, not inferred through `execution_metadata` as
+before (which under-sampled slightly: 162 metadata rows vs 168 real GH
+runs — a small, separate ~3.6% gap where the container executed but the
+Python script didn't reach the metadata-write step, worth noting but not
+the main story). **The real mechanism**: for every one of the 168 runs
+that DID fire, `created_at` to `run_started_at` delay was exactly 0.0
+seconds — meaning there is zero evidence of queue/concurrency delay for
+anything that actually starts. The other ~359 nominal triggers left **no
+run record on GitHub's side at all** — consistent with GitHub's own
+documented "best effort, not guaranteed" behavior for the `schedule`
+event, which silently drops triggers before a run is ever created (no
+artifact, no log entry exists for a dropped trigger — its absence from the
+`workflow_runs` list IS the evidence). This looks structurally like a
+platform-side scheduler-density effect (a workflow firing near-continuously
+across dense multi-cron-entry windows), not a queueing/concurrency/runner
+problem.
+
+**2b. FINDING.** The `:03/:33`-style offset's own documented theory (see
+the YAML's own extensive comment) was: GitHub Actions delays runs most at
+popular top-of-hour/half-hour times, so shifting off `:00`/`:30` should
+reduce DELAY. The real, measured mechanism (0.0s delay for every run that
+fires; ~68% of nominal triggers never create a run at all) shows the fix
+solved a problem that isn't the dominant one today — it may have genuinely
+eliminated queue-delay for what does fire (a real, if unverifiable-in-
+isolation, success), but it does nothing for triggers that never get
+created in the first place, which is the much larger effect. The offset
+fix and the real drop mechanism are pointed at two different failure
+modes.
+
+**A genuinely important, separate, and more precise finding — the real
+cause of GOLD's own specific 96.2h number.** Traced `_last_evaluation_gap_hours`
+(`nero_core/execution/health_check.py:230`) exactly: it computes
+`(wall-clock time the row was logged) - (real close time of the CANDLE
+DATA that row evaluated)` — a completely different quantity than "was this
+scheduler tick dropped." Checked GOLD/BREAKOUT_MOMENTUM's actual two
+ever-logged rows directly: **both fired exactly on schedule, on a Friday,
+within the intended 240-minute tolerance window of `WEEKLY_CLOSE_HOUR_UTC
+= 0`** (`WEEKLY_CLOSE_WEEKDAY = 4`, `candle_schedule.py:85`) — the
+scheduler did NOT miss its window either time. But the `"1week"` candle
+data it evaluated was timestamped the *preceding Monday* both times
+(2026-07-27 and 2026-08-03) — a **deterministic ~96-hour (Friday-minus-
+Monday) gap, by construction, on every successful evaluation**, unrelated
+to cron reliability at all. **Confirmed universal, not GOLD-specific**:
+checked every other `"1week"`-gated config in `execution_log`
+(`DONCHIAN_TREND`/EUR-USD, GBP/USD, USD/JPY, GOLD; `RANGE_MEAN_REVERSION`/
+GOLD) — every single one shows the identical Friday-logged/Monday-candle
+pattern, gaps clustering at 96.2–99.2h. This is `WEEKLY_CLOSE_WEEKDAY`
+(assumes the real market week closes Friday) not matching the actual
+weekly-candle labeling convention the live data source uses for `"1week"`
+bars (labeled Monday — likely a week-START label, not a close label; the
+separately-exported `docs/site_data/candles/GOLD_1week.json` shows the
+same bars labeled Sunday, one day off again, confirming this is a genuine
+labeling-convention question, not a fluke of one fetch). **This is a
+correction to this same report's own earlier Part F conclusion**, which
+attributed the 96.2h figure to the cron-drop incident — real multi-asset
+data now shows the two are separate, confirmed-independent problems: the
+cron-drop rate is real (68%, above) but is not what produces GOLD's own
+number; a deterministic weekday-boundary mismatch is.
+
+**2c. Three real options, with tradeoffs** (report only, per explicit
+instruction):
+
+1. **Retry/catch-up for a missed window**: confirmed via
+   `candle_boundary_due` (`candle_schedule.py:95`) that none exists today
+   — the function is a strict boolean gate (`now` inside the tolerance
+   window or not); a fully-missed window is silently skipped forever
+   (`assets_skipped.append({..., "classification": "NOT_DUE"})`,
+   `live_scheduler.py:836`), with no state tracking "did this period's
+   window ever get hit" to trigger a late catch-up run. Adding one would
+   mean: track the last successfully-evaluated candle_timestamp per
+   config (already available via `latest_logged_candle_timestamp`), and if
+   a NEW real candle boundary has passed with zero matching log row, allow
+   evaluation on the NEXT run regardless of the normal tolerance window.
+   Real tradeoff: this could itself perpetuate the Friday/Monday mismatch
+   above rather than fix it — the "catch-up" would still evaluate whatever
+   candle the data source calls "most recent," which is the same
+   mislabeled Monday bar.
+2. **A different scheduling mechanism** (self-hosted runner or an
+   external cron service calling `workflow_dispatch` via the API instead
+   of relying on the native `schedule:` event): real cost/complexity,
+   not proposed lightly. A self-hosted runner needs a persistently-running
+   machine (real infrastructure cost, ongoing OS/security maintenance) —
+   a meaningfully bigger operational burden for a project that is
+   otherwise fully GitHub-Actions-native. An external cron service (e.g. a
+   free-tier cron trigger calling `POST .../actions/workflows/{id}/dispatches`)
+   is cheaper and needs no persistent server, but introduces a NEW
+   external dependency and a new credential (a PAT/GitHub App token with
+   `actions:write`, living outside GitHub's own secret store) — a real,
+   if bounded, new security surface. `workflow_dispatch` triggered by a
+   direct API call is plausibly more reliable than the native `schedule:`
+   event specifically because it's a synchronous, acknowledged API request
+   rather than a "best effort" internal cron match — but this is an
+   inference from GitHub's own documented distinction between the two
+   trigger types, not something measured directly in this investigation.
+3. **Widen the tolerance window further**: mechanically increases the
+   number of nominal ticks per window, which — under the SAME
+   independence-style math the original `:03/:33` fix used — would lower
+   miss probability. Real consequence, stated precisely: this does
+   NOTHING for the Friday/Monday mismatch above (a wider window still
+   evaluates the same mislabeled candle, just possibly a few hours later
+   in wall-clock terms) and a genuinely important caveat this investigation
+   found: **the independence assumption behind that math is itself wrong**.
+   At the measured 68.1% per-tick drop rate, treating drops as independent
+   Bernoulli trials predicts GOLD's 16-tick window should be entirely
+   missed only once every ~465 weeks — but 3 gaps exceeding the 240-minute
+   tolerance were directly observed in just 9 days. Real drops are
+   clustered/bursty (a platform incident drops a contiguous run of
+   ticks), not independently random — meaning the tolerance-window math
+   this codebase has relied on since the original 2026-07-28/29 fix
+   (and my own earlier Part F report) systematically UNDERESTIMATES the
+   real risk of a fully-missed window. Widening the window helps, but by
+   less than the independence-based math would suggest.
+
+**2d. RECOMMENDATION (report only, not implemented).** Two separate, both
+real, problems exist — recommend against picking just one:
+- **Fix the Friday/Monday `WEEKLY_CLOSE_WEEKDAY` mismatch first** — it is
+  the actual, deterministic, 100%-reproducible cause of the specific
+  96.2h figure this directive investigates (confirmed across 5 real rows,
+  4 different assets, 0 exceptions), independent of any scheduling
+  reliability question. This needs a real decision (which weekday/hour
+  the data source's own weekly bar actually represents, verified against
+  more than 2 data points before changing a constant three other
+  strategies also depend on) — not a quick constant flip.
+- **For the cron-drop rate specifically**, option 2 (external
+  `workflow_dispatch` trigger) is the more promising direction of the
+  three — it targets the actual measured mechanism (triggers never being
+  created) rather than working around it, unlike options 1 and 3. But
+  it introduces a new external credential, a real tradeoff worth a
+  deliberate decision, not a default pick.
+
+**2e. FINDING** (confirmed-from-data). With the Friday/Monday mismatch as
+the dominant, deterministic driver, GOLD's real per-week evaluation
+cadence is actually close to its intended one-per-week rate — 2 of 2
+observed evaluations landed almost exactly 7 days apart (167.1h), both
+correctly within their Friday tolerance window. What `health_check.json`
+already reports (96.2h staleness) is REAL and not overstated — but it is
+materially different from what this directive's own framing assumed: it
+is not "the strategy is occasionally skipped for days at a time by a
+flaky scheduler," it is "the strategy fires reliably, every week, against
+a candle the data source itself always labels ~96 hours earlier than the
+day the code checks for." The 68.1% cron-drop rate is real and separately
+significant (it affects how MANY of the 12 dense-window ticks are
+available as opportunities, and is the plausible cause of the 3 real
+full-window misses found in 9 days across OTHER, non-weekly configs), but
+is not the direct explanation for this specific number.
+
+### Test counts, Python (Part 1 + Part 2 investigation, no website changes this directive)
+
+Before this directive: 2690 (per the prior closing report). After:
+**2693** (+3: `tests/test_no_local_path_leak.py`). Same 4 pre-existing,
+unrelated failures (2x missing `lxml`, 1 PSX test depending on the same, 1
+real-data-drift assertion in `test_eve_citation_freshness.py`) — confirmed
+via a scoped rerun of `test_trial_admission`, `test_repair_to_trial`,
+`test_export_trial_entries`, `test_export_site_data`,
+`test_no_local_path_leak`, and `test_factory_loop_run` (119 tests, all
+passing) that the `trial.py` field removal introduced zero regressions.
+Website: unchanged this directive (0 new/changed test files) — still 671
+tests, 669 passing, same 2 pre-existing failures.
+
+### No evidence-bar constant touched, confirmed
+
+The `trial.py` change removes exactly one non-judgment field
+(`forward_tracking_db_ref`) — `AdmitToTrialNeverConsultsFreshnessTest`'s 3
+tests (proving `admit_to_trial` still has no freshness parameter, still
+rejects unknown kwargs, still admits regardless of verdict quality) all
+pass unmodified, confirming zero change to DSL-validity, freshness
+handling, or admission criteria. `repair_to_trial.py`,
+`graveyard_distillation.py`, and every Adam/Eve scoring path: zero diff
+this directive (only `trial.py`, in the one narrow spot required by 1b's
+own instruction, plus a new `tools/` migration script and a new test file
+were touched).
+
+### Stale figures found this directive, and the real values
+
+This report's OWN earlier Part F conclusion is the stale figure: it
+attributed GOLD's 96.2h staleness entirely to the 2026-07-28/29 cron-drop
+incident. Real, multi-asset data traced in this directive shows that
+figure is actually dominated by a separate, deterministic
+`WEEKLY_CLOSE_WEEKDAY` boundary mismatch (~96h by construction, every
+week) — the cron-drop rate (confirmed real, now measured more precisely
+at 68.1% via GitHub's own API rather than 61% via the `execution_metadata`
+proxy) is a real, independent problem, not the direct cause of that
+specific number.
+
