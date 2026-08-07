@@ -4950,3 +4950,86 @@ before rebasing); Rung 2's own 7 uncommitted `nero_core/` files were
 stashed first and restored unchanged after, verified via `git status
 --short` before and after.
 
+## 2026-08-08: CC-1 directive -- Audit and fix: every strategy page must show entry/exit rules and trade frequency
+
+Website-layer only, as scoped. No change to `trial.py`/`repair_to_trial.py`/
+`graveyard_distillation.py`/Adam/Eve scoring, confirmed via `git status
+--short` before starting (only Rung 2's own 7 uncommitted files present,
+none touched) and `git show --stat` on both shipped commits.
+
+### Item 1 -- audit, page by page (real findings, not assumed gaps)
+
+Checked first, per the directive's own instruction, before building anything.
+
+| Category | What was already shown | What was genuinely missing |
+|---|---|---|
+| BREAKOUT_MOMENTUM, TREND_PULLBACK, COINTEGRATION_PAIRS, ORDERFLOW_IMBALANCE, PEAD (`/strategy/[id]`) | A real, human-written PROSE mechanism description (`docs/site_data/strategy_descriptions.json`'s `mechanism` field) already combining entry+exit logic in readable language -- confirmed already rendered via `description.mechanism` | The EXACT numeric parameters (RSI thresholds, ATR multiples, lookback periods, R-multiples) -- these exist only in each strategy's real `nero_core/strategies/*.py` source (`STRATEGY_DESCRIPTION` constants and dataclass defaults), never surfaced on the site at all |
+| VOLATILITY_SQUEEZE, RANGE_MEAN_REVERSION, DONCHIAN_TREND, NEWS_SENTIMENT, GOLD_SILVER_RATIO_MR | Same prose-mechanism pattern | Not in this directive's audit scope -- left untouched, `strategy-rules-fallback` correctly shows for these |
+| Forward Trial's 10 hypotheses | **Nothing.** Confirmed no dedicated per-hypothesis detail page exists anywhere on the site -- the only real viewing surface is `/factory-loop`'s own admission table (and `/signals`, for the 1 hypothesis with a real position). Neither showed the real entry/exit condition in any form, not even raw DSL JSON | Everything: a human-readable translation of `structured_entry_rule`/`structured_exit_plan` |
+| Every live-scheduler strategy's own `/strategy/[id]` page | Nothing | A trades/year or trades/period frequency figure of any kind -- `stats.json` has no such field, confirmed directly |
+| Forward Trial's `projected_time_to_min_sample_label` | Already shown, in the same `/factory-loop` table these hypotheses' only real page already is -- confirmed this specific ask (item 2c's third bullet) was already satisfied before this directive started | Nothing -- no change needed here |
+
+**1d confirmed:** live-scheduler strategies' real rules live in `nero_core/strategies/*.py` (e.g. `breakout_momentum.py`'s `BreakoutMomentumParameters` dataclass + `STRATEGY_DESCRIPTION` constant), never the DSL -- these strategies predate Adam/Eve and have no `structured_entry_rule` field at all. Forward Trial hypotheses' real rules are `structured_entry_rule`/`structured_exit_plan` DSL objects -- but critically, `forward_trial.json` itself (the admission record) carries **neither** field; the real rule lives only on the *original* hypothesis record (`agent_hypotheses.json` for Adam, `eve_hypotheses.json` for Eve), requiring a cross-reference by `hypothesis_name` that did not exist anywhere on the site before this directive.
+
+### Item 2 -- the fix
+
+**2a, translation approach:** `website/lib/ruleTranslation.ts` -- pure functions `translateEntryRule`/`translateExitPlan`, transcribing `rule_dsl.py`'s own `ALLOWED_FIELDS`/`ALLOWED_OPS` vocabulary into plain-English labels (e.g. `zscore20` -> "20-period z-score", `cross_above` -> "crosses above"). A dedicated test reads `rule_dsl.py` directly and asserts every real field/op has a label, so a future DSL vocabulary change that outpaces this file fails a test rather than silently rendering a raw internal name on a real hypothesis's page. Real examples, verified against the actual committed data:
+- `{"conditions": [{"field": "zscore20", "op": "lte", "value": -2}, {"field": "rsi14", "op": "lte", "value": 30}]}` -> *"Enter when 20-period z-score is at or below -2 AND 14-period RSI is at or below 30."* (the real GOLD/1week hypothesis from `eve_hypotheses.json`)
+- `{"stop_atr_multiple": 2.0, "dynamic_target_condition": {"field": "close", "op": "gte", "compare_to_field": "ma20"}, "max_holding_hours": 2160}` -> *"Exit at whichever comes first: a stop-loss 2x ATR(14) from entry, or a moving target: exit when price is at or above 20-period moving average, or a maximum hold of 2160 hours."* (same real hypothesis's own exit plan)
+- Real committed hypothesis (`RSI2_TREND_PULLBACK_PAXG_4H`, Adam): `{"field": "rsi14", "op": "lt", "value": 30}` -> *"Enter when 14-period RSI is below 30."*
+
+**2b, live-scheduler strategies (real code, not the DSL):** Not feasible to translate mechanically the way the DSL is -- each strategy has its own hand-written Python entry/exit logic with no shared vocabulary to walk. Per the directive's own allowance, hand-transcribed real parameter values instead, verified line-by-line against source, into new `entry_rule`/`exit_rule` fields on `docs/site_data/strategy_descriptions.json` (a pre-existing, already hand-curated file -- no new export script, no nero_core change). Done for the 5 named families:
+
+| Family | Entry rule (verbatim, real) | Source |
+|---|---|---|
+| BREAKOUT_MOMENTUM | "Close breaks above the prior 20-bar high, AND closes above its 200-period moving average, AND RSI(14) is at or above 50 (confirming momentum)." | `nero_core/strategies/breakout_momentum.py`, `BreakoutMomentumParameters` defaults |
+| TREND_PULLBACK | "...PRIOR candle's close came within 1x ATR(14) of the 50-period average...CURRENT candle's close is back above the 50-period average, with RSI(14) between 40 and 60..." | `nero_core/strategies/trend_pullback.py` |
+| COINTEGRATION_PAIRS | "...rolling z-score...reaches 2.0 or beyond...confirmed by a real Engle-Granger cointegration test (5% significance)..." | `nero_core/strategies/cointegration_pairs.py` |
+| ORDERFLOW_IMBALANCE | "LONG when the live order-book's bid/ask volume ratio (top 20 levels) exceeds 3.0 AND...close is above its 20-period moving average..." | `nero_core/strategies/orderflow_imbalance.py` |
+| PEAD | "...earnings surprise is at least the config's own threshold (this project's live configs use 3% and 8%)..." | `nero_core/strategies/pead.py` |
+
+Families outside this directive's audit scope (VOLATILITY_SQUEEZE, RANGE_MEAN_REVERSION, DONCHIAN_TREND, NEWS_SENTIMENT, GOLD_SILVER_RATIO_MR) deliberately left without `entry_rule`/`exit_rule` -- the page shows an honest `strategy-rules-fallback` message for these, never a fabricated blank pretending the field was checked.
+
+**2c, real trade frequency:** `website/lib/tradeFrequency.ts`, computed from `ledger_full.json`'s own real ENTRY rows (already fetched on `/strategy/[id]` for other panels -- no new data source). Confirmed real, current numbers:
+- BREAKOUT_MOMENTUM/GOLD, TREND_PULLBACK/BNB, COINTEGRATION_PAIRS/BTC-ETH: 0 real ENTRY rows -- page shows *"0 trades since going live on Jul 31, 2026, 01:06 AM UTC"* (the real earliest ledger row for that exact strategy+version+asset), never a fabricated estimate.
+- ORDERFLOW_IMBALANCE/BTC: 29 real ENTRY rows over a real 9.07-day span (2026-07-29 14:28 to 2026-08-07 16:06) -> **1168.1 trades/year**, shown with an explicit disclosure that this is "a short observation window, not yet a stable long-run average" -- never presented as a settled rate.
+- A single real entry (e.g. one PEAD/AAPL config) reports the real count, not a computed rate -- a rate needs 2+ points to mean anything, and `computeTradeFrequency` returns `null` rather than dividing by a zero/undefined span.
+
+**2d confirmed:** every frequency figure on `/strategy/[id]` is explicitly labeled real-measured (with its real span disclosed) or an honest zero/one-trade count -- no backtest-era frequency estimate exists anywhere in this project's committed data as a clean, already-computed field (checked `backtest_evaluation`'s own `is_trades`/`oos_trades` -- raw counts only, no accompanying time-span/rate field), so none is shown; a fabricated backtest-era rate was explicitly ruled out rather than approximated. `projected_time_to_min_sample_label` (Forward Trial's own real figure) continues to be shown unmodified, distinctly labeled as a projection, not conflated with a live-scheduler strategy's measured rate.
+
+### Item 3 -- consistency and reuse
+
+**3a:** `fetchTrialEntries()`/`fetchAgentHypotheses()`/`fetchEveHypotheses()` reused verbatim (the exact functions `/signals` and other pages already call) -- no second read of the same files. `ruleTranslation.ts` is one shared implementation consumed by `/factory-loop` for both Adam- and Eve-origin hypotheses, not duplicated per origin.
+
+**3b:** Same design tokens throughout (`ink`/`gold`/`teal`/`parchment`/`muted`/`loss`) -- no new palette.
+
+**3c, regression tests:** `test_the_real_committed_gold_1week_z_score_rsi_hypothesis_correctly`-style tests reproduce the exact real DSL hypothesis and its real translation (`ruleTranslation.test.ts`); `strategyPage.test.tsx` gained a test confirming a live-scheduler strategy's hand-transcribed Python-derived rule (BREAKOUT_MOMENTUM) renders correctly, plus the honest-fallback case for a family without one yet.
+
+**Verified end to end against real production data**, not just unit tests: built + served the site locally against the real, freshly-pushed `origin/main` content (a stale Next.js build-cache reuse was caught and cleared with `rm -rf .next` mid-verification -- the first post-push check silently served a pre-push cached fetch response, a real, worth-noting gotcha for anyone re-verifying a data-file-only content change this way in the future). Confirmed real rendered output:
+- `/strategy/[id]` (BREAKOUT_MOMENTUM/GOLD): *"Close breaks above the prior 20-bar high, AND closes above its 200-period moving average, AND RSI(14) is at or above 50..."* / *"Whichever comes first: a stop-loss 1.2x ATR(14) below entry, a fixed target at 1.25x the initial risk (1.25R)..."*
+- `/factory-loop`: multiple real Forward Trial hypotheses now show real translated rules, e.g. *"Enter when 20-period z-score is at or below -1.5 AND 14-period ADX (trend strength) is below 25. Exit at whichever comes first: a stop-loss 1.5x ATR(14) from entry..."*
+
+### Test counts
+
+Website: 688 -> 717 (29 new: 14 `ruleTranslation.test.ts`, 5 `tradeFrequency.test.ts`, 4 `hypothesisRules.test.ts`, 4 `strategyPage.test.tsx`, 2 `factoryLoopPage.test.tsx`), all passing. Same 2 pre-existing, unrelated failures as every prior directive this session (`siteDataSchema.test.ts`'s stale `failure_patterns.json` count check) -- confirmed unchanged, not caused by this directive.
+
+### Stale/imprecise figures found
+
+None in the directive's own text this time -- the directive's real numbers (BREAKOUT_MOMENTUM/TREND_PULLBACK/COINTEGRATION_PAIRS at 0 resolved trades, ORDERFLOW_IMBALANCE with real trade history, `projected_time_to_min_sample_label` already existing) all checked out exactly as stated against live data.
+
+### Shipped
+
+```
+git log origin/main --oneline -3
+45d1b7c Every strategy page: real entry/exit rules and trade frequency
+8c12746 factory-loop: show real Forward Trial ENTRY activity, not just admission
+6323ec0 Closing report: REFINEMENT tagging mechanism gap fix
+```
+
+Commit `45d1b7c`: `docs/site_data/strategy_descriptions.json`,
+`website/app/factory-loop/page.tsx`, `website/app/strategy/[id]/page.tsx`,
+`website/lib/{ruleTranslation,hypothesisRules,tradeFrequency}.ts`,
+`website/lib/types.ts`, and their 5 test files -- 12 files, no other diff.
+Rung 2's 7 uncommitted `nero_core/` files confirmed untouched throughout
+(`git status --short` before and after).
+
