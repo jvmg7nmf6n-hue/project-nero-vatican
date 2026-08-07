@@ -15,6 +15,7 @@ from nero_core.truth_ledger.execution_log import (
     latest_news_sentiment_fetch_timestamp,
     list_execution_log,
     list_execution_metadata,
+    list_news_sentiment_log,
 )
 
 
@@ -189,6 +190,44 @@ class NewsSentimentLogTest(ExecutionLogTestCase):
         # masked by v2's -- a version-blind MAX(fetch_timestamp) would get this wrong.
         self.assertEqual(latest_news_sentiment_fetch_timestamp("GOLD", V1_VERSION, db_path=self.db_path), later)
         self.assertEqual(latest_news_sentiment_fetch_timestamp("GOLD", V2_VERSION, db_path=self.db_path), earlier)
+
+    # CC-1 overnight directive, Part 4: list_news_sentiment_log is the new
+    # all-time read this export needed -- list_news_sentiment_log_for_run
+    # (one run at a time) already existed but can't back a site-wide export.
+    def test_list_news_sentiment_log_returns_every_row_across_multiple_runs(self) -> None:
+        earlier = datetime(2026, 7, 17, 19, 0, tzinfo=timezone.utc)
+        later = datetime(2026, 7, 18, 19, 0, tzinfo=timezone.utc)
+        insert_news_sentiment_log(
+            run_id="run-1", asset="GOLD", strategy_version=V1_VERSION, fetch_timestamp=earlier, signal_type="NEUTRAL",
+            confidence=0.0, reasoning="run 1", source="local", db_path=self.db_path,
+        )
+        insert_news_sentiment_log(
+            run_id="run-2", asset="BTC", strategy_version=V2_VERSION, fetch_timestamp=later, signal_type="BUY_BIAS",
+            confidence=0.4, reasoning="run 2", source="claude", sentiment_score=4, db_path=self.db_path,
+        )
+
+        rows = list_news_sentiment_log(db_path=self.db_path)
+        self.assertEqual(len(rows), 2)
+        # Ordered by fetch_timestamp ascending, not insertion order.
+        self.assertEqual(rows[0].reasoning, "run 1")
+        self.assertEqual(rows[1].reasoning, "run 2")
+
+    def test_list_news_sentiment_log_filters_by_asset(self) -> None:
+        now = datetime(2026, 7, 17, 19, 0, tzinfo=timezone.utc)
+        insert_news_sentiment_log(
+            run_id="run-1", asset="GOLD", strategy_version=V1_VERSION, fetch_timestamp=now, signal_type="NEUTRAL",
+            confidence=0.0, reasoning="gold", source="local", db_path=self.db_path,
+        )
+        insert_news_sentiment_log(
+            run_id="run-1", asset="BTC", strategy_version=V1_VERSION, fetch_timestamp=now, signal_type="NEUTRAL",
+            confidence=0.0, reasoning="btc", source="local", db_path=self.db_path,
+        )
+        rows = list_news_sentiment_log(db_path=self.db_path, asset="GOLD")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].asset, "GOLD")
+
+    def test_list_news_sentiment_log_empty_db_returns_empty_list_not_an_error(self) -> None:
+        self.assertEqual(list_news_sentiment_log(db_path=self.db_path), [])
 
 
 if __name__ == "__main__":

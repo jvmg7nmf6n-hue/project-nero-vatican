@@ -338,6 +338,35 @@ class NewsSentimentLogRow:
     created_at: datetime
 
 
+def list_news_sentiment_log(db_path: Path = DEFAULT_DB_PATH, asset: str | None = None) -> list[NewsSentimentLogRow]:
+    """CC-1 overnight directive, Part 4: all-time view across every run, mirroring
+    list_execution_log's own all-time-per-asset shape -- distinct from
+    list_news_sentiment_log_for_run below, which is scoped to one run_id. Real
+    data has existed in this table since 2026-07-18 with no way to read it back
+    except one run at a time; this is the read path a static site export needs."""
+    init_execution_tables(db_path)
+    query = """
+        SELECT id, run_id, asset, strategy_version, news_timestamp, fetch_timestamp, sentiment_score,
+               signal_type, confidence, reasoning, source, created_at
+        FROM news_sentiment_log
+    """
+    params: list[Any] = []
+    if asset is not None:
+        query += " WHERE asset = ?"
+        params.append(asset)
+    query += " ORDER BY fetch_timestamp ASC, id ASC"
+    with closing(sqlite3.connect(str(db_path))) as conn:
+        rows = conn.execute(query, params).fetchall()
+    return [
+        NewsSentimentLogRow(
+            id=r[0], run_id=r[1], asset=r[2], strategy_version=r[3], news_timestamp=datetime.fromisoformat(r[4]) if r[4] else None,
+            fetch_timestamp=datetime.fromisoformat(r[5]), sentiment_score=r[6], signal_type=r[7],
+            confidence=r[8], reasoning=r[9], source=r[10], created_at=datetime.fromisoformat(r[11]),
+        )
+        for r in rows
+    ]
+
+
 def list_news_sentiment_log_for_run(run_id: str, db_path: Path = DEFAULT_DB_PATH) -> list[NewsSentimentLogRow]:
     """All news_sentiment_log rows inserted by one specific run, in insertion order."""
     init_execution_tables(db_path)
