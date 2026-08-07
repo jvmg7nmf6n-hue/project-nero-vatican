@@ -490,8 +490,39 @@ def _kraken_interval_minutes(interval: str) -> int:
     return {"1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "4h": 240, "1d": 1440}.get(interval, 60)
 
 
+# CC-1 directive (2026-08-07, "fix market_data.py's missing '1week' interval
+# entry"): "1week" was missing from this dict entirely, silently falling
+# through to the 86_400_000 (1-day) default -- confirmed the real, live
+# effect on GOLD's own exported chart open_time (`_load_twelve_data`, this
+# module, `open_time = close_time - interval_ms`): a 1-week candle's
+# open_time was computed 1 day before close_time instead of 7 days before
+# it, a 6-day error, cosmetic (display only) but real and user-visible.
+# 604_800_000 matches `nero_core.data_sources.forex_data
+# .TWELVE_DATA_INTERVAL_MILLISECONDS`'s own already-correct "1week" entry
+# exactly -- the same real value, not a new one.
+#
+# A SECOND, identical-class gap found while building this directive's own
+# item 1c regression test (never previously reported): "2h" was ALSO
+# missing. `tools/timeframe_data.py`'s `TWELVE_DATA_ONLY_ASSETS = {"GOLD"}`
+# + `NATIVE_TWELVEDATA_INTERVAL = {"2h": "2h", ...}` confirms GOLD's own "2h"
+# timeframe fetch goes through this exact same table -- it would have
+# silently computed the same wrong 1-day-off open_time this "1week" fix
+# addresses. 7_200_000 (2 x 3_600_000) is a direct unit conversion, not
+# copied from another file -- no other dict in this codebase has a "2h"
+# entry to match against (forex pairs never use a 2h timeframe).
+#
+# Extracted to a named module-level constant (mirroring
+# nero_core.data_sources.forex_data.TWELVE_DATA_INTERVAL_MILLISECONDS's own
+# naming) specifically so a regression test can assert real dict membership
+# directly, rather than only inspecting _twelve_data_interval_milliseconds's
+# return value (which could coincidentally match the default and hide a
+# missing key the same way "1week"/"2h" both did).
+TWELVE_DATA_INTERVAL_MILLISECONDS: dict[str, int] = {
+    "1min": 60_000, "5min": 300_000, "15min": 900_000, "30min": 1_800_000,
+    "1h": 3_600_000, "2h": 7_200_000, "4h": 14_400_000, "1day": 86_400_000,
+    "1week": 604_800_000,
+}
+
+
 def _twelve_data_interval_milliseconds(interval: str) -> int:
-    return {
-        "1min": 60_000, "5min": 300_000, "15min": 900_000, "30min": 1_800_000,
-        "1h": 3_600_000, "4h": 14_400_000, "1day": 86_400_000,
-    }.get(interval, 86_400_000)
+    return TWELVE_DATA_INTERVAL_MILLISECONDS.get(interval, 86_400_000)

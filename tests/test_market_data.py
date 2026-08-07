@@ -11,8 +11,11 @@ import requests
 from nero_core.data_sources.market_data import (
     BINANCE_SYMBOLS,
     CANDLE_COLUMNS,
+    TWELVE_DATA_INTERVAL_MILLISECONDS,
+    TWELVE_DATA_SYMBOLS,
     MarketDataClient,
     MarketDataUnavailableError,
+    _twelve_data_interval_milliseconds,
 )
 
 NOW = datetime.now(timezone.utc)
@@ -342,6 +345,79 @@ def _twelve_data_intraday_values(count: int, end: datetime, interval_hours: int 
             }
         )
     return values
+
+
+class TwelveDataIntervalMillisecondsCoverageTest(unittest.TestCase):
+    """CC-1 directive (2026-08-07, "fix market_data.py's missing '1week'
+    interval entry"), item 1c: every real Twelve-Data-native interval string
+    GOLD's own fetch path (the only asset in TWELVE_DATA_SYMBOLS reachable
+    via tools.timeframe_data.TWELVE_DATA_ONLY_ASSETS = {"GOLD"}) can ever
+    actually pass to _twelve_data_interval_milliseconds must have a REAL
+    dict entry -- not merely "the function returns something," which would
+    let a missing key silently collapse to the wrong 86_400_000 (1-day)
+    default exactly like the real "1week" (and the "2h" this same directive
+    found alongside it) bugs did. Checks the dict directly by membership
+    (`in`), not just by calling the function and eyeballing the return
+    value, so a future new timeframe added to STANDARD_TIMEFRAMES /
+    NATIVE_TWELVEDATA_INTERVAL without a matching entry here fails loudly,
+    not silently.
+
+    The real, traced set of Twelve-Data-native interval strings GOLD's own
+    fetch path can produce (tools/timeframe_data.py):
+      - "2h", "4h", "1week" -- directly, via NATIVE_TWELVEDATA_INTERVAL's
+        own values for tools.timeframe_data.STANDARD_TIMEFRAMES.
+      - "1h" -- the "12h" timeframe's own resample-from-1h fallback
+        (fetch_timeframe_candles's own `if timeframe == "12h":` branch).
+      - "1day" -- the "24h" timeframe, via MarketDataClient.load_daily's
+        own hardcoded `interval="1day"` call to _load_twelve_data.
+    """
+
+    def test_gold_is_still_the_only_twelve_data_only_asset(self) -> None:
+        # Sanity check on this test's own premise -- if a second asset ever
+        # joins TWELVE_DATA_ONLY_ASSETS, this test's real-world relevance
+        # (and STANDARD_TIMEFRAMES' own applicability) should be re-checked.
+        from tools.timeframe_data import TWELVE_DATA_ONLY_ASSETS
+
+        self.assertEqual(TWELVE_DATA_ONLY_ASSETS, {"GOLD"})
+        self.assertIn("GOLD", TWELVE_DATA_SYMBOLS)
+
+    def test_every_real_native_interval_gold_can_request_has_a_real_entry(self) -> None:
+        """Checks real dict MEMBERSHIP directly (`in TWELVE_DATA_INTERVAL_
+        MILLISECONDS`), not just the function's return value -- a missing
+        key silently returning the correct-looking value by coincidence
+        (as "1day" itself legitimately does, since 1day IS the fallback
+        default) would defeat a return-value-only check. This is exactly
+        the class of gap "1week" and "2h" both were before this directive."""
+        from tools.timeframe_data import NATIVE_TWELVEDATA_INTERVAL, STANDARD_TIMEFRAMES
+
+        real_native_intervals = {"1h", "1day"}  # the "12h"/"24h" fallback paths, always real regardless of the map
+        for timeframe in STANDARD_TIMEFRAMES:
+            native = NATIVE_TWELVEDATA_INTERVAL.get(timeframe)
+            if native is not None:
+                real_native_intervals.add(native)
+
+        for interval in sorted(real_native_intervals):
+            with self.subTest(interval=interval):
+                self.assertIn(
+                    interval, TWELVE_DATA_INTERVAL_MILLISECONDS,
+                    f"{interval!r} is a real interval GOLD's own fetch path can request but has "
+                    f"no entry in TWELVE_DATA_INTERVAL_MILLISECONDS -- it would silently fall "
+                    f"through to the wrong 86_400_000 (1-day) default",
+                )
+
+    def test_1week_is_604_800_000_milliseconds(self) -> None:
+        self.assertEqual(_twelve_data_interval_milliseconds("1week"), 604_800_000)
+
+    def test_2h_is_7_200_000_milliseconds(self) -> None:
+        self.assertEqual(_twelve_data_interval_milliseconds("2h"), 7_200_000)
+
+    def test_open_time_is_correctly_7_days_before_close_time_for_1week(self) -> None:
+        """The real, end-to-end effect this fix addresses: a 1week candle's
+        open_time must be exactly 7 days (604_800_000 ms) before its own
+        close_time, not 1 day (the pre-fix bug's real, wrong value)."""
+        close_time = 1_800_000_000_000
+        open_time = close_time - _twelve_data_interval_milliseconds("1week")
+        self.assertEqual(close_time - open_time, 7 * 24 * 60 * 60 * 1000)
 
 
 class TimestampMillisecondPrecisionRegressionTest(unittest.TestCase):
