@@ -49,6 +49,8 @@ class GoldAnalysisAgent(BaseAgent):
             meta={
                 "net_score": read.net_score,
                 "bias": read.bias.value,
+                "agreement": read.agreement,
+                "coverage": read.coverage,
                 "probability_up": read.probability_up,
                 "top_drivers": read.top_drivers,
                 "reasoning": reasoning,

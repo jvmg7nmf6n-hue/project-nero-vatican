@@ -50,6 +50,14 @@ class TradeRecommendationAgent(BaseAgent):
                 "bias": stance.value,
                 "raw_bias": bias.value,
                 "confidence": final_conf,
+                # VATICAN INTEGRATION (Stage 2, "fix the aggregation formula"
+                # directive): pass through gold_analysis/bitcoin_analysis's
+                # own agreement/coverage (already correctly provenance-
+                # filtered in live mode via real_only_signals) rather than
+                # recomputing from ctx.all_signals, which would silently
+                # re-include mock-only agents' signals.
+                "agreement": float(res.meta.get("agreement", 0.0)),
+                "coverage": float(res.meta.get("coverage", 0.0)),
                 "probability_up": prob_up,
                 "actionable": actionable,
                 "drivers": res.meta.get("top_drivers", []),

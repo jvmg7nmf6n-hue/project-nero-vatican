@@ -12,6 +12,20 @@ class AssetRead:
     net_score: float          # weighted, on the -2..+2 bias scale
     bias: Bias
     confidence: float
+    # VATICAN INTEGRATION (Stage 2, "fix the aggregation formula" directive,
+    # docs/bellwether_aggregation_formula_report.md): `confidence` above is
+    # kept unchanged (0.3 + 0.45*agreement + 0.25*coverage) for backward
+    # compatibility with every existing consumer (trade_recommendation's
+    # actionability threshold, risk's haircut math, every pre-existing
+    # test) — nothing downstream breaks. `agreement` and `coverage` are the
+    # SAME two components that formula already computes internally, now
+    # also exposed as their own fields so a consumer can see them
+    # separately rather than only the blend. See that report for why this
+    # split matters: confidence alone can't distinguish "narrow but very
+    # aligned" from "broad but only mildly aligned," and the two behave very
+    # differently as more real agents get wired.
+    agreement: float          # 0 (split) .. 1 (unanimous strong) — |net_score|/2
+    coverage: float           # 0..1 — how much of the intended signal mass showed up this cycle
     probability_up: float
     bullish: list[Signal]
     bearish: list[Signal]
@@ -88,7 +102,7 @@ def aggregate(asset: Asset, signals: list[Signal]) -> AssetRead:
     """
     relevant = [s for s in signals if s.asset == asset and s.bias != Bias.NEUTRAL]
     if not relevant:
-        return AssetRead(asset, 0.0, Bias.NEUTRAL, 0.25, 0.5, [], [], [])
+        return AssetRead(asset, 0.0, Bias.NEUTRAL, 0.25, 0.0, 0.0, 0.5, [], [], [])
 
     total_w = sum(s.strength for s in relevant) or 1.0
     net = sum(s.weighted_score for s in relevant) / total_w
@@ -98,10 +112,10 @@ def aggregate(asset: Asset, signals: list[Signal]) -> AssetRead:
     bearish = sorted([s for s in relevant if s.bias.score < 0],
                      key=lambda s: s.weighted_score)
 
-    # Confidence rises with (a) signal mass and (b) agreement among signals.
+    # Confidence rises with (a) signal coverage and (b) agreement among signals.
     agreement = abs(net) / 2.0                       # 0 (split) .. 1 (unanimous strong)
-    mass = min(1.0, total_w / 4.0)
-    confidence = round(0.3 + 0.45 * agreement + 0.25 * mass, 3)
+    coverage = min(1.0, total_w / 4.0)                # how much intended signal mass showed up
+    confidence = round(0.3 + 0.45 * agreement + 0.25 * coverage, 3)
 
     # Logistic squashing of net score into a probability.
     prob_up = round(1.0 / (1.0 + pow(2.718281828, -1.1 * net)), 3)
@@ -114,6 +128,8 @@ def aggregate(asset: Asset, signals: list[Signal]) -> AssetRead:
         net_score=round(net, 3),
         bias=Bias.from_score(net),
         confidence=confidence,
+        agreement=round(agreement, 3),
+        coverage=round(coverage, 3),
         probability_up=prob_up,
         bullish=bullish,
         bearish=bearish,

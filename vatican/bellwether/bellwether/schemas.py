@@ -217,6 +217,19 @@ class AnalysisOutput(BaseModel):
     gold_bias: Bias
     bitcoin_bias: Bias
     confidence: float = Field(ge=0.0, le=1.0)
+    # VATICAN INTEGRATION (Stage 2, "fix the aggregation formula" directive):
+    # `confidence` above stays a single blended scalar for backward
+    # compatibility, but it conflates two different questions — "how much do
+    # the available signals agree" and "how much of the intended signal set
+    # was actually available this cycle" (docs/
+    # bellwether_aggregation_formula_report.md). These four fields expose
+    # gold_analysis/bitcoin_analysis's own `_synthesis.aggregate()` agreement
+    # and coverage components separately, per asset, so a consumer isn't
+    # stuck decomposing a blend after the fact.
+    gold_agreement: float = Field(ge=0.0, le=1.0, default=0.0)
+    gold_coverage: float = Field(ge=0.0, le=1.0, default=0.0)
+    bitcoin_agreement: float = Field(ge=0.0, le=1.0, default=0.0)
+    bitcoin_coverage: float = Field(ge=0.0, le=1.0, default=0.0)
     probability_up_gold: float = Field(ge=0.0, le=1.0)
     probability_up_bitcoin: float = Field(ge=0.0, le=1.0)
     historical_matches: list[HistoricalMatch] = Field(default_factory=list)
