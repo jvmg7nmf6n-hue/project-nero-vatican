@@ -4489,3 +4489,131 @@ reports -- this directive reused those figures for 2d's estimate rather than
 re-measuring, and found no discrepancy against re-reading the same source code
 they were originally derived from.
 
+---
+
+## 2026-08-07: CC-1 master directive, Part A -- fix advance_open_trials for repaired records
+
+CC-1 master directive "Close the backlog: macro-conditioning ladder + repair
+resolution fix," Part A (sequenced first: small, precise, unblocks nothing else,
+pending longest).
+
+**A1. FINDING** (confirmed-from-code). The exact gap:
+`advance_open_trials` (`tools/factory_loop_run.py:332-336`, pre-fix) resolved
+every OPEN record's asset/timeframe via `hypothesis_lookup.get(name)`, where
+`name = ref.get("hypothesis_name", "")` and `hypothesis_lookup` is built by the
+caller (`tools/factory_loop_run.py:418`) as `{c.hypothesis_name: c.hypothesis_record
+for c in load_adam_candidates() + load_eve_candidates()}` -- keyed by raw,
+unsuffixed Adam/Eve candidate names only. A repaired record's real
+`hypothesis_name`, confirmed at `nero_core/research_agent/repair_to_trial.py:111`
+(`admit_repair_to_trial`), is constructed as
+`f"{state['original_hypothesis_name']}__REPAIR_{attempt_id}"` -- this exact
+string never appears as a key in `hypothesis_lookup`, so `hypothesis_lookup.get(name)`
+always returned `None` for a repaired record, which the pre-fix code correctly
+detected and reported (`"no hypothesis record found... repaired-origin lineage
+lookup is a known, real, not-yet-supported gap"`) rather than crashing or
+silently guessing -- but it never actually ticked. `repair_chain_launch.py`'s
+own `EVENT_ATTEMPT_LAUNCHED` event (`tools/repair_chain_launch.py:215-230`) was
+also directly inspected: it carries `structured_entry_rule`,
+`structured_entry_rule_short`, `structured_exit_plan`, `modification_type`,
+`fresh_data_method` -- but never `asset` or `timeframe`, even though the
+modification `proposal` dict it's built from does carry both
+(`repair_lab.py:301-302`'s own documented proposal schema). This is a second,
+related, real fact relevant to A4 below.
+
+**A2. WHAT SHIPPED.** `tools/factory_loop_run.py`'s `advance_open_trials`: when
+`ref.get("origin") == trial.ORIGIN_REPAIRED` (the authoritative signal --
+set unconditionally by `trial.admit_to_trial` for every repaired record, not a
+string-pattern guess) and the suffix marker `"__REPAIR_"` is present, the
+lookup key is resolved by `name.rsplit("__REPAIR_", 1)[0]` -- recovering
+`state['original_hypothesis_name']` exactly, the same string
+`admit_repair_to_trial` started from. This works because `load_adam_candidates`/
+`load_eve_candidates` read from `agent_hypotheses.json`/`eve_hypotheses.json`,
+both append-only stores never pruned when a hypothesis dies -- the ancestor a
+repair is based on is always still present in the same lookup a fresh record
+already resolves through. **No new resolution pathway** -- the repaired record
+now flows through the identical `hypothesis_lookup.get(...)` -> fetch -> tick
+-> verdict -> `update_trial_status` sequence a fresh record always used.
+
+**A3. WHAT SHIPPED.** 4 new tests in `tests/test_factory_loop_run.py`'s
+`AdvanceOpenTrialsTest`:
+- `test_repaired_record_resolves_via_stripped_original_hypothesis_name` --
+  proves the lookup itself resolves correctly and that `run_forward_tick`
+  receives the REAL resolved hypothesis dict (asset/timeframe/structured
+  fields), not an empty one.
+- `test_repaired_record_advances_open_to_survived_exactly_like_a_fresh_record`
+  and `test_repaired_record_can_resolve_to_failed_trial_exactly_like_a_fresh_record`
+  -- prove a repaired record reaches `update_trial_status` with the correct
+  terminal status (`STATUS_SURVIVED_TRIAL` / `STATUS_FAILED_TRIAL`) once
+  `compute_forward_verdict` returns a real verdict, exactly as a fresh record
+  does (same code path, same assertions style as the pre-existing
+  `test_live_tick_uses_real_fetch_layer_and_logs_outcome`).
+- The existing `test_hypothesis_not_in_lookup_is_reported_not_crashed` (fresh
+  record, genuinely-unknown name) still passes unmodified, confirming the fix
+  is scoped to `origin == ORIGIN_REPAIRED` and does not change fresh-record
+  behavior at all.
+
+**STALE FIGURE FOUND in this directive's own A3 wording**: "OPEN →
+EARLY_POSITIVE → PROMISING → TRIAL_SURVIVED" does not match the real status
+model. `nero_core/research_agent/trial.py:74-76` defines exactly 3 status
+constants: `STATUS_OPEN`, `STATUS_SURVIVED_TRIAL`, `STATUS_FAILED_TRIAL` -- no
+`EARLY_POSITIVE`/`PROMISING` status exists in the real code (this exact
+staleness was already flagged once before, in the prior B3b report section of
+this same document). The regression tests above use the real 2-outcome
+terminal model (`OPEN` -> `SURVIVED_TRIAL` or `FAILED_TRIAL`), not the
+directive's stated 4-state ladder.
+
+**A4. FINDING, honest completeness statement** (confirmed-from-data). The
+specific code gap this directive asked about is now fixed and proven correct
+by test -- a repaired record's forward ticks will resolve and advance exactly
+like a fresh record's, once one exists. It is **not** true that the
+repair-to-resolution path is complete end to end in a practical sense, for two
+separate, real, pre-existing reasons this fix does not touch:
+1. **Nothing has ever launched a real repair attempt.** Confirmed directly:
+   `docs/site_data/repair_attempts.json` does not exist on disk at all (0 repair
+   events of any kind, ever, in this checkout). `tools/repair_chain_launch.py`'s
+   own module docstring is explicit that it is test-only glue, "not, and was
+   never meant to be, a production entry point" -- confirmed by direct search,
+   zero non-test files call `append_repair_event` with `EVENT_ATTEMPT_LAUNCHED`
+   anywhere in this codebase. This fix currently has zero real records to
+   unblock; it is preventive/correctness work for when the repair mechanism is
+   actually invoked, not a fix that changes any real record's status today.
+2. **`tools/factory_loop_run.py --live` is not on any schedule.** Confirmed:
+   none of the 6 files in `.github/workflows/` (`bellwether_overlay.yml`,
+   `health_check.yml`, `live_scheduler.yml`, `research_agent_manual.yml`,
+   `scheduler_heartbeat_check.yml`, `signal_alerts.yml`) reference
+   `factory_loop_run`. A human must run it manually for ANY OPEN record --
+   fresh or repaired -- to ever tick forward at all. This is pre-existing,
+   affects fresh records identically, and is explicitly a separate,
+   out-of-scope scheduling question per this directive's own OUT OF SCOPE list.
+
+One additional real, NOT-yet-fixed edge case, honestly scoped rather than
+silently covered (see A1/A2's own docstring in the shipped code): a repair
+whose `modification_type` is `asset_timeframe_change` (the one modification
+type explicitly allowed to move to a different asset/timeframe than the
+original, per `repair_lab.py`'s own `validate_modification`) would resolve to
+the WRONG asset/timeframe under this fix, since `repair_chain_launch.py`'s
+launch event never captures the modification's own `asset`/`timeframe` fields.
+Fixing this would require changing that event's write schema -- a larger,
+separate change than "small, precise, no new resolution pathway." Confirmed
+zero real instances of this exist today (zero repair attempts have ever been
+launched, per point 1 above), so this is a documented risk for the future, not
+a current incorrect record.
+
+**Test counts.** Scoped rerun (`test_factory_loop_run`, `test_trial_admission`,
+`test_repair_to_trial`, `test_repair_chain_launch`,
+`test_repair_chain_launch_no_auto_wire`, `test_repair_lab_no_auto_wire`,
+`test_repair_lab_forward_tracker`): 90 tests, all passing (+4 from this
+directive's own new tests in `test_factory_loop_run`). Full-suite before/after
+count reported in this directive's own final closing section below, alongside
+Part B.
+
+**No evidence-bar constant touched, confirmed.** This change touches exactly
+`tools/factory_loop_run.py`'s `advance_open_trials` function (lookup-key
+resolution only, no admission/verdict/status logic changed) and one test file.
+Zero diff to `graveyard_distillation.py` or any Adam/Eve scoring path. Zero
+change to `trial.admit_to_trial`'s own DSL-validity gate, to
+`repair_to_trial.admit_repair_to_trial`'s own admission gate, or to any
+threshold constant (`MIN_SAMPLE_SIZE`, frequency floor, FDR alpha, bootstrap
+CI) -- confirmed via `git diff --name-only` showing only the two files named
+above.
+
