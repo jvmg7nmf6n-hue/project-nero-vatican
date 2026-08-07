@@ -1,0 +1,60 @@
+name: Bellwether Macro Overlay
+
+# Cadence: every 8h, offset from :00 (same GitHub-Actions-congestion lesson
+# live_scheduler.yml already documents -- scheduled runs anchored at :00/:30
+# land late most reliably). 8h matches Binance's own funding-settlement
+# cadence (00:00/08:00/16:00 UTC) -- the FASTEST-changing of Bellwether's
+# real inputs (real yield/DXY/VIX are daily-resolution; running more often
+# than every 8h would not produce a fresher DXY/VIX/real-yield value, only
+# a fresher funding rate). ORDERFLOW_IMBALANCE/BTC's own real cadence
+# (median ~6.1h between entries, mean ~8.1h -- see docs/
+# bellwether_stage2_report.md's Part C section) means an 8h-old macro read
+# is comparable to, not much worse than, the strategy's own typical
+# inter-entry gap -- reasoned cadence, not arbitrary.
+on:
+  schedule:
+    - cron: "17 0,8,16 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bellwether-overlay
+  cancel-in-progress: false
+
+jobs:
+  bellwether-overlay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Vatican + Bellwether dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r vatican/bellwether/requirements-lock.txt
+      - name: Run Bellwether macro overlay
+        run: python -m nero_core.execution.bellwether_overlay
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        continue-on-error: true
+      - name: Save Truth Ledger + site data
+        run: |
+          git config user.name "bellwether-overlay"
+          git config user.email "actions@users.noreply.github.com"
+          git pull --rebase origin main || git rebase --abort || true
+          if [ -f data/truth_ledger.db ]; then
+            git add -f data/truth_ledger.db
+          fi
+          if [ -f docs/site_data/macro_reads.json ]; then
+            git add -f docs/site_data/macro_reads.json
+          fi
+          if git diff --cached --quiet; then
+            echo "no overlay changes"
+            exit 0
+          fi
+          git commit -m "Update Bellwether macro overlay"
+          git pull --rebase origin main || git rebase --abort || true
+          git push || echo "overlay push skipped; next run will retry"
