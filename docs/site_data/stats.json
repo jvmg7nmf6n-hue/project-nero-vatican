@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-07T22:48:32.183982+00:00",
+  "last_updated": "2026-08-07T23:41:30.594050+00:00",
   "strategies": [
     {
       "strategy": "BREAKOUT_MOMENTUM",
@@ -240,22 +240,18 @@
       "strategy": "ORDERFLOW_IMBALANCE",
       "strategy_version": "orderflow-imbalance-v1.0.0",
       "asset": "BTC",
-      "resolved_trades": 30,
+      "resolved_trades": 31,
       "unverified_trades": 27,
-      "win_rate": 0.43333333333333335,
-      "expectancy_r": -0.1740687034426638,
-      "avg_return_pct": -0.05519221476022964,
+      "win_rate": 0.41935483870967744,
+      "expectancy_r": -0.17071010879963794,
+      "avg_return_pct": -0.05539963025164597,
       "signal_counts": {
         "ENTRY": 58,
-        "EXIT": 57,
+        "EXIT": 58,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": {
-        "entry_price": 64928.01,
-        "entry_timestamp": "2026-08-07T22:48:16.200238+00:00",
-        "candle_timestamp": "2026-08-07T21:59:59.999000+00:00"
-      },
+      "open_position": null,
       "unverified_open_entries": 0
     },
     {
@@ -268,12 +264,16 @@
       "expectancy_r": 0.09410926036435155,
       "avg_return_pct": 0.04119729563062523,
       "signal_counts": {
-        "ENTRY": 45,
+        "ENTRY": 46,
         "EXIT": 45,
         "WATCH": 0,
         "NO_TRADE": 0
       },
-      "open_position": null,
+      "open_position": {
+        "entry_price": 1914.84,
+        "entry_timestamp": "2026-08-07T23:41:17.944120+00:00",
+        "candle_timestamp": "2026-08-07T22:59:59.999000+00:00"
+      },
       "unverified_open_entries": 0
     },
     {
