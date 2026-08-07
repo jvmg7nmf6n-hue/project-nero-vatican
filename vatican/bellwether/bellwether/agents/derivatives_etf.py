@@ -6,7 +6,7 @@ how leveraged and which way the crowd is leaning.
 """
 from __future__ import annotations
 
-from ..schemas import AgentResult, Asset, Bias, Category, Signal
+from ..schemas import AgentResult, Asset, Bias, Category, DataProvenance, Signal
 from .base import AnalysisContext, BaseAgent
 
 
@@ -16,6 +16,17 @@ class DerivativesEtfAgent(BaseAgent):
     async def run(self, ctx: AnalysisContext) -> AgentResult:
         flows = ctx.data.etf.flows()
         d = ctx.data.derivatives.metrics()
+        # VATICAN INTEGRATION (Stage 2, Part B): must be called AFTER
+        # metrics() (which sets the real provider's _last_provenance as a
+        # side effect of the fetch it just did) and before any `await` in
+        # this function -- there is none, so this read can't race a
+        # concurrent Stage-A coroutine touching the same provider instance.
+        # ETF flows (btc_flow/gold_flow) and skew/OI/positioning have no
+        # real Vatican source (confirmed blocked for ETF flows, docs/
+        # etf_flow_audit.md; unresearched for the rest) -- funding alone
+        # going real makes this agent MIXED at best, never fully REAL,
+        # honestly.
+        funding_provenance = ctx.data.derivatives.provenance_of("btc_perp_funding_bps")
 
         btc_flow = flows.get("btc_spot_etf_flow_musd", 0.0)
         gold_flow = flows.get("gold_etf_flow_musd", 0.0)
@@ -48,4 +59,8 @@ class DerivativesEtfAgent(BaseAgent):
             f"Gold ETF flow: {gold_flow:+.0f} M USD",
             f"BTC perp funding: {funding:+.1f} bps; 25d skew: {skew:+.1f}",
         ]
-        return self.result(signals=signals, facts=facts, confidence=0.62)
+        provenance = (DataProvenance.MIXED if funding_provenance == DataProvenance.REAL
+                     else DataProvenance.SYNTHETIC)
+        return self.result(signals=signals, facts=facts, confidence=0.62, provenance=provenance,
+                           meta={"btc_perp_funding_bps": funding,
+                                 "btc_perp_funding_bps_provenance": funding_provenance.value})

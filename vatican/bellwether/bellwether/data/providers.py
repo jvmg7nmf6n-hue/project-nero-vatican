@@ -61,6 +61,17 @@ class DerivativesProvider(ABC):
     @abstractmethod
     def metrics(self) -> dict[str, float]: ...
 
+    def provenance_of(self, field: str):
+        """VATICAN INTEGRATION (Stage 2, Part B — BTC funding rate): mirrors
+        MarketSnapshot.provenance_of's convention (missing/unoverridden ==
+        SYNTHETIC, never assumed REAL). A concrete, non-abstract default
+        here means MockDerivatives needs no change at all — it simply never
+        overrides this method, so every field it produces stays honestly
+        SYNTHETIC."""
+        from ..schemas import DataProvenance
+
+        return DataProvenance.SYNTHETIC
+
 
 class EtfFlowProvider(ABC):
     @abstractmethod
@@ -380,6 +391,83 @@ def _fetch_real_vix_level() -> float:
     return float(lagged.iloc[-1])
 
 
+class VaticanRealDerivatives(DerivativesProvider):
+    """Real `btc_perp_funding_bps` via `nero_core.data_sources.funding_data`
+    (Part B, "BTC funding rate" — free Binance public endpoint, already
+    built, per the audit's priority-3 slot). Wired the SAME shape as VIX/DXY
+    in VaticanRealMarketData: wraps a MockDerivatives instance so every
+    OTHER field (btc_oi_chg_pct, btc_25d_skew, gold_futures_oi_chg_pct,
+    gold_mgr_net_long_pct — none of which have a real Vatican source yet)
+    stays on the identical mock draw; process-lifetime cache (funding
+    settles every 8h, doesn't move within one sweep/run); falls back to the
+    mock draw and reports SYNTHETIC on any fetch failure, never guesses a
+    substitute value.
+
+    Units: `funding_data.py`'s `funding_rate` column is a fraction (e.g.
+    0.0001 = 1 basis point per 8h settlement) — this class multiplies by
+    10,000 to match `btc_perp_funding_bps`'s existing bps convention, the
+    SAME scale `derivatives_etf.py` and `risk.py` already compare against
+    (e.g. `> 6` bps for "crowded leverage")."""
+
+    def __init__(self, rng: random.Random) -> None:
+        self.rng = rng
+        self._mock = MockDerivatives(rng)
+        self._last_provenance = None
+
+    def metrics(self) -> dict[str, float]:
+        from ..schemas import DataProvenance
+
+        base = self._mock.metrics()
+        try:
+            base["btc_perp_funding_bps"] = _fetch_real_btc_funding_bps_cached()
+            self._last_provenance = DataProvenance.REAL
+        except Exception:
+            self._last_provenance = DataProvenance.SYNTHETIC
+        return base
+
+    def provenance_of(self, field: str):
+        from ..schemas import DataProvenance
+
+        if field != "btc_perp_funding_bps":
+            return DataProvenance.SYNTHETIC
+        # metrics() always sets _last_provenance before any agent can read
+        # it (DataHub is built once per Orchestrator, metrics() is called
+        # from within the same cycle) -- default SYNTHETIC only guards the
+        # theoretical case of provenance_of() called before metrics().
+        return self._last_provenance or DataProvenance.SYNTHETIC
+
+
+# Same process-lifetime-cache rationale as _DXY_CACHE/_VIX_CACHE above --
+# funding settles every 8h, doesn't move within a single sweep/run, and
+# Binance's public endpoint is rate-limited under rapid repeated calls.
+_BTC_FUNDING_CACHE: dict[str, float] = {}
+
+
+def _fetch_real_btc_funding_bps_cached() -> float:
+    if "value" not in _BTC_FUNDING_CACHE:
+        _BTC_FUNDING_CACHE["value"] = _fetch_real_btc_funding_bps()
+    return _BTC_FUNDING_CACHE["value"]
+
+
+def _fetch_real_btc_funding_bps() -> float:
+    """Most recent ALREADY-SETTLED BTC perp funding rate, in bps, via
+    `nero_core.data_sources.funding_data.load_funding_history` unmodified —
+    same cache-then-live convention that module already implements. No
+    additional lag applied here: the endpoint only ever returns settled
+    (already-closed) events by its own contract (see that module's own
+    docstring), so the latest row is already a closed-candle-equivalent
+    observation, not a live/pending rate. Raises on any failure (import
+    failure, no cache and no network, empty history) -- callers must catch
+    and fall back, never guess a substitute."""
+    from nero_core.data_sources.funding_data import load_funding_history
+
+    result = load_funding_history("BTC")
+    if result.settlements.empty:
+        raise ValueError("BTC funding history has no settlements")
+    latest_rate = float(result.settlements["funding_rate"].iloc[-1])
+    return latest_rate * 10_000.0
+
+
 # --------------------------------------------------------------------------- #
 # Hub
 # --------------------------------------------------------------------------- #
@@ -406,10 +494,10 @@ def build_data_hub(settings: Settings | None = None) -> DataHub:
             rng=rng,
         )
     if s.data_mode == "live":
-        # VATICAN INTEGRATION (Stage 2, docs/bellwether_audit.md): only
-        # `market` (specifically real_yield_10y) has a real provider so
-        # far — calendar/onchain/derivatives/etf stay on the same mock
-        # providers as "mock" mode until a later increment wires them,
+        # VATICAN INTEGRATION (Stage 2, docs/bellwether_audit.md): `market`
+        # (real_yield_10y, dxy, vix) and now `derivatives` (btc_perp_funding_bps,
+        # Part B) have real providers — calendar/onchain/etf stay on the same
+        # mock providers as "mock" mode until a later increment wires them,
         # per the audit's own priority order (monetary_policy -> VIX ->
         # funding rate -> everything else). This is deliberate partial
         # coverage, not an oversight: "live" means "real where real
@@ -420,7 +508,7 @@ def build_data_hub(settings: Settings | None = None) -> DataHub:
             market=VaticanRealMarketData(rng),
             calendar=MockCalendar(rng),
             onchain=MockOnChain(rng),
-            derivatives=MockDerivatives(rng),
+            derivatives=VaticanRealDerivatives(rng),
             etf=MockEtfFlows(rng),
             rng=rng,
         )

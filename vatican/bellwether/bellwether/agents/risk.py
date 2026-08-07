@@ -45,17 +45,27 @@ class RiskAgent(BaseAgent):
                                           detail=f"{bulls} bullish vs {bears} bearish drivers"))
                     haircut += 0.1
 
-        # 2) Crowded leverage / froth from derivatives + on-chain. No live
-        # DerivativesProvider/OnChainProvider exists yet (see build_data_hub)
-        # -- these providers are ALWAYS mock today, in both "mock" and
-        # "live" data_mode, so this check is skipped entirely in live mode
-        # rather than computed from a value that can never currently be real.
-        if not live:
-            d = ctx.data.derivatives.metrics()
+        # 2a) Crowded leverage from derivatives. VATICAN INTEGRATION
+        # (Stage 2, Part B): btc_perp_funding_bps is now real in live mode
+        # (VaticanRealDerivatives) -- gated on ITS OWN field provenance,
+        # same pattern as the VIX check below (4), not on data_mode. Runs
+        # unconditionally in mock mode (unchanged), and in live mode only
+        # once the fetch actually succeeded this cycle.
+        d = ctx.data.derivatives.metrics()
+        funding_provenance = ctx.data.derivatives.provenance_of("btc_perp_funding_bps")
+        if (not live) or funding_provenance in (DataProvenance.REAL, DataProvenance.MIXED):
             if d.get("btc_perp_funding_bps", 0) > 6:
                 flags.append(RiskFlag(label="BTC leverage crowded", severity=0.6,
                                       detail=f"perp funding {d['btc_perp_funding_bps']:+.1f} bps"))
                 haircut += 0.08
+            if live:
+                contributing_provenances.append(funding_provenance)
+
+        # 2b) On-chain valuation froth. No live OnChainProvider exists yet
+        # (see build_data_hub) -- MVRV-Z is ALWAYS mock today in both data
+        # modes, so this check is skipped entirely in live mode rather than
+        # computed from a value that can never currently be real.
+        if not live:
             mvrv = ctx.data.onchain.metrics().get("mvrv_z", 1.0)
             if mvrv > 3.0:
                 flags.append(RiskFlag(label="BTC valuation hot", severity=0.5,
