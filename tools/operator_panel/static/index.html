@@ -21,6 +21,9 @@
   .stat { display: inline-block; margin-right: 1.5rem; }
   .stat b { display: block; font-size: 1.3rem; }
   .pending { border-left: 3px solid #b08a3a; padding-left: .6rem; margin-bottom: .8rem; }
+  .git-banner { padding: .6rem .9rem; border-radius: 6px; margin-top: .5rem; font-weight: 600; display: none; }
+  .git-banner.ok { background: #1c3a1f; border: 1px solid #3a7a4a; color: #cdeccf; }
+  .git-banner.fail { background: #3a1f1f; border: 1px solid #7a3a3a; color: #f0d4d4; }
 </style>
 </head>
 <body>
@@ -39,6 +42,7 @@
 <section>
   <h2>Run Adam</h2>
   <button onclick="runAdam()">Run Adam (scanner + web search)</button>
+  <div id="adam-git-banner" class="git-banner"></div>
   <div id="adam-stream" class="muted"></div>
 </section>
 
@@ -46,6 +50,7 @@
   <h2>Run Eve</h2>
   <div id="eve-preflight" class="muted">loading preflight…</div>
   <button class="confirm" onclick="runEve()">Run Eve (one session)</button>
+  <div id="eve-git-banner" class="git-banner"></div>
   <div id="eve-stream" class="muted"></div>
 </section>
 
@@ -99,9 +104,19 @@ async function loadEvePreflight() {
     `Session ceiling: $${p.session_ceiling_usd} | pre-registration remaining: $${p.pre_registration_remaining_usd} | EVE_ENABLED (default env): ${p.eve_enabled}`;
 }
 
-function streamRun(path, body, outEl) {
+// CC-1 directive, "fix Operator Panel automation" (Item 4d): parses real
+// SSE event frames (event:/data: pairs) instead of blindly dumping raw
+// stream text, specifically so a `git_result` event -- the commit/push/
+// verify outcome after a run finishes -- can render as an unmissable
+// success/failure banner, not just another line buried in the log. The
+// owner must know immediately if a push failed, not discover it later.
+function streamRun(path, body, outEl, bannerEl) {
   const el = document.getElementById(outEl);
+  const banner = document.getElementById(bannerEl);
   el.innerText = '';
+  banner.style.display = 'none';
+  banner.className = 'git-banner';
+  let buffer = '';
   fetch(path, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {}) })
     .then(res => {
       const reader = res.body.getReader();
@@ -109,7 +124,32 @@ function streamRun(path, body, outEl) {
       function pump() {
         reader.read().then(({done, value}) => {
           if (done) return;
-          el.innerText += decoder.decode(value);
+          buffer += decoder.decode(value, {stream: true});
+          const frames = buffer.split('\n\n');
+          buffer = frames.pop(); // last chunk may be incomplete -- keep it for next read.
+          for (const frame of frames) {
+            const eventMatch = frame.match(/^event: (.+)$/m);
+            const dataMatch = frame.match(/^data: (.+)$/m);
+            if (!dataMatch) continue;
+            const eventType = eventMatch ? eventMatch[1] : 'message';
+            let data;
+            try { data = JSON.parse(dataMatch[1]); } catch (e) { data = null; }
+            if (eventType === 'line' && data) {
+              el.innerText += data.text + '\n';
+            } else if (eventType === 'git_result' && data) {
+              banner.className = 'git-banner ' + (data.ok ? 'ok' : 'fail');
+              banner.style.display = 'block';
+              if (!data.changed) {
+                banner.textContent = 'No new result files to commit this run.';
+              } else if (data.ok) {
+                banner.textContent = `PUSHED AND VERIFIED: commit ${data.commit_sha ? data.commit_sha.slice(0, 12) : '?'} is on origin/main.`;
+              } else {
+                banner.textContent = `GIT PUSH FAILED: ${data.error || 'unknown error -- see log below'}`;
+              }
+            } else if (data) {
+              el.innerText += JSON.stringify(data) + '\n';
+            }
+          }
           pump();
         });
       }
@@ -117,10 +157,10 @@ function streamRun(path, body, outEl) {
     });
 }
 
-function runAdam() { streamRun('/api/adam/run', {}, 'adam-stream'); }
+function runAdam() { streamRun('/api/adam/run', {}, 'adam-stream', 'adam-git-banner'); }
 function runEve() {
   if (!confirm('This spends real money against the session ceiling shown above. Continue?')) return;
-  streamRun('/api/eve/run', {confirm: true}, 'eve-stream');
+  streamRun('/api/eve/run', {confirm: true}, 'eve-stream', 'eve-git-banner');
 }
 
 async function loadRuns() {

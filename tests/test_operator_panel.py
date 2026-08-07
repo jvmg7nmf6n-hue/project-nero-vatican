@@ -65,6 +65,57 @@ class OperatorPanelEndpointTest(unittest.TestCase):
         response = self.client.post("/api/eve/run", json={"confirm": False})
         self.assertEqual(response.status_code, 400)
 
+    # CC-1 directive, "fix Operator Panel automation" (Item 4d): the panel
+    # now commits+pushes automatically after a run, but ONLY the specific,
+    # machine-derived files each workflow's own established policy already
+    # allows -- never a blanket add, never the raw-proposal-text/human-
+    # judgment files that are deliberately excluded. These are regression
+    # guards against scope creep silently widening what gets auto-committed.
+    def test_adam_run_commit_paths_never_include_raw_hypotheses_json(self) -> None:
+        names = {p.name for p in self.app_module.ADAM_RUN_COMMIT_PATHS}
+        self.assertNotIn("agent_hypotheses.json", names)
+        self.assertEqual(
+            names,
+            {"agent_test_results.json", "agent_run_summaries.json", "agent_performance.json"},
+        )
+
+    def test_eve_run_commit_paths_never_include_session_registry(self) -> None:
+        names = {p.name for p in self.app_module.EVE_RUN_COMMIT_PATHS}
+        # eve_session_registry.json is a human-curated classification file,
+        # not one of nero_core.eve.storage's own allowlisted write paths --
+        # must never be silently auto-committed by this fix.
+        self.assertNotIn("eve_session_registry.json", names)
+        self.assertEqual(names, {"eve_hypotheses.json", "eve_budget_ledger.json", "eve_sessions"})
+
+    def test_commit_and_report_yields_a_success_banner_event(self) -> None:
+        from tools.operator_panel.git_ops import GitOpsResult
+
+        fake_result = GitOpsResult(
+            changed=True, committed=True, commit_sha="abc123def456", pushed=True, verified=True,
+            origin_log="abc123d Record Eve session results (Operator Panel)",
+        )
+        with patch.object(self.app_module, "commit_and_push", return_value=fake_result) as mock_commit:
+            events = list(self.app_module._commit_and_report([self.tmp / "x.json"], "msg", "Eve"))
+        mock_commit.assert_called_once()
+        git_result_events = [e for e in events if "event: git_result" in e]
+        self.assertEqual(len(git_result_events), 1)
+        payload = json.loads(git_result_events[0].split("data: ", 1)[1])
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["verified"])
+        self.assertEqual(payload["commit_sha"], "abc123def456")
+
+    def test_commit_and_report_yields_a_failure_banner_event_with_the_real_error(self) -> None:
+        from tools.operator_panel.git_ops import GitOpsResult
+
+        fake_result = GitOpsResult(changed=True, committed=True, pushed=False, verified=False, error="git push failed: rejected")
+        with patch.object(self.app_module, "commit_and_push", return_value=fake_result):
+            events = list(self.app_module._commit_and_report([self.tmp / "x.json"], "msg", "Adam"))
+        git_result_events = [e for e in events if "event: git_result" in e]
+        payload = json.loads(git_result_events[0].split("data: ", 1)[1])
+        self.assertFalse(payload["ok"])
+        self.assertFalse(payload["pushed"])
+        self.assertIn("rejected", payload["error"])
+
     def test_approve_draft_writes_through_commit_graveyard_entry_only(self) -> None:
         # Regression guard on item 4's own "no new write path" requirement:
         # approving must call the REAL graveyard_distillation.

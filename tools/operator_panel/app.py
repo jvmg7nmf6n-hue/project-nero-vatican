@@ -50,6 +50,7 @@ from nero_core.research_agent import graveyard_distillation, repair_lab, trial
 from nero_core.research_agent.hypothesis_gen import DEFAULT_HYPOTHESES_PATH, DEFAULT_PARAMETERS
 from nero_core.research_agent.storage import read_json_list, append_json_list
 from tools import factory_loop_run, factory_loop_status_summary, repair_chain_launch
+from tools.operator_panel.git_ops import commit_and_push
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -58,6 +59,32 @@ EVE_BUDGET_LEDGER_PATH = REPO_ROOT / "docs" / "site_data" / "eve_budget_ledger.j
 EVE_SESSION_REGISTRY_PATH = REPO_ROOT / "docs" / "site_data" / "eve_session_registry.json"
 DISTILLATION_DRAFTS_PATH = factory_loop_run.DEFAULT_DISTILLATION_DRAFTS_PATH
 AGENT_TEST_RESULTS_PATH = REPO_ROOT / "docs" / "site_data" / "agent_test_results.json"
+
+# CC-1 directive, "fix Operator Panel automation" (Item 4d): exactly which
+# real, machine-written files get committed after a panel-triggered run --
+# never a blanket `git add -A`. Mirrors .github/workflows/
+# research_agent_manual.yml's own selective policy for Adam: agent_hypotheses.json
+# is deliberately EXCLUDED -- it's raw, unreviewed LLM proposal text, and
+# that workflow's own docstring explains why a bad entry there can't be
+# cleanly undone once committed. Eve's own eve_hypotheses.json, by
+# contrast, has been committed as-is for every real session in this
+# project's history (confirmed via `git log -- docs/site_data/
+# eve_hypotheses.json`) -- there is no equivalent review-gate precedent for
+# it, so it IS included here. `eve_session_registry.json` is deliberately
+# EXCLUDED from both lists: it is not one of nero_core.eve.storage's own
+# three allowlisted write paths (confirmed directly) -- its classification
+# field is a human judgment call made after reading a session's real
+# outcome, not something this fix should start writing automatically.
+ADAM_RUN_COMMIT_PATHS = [
+    REPO_ROOT / "docs" / "site_data" / "agent_test_results.json",
+    REPO_ROOT / "docs" / "site_data" / "agent_run_summaries.json",
+    REPO_ROOT / "docs" / "site_data" / "agent_performance.json",
+]
+EVE_RUN_COMMIT_PATHS = [
+    REPO_ROOT / "docs" / "site_data" / "eve_hypotheses.json",
+    REPO_ROOT / "docs" / "site_data" / "eve_budget_ledger.json",
+    REPO_ROOT / "docs" / "site_data" / "eve_sessions",
+]
 
 # Mirrors nero_core.eve.budget_ledger.MONTH_CEILING_USD/DEFAULT_SESSION_BUDGET_USD
 # and eve_session_registry.json's own "~$14" pre-registration figure --
@@ -400,7 +427,45 @@ def launch_repair(body: LaunchRepairRequest) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _stream_subprocess(cmd: list[str], env: dict, run_id: str):
+def _run_subprocess_to_completion(cmd: list[str], env: dict, run_id: str):
+    """Shared by the post-run commit step below AND _stream_subprocess --
+    runs a short-lived helper script (research_agent_run_summary.py) to
+    completion, streaming its output the same way, before the git step."""
+    process = subprocess.Popen(
+        cmd, cwd=REPO_ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, bufsize=1,
+    )
+    for line in iter(process.stdout.readline, ""):
+        yield f"event: line\ndata: {json.dumps({'text': line.rstrip()})}\n\n"
+    process.wait()
+
+
+def _commit_and_report(paths: list[Path], message: str, label: str):
+    """CC-1 directive, Item 4d: the actual fix -- runs after the agent
+    subprocess finishes (success OR crash; a crashed Eve session still
+    writes a real, honest partial record worth committing, matching how
+    every past crashed session in this project's history has in fact been
+    committed) and reports a clear, structured success/failure event the
+    panel UI renders as a banner, never leaving the owner to discover a
+    failed push later."""
+    yield f"event: line\ndata: {json.dumps({'text': f'--- {label}: committing and pushing results ---'})}\n\n"
+    result = commit_and_push(paths, message, REPO_ROOT)
+    for line in result.log_lines:
+        yield f"event: line\ndata: {json.dumps({'text': line})}\n\n"
+    payload = {
+        "ok": result.ok,
+        "changed": result.changed,
+        "committed": result.committed,
+        "pushed": result.pushed,
+        "verified": result.verified,
+        "commit_sha": result.commit_sha,
+        "error": result.error,
+        "origin_log": result.origin_log,
+    }
+    yield f"event: git_result\ndata: {json.dumps(payload)}\n\n"
+
+
+def _stream_subprocess(cmd: list[str], env: dict, run_id: str, commit_paths: list[Path] | None = None, commit_message: str = "", label: str = ""):
     process = subprocess.Popen(
         cmd, cwd=REPO_ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, bufsize=1,
@@ -417,6 +482,11 @@ def _stream_subprocess(cmd: list[str], env: dict, run_id: str):
         with _RUNNING_LOCK:
             _RUNNING.pop(run_id, None)
 
+    # Runs regardless of returncode -- a crash still produces real,
+    # honestly-partial data worth committing (see _commit_and_report).
+    if commit_paths:
+        yield from _commit_and_report(commit_paths, commit_message, label)
+
 
 @app.post("/api/adam/run")
 def run_adam() -> StreamingResponse:
@@ -426,14 +496,24 @@ def run_adam() -> StreamingResponse:
     is set ONLY for this one subprocess's own environment (mirrors the
     workflow's own inline-env pattern) -- this click IS the "deliberate,
     watched click" the pipeline's own kill switch exists to require, not a
-    bypass of it."""
+    bypass of it.
+
+    CC-1 directive Item 4d: after the pipeline finishes, also runs
+    tools/research_agent_run_summary.py (the same second step the GitHub
+    Actions workflow runs, previously MISSING here entirely -- a real,
+    confirmed gap found while implementing this fix) and then commits +
+    pushes + verifies exactly ADAM_RUN_COMMIT_PATHS, mirroring that
+    workflow's own selective policy."""
     run_id = str(uuid.uuid4())
     env = dict(os.environ)
     env["RESEARCH_AGENT_ENABLED"] = "true"
-    return StreamingResponse(
-        _stream_subprocess([sys.executable, "-m", "nero_core.research_agent.pipeline"], env, run_id),
-        media_type="text/event-stream",
-    )
+
+    def _generate():
+        yield from _stream_subprocess([sys.executable, "-m", "nero_core.research_agent.pipeline"], env, run_id)
+        yield from _run_subprocess_to_completion([sys.executable, "tools/research_agent_run_summary.py"], dict(os.environ), run_id)
+        yield from _commit_and_report(ADAM_RUN_COMMIT_PATHS, "Record Adam run results (Operator Panel)", "Adam")
+
+    return StreamingResponse(_generate(), media_type="text/event-stream")
 
 
 @app.get("/api/eve/preflight")
@@ -457,14 +537,27 @@ def run_eve(body: EveRunRequest) -> StreamingResponse:
     """Triggers `python -m nero_core.eve.pipeline` -- requires confirm=true
     (the UI must show /api/eve/preflight's real ceiling first). EVE_ENABLED=true
     set ONLY for this one subprocess -- see run_adam's own docstring for why
-    this is the deliberate click the kill switch requires, not a bypass."""
+    this is the deliberate click the kill switch requires, not a bypass.
+
+    CC-1 directive Item 4d: previously this endpoint did not commit or push
+    anything at all -- every real Eve session run this way would sit
+    uncommitted until a human noticed and reconciled it by hand (the exact
+    risk this directive's owner named, confirmed real: no GitHub Actions
+    workflow for Eve exists at all, unlike Adam's). Now commits + pushes +
+    verifies EVE_RUN_COMMIT_PATHS after the session ends, success OR crash
+    -- a crashed session's own honest partial record is real data, not
+    noise, and this project's own history shows every prior crash was in
+    fact committed by hand later anyway."""
     if not body.confirm:
         raise HTTPException(400, "confirm=true required -- show /api/eve/preflight's budget ceiling first")
     run_id = str(uuid.uuid4())
     env = dict(os.environ)
     env["EVE_ENABLED"] = "true"
     return StreamingResponse(
-        _stream_subprocess([sys.executable, "-m", "nero_core.eve.pipeline"], env, run_id),
+        _stream_subprocess(
+            [sys.executable, "-m", "nero_core.eve.pipeline"], env, run_id,
+            commit_paths=EVE_RUN_COMMIT_PATHS, commit_message="Record Eve session results (Operator Panel)", label="Eve",
+        ),
         media_type="text/event-stream",
     )
 
