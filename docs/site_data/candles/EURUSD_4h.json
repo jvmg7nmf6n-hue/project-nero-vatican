@@ -2,40 +2,8 @@
   "schema_version": 1,
   "asset": "EUR/USD",
   "timeframe": "4h",
-  "last_updated": "2026-08-07T00:12:24.158581+00:00",
+  "last_updated": "2026-08-07T16:06:25.671288+00:00",
   "candles": [
-    {
-      "time": 1783177200,
-      "open": 1.14368,
-      "high": 1.14458,
-      "low": 1.14326,
-      "close": 1.14398,
-      "volume": null
-    },
-    {
-      "time": 1783191600,
-      "open": 1.14397,
-      "high": 1.14454,
-      "low": 1.14345,
-      "close": 1.14392,
-      "volume": null
-    },
-    {
-      "time": 1783206000,
-      "open": 1.1439,
-      "high": 1.14456,
-      "low": 1.14358,
-      "close": 1.14383,
-      "volume": null
-    },
-    {
-      "time": 1783220400,
-      "open": 1.14381,
-      "high": 1.14453,
-      "low": 1.14356,
-      "close": 1.14398,
-      "volume": null
-    },
     {
       "time": 1783234800,
       "open": 1.14397,
@@ -1602,6 +1570,38 @@
       "high": 1.15449,
       "low": 1.1515,
       "close": 1.15209,
+      "volume": null
+    },
+    {
+      "time": 1786057200,
+      "open": 1.15205,
+      "high": 1.15259,
+      "low": 1.15174,
+      "close": 1.15244,
+      "volume": null
+    },
+    {
+      "time": 1786071600,
+      "open": 1.15241,
+      "high": 1.15264,
+      "low": 1.15185,
+      "close": 1.15196,
+      "volume": null
+    },
+    {
+      "time": 1786086000,
+      "open": 1.15194,
+      "high": 1.15254,
+      "low": 1.15187,
+      "close": 1.15245,
+      "volume": null
+    },
+    {
+      "time": 1786100400,
+      "open": 1.15243,
+      "high": 1.15267,
+      "low": 1.15172,
+      "close": 1.15243,
       "volume": null
     }
   ]
