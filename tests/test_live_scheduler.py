@@ -44,7 +44,16 @@ def _mock_claude_response(impact_on_gold: str = "NEUTRAL", impact_on_btc: str = 
     resp.json.return_value = {"content": [{"type": "text", "text": json.dumps(payload)}]}
     return resp
 
-FRIDAY_MIDNIGHT_UTC = datetime(2026, 7, 17, 0, 5, tzinfo=timezone.utc)  # 2026-07-17 is a Friday
+# CC-1 DIRECTIVE FIX (2026-08-07): was a Friday (2026-07-17) -- renamed and
+# redated to a Monday (2026-07-13) after candle_schedule.py's own
+# WEEKLY_CLOSE_WEEKDAY was corrected from Friday to Monday (confirmed via
+# real execution_log data across all 4 "1week"-gated configs that Twelve
+# Data's real weekly candle closes/labels on Monday, not Friday -- see
+# docs/investigations/factory_loop_implementation_report.md). Every test
+# using this constant wants a moment where BOTH "24h" and "1week" are due
+# simultaneously; "24h" doesn't care which weekday, so only the date needed
+# to change, not the shape of any test.
+WEEKLY_BOUNDARY_MIDNIGHT_UTC = datetime(2026, 7, 13, 0, 5, tzinfo=timezone.utc)  # 2026-07-13 is a Monday
 NEWS_HOUR_UTC = datetime(2026, 7, 17, 19, 5, tzinfo=timezone.utc)
 NOT_DUE_UTC = datetime(2026, 7, 17, 6, 0, tzinfo=timezone.utc)  # off every boundary this module checks
 
@@ -265,7 +274,7 @@ class FullRunTest(LiveSchedulerTestCase):
         # fixture configured" TRANSIENT classification (real earnings/stock
         # data isn't mocked in this general scheduler test), which would
         # otherwise retry 3x with REAL time.sleep (1+3+10=14s) EACH.
-        result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda s: None)
+        result = live_scheduler.run_once(client=client, now=WEEKLY_BOUNDARY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda s: None)
 
         self.assertIn("GOLD", result.assets_evaluated)
         self.assertIn("BNB", result.assets_evaluated)
@@ -299,10 +308,10 @@ class FullRunTest(LiveSchedulerTestCase):
     def test_running_twice_with_identical_data_produces_no_duplicate_rows(self) -> None:
         client = self._patched_client()
 
-        live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda s: None)
+        live_scheduler.run_once(client=client, now=WEEKLY_BOUNDARY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda s: None)
         first_count = len(list_execution_log(db_path=self.db_path))
 
-        second_result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda s: None)
+        second_result = live_scheduler.run_once(client=client, now=WEEKLY_BOUNDARY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda s: None)
         second_count = len(list_execution_log(db_path=self.db_path))
 
         self.assertEqual(first_count, second_count)
@@ -320,8 +329,8 @@ class FullRunTest(LiveSchedulerTestCase):
         must resolve to candle_boundary_due(...)=True for this to actually exercise
         the scenario, not just re-run the exact same instant."""
         client = self._patched_client()
-        first_now = FRIDAY_MIDNIGHT_UTC  # 00:05 UTC Friday
-        second_now = datetime(2026, 7, 17, 3, 30, tzinfo=timezone.utc)  # same window, 3h25m later
+        first_now = WEEKLY_BOUNDARY_MIDNIGHT_UTC  # 00:05 UTC Monday
+        second_now = datetime(2026, 7, 13, 3, 30, tzinfo=timezone.utc)  # same window, 3h25m later
         self.assertTrue(live_scheduler.candle_boundary_due("1week", second_now))
         self.assertTrue(live_scheduler.candle_boundary_due("24h", second_now))
 
@@ -356,7 +365,7 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
             "nero_core.execution.live_scheduler.fetch_forex_ohlcv", side_effect=self._fake_fetch_forex_ohlcv
         ):
             client = MarketDataClient()
-            result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
+            result = live_scheduler.run_once(client=client, now=WEEKLY_BOUNDARY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
 
         self.assertNotIn("GOLD", result.assets_evaluated)
         self.assertIn("BNB", result.assets_evaluated)
@@ -410,7 +419,7 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
             "nero_core.execution.live_scheduler.fetch_forex_ohlcv", side_effect=self._fake_fetch_forex_ohlcv
         ):
             client = MarketDataClient()
-            result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=sleeps.append)
+            result = live_scheduler.run_once(client=client, now=WEEKLY_BOUNDARY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=sleeps.append)
 
         self.assertIn("GOLD", result.assets_evaluated)
         # BREAKOUT_MOMENTUM's GOLD/1week fetch fails twice then succeeds on the 3rd
@@ -439,7 +448,7 @@ class PartialFailureResilienceTest(LiveSchedulerTestCase):
             "nero_core.execution.live_scheduler.fetch_forex_ohlcv", side_effect=self._fake_fetch_forex_ohlcv
         ):
             client = MarketDataClient()
-            result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
+            result = live_scheduler.run_once(client=client, now=WEEKLY_BOUNDARY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
 
         self.assertNotIn("GOLD", result.assets_evaluated)
         # All three GOLD/1week configs (BREAKOUT_MOMENTUM, RANGE_MEAN_REVERSION, and
@@ -478,7 +487,7 @@ class NewsSentimentSchedulingTest(LiveSchedulerTestCase):
     def test_news_sentiment_not_due_outside_its_daily_hour(self) -> None:
         client = self._patched_client()
 
-        result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda s: None)
+        result = live_scheduler.run_once(client=client, now=WEEKLY_BOUNDARY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda s: None)
 
         news_skips = [r for r in result.assets_skipped if r["asset"] == "NEWS_SENTIMENT"]
         self.assertEqual(len(news_skips), 1)
@@ -679,7 +688,7 @@ class DataSourcePersistenceTest(LiveSchedulerTestCase):
 
     def test_single_asset_config_persists_the_fetch_source(self) -> None:
         client = self._patched_client()
-        result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
+        result = live_scheduler.run_once(client=client, now=WEEKLY_BOUNDARY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
 
         self.assertIn("GOLD", result.assets_evaluated)
         rows = list_execution_log(db_path=self.db_path, asset="GOLD", strategy="BREAKOUT_MOMENTUM")
@@ -736,7 +745,7 @@ class PairsAndGoldSilverRatioDataSourceTest(LiveSchedulerTestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-        result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda s: None)
+        result = live_scheduler.run_once(client=client, now=WEEKLY_BOUNDARY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda s: None)
 
         self.assertIn("BTC-ETH", result.assets_evaluated)
         rows = list_execution_log(db_path=self.db_path, asset="BTC-ETH", strategy="COINTEGRATION_PAIRS")
@@ -768,7 +777,7 @@ class PairsAndGoldSilverRatioDataSourceTest(LiveSchedulerTestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-        status, record = live_scheduler.process_gold_silver_ratio(client, run_id="test-run", now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path)
+        status, record = live_scheduler.process_gold_silver_ratio(client, run_id="test-run", now=WEEKLY_BOUNDARY_MIDNIGHT_UTC, db_path=self.db_path)
 
         self.assertEqual(status, "EVALUATED", f"expected EVALUATED, got SKIPPED: {record}")
         rows = list_execution_log(db_path=self.db_path, asset="GOLD-SILVER", strategy="GOLD_SILVER_RATIO_MR")
@@ -809,7 +818,7 @@ class PeadAndDonchianForexDataSourceTest(LiveSchedulerTestCase):
 
         with patch("nero_core.execution.live_scheduler.fetch_earnings_surprises", return_value=events_df), \
                 patch("nero_core.execution.live_scheduler.fetch_stock_ohlcv", return_value=stock_result):
-            status, record = live_scheduler.process_pead_config(config, run_id="test-run", now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path)
+            status, record = live_scheduler.process_pead_config(config, run_id="test-run", now=WEEKLY_BOUNDARY_MIDNIGHT_UTC, db_path=self.db_path)
 
         self.assertEqual(status, "EVALUATED", f"expected EVALUATED, got SKIPPED: {record}")
         rows = list_execution_log(db_path=self.db_path, asset="AAPL", strategy=live_scheduler.PEAD_ID)
@@ -825,7 +834,7 @@ class PeadAndDonchianForexDataSourceTest(LiveSchedulerTestCase):
         )
 
         with patch("nero_core.execution.live_scheduler.fetch_forex_ohlcv", return_value=forex_result):
-            status, record = live_scheduler.process_donchian_forex_config(config, run_id="test-run", now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path)
+            status, record = live_scheduler.process_donchian_forex_config(config, run_id="test-run", now=WEEKLY_BOUNDARY_MIDNIGHT_UTC, db_path=self.db_path)
 
         self.assertEqual(status, "EVALUATED", f"expected EVALUATED, got SKIPPED: {record}")
         rows = list_execution_log(db_path=self.db_path, asset=config.pair, strategy=live_scheduler.DONCHIAN_TREND_ID)
@@ -859,7 +868,7 @@ class ApiKeyStartupValidationTest(LiveSchedulerTestCase):
         del env["ANTHROPIC_API_KEY"]
         client = self._patched_client()
         with patch("nero_core.execution.live_scheduler.os.getenv", side_effect=self._getenv_from(env)):
-            result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
+            result = live_scheduler.run_once(client=client, now=WEEKLY_BOUNDARY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
 
         warnings = [e for e in result.errors_encountered if e.get("classification") == "CONFIG_WARNING"]
         self.assertEqual(len(warnings), 1)
@@ -871,7 +880,7 @@ class ApiKeyStartupValidationTest(LiveSchedulerTestCase):
     def test_all_keys_present_produces_no_config_warning(self) -> None:
         client = self._patched_client()
         with patch("nero_core.execution.live_scheduler.os.getenv", side_effect=self._getenv_from(self._ALL_KEYS_PRESENT)):
-            result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
+            result = live_scheduler.run_once(client=client, now=WEEKLY_BOUNDARY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
 
         warnings = [e for e in result.errors_encountered if e.get("classification") == "CONFIG_WARNING"]
         self.assertEqual(warnings, [])
@@ -879,7 +888,7 @@ class ApiKeyStartupValidationTest(LiveSchedulerTestCase):
     def test_multiple_missing_keys_each_get_their_own_warning(self) -> None:
         client = self._patched_client()
         with patch("nero_core.execution.live_scheduler.os.getenv", side_effect=self._getenv_from({})):
-            result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
+            result = live_scheduler.run_once(client=client, now=WEEKLY_BOUNDARY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
 
         warned_keys = {e["key"] for e in result.errors_encountered if e.get("classification") == "CONFIG_WARNING"}
         self.assertEqual(warned_keys, {"TWELVE_DATA_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY"})
@@ -890,7 +899,7 @@ class ApiKeyStartupValidationTest(LiveSchedulerTestCase):
         are deliberately distinctive strings so any accidental leak is unmissable."""
         client = self._patched_client()
         with patch("nero_core.execution.live_scheduler.os.getenv", side_effect=self._getenv_from(self._ALL_KEYS_PRESENT)):
-            result = live_scheduler.run_once(client=client, now=FRIDAY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
+            result = live_scheduler.run_once(client=client, now=WEEKLY_BOUNDARY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda _s: None)
 
         serialized = str(result.errors_encountered) + str(result.assets_skipped) + str(result.assets_evaluated)
         for value in self._ALL_KEYS_PRESENT.values():

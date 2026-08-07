@@ -82,7 +82,23 @@ SINGLE_SHOT_TOLERANCE_MINUTES = 240
 # SINGLE_SHOT_TOLERANCE_MINUTES, but still well past DEFAULT_TOLERANCE_MINUTES.
 MULTI_SHOT_TOLERANCE_MINUTES = 150
 
-WEEKLY_CLOSE_WEEKDAY = 4  # Monday=0 ... Friday=4
+# CC-1 DIRECTIVE FIX (2026-08-07): was 4 (Friday) -- a real, structural
+# mismatch with the actual weekly-candle data. Confirmed via TWO independent
+# Twelve Data fetch paths (nero_core/data_sources/market_data.py's
+# _load_twelve_data, used by GOLD's native "1week" interval, AND
+# nero_core/data_sources/forex_data.py's _normalize_frame, used by EUR/USD/
+# GBP/USD/USD/JPY's DONCHIAN_TREND "1week" -- both treat Twelve Data's raw
+# `datetime` field as the bar's close_time directly, same formula) and via
+# real execution_log data (5 rows across all 4 affected configs: every
+# logged "1week" evaluation fired correctly on a FRIDAY, within its intended
+# tolerance window, but the candle it evaluated was timestamped the
+# PRECEDING MONDAY every single time -- a deterministic ~96h gap, not a
+# scheduling failure). Twelve Data's native "1week" bar for these
+# instruments genuinely closes/labels on Monday, not Friday -- this
+# constant now matches that real vendor convention instead of an unverified
+# assumption. Full investigation: docs/investigations/
+# factory_loop_implementation_report.md's 2026-08-07 sections.
+WEEKLY_CLOSE_WEEKDAY = 0  # Monday=0 ... Friday=4 -- matches Twelve Data's real "1week" close label
 WEEKLY_CLOSE_HOUR_UTC = 0
 
 

@@ -35,15 +35,20 @@ class CandleBoundaryDueTest(unittest.TestCase):
         self.assertTrue(candle_boundary_due("24h", _utc(2026, 7, 17, 0, 0)))
         self.assertFalse(candle_boundary_due("24h", _utc(2026, 7, 17, 12, 0)))
 
-    def test_1week_due_only_on_friday_near_midnight_utc(self) -> None:
-        # 2026-07-17 is a Friday.
-        self.assertTrue(candle_boundary_due("1week", _utc(2026, 7, 17, 0, 10)))
+    def test_1week_due_only_on_monday_near_midnight_utc(self) -> None:
+        # 2026-07-13 is a Monday. CC-1 DIRECTIVE FIX (2026-08-07): was Friday
+        # (2026-07-17) -- confirmed via real execution_log data across all 4
+        # affected configs (GOLD, EUR/USD, GBP/USD, USD/JPY) that Twelve
+        # Data's real native "1week" bar for these instruments closes/labels
+        # on Monday, not Friday. See candle_schedule.py's own updated
+        # WEEKLY_CLOSE_WEEKDAY comment for the full trace.
+        self.assertTrue(candle_boundary_due("1week", _utc(2026, 7, 13, 0, 10)))
 
-    def test_1week_not_due_on_thursday(self) -> None:
-        self.assertFalse(candle_boundary_due("1week", _utc(2026, 7, 16, 0, 10)))
+    def test_1week_not_due_on_sunday(self) -> None:
+        self.assertFalse(candle_boundary_due("1week", _utc(2026, 7, 12, 0, 10)))
 
-    def test_1week_not_due_on_friday_afternoon(self) -> None:
-        self.assertFalse(candle_boundary_due("1week", _utc(2026, 7, 17, 14, 0)))
+    def test_1week_not_due_on_monday_afternoon(self) -> None:
+        self.assertFalse(candle_boundary_due("1week", _utc(2026, 7, 13, 14, 0)))
 
     # Regression tests for a real incident (2026-07-28 PEAD zero-signal investigation):
     # "24h" and "1week" get only ONE boundary opportunity per period, so their default
@@ -60,16 +65,16 @@ class CandleBoundaryDueTest(unittest.TestCase):
             with self.subTest(hour=hour, minute=minute):
                 self.assertTrue(candle_boundary_due("24h", _utc(2026, 7, 17, hour, minute)))
 
-    def test_1week_due_at_actually_observed_delayed_run_time_on_friday(self) -> None:
-        # 2026-07-17 and 2026-07-24 are both Fridays.
-        self.assertTrue(candle_boundary_due("1week", _utc(2026, 7, 17, 1, 30)))
-        self.assertTrue(candle_boundary_due("1week", _utc(2026, 7, 24, 1, 30)))
+    def test_1week_due_at_actually_observed_delayed_run_time_on_monday(self) -> None:
+        # 2026-07-13 and 2026-07-20 are both Mondays.
+        self.assertTrue(candle_boundary_due("1week", _utc(2026, 7, 13, 1, 30)))
+        self.assertTrue(candle_boundary_due("1week", _utc(2026, 7, 20, 1, 30)))
 
     def test_24h_and_1week_still_not_due_well_outside_the_widened_window(self) -> None:
         # SINGLE_SHOT_TOLERANCE_MINUTES is generous, not unlimited -- confirms the
         # widened window doesn't silently degrade into "always due".
         self.assertFalse(candle_boundary_due("24h", _utc(2026, 7, 17, 6, 0)))
-        self.assertFalse(candle_boundary_due("1week", _utc(2026, 7, 17, 6, 0)))
+        self.assertFalse(candle_boundary_due("1week", _utc(2026, 7, 13, 6, 0)))
 
     def test_1h_default_tolerance_is_unaffected_by_the_single_shot_widening(self) -> None:
         # "1h" gets 24 opportunities/day -- it must keep the narrow default, not

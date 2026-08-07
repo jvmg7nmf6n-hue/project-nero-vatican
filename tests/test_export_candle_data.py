@@ -20,10 +20,13 @@ from nero_core.execution.export_candle_data import (
     sanitize_asset_for_filename,
 )
 
-# Real weekday alignment: 2026-07-24 is a Friday (matches candle_boundary_due's
-# WEEKLY_CLOSE_WEEKDAY=4 constant), 2026-07-27 is the following Monday.
+# Real weekday alignment: 2026-07-20 is a Monday (matches candle_boundary_due's
+# WEEKLY_CLOSE_WEEKDAY=0 constant -- CC-1 DIRECTIVE FIX 2026-08-07, corrected from
+# the previously-assumed Friday; see docs/investigations/
+# factory_loop_implementation_report.md), 2026-07-27 is also a Monday (kept as a
+# distinct value from NOW_1WEEK_DUE, same as before this fix).
 NOW_24H_DUE = datetime(2026, 7, 27, 0, 10, tzinfo=timezone.utc)
-NOW_1WEEK_DUE = datetime(2026, 7, 24, 0, 10, tzinfo=timezone.utc)
+NOW_1WEEK_DUE = datetime(2026, 7, 20, 0, 10, tzinfo=timezone.utc)
 NOW_12H_DUE = datetime(2026, 7, 27, 12, 5, tzinfo=timezone.utc)
 NOW_NOTHING_DUE = datetime(2026, 7, 27, 6, 0, tzinfo=timezone.utc)
 # Isolated 4h-only due window: 08:05 UTC is >240min past midnight (24h not due) and
