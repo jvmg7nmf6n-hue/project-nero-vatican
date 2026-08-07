@@ -14,10 +14,17 @@
 // results[0].value` without needing to manually clear nested mocks between renders.
 export const ColorType = { Solid: "solid" };
 
+export const LineStyle = { Solid: 0, Dashed: 2 };
+
 export const createChart = jest.fn(() => ({
   addCandlestickSeries: jest.fn(() => ({
     setData: jest.fn(),
     setMarkers: jest.fn(),
+  })),
+  // CC-1 Part D2: overlay line series (MA/EMA/Bollinger Bands/VWAP) use this --
+  // same minimal shape as addCandlestickSeries's mock above.
+  addLineSeries: jest.fn(() => ({
+    setData: jest.fn(),
   })),
   applyOptions: jest.fn(),
   remove: jest.fn(),

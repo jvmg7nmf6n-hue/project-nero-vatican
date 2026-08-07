@@ -54,8 +54,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main className="flex-1 mx-auto w-full max-w-5xl px-4 py-10">{children}</main>
 
         <footer className="border-t border-gold/20 py-6">
-          <div className="mx-auto max-w-5xl px-4 text-xs text-muted">
-            Paper-trading research only. No financial advice. No guaranteed returns.
+          <div className="mx-auto max-w-5xl px-4 text-xs text-muted flex flex-wrap gap-x-3 gap-y-1">
+            <span>Paper-trading research only. No financial advice. No guaranteed returns.</span>
+            <span>
+              Charts by{" "}
+              <a
+                href="https://github.com/tradingview/lightweight-charts"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-parchment"
+              >
+                TradingView Lightweight Charts
+              </a>{" "}
+              (Apache-2.0).
+            </span>
           </div>
         </footer>
       </body>

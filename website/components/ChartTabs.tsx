@@ -1,11 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import CandlestickChart from "./CandlestickChart";
+import CandlestickChart, { type ChartOverlayToggles } from "./CandlestickChart";
 import EquityCurveChart from "./EquityCurveChart";
 import type { Candle } from "@/lib/candleData";
 import type { ChartMarker } from "@/lib/chartMarkers";
 import type { EquityCurve } from "@/lib/equityCurve";
+
+// CC-1 Part D2: overlay toggles, off by default -- the raw candlestick chart
+// stays the default view, overlays are opt-in.
+const OVERLAY_LABELS: Record<keyof ChartOverlayToggles, string> = {
+  ma: "MA20",
+  ema: "EMA20",
+  bollinger: "Bollinger Bands",
+  vwap: "VWAP",
+};
 
 type ChartTab = "price" | "equity";
 export type PriceChartUnavailableReason = "missing" | "error" | null;
@@ -34,6 +43,11 @@ export default function ChartTabs({
 }: ChartTabsProps) {
   const hasPriceChart = candles !== null && candles.length > 0;
   const [activeTab, setActiveTab] = useState<ChartTab>(hasPriceChart ? "price" : "equity");
+  const [overlays, setOverlays] = useState<ChartOverlayToggles>({});
+
+  const toggleOverlay = (key: keyof ChartOverlayToggles) => {
+    setOverlays((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   return (
     <div>
@@ -58,7 +72,23 @@ export default function ChartTabs({
 
       {activeTab === "price" ? (
         hasPriceChart ? (
-          <CandlestickChart candles={candles as Candle[]} markers={markers} />
+          <>
+            <div data-testid="chart-overlay-toggles" className="mb-3 flex flex-wrap gap-3 text-xs text-muted">
+              {(Object.keys(OVERLAY_LABELS) as (keyof ChartOverlayToggles)[]).map((key) => (
+                <label key={key} className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    data-testid={`overlay-toggle-${key}`}
+                    checked={Boolean(overlays[key])}
+                    onChange={() => toggleOverlay(key)}
+                    className="accent-gold"
+                  />
+                  {OVERLAY_LABELS[key]}
+                </label>
+              ))}
+            </div>
+            <CandlestickChart candles={candles as Candle[]} markers={markers} overlays={overlays} />
+          </>
         ) : (
           <p data-testid="price-chart-unavailable" className="text-muted">
             {priceChartUnavailableReason === "error"

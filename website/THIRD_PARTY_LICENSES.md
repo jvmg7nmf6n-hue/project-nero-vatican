@@ -15,3 +15,10 @@ introduced by `@xyflow/react`, confirmed via `npm ls @xyflow/react` showing
 it as a dependency-free leaf. Fixing them requires an `eslint-config-
 next`/`next` major-version bump, out of scope for this directive (a
 CSS/diagramming/chart pass, not a framework upgrade).
+
+## Packages evaluated and NOT added
+
+| Package | License | Why not |
+|---|---|---|
+| `lightweight-charts-indicators` | MIT | Every published version (0.1.0-0.5.0) requires `oakscriptjs`, which requires `lightweight-charts@^5.0.0` for every version. Incompatible with this project's `lightweight-charts@^4.2.0` pin — confirmed via `npm view <pkg>@<version> peerDependencies`, not assumed. See `docs/investigations/website_chart_overlays_d2.md` for the full reasoning; MA/EMA/Bollinger Bands/VWAP were hand-rolled instead (`website/lib/indicators.ts`). |
+| `lightweight-charts-drawing` | MIT | Same root cause — `0.1.1` peer-depends on `lightweight-charts@^5.0.0` directly. FibRetracement/TrendLine math hand-rolled instead (`website/lib/fibonacci.ts`). |
