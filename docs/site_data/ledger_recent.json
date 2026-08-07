@@ -1,7 +1,73 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-06T15:22:43.071658+00:00",
+  "last_updated": "2026-08-07T00:12:23.560357+00:00",
   "rows": [
+    {
+      "timestamp": "2026-08-07T00:11:18.530552+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
+      "asset": "ETH",
+      "signal_type": "ENTRY",
+      "entry_price": 1904.1,
+      "exit_price": null,
+      "reasoning": "direction=SHORT stop_loss=1923.41285714 imbalance_ratio=0.2438",
+      "candle_timestamp": "2026-08-06T23:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T00:11:18.530552+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
+      "asset": "BTC",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 64323.61,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=0.3169",
+      "candle_timestamp": "2026-08-06T23:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T00:11:18.530552+00:00",
+      "strategy": "COINTEGRATION_PAIRS",
+      "strategy_version": "cointegration-pairs-v1.0.0",
+      "asset": "BTC-ETH",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "|z|=0.59 below entry threshold 2.0",
+      "candle_timestamp": "2026-08-06T23:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T00:11:18.530552+00:00",
+      "strategy": "RANGE_MEAN_REVERSION",
+      "strategy_version": "range-mean-reversion-v1.3.0-confirmation",
+      "asset": "BTC",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NO_CONFIRMATION_PATTERN",
+      "candle_timestamp": "2026-08-06T23:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T00:11:18.530552+00:00",
+      "strategy": "RANGE_MEAN_REVERSION",
+      "strategy_version": "range-mean-reversion-v1.1.0-long-only",
+      "asset": "BTC",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NO_BAND_BREACH",
+      "candle_timestamp": "2026-08-06T23:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T00:11:18.530552+00:00",
+      "strategy": "TREND_PULLBACK",
+      "strategy_version": "trend-pullback-v1.0.0",
+      "asset": "BNB",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NOT_IN_ESTABLISHED_UPTREND, NO_RECENT_PULLBACK_TO_MA50",
+      "candle_timestamp": "2026-08-06T23:59:59.999000+00:00"
+    },
     {
       "timestamp": "2026-08-06T15:22:38.447518+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
@@ -58,6 +124,83 @@
       "candle_timestamp": "2026-08-06T11:59:59.999000+00:00"
     },
     {
+      "timestamp": "2026-08-07T00:11:18.530552+00:00",
+      "strategy": "PEAD",
+      "strategy_version": "pead-v1.0.0-surprise8pct-hold10",
+      "asset": "TSLA",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 321.61429779052736,
+      "reasoning": "TIME exit, surprise_pct=-38.35, r_multiple=1.598, net_pnl=94.10",
+      "candle_timestamp": "2026-08-06T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T00:11:18.530552+00:00",
+      "strategy": "PEAD",
+      "strategy_version": "pead-v1.0.0-surprise3pct-hold10",
+      "asset": "TSLA",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 321.61429779052736,
+      "reasoning": "TIME exit, surprise_pct=-38.35, r_multiple=1.598, net_pnl=96.20",
+      "candle_timestamp": "2026-08-06T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T00:11:18.530552+00:00",
+      "strategy": "VOLATILITY_SQUEEZE",
+      "strategy_version": "volatility-squeeze-v1.1.0-ma100-silver-calibrated-24h",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "CLOSE_NOT_ABOVE_TREND_MA",
+      "candle_timestamp": "2026-08-06T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T00:11:18.530552+00:00",
+      "strategy": "VOLATILITY_SQUEEZE",
+      "strategy_version": "volatility-squeeze-v1.1.0-ma150-silver-calibrated-24h",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "CLOSE_NOT_ABOVE_TREND_MA",
+      "candle_timestamp": "2026-08-06T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T00:11:18.530552+00:00",
+      "strategy": "VOLATILITY_SQUEEZE",
+      "strategy_version": "volatility-squeeze-v1.1.0-ma200-silver-calibrated-24h",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "CLOSE_NOT_ABOVE_TREND_MA",
+      "candle_timestamp": "2026-08-06T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T00:11:18.530552+00:00",
+      "strategy": "TREND_PULLBACK",
+      "strategy_version": "trend-pullback-v1.5.0-silver-calibrated-24h",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NOT_IN_ESTABLISHED_UPTREND, NO_RECENT_PULLBACK_TO_MA50, CLOSE_NOT_BACK_ABOVE_MA50, RSI_OUTSIDE_NEUTRAL_BAND",
+      "candle_timestamp": "2026-08-06T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T00:11:18.530552+00:00",
+      "strategy": "BREAKOUT_MOMENTUM",
+      "strategy_version": "breakout-momentum-v1.6.0-silver-calibrated-24h",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "CLOSE_NOT_ABOVE_MA200",
+      "candle_timestamp": "2026-08-06T04:00:00+00:00"
+    },
+    {
       "timestamp": "2026-08-06T03:28:04.012973+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
       "strategy_version": "orderflow-imbalance-v1.0.0",
@@ -67,6 +210,17 @@
       "exit_price": 1899.21,
       "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=0.4818",
       "candle_timestamp": "2026-08-06T02:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T00:11:18.530552+00:00",
+      "strategy": "GOLD_SILVER_RATIO_MR",
+      "strategy_version": "gold-silver-ratio-mr-v1.0.0",
+      "asset": "GOLD-SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "RATIO_WITHIN_BAND",
+      "candle_timestamp": "2026-08-06T00:00:00+00:00"
     },
     {
       "timestamp": "2026-08-06T12:09:21.216507+00:00",
@@ -696,6 +850,17 @@
       "candle_timestamp": "2026-08-03T07:59:59.999000+00:00"
     },
     {
+      "timestamp": "2026-08-07T00:11:18.530552+00:00",
+      "strategy": "RANGE_MEAN_REVERSION",
+      "strategy_version": "range-mean-reversion-v1.0.0",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NO_BAND_BREACH",
+      "candle_timestamp": "2026-08-03T04:00:00+00:00"
+    },
+    {
       "timestamp": "2026-08-03T02:55:54.983435+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
       "strategy_version": "orderflow-imbalance-v1.0.0",
@@ -716,6 +881,61 @@
       "exit_price": null,
       "reasoning": "direction=SHORT stop_loss=63665.38571429 imbalance_ratio=0.0764",
       "candle_timestamp": "2026-08-03T01:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T00:11:18.530552+00:00",
+      "strategy": "DONCHIAN_TREND",
+      "strategy_version": "donchian-trend-v2.0.0-bracket-usdjpy-n40-1week",
+      "asset": "USD/JPY",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NO_BREAKOUT",
+      "candle_timestamp": "2026-08-03T00:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T00:11:18.530552+00:00",
+      "strategy": "DONCHIAN_TREND",
+      "strategy_version": "donchian-trend-v2.0.0-bracket-gbpusd-n20-1week",
+      "asset": "GBP/USD",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NO_BREAKOUT",
+      "candle_timestamp": "2026-08-03T00:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T00:11:18.530552+00:00",
+      "strategy": "DONCHIAN_TREND",
+      "strategy_version": "donchian-trend-v2.0.0-bracket-eurusd-n20-1week",
+      "asset": "EUR/USD",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NO_BREAKOUT",
+      "candle_timestamp": "2026-08-03T00:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T00:11:18.530552+00:00",
+      "strategy": "RANGE_MEAN_REVERSION",
+      "strategy_version": "range-mean-reversion-v1.0.0",
+      "asset": "GOLD",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NOT_RANGING, NO_BAND_BREACH",
+      "candle_timestamp": "2026-08-03T00:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T00:11:18.530552+00:00",
+      "strategy": "BREAKOUT_MOMENTUM",
+      "strategy_version": "breakout-momentum-v1.2.0-gold-calibrated-1week",
+      "asset": "GOLD",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "CLOSE_NOT_ABOVE_BREAKOUT_HIGH, RSI_NOT_MOMENTUM_SUPPORTIVE",
+      "candle_timestamp": "2026-08-03T00:00:00+00:00"
     },
     {
       "timestamp": "2026-08-03T13:46:35.310829+00:00",
@@ -1981,226 +2201,6 @@
       "exit_price": null,
       "reasoning": "CLOSE_NOT_ABOVE_BREAKOUT_HIGH, CLOSE_NOT_ABOVE_MA200, RSI_NOT_MOMENTUM_SUPPORTIVE",
       "candle_timestamp": "2026-07-29T04:00:00+00:00"
-    },
-    {
-      "timestamp": "2026-07-30T00:57:23.563669+00:00",
-      "strategy": "GOLD_SILVER_RATIO_MR",
-      "strategy_version": "gold-silver-ratio-mr-v1.0.0",
-      "asset": "GOLD-SILVER",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "RATIO_WITHIN_BAND",
-      "candle_timestamp": "2026-07-29T00:00:00+00:00"
-    },
-    {
-      "timestamp": "2026-07-29T01:01:45.351488+00:00",
-      "strategy": "COINTEGRATION_PAIRS",
-      "strategy_version": "cointegration-pairs-v1.0.0",
-      "asset": "BTC-ETH",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "|z|=0.35 below entry threshold 2.0",
-      "candle_timestamp": "2026-07-28T23:59:59.999000+00:00"
-    },
-    {
-      "timestamp": "2026-07-29T01:01:45.351488+00:00",
-      "strategy": "RANGE_MEAN_REVERSION",
-      "strategy_version": "range-mean-reversion-v1.3.0-confirmation",
-      "asset": "BTC",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "NO_CONFIRMATION_PATTERN",
-      "candle_timestamp": "2026-07-28T23:59:59.999000+00:00"
-    },
-    {
-      "timestamp": "2026-07-29T01:01:45.351488+00:00",
-      "strategy": "RANGE_MEAN_REVERSION",
-      "strategy_version": "range-mean-reversion-v1.1.0-long-only",
-      "asset": "BTC",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "NOT_RANGING, NO_BAND_BREACH",
-      "candle_timestamp": "2026-07-28T23:59:59.999000+00:00"
-    },
-    {
-      "timestamp": "2026-07-29T01:01:45.351488+00:00",
-      "strategy": "TREND_PULLBACK",
-      "strategy_version": "trend-pullback-v1.0.0",
-      "asset": "BNB",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "NOT_IN_ESTABLISHED_UPTREND, CLOSE_NOT_BACK_ABOVE_MA50",
-      "candle_timestamp": "2026-07-28T23:59:59.999000+00:00"
-    },
-    {
-      "timestamp": "2026-07-28T14:09:03.742994+00:00",
-      "strategy": "COINTEGRATION_PAIRS",
-      "strategy_version": "cointegration-pairs-v1.0.0",
-      "asset": "BTC-ETH",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "|z|=0.26 below entry threshold 2.0",
-      "candle_timestamp": "2026-07-28T11:59:59.999000+00:00"
-    },
-    {
-      "timestamp": "2026-07-28T14:09:03.742994+00:00",
-      "strategy": "TREND_PULLBACK",
-      "strategy_version": "trend-pullback-v1.0.0",
-      "asset": "BNB",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "NOT_IN_ESTABLISHED_UPTREND, CLOSE_NOT_BACK_ABOVE_MA50, RSI_OUTSIDE_NEUTRAL_BAND",
-      "candle_timestamp": "2026-07-28T11:59:59.999000+00:00"
-    },
-    {
-      "timestamp": "2026-07-29T01:01:45.351488+00:00",
-      "strategy": "VOLATILITY_SQUEEZE",
-      "strategy_version": "volatility-squeeze-v1.1.0-ma100-silver-calibrated-24h",
-      "asset": "SILVER",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "CLOSE_NOT_ABOVE_SQUEEZE_HIGH, CLOSE_NOT_ABOVE_TREND_MA",
-      "candle_timestamp": "2026-07-28T04:00:00+00:00"
-    },
-    {
-      "timestamp": "2026-07-29T01:01:45.351488+00:00",
-      "strategy": "VOLATILITY_SQUEEZE",
-      "strategy_version": "volatility-squeeze-v1.1.0-ma150-silver-calibrated-24h",
-      "asset": "SILVER",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "CLOSE_NOT_ABOVE_SQUEEZE_HIGH, CLOSE_NOT_ABOVE_TREND_MA",
-      "candle_timestamp": "2026-07-28T04:00:00+00:00"
-    },
-    {
-      "timestamp": "2026-07-29T01:01:45.351488+00:00",
-      "strategy": "VOLATILITY_SQUEEZE",
-      "strategy_version": "volatility-squeeze-v1.1.0-ma200-silver-calibrated-24h",
-      "asset": "SILVER",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "CLOSE_NOT_ABOVE_SQUEEZE_HIGH, CLOSE_NOT_ABOVE_TREND_MA",
-      "candle_timestamp": "2026-07-28T04:00:00+00:00"
-    },
-    {
-      "timestamp": "2026-07-29T01:01:45.351488+00:00",
-      "strategy": "TREND_PULLBACK",
-      "strategy_version": "trend-pullback-v1.5.0-silver-calibrated-24h",
-      "asset": "SILVER",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "NOT_IN_ESTABLISHED_UPTREND, NO_RECENT_PULLBACK_TO_MA50, CLOSE_NOT_BACK_ABOVE_MA50",
-      "candle_timestamp": "2026-07-28T04:00:00+00:00"
-    },
-    {
-      "timestamp": "2026-07-29T01:01:45.351488+00:00",
-      "strategy": "BREAKOUT_MOMENTUM",
-      "strategy_version": "breakout-momentum-v1.6.0-silver-calibrated-24h",
-      "asset": "SILVER",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "CLOSE_NOT_ABOVE_BREAKOUT_HIGH, CLOSE_NOT_ABOVE_MA200, RSI_NOT_MOMENTUM_SUPPORTIVE",
-      "candle_timestamp": "2026-07-28T04:00:00+00:00"
-    },
-    {
-      "timestamp": "2026-07-28T03:48:34.609837+00:00",
-      "strategy": "RANGE_MEAN_REVERSION",
-      "strategy_version": "range-mean-reversion-v1.3.0-confirmation",
-      "asset": "BTC",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "NO_CONFIRMATION_PATTERN",
-      "candle_timestamp": "2026-07-28T00:00:00+00:00"
-    },
-    {
-      "timestamp": "2026-07-28T03:48:34.609837+00:00",
-      "strategy": "RANGE_MEAN_REVERSION",
-      "strategy_version": "range-mean-reversion-v1.1.0-long-only",
-      "asset": "BTC",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "NO_BAND_BREACH",
-      "candle_timestamp": "2026-07-28T00:00:00+00:00"
-    },
-    {
-      "timestamp": "2026-07-31T01:06:07.090360+00:00",
-      "strategy": "RANGE_MEAN_REVERSION",
-      "strategy_version": "range-mean-reversion-v1.0.0",
-      "asset": "SILVER",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "NO_BAND_BREACH",
-      "candle_timestamp": "2026-07-27T04:00:00+00:00"
-    },
-    {
-      "timestamp": "2026-07-31T01:06:07.090360+00:00",
-      "strategy": "DONCHIAN_TREND",
-      "strategy_version": "donchian-trend-v2.0.0-bracket-usdjpy-n40-1week",
-      "asset": "USD/JPY",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "NO_BREAKOUT",
-      "candle_timestamp": "2026-07-27T00:00:00+00:00"
-    },
-    {
-      "timestamp": "2026-07-31T01:06:07.090360+00:00",
-      "strategy": "DONCHIAN_TREND",
-      "strategy_version": "donchian-trend-v2.0.0-bracket-gbpusd-n20-1week",
-      "asset": "GBP/USD",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "NO_BREAKOUT",
-      "candle_timestamp": "2026-07-27T00:00:00+00:00"
-    },
-    {
-      "timestamp": "2026-07-31T01:06:07.090360+00:00",
-      "strategy": "DONCHIAN_TREND",
-      "strategy_version": "donchian-trend-v2.0.0-bracket-eurusd-n20-1week",
-      "asset": "EUR/USD",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "NO_BREAKOUT",
-      "candle_timestamp": "2026-07-27T00:00:00+00:00"
-    },
-    {
-      "timestamp": "2026-07-31T01:06:07.090360+00:00",
-      "strategy": "RANGE_MEAN_REVERSION",
-      "strategy_version": "range-mean-reversion-v1.0.0",
-      "asset": "GOLD",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "NOT_RANGING, NO_BAND_BREACH",
-      "candle_timestamp": "2026-07-27T00:00:00+00:00"
-    },
-    {
-      "timestamp": "2026-07-31T01:06:07.090360+00:00",
-      "strategy": "BREAKOUT_MOMENTUM",
-      "strategy_version": "breakout-momentum-v1.2.0-gold-calibrated-1week",
-      "asset": "GOLD",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "CLOSE_NOT_ABOVE_BREAKOUT_HIGH, RSI_NOT_MOMENTUM_SUPPORTIVE",
-      "candle_timestamp": "2026-07-27T00:00:00+00:00"
     }
   ]
 }
