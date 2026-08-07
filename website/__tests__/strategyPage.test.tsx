@@ -5,6 +5,7 @@ import type { CandleFetchResult } from "@/lib/data";
 import type {
   LedgerExport,
   LedgerRow,
+  NewsSentimentExport,
   QuantCrossAssetExport,
   QuantMetricsExport,
   StatsExport,
@@ -23,6 +24,7 @@ const mockFetchStrategyDescriptions = jest.mocked(data.fetchStrategyDescriptions
 const mockFetchCandleData = jest.mocked(data.fetchCandleData);
 const mockFetchQuantMetrics = jest.mocked(data.fetchQuantMetrics);
 const mockFetchQuantCrossAsset = jest.mocked(data.fetchQuantCrossAsset);
+const mockFetchNewsSentiment = jest.mocked(data.fetchNewsSentiment);
 
 const STRATEGY_ID = "breakout-momentum--gold--breakout-momentum-v1-2-0-gold-calibrated-1week";
 
@@ -97,6 +99,7 @@ function setupMocks(overrides: {
   candle?: CandleFetchResult;
   quantMetrics?: QuantMetricsExport | null;
   quantCrossAsset?: QuantCrossAssetExport | null;
+  newsSentiment?: NewsSentimentExport | null;
 } = {}) {
   mockFetchStrategies.mockResolvedValue(
     overrides.strategies ?? { schema_version: 1, last_updated: "x", strategies: [ROSTER_ENTRY] }
@@ -118,6 +121,10 @@ function setupMocks(overrides: {
   // Default: no quant_cross_asset.json entry -- matches every test that predates
   // Day 7 and never intended to exercise the regime badge.
   mockFetchQuantCrossAsset.mockResolvedValue(overrides.quantCrossAsset !== undefined ? overrides.quantCrossAsset : null);
+  // Default: no news_sentiment.json entries -- matches every test that
+  // predates this directive and never intended to exercise the Sentiment
+  // History section.
+  mockFetchNewsSentiment.mockResolvedValue(overrides.newsSentiment !== undefined ? overrides.newsSentiment : null);
 }
 
 describe("StrategyDetailPage", () => {
@@ -293,6 +300,59 @@ describe("StrategyDetailPage", () => {
     expect(measured).toHaveTextContent("trades/year");
     expect(measured).toHaveTextContent("2 real entries");
     expect(measured).toHaveTextContent("short observation window");
+  });
+
+  // CC-1 overnight directive, Part 4: real news_sentiment_log rows, scoped
+  // previously, never displayed until now.
+  it("shows the real Sentiment History table when this exact (asset, strategy_version) has real news_sentiment_log rows", async () => {
+    setupMocks({
+      newsSentiment: {
+        schema_version: 1, last_updated: "x",
+        entries: [
+          {
+            id: 1, run_id: "r1", asset: ROSTER_ENTRY.asset, strategy_version: ROSTER_ENTRY.version,
+            news_timestamp: null, fetch_timestamp: "2026-07-18T19:39:46+00:00", sentiment_score: 0,
+            signal_type: "NEUTRAL", confidence: 0.0, reasoning: "score 0 from 9 eligible headlines", source: "local",
+          },
+          {
+            id: 2, run_id: "r2", asset: ROSTER_ENTRY.asset, strategy_version: ROSTER_ENTRY.version,
+            news_timestamp: null, fetch_timestamp: "2026-07-24T19:17:58+00:00", sentiment_score: 4,
+            signal_type: "BUY_BIAS", confidence: 0.4, reasoning: "score 4 from 9 eligible headlines", source: "local",
+          },
+        ],
+      },
+    });
+
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    const section = screen.getByTestId("news-sentiment-history");
+    expect(section).toHaveTextContent("2 entries on file");
+    const rows = screen.getAllByTestId("news-sentiment-row");
+    expect(rows).toHaveLength(2);
+    // Most recent first.
+    expect(rows[0]).toHaveTextContent("BUY_BIAS");
+    expect(rows[1]).toHaveTextContent("NEUTRAL");
+  });
+
+  it("never shows the Sentiment History section for a strategy with no matching news_sentiment_log rows", async () => {
+    setupMocks({
+      newsSentiment: {
+        schema_version: 1, last_updated: "x",
+        entries: [
+          {
+            id: 1, run_id: "r1", asset: "SOME_OTHER_ASSET", strategy_version: "some-other-version",
+            news_timestamp: null, fetch_timestamp: "2026-07-18T19:39:46+00:00", sentiment_score: 0,
+            signal_type: "NEUTRAL", confidence: 0.0, reasoning: "x", source: "local",
+          },
+        ],
+      },
+    });
+
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    expect(screen.queryByTestId("news-sentiment-history")).not.toBeInTheDocument();
   });
 
   it("shows a no-source-report message when source_report is null", async () => {

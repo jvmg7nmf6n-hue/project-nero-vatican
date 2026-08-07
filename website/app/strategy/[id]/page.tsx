@@ -17,6 +17,7 @@ import {
   fetchCandleData,
   fetchLedgerFull,
   fetchLedgerRecent,
+  fetchNewsSentiment,
   fetchQuantCrossAsset,
   fetchQuantMetrics,
   fetchStats,
@@ -86,7 +87,7 @@ function TradeRow({ trade }: { trade: ResolvedTrade }) {
 }
 
 export default async function StrategyDetailPage({ params }: { params: { id: string } }) {
-  const [strategiesExport, statsExport, ledgerExport, ledgerRecentExport, descriptions, quantMetricsExport, quantCrossAssetExport] =
+  const [strategiesExport, statsExport, ledgerExport, ledgerRecentExport, descriptions, quantMetricsExport, quantCrossAssetExport, newsSentimentExport] =
     await Promise.all([
       fetchStrategies(),
       fetchStats(),
@@ -95,6 +96,7 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
       fetchStrategyDescriptions(),
       fetchQuantMetrics(),
       fetchQuantCrossAsset(),
+      fetchNewsSentiment(),
     ]);
 
   const roster = strategiesExport?.strategies ?? [];
@@ -119,6 +121,13 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
   const hasResolvedTrades = (statsRow?.resolved_trades ?? 0) > 0;
   const equityCurve = hasResolvedTrades ? buildEquityCurve(trades) : null;
   const tradeFrequency = computeTradeFrequency(ledgerExport?.rows ?? [], entry.name, entry.version, entry.asset);
+  // CC-1 overnight directive, Part 4: real news_sentiment_log rows scoped to
+  // this exact (asset, strategy_version) -- naturally empty (and the
+  // section below simply doesn't render) for every non-NEWS_SENTIMENT
+  // strategy, no hardcoded name check needed.
+  const newsSentimentEntries = (newsSentimentExport?.entries ?? [])
+    .filter((e) => e.asset === entry.asset && e.strategy_version === entry.version)
+    .sort((a, b) => b.fetch_timestamp.localeCompare(a.fetch_timestamp));
 
   // Pair strategies (BTC-ETH, GOLD-SILVER) have no single price series -- Day 1's
   // export pipeline deliberately skips them (see nero_core/execution/
@@ -302,6 +311,47 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
           </p>
         )}
       </section>
+
+      {newsSentimentEntries.length > 0 ? (
+        <section data-testid="news-sentiment-history">
+          <h2 className="font-serif text-xl text-parchment mb-4">Sentiment history</h2>
+          <p className="text-muted text-sm mb-3">
+            Every real sentiment read this configuration has logged, most recent first &mdash;{" "}
+            {newsSentimentEntries.length} entr{newsSentimentEntries.length === 1 ? "y" : "ies"} on file since{" "}
+            {formatTimestamp(newsSentimentEntries[newsSentimentEntries.length - 1].fetch_timestamp)}.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="text-muted border-b border-muted/30">
+                  <th className="py-2 pr-4">Fetched</th>
+                  <th className="py-2 pr-4">Signal</th>
+                  <th className="py-2 pr-4">Confidence</th>
+                  <th className="py-2 pr-4">Source</th>
+                  <th className="py-2">Reasoning</th>
+                </tr>
+              </thead>
+              <tbody>
+                {newsSentimentEntries.map((e) => (
+                  <tr key={e.id} data-testid="news-sentiment-row" className="border-b border-muted/10 align-top">
+                    <td className="py-2 pr-4 whitespace-nowrap">{formatTimestamp(e.fetch_timestamp)}</td>
+                    <td
+                      className={`py-2 pr-4 font-medium ${
+                        e.signal_type === "BUY_BIAS" ? "text-teal" : e.signal_type === "SELL_BIAS" ? "text-loss" : "text-muted"
+                      }`}
+                    >
+                      {e.signal_type}
+                    </td>
+                    <td className="py-2 pr-4">{(e.confidence * 100).toFixed(0)}%</td>
+                    <td className="py-2 pr-4 text-muted">{e.source}</td>
+                    <td className="py-2 text-muted">{e.reasoning}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
 
       <section>
         <h2 className="font-serif text-xl text-parchment mb-4">

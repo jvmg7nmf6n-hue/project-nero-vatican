@@ -20,6 +20,7 @@ import type {
   RepairCandidate,
   SiteSummary,
   MacroReadsExport,
+  NewsSentimentExport,
   StatsExport,
   StrategiesExport,
   StrategyDescriptions,
@@ -160,6 +161,14 @@ export function fetchForwardTrial(): Promise<ForwardTrialRecord[] | null> {
 // the export has run at least once.
 export function fetchTrialEntries(): Promise<TrialEntriesExport | null> {
   return fetchJson<TrialEntriesExport>("trial_entries.json");
+}
+
+// CC-1 overnight directive, Part 4: every real news_sentiment_log row, all
+// time (nero_core.execution.export_news_sentiment.py) -- scoped previously,
+// never built until this directive; real signals since 2026-07-18 that no
+// visitor could see.
+export function fetchNewsSentiment(): Promise<NewsSentimentExport | null> {
+  return fetchJson<NewsSentimentExport>("news_sentiment.json");
 }
 
 // CC-1 Part E: Bellwether's own macro reads + conflict-flag audit trail.

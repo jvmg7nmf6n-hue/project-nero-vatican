@@ -654,6 +654,29 @@ export interface TrialEntriesExport {
   entries: TrialEntry[];
 }
 
+// CC-1 overnight directive, Part 4: nero_core/execution/export_news_sentiment.py's
+// own output shape -- every real news_sentiment_log row, all time, both real
+// NEWS_SENTIMENT configs (v1.0.0 keyword-based, v2.0.0-llm-claude).
+export interface NewsSentimentEntry {
+  id: number;
+  run_id: string;
+  asset: string;
+  strategy_version: string;
+  news_timestamp: string | null;
+  fetch_timestamp: string;
+  sentiment_score: number | null;
+  signal_type: "BUY_BIAS" | "SELL_BIAS" | "NEUTRAL";
+  confidence: number;
+  reasoning: string;
+  source: string;
+}
+
+export interface NewsSentimentExport {
+  schema_version: number;
+  last_updated: string;
+  entries: NewsSentimentEntry[];
+}
+
 export interface ForwardTrialRecord {
   trial_id: string;
   source_hypothesis_ref: ForwardTrialSourceRef;
