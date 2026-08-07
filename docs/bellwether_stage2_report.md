@@ -611,3 +611,197 @@ already built). Each one added means one more real-provenance agent joins
 finding above says matters most right now — worth prioritizing over
 extending the risk-haircut filtering gap, since more real mass is the more
 informative next measurement.
+
+---
+
+## 2026-08-07: CC-1 master directive, Part B Rung 1 -- correlation discount for `agreement`
+
+CC-1 master directive "Close the backlog: macro-conditioning ladder + repair
+resolution fix," Part B, Rung 1 (blocks Rungs 2/3 by design -- wiring macro
+DSL fields before resolving this would let Adam/Eve condition on signals
+that aren't independent of each other).
+
+### B1a. Real pairwise correlation matrix (measured, not estimated)
+
+**FINDING (confirmed-from-data).** Built `vatican/bellwether/tools/
+correlation_matrix.py`, a one-time analysis script (not part of the runtime
+engine) pulling REAL historical series for all 4 real fields:
+- `real_yield_10y`: `nero_core.data_sources.macro_data.fetch_dfii10_daily`
+  (FRED DFII10, cached at `data/macro_cache/dfii10.csv`) -- the exact same
+  function/cache `VaticanRealMarketData` itself uses in production.
+- `dxy`: yfinance `DX-Y.NYB` daily close, same ticker
+  `_fetch_real_dxy_level` uses, pulled over a 5-year window here (production
+  only needs the single latest value).
+- `vix`: yfinance `^VIX` daily close, same ticker `_fetch_real_vix_level`
+  uses, same 5-year window.
+- funding rate: `nero_core.data_sources.funding_data.load_funding_history("BTC")`
+  (Binance `fapi/v1/fundingRate`, cached at `data/funding_cache/BTC_funding.csv`),
+  resampled from its native 3-settlements/day cadence to a daily mean, in
+  bps (matching `btc_perp_funding_bps`'s existing scale).
+
+All 4 series aligned on calendar date via an INNER join (real observations
+only, no forward-fill, no synthetic interpolation). **Real sample: n=1229
+overlapping calendar days, 2021-08-09 to 2026-07-15.**
+
+**Real pairwise Pearson correlation matrix, LEVEL values** (the relevant one
+for Rung 1 -- see reasoning below):
+
+| | real_yield_10y | dxy | vix | funding_rate_bps |
+|---|---|---|---|---|
+| real_yield_10y | 1.0000 | 0.4833 | -0.3444 | -0.1551 |
+| dxy | 0.4833 | 1.0000 | 0.0870 | -0.0883 |
+| vix | -0.3444 | 0.0870 | 1.0000 | -0.2791 |
+| funding_rate_bps | -0.1551 | -0.0883 | -0.2791 | 1.0000 |
+
+**Real pairwise Pearson correlation, 20-trading-day CHANGE** (matches
+MACRO_RISK_ON's own t+2/20-bar-change convention -- kept for Rung 2's later
+use, NOT what Rung 1's discount is built from, see reasoning below):
+
+| | real_yield_10y | dxy | vix | funding_rate_bps |
+|---|---|---|---|---|
+| real_yield_10y | 1.0000 | 0.5608 | 0.2273 | -0.0792 |
+| dxy | 0.5608 | 1.0000 | 0.2588 | -0.0584 |
+| vix | 0.2273 | 0.2588 | 1.0000 | -0.1451 |
+| funding_rate_bps | -0.0792 | -0.0584 | -0.1451 | 1.0000 |
+
+Only ONE pair shows a non-trivial relationship: `real_yield_10y`/`dxy` at
+0.48 (level) / 0.56 (20-day change) -- a real, moderate, economically
+sensible relationship (real yields up tends to coincide with dollar
+strength). Every other pair is weak (|rho| < 0.35 in every case, mostly
+under 0.29).
+
+### B1b/B1c. Which agents actually double-count, and the mechanism chosen
+
+**FINDING, more precise than the directive's own framing** (confirmed from
+reading `monetary_policy.py`, `liquidity.py`, `derivatives_etf.py`, and
+`risk.py` in full): the redundancy risk is NOT "4 real agents, each an
+independent vote" -- it's narrower and different in shape:
+- `monetary_policy.py` already BLENDS `real_yield_10y` and `dxy` internally
+  into ONE signal per asset (`gold_score = -(real_gap*1.2) - (dxy_gap*4.0)`)
+  -- the one pair with real measured correlation (0.48-0.56) never appears
+  as two separate votes in `_synthesis.aggregate()` at all. No fix needed
+  there.
+- `risk.py` reads BOTH `vix` and `funding_rate_bps`, but returns
+  `RiskFlag`s and a confidence haircut, **never a `Signal`** -- confirmed by
+  reading its full `run()` method, `self.result(risks=..., ...)` never
+  passes `signals=`. It never enters `aggregate()`'s `relevant` list at
+  all, so it has zero bearing on `agreement`.
+- The REAL cross-agent redundancy is between `monetary_policy.py`
+  (real_yield_10y + dxy blend) and `liquidity.py` (`vix`-only GOLD signal,
+  `vix` + mock-stablecoin BTC signal) and `derivatives_etf.py`
+  (funding-rate-threshold term in its BTC signal) -- three DIFFERENT agents
+  that DO each emit their own `Signal` into `aggregate()`, driven by fields
+  with real (if modest) measured correlation to each other.
+
+**RECOMMENDATION, with the real matrix as evidence.** Considered 3 options:
+1. **Simple pairwise correlation penalty on `agreement`** -- discount an
+   agreeing signal's effective weight by `(1 - |rho|)` when a correlated,
+   different-agent signal was already counted. Minimal code change, directly
+   traceable to the measured numbers, and proportionate to what the real
+   data shows (mostly weak correlations, one moderate one).
+2. **Factor-model / clustering** -- treat `{monetary_policy, liquidity}` (or
+   any pair above a threshold) as one merged "cluster vote." Rejected: this
+   is a step function that would either fully merge or not, when the real
+   data shows a CONTINUUM of weak-to-moderate correlations (0.09 to 0.56)
+   -- collapsing e.g. `dxy`/`vix` at 0.09 into a hard cluster with
+   `real_yield_10y`/`vix` at -0.34 would over-penalize a pair that's
+   genuinely close to independent.
+3. **Effective-N via eigen-decomposition of the correlation matrix** -- more
+   statistically formal, but heavier to implement and explain for a 4-field,
+   3-agent system where the effect size doesn't warrant it; rejected as
+   overkill for what the real data shows.
+
+**Chose option 1**, implemented in `_synthesis.py`:
+- `_REAL_FIELD_CORRELATION`: the LEVEL matrix above, hard-coded (not
+  re-fetched at runtime -- these are slow-moving structural relationships,
+  not something that needs measuring fresh every Orchestrator cycle). LEVEL
+  chosen over the 20-day-change variant because every Bellwether formula
+  this discount protects (`real_gap`, `dxy_gap`, `vix_z`) computes a LEVEL
+  gap/z-score, not a period-over-period change -- the 20-day-change matrix
+  is kept in this report for Rung 2's later, different use (a DSL condition
+  reacting to movement), not used here.
+- `_AGENT_REAL_FIELDS`: which of the 4 fields each Signal-emitting agent's
+  own formula reads (`monetary_policy`: both; `liquidity`: vix;
+  `derivatives_etf`: funding) -- `risk` deliberately excluded, per the
+  finding above.
+- `_agent_pair_correlation(a, b)`: max `|rho|` across the cross-product of
+  two agents' own field sets.
+- `_discounted_agreement_numerator`: processes signals strongest-first; a
+  signal that AGREES in direction with an already-counted signal from a
+  correlated, different agent has its strength discounted by `(1 - |rho|)`
+  before contributing; a DISAGREEING signal is left at full weight (a
+  disagreement between usually-correlated agents is genuinely more
+  informative, not redundant). Divided by the SAME undiscounted `total_w`
+  coverage already uses -- deliberately: dividing by a matching discounted
+  denominator would renormalize a perfectly redundant pair right back to
+  the SAME ratio as one signal alone (a weighted average is insensitive to
+  duplicate copies of an identical score by construction), which would
+  silently defeat the whole point. Dividing the discounted numerator by the
+  ORIGINAL total_w instead correctly shrinks the ratio toward zero for a
+  redundant pair.
+- **Scope, precisely**: only `agreement` (and therefore `confidence`, which
+  already consumes `agreement` in its existing, unchanged 0.3/0.45/0.25
+  formula) changes. `net_score`, `bias`, and `probability_up` are left on
+  the ORIGINAL undiscounted `net` -- this directive's own ask was
+  `agreement` specifically, not the directional call.
+
+### B1d. Real before/after, 180-cycle live sweep (identical seeds/headlines)
+
+Ran the SAME sweep twice (`tools/sweep.py --mode live`, 30 seeds x 6
+headlines = 180 cycles both times) -- once with the discount temporarily
+reverted (`git stash`) for a true apples-to-apples "before," once with it
+restored for "after":
+
+| Metric | Before | After | Δ |
+|---|---|---|---|
+| mean_confidence | 0.396 | 0.391 | -0.005 |
+| max_confidence | 0.500 | 0.483 | -0.017 |
+| mean_gold_agreement | 0.372 | 0.361 | -0.011 (-3.0%) |
+| mean_gold_coverage | 0.202 | 0.202 | 0 (unchanged, as designed) |
+| mean_bitcoin_agreement | 0.537 | 0.513 | -0.024 (-4.5%) |
+| mean_bitcoin_coverage | 0.296 | 0.296 | 0 (unchanged, as designed) |
+| pct_below_035 / pct_gold_neutral / pct_bitcoin_neutral | 26.7 / 30.0 / 16.7 | 26.7 / 30.0 / 16.7 | 0 |
+
+**Real interpretation**: a modest, real downward correction, exactly the
+direction expected -- BTC's discount (4.5%) is larger than GOLD's (3.0%),
+consistent with BTC having 3 real-field-driven contributing agents
+(`monetary_policy`, `liquidity`, `derivatives_etf`) vs GOLD's 2
+(`monetary_policy`, `liquidity`) -- more agent-pairs for the discount to
+apply to. `coverage` is confirmed byte-identical before/after in this real
+run, not just by unit test -- direct proof the discount didn't leak into
+the one field it was designed to leave alone. The directional-classification
+metrics (`pct_gold_neutral`, `pct_bitcoin_neutral`, `pct_below_035`) are
+also unchanged, confirming `bias`/`net_score` truly weren't touched.
+
+### B1e. Regression test
+
+`vatican/bellwether/tests/test_correlation_discount.py`, 6 new tests:
+perfectly-correlated-vs-independent agreement comparison (the literal B1e
+requirement), a lone signal is never discounted, the REAL agent names
+(`monetary_policy`/`liquidity`/`derivatives_etf`) show a real discount
+proportional to their real measured correlation, disagreement between
+correlated agents is never discounted, agents outside `_AGENT_REAL_FIELDS`
+are unaffected (protects the pre-existing `test_vatican_aggregation.py`
+assertions), and `_agent_pair_correlation` is symmetric and bounded to
+`[0, 1]`.
+
+### Test counts
+
+Bellwether (`vatican/bellwether/tests/`): before this rung, 46 passed / 1
+skipped. After: **53 passed / 1 skipped** (+7: the 6 new tests above, plus
+one existing test file's collection count -- confirmed via a full
+`pytest tests/ -q` rerun, zero regressions, zero changed assertions in any
+pre-existing test). Vatican-core (`nero_core`) Python suite: unaffected --
+zero files under `nero_core/` touched this rung (confirmed via
+`git diff --name-only`).
+
+### No evidence-bar constant touched, confirmed
+
+This rung touches exactly `vatican/bellwether/bellwether/agents/_synthesis.py`
+(new module-level constants/functions plus a two-line change inside
+`aggregate()`'s existing confidence block) and one new test file. Zero
+change to any Vatican-core evidence-bar constant (`MIN_SAMPLE_SIZE`, the
+30/yr frequency floor, the 70/30 split, FDR alpha, bootstrap CI, random
+baselines, Trial admission criteria) -- none of those live in
+`vatican/bellwether/` at all, and `git diff --name-only` confirms nothing
+under `nero_core/` changed this rung.
