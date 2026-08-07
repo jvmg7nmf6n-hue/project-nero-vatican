@@ -805,3 +805,324 @@ change to any Vatican-core evidence-bar constant (`MIN_SAMPLE_SIZE`, the
 baselines, Trial admission criteria) -- none of those live in
 `vatican/bellwether/` at all, and `git diff --name-only` confirms nothing
 under `nero_core/` changed this rung.
+
+---
+
+## 2026-08-07: CC-1 directive -- wire the 2 safest agents real: DefiLlama stablecoins + RSS news feed
+
+File-overlap check (per this directive's own instruction, confirmed rather
+than assumed): `git status --short` at the start of this directive showed
+Rung 2's own uncommitted work touching exactly 7 `nero_core/` files
+(`macro_data.py`, `eve/random_baseline.py`, `eve/session.py`,
+`eve/tools_defs.py`, `research_agent/auto_tester.py`,
+`research_agent/frequency_gate.py`, `research_agent/rule_dsl.py`). This
+directive's own changes (below) touch `vatican/bellwether/bellwether/data/
+providers.py`, `vatican/bellwether/bellwether/agents/liquidity.py`,
+`nero_core/execution/bellwether_overlay.py`, and their test files --
+zero overlap with Rung 2's file set, confirmed, not assumed.
+
+### Item 1 -- DefiLlama stablecoin supply
+
+**1a. FINDING** (confirmed-from-data, fetched live 2026-08-07): `GET
+https://stablecoins.llama.fi/stablecoincharts/all` returns HTTP 200, no API
+key, a JSON list of daily rows shaped `{"date": "<unix seconds, UTC
+midnight>", "totalCirculatingUSD": {"peggedUSD": <float>, ...other pegs}}`.
+Confirmed 3174+ rows, current total ~$306B, and the row set includes a
+still-forming "today" entry (the last row's `date` decoded to the exact
+calendar day the fetch was run on, UTC midnight-stamped, at a time that day
+had not yet elapsed). `GET .../stablecoins?includePrices=true` (the
+per-asset endpoint) was also fetched directly and confirms USDT (id=1) and
+USDC (id=2) are both present with real circulating-supply figures, but the
+aggregate `stablecoincharts/all` endpoint is what's actually used (a single
+clean total, not a manual sum across 414 individual assets).
+
+**1b. WHAT SHIPPED.** `vatican/bellwether/bellwether/data/providers.py`:
+added `provenance_of()` to the `OnChainProvider` ABC (concrete, SYNTHETIC
+default -- mirrors `DerivativesProvider`'s own existing pattern exactly, so
+`MockOnChain` needs zero changes), `_fetch_real_stablecoin_supply_chg_pct()`
++ `_fetch_real_stablecoin_supply_chg_pct_cached()` (process-lifetime cache,
+same shape as `_DXY_CACHE`/`_VIX_CACHE`/`_BTC_FUNDING_CACHE`), and a new
+`VaticanRealOnChain(OnChainProvider)` class wrapping `MockOnChain` --
+overrides only `stablecoin_supply_chg_pct`, every other field
+(`exchange_netflow_btc`, `lth_supply_chg_pct`, `mvrv_z`,
+`OnChainProvider`'s own separate `funding_rate_bps`) stays on the identical
+mock draw, per the scoping directive's own Item 1b finding that none of
+those have a confirmed free source. `requests` is a soft dependency
+(imported inside the function), matching `yfinance`'s own treatment for
+dxy/vix. Wired into `build_data_hub`'s `"live"` branch:
+`onchain=VaticanRealOnChain(rng)` (was `MockOnChain(rng)`). Verified live:
+`_fetch_real_stablecoin_supply_chg_pct()` returned a real value
+(0.0445% for that day) end to end.
+
+**1c. FINDING.** DefiLlama's own chart includes a still-forming "today" row
+(see 1a) -- a **1-calendar-day lag** is applied (`_STABLECOIN_LAG_DAYS = 1`:
+treat the row before the most recent one as "current," matching this
+project's own closed-candle discipline, the same shape as
+`_DXY_LAG_BUSINESS_DAYS`/`_VIX_LAG_BUSINESS_DAYS` above it). This is a
+**calendar-day** lag, not a **business-day** one like the dollar/DFII10
+legs -- stablecoin supply changes every day, weekends included, so there is
+no market-closed concept to skip. This directly answers (not assumes) the
+scoping report's own "UNKNOWN" note on this point.
+
+**1d. FINDING.** `liquidity.py` combines two inputs: its GOLD signal uses
+`vix` only; its BTC signal uses `vix` AND `stablecoin_supply_chg_pct`.
+`AgentResult.provenance` is a single value for the whole agent (documented,
+pre-existing coarseness), so `liquidity.py`'s own provenance logic was
+rewritten to combine BOTH real inputs the same way `monetary_policy.py`
+already combines its own two (`real_yield_10y`, `dxy`): both real -> REAL,
+either real -> MIXED, neither -> SYNTHETIC. Before this directive,
+`stablecoin_supply_chg_pct` was unconditionally SYNTHETIC (no
+`OnChainProvider.provenance_of` existed at all), so `liquidity` could only
+ever reach MIXED at best -- **it can now genuinely reach REAL**, confirmed
+in a real sweep run below (one live cycle's own `provenance_breakdown`
+showed `liquidity: 'real'`).
+
+**1e. WHAT SHIPPED.** New file
+`vatican/bellwether/tests/test_vatican_onchain.py`, 6 tests: fetch-failure
+falls back cleanly to the identical mock draw + SYNTHETIC (never guesses),
+every other on-chain field always reports SYNTHETIC regardless of the
+stablecoin fetch's own outcome, `MockOnChain` needs no code change to
+satisfy the new ABC method, a real-network integration check (skipped, not
+failed, if unreachable) asserting the real value is a plausible bounded %
+change, and two new `liquidity.py` provenance-combination tests (both-real
+-> REAL; only-stablecoin-real -> MIXED). One pre-existing test's own stale
+comment (`test_liquidity_agent_mixed_once_vix_real_stablecoin_still_mock`,
+which said "no live OnChainProvider exists") was corrected to reflect that
+one now does, while explaining why that specific test still deliberately
+isolates the stablecoin-still-synthetic case. Full Bellwether suite: 53 ->
+**59 passed, 1 skipped** (+6), zero regressions.
+
+### Item 2 -- RSS news feed wiring
+
+**2a. FINDING** (confirmed-from-code, exact file+line). The real production
+entrypoint is **not** the FastAPI `/analyze` route (`bellwether/api/
+main.py`, which is a passive service -- `events` come from whichever
+caller invokes it) but the scheduled overlay script,
+`nero_core/execution/bellwether_overlay.py`, run every 8h via
+`.github/workflows/bellwether_overlay.yml`. Confirmed at
+`nero_core/execution/bellwether_overlay.py:95` (pre-fix):
+`orch.analyze(events=[], persist=False)` -- a **literal, hardcoded empty
+list**, every single scheduled run, matching the scoping report's own
+finding exactly, now pinned to the precise line. `MacroEvent`'s shape
+(`bellwether/schemas.py:88-96`): `headline: str, summary: str = "",
+source: str = "unknown", region: Region = GLOBAL, category: Category =
+OTHER, url: str | None = None, published_at: datetime`.
+
+**2b. WHAT SHIPPED.** New function `build_real_macro_events()` in
+`bellwether_overlay.py`, calling `nero_core.data_sources.news_feed
+.NewsFeedClient.load("GOLD")` and `.load("BTC")` (the two assets Bellwether
+actually models), transforming each real `NewsItem` into a `MacroEvent`.
+**Critical honesty finding, confirmed-from-code before writing any
+transform logic**: `NewsFeedClient.load()` has its own `FALLBACK_HEADLINES`
+-- a static, illustrative (NOT real) headline list returned when the real
+RSS fetch fails or nothing matches that asset's keywords this cycle.
+`build_real_macro_events()` checks `NewsFeedResult.status` and only
+transforms headlines when `status.startswith("live")` -- a fallback result
+means **zero real events for that asset this cycle, never the fallback
+text passed through as if it were real**. This is the same "never guess,
+degrade honestly" discipline every other real provider in this codebase
+follows, applied to news content for the first time. `category` is a
+best-effort map from `news_feed.py`'s own keyword tags (Central Banks ->
+MONETARY_POLICY, Geopolitics -> GEOPOLITICS, Sentiment -> RISK_SENTIMENT;
+everything else -> OTHER, never guessed). `published_at` is parsed from the
+feed's real RFC822 `pubDate` via the standard library
+(`email.utils.parsedate_to_datetime`), falling back to the current
+ingestion time (never a fabricated past time) only when a specific item's
+date is missing/unparseable. `_run_bellwether_live()` now calls
+`orch.analyze(events=build_real_macro_events(), persist=False)`.
+Verified live: **11 real, current headlines** fetched end to end (e.g.
+"Fed Governor Cook says she's 'prepared to act' on rate hike to address
+inflation", CNBC; "Gold prices today, Friday, August 7, 2026: Gold prices
+continue to rise...", Yahoo Finance).
+
+**2c. FINDING -- the real result is more limited than the wiring itself,
+disclosed plainly, not oversold.** Ran a real cycle both ways (`Settings
+(data_mode="live", seed=1)`), calling `NewsIntelligenceAgent`/
+`GeopoliticalAgent` directly with the real fetched events:
+`news_intelligence` produced **6 real signals** and `geopolitical`
+produced **2 real signals**, all with real rationale text quoting the real
+headlines (e.g. `GOLD STRONG_BULLISH keyword match in: Jeffrey Gundlach
+says the bond market is telling Warsh...`) -- the wiring genuinely works,
+real text produces real signals. **But both agents' own
+`AgentResult.provenance` stayed `SYNTHETIC`, identically to the `events=[]`
+case.** Traced this to `bellwether/schemas.py:202`: `AgentResult.provenance`
+defaults to `SYNTHETIC`, and `news_intelligence.py`/`geopolitical.py`
+**never set `provenance=` explicitly in any of their `_heuristic`/
+`_llm_classify`/`_llm` result-building code paths, in either the pre-
+existing or the now-real-events case.** Since `real_only_signals()` (used
+by `gold_analysis`/`bitcoin_analysis` in live mode) excludes any agent
+whose own provenance isn't REAL/MIXED, **these 8 real signals are
+completely excluded from the live-mode aggregate today** -- confirmed
+directly: a full `Orchestrator.analyze()` run with `events=[]` vs. with the
+11 real headlines produced **byte-identical** `gold_bias`, `bitcoin_bias`,
+`gold_agreement` (0.468), and `bitcoin_agreement` (0.039) in both cases.
+**This is a real, pre-existing gap in `news_intelligence.py`/
+`geopolitical.py` themselves (not something this directive's own scope
+included fixing -- wiring ingestion was the ask, not rewriting these two
+agents' own provenance logic), and it means Item 2's real effect on the
+live aggregate is currently zero, honestly reported per this directive's
+own 3c instruction, not framed as a clean win.**
+
+**2d. FINDING.** `NewsFeedClient.load()` is stateless -- no shared cache,
+no persisted dedup state, no database writes; each call is an independent
+HTTP GET per RSS feed. Calling it a second time (from
+`bellwether_overlay.py`, in addition to `NEWS_SENTIMENT`'s own existing
+call sites) cannot interfere with `NEWS_SENTIMENT`'s own behavior in any
+way -- confirmed by reading the class in full, not assumed from the
+"stateless-looking" name alone. Zero lines of `nero_core/strategies/
+news_sentiment.py` or `nero_core/data_sources/news_feed.py` itself were
+touched.
+
+**2e. WHAT SHIPPED.** 5 new tests in `tests/test_bellwether_overlay.py`
+(`BuildRealMacroEventsTest`): a live-status result produces matching
+`MacroEvent`s with correct source/url/category; **the exact honesty
+requirement** -- a fallback-status result (even one whose own headline
+text is a real `FALLBACK_HEADLINES` string) produces **zero** events, never
+that fallback text passed through as real; a headline appearing in both
+the GOLD and BTC queries is deduped to one event, not two; an unmapped
+category tag defaults to OTHER rather than guessing; an unparseable
+`pubDate` degrades to the schema's own default timestamp rather than
+crashing. All 17 tests in the file pass (12 pre-existing + 5 new), zero
+regressions.
+
+### Item 3 -- measured real effect
+
+**3a. FINDING** (confirmed-from-data). Re-ran the identical 180-cycle sweep
+(`tools/sweep.py --mode live`, 30 seeds x 6 headlines) after both items
+were wired:
+
+| Metric | Before (Rung 1's own closing numbers) | After (this directive) | Δ |
+|---|---|---|---|
+| mean_confidence | 0.391 | 0.373 | -0.018 |
+| mean_gold_agreement | 0.361 | 0.361 | 0 |
+| mean_gold_coverage | 0.202 | 0.202 | 0 |
+| mean_bitcoin_agreement | 0.513 | 0.393 | **-0.120** |
+| mean_bitcoin_coverage | 0.296 | 0.300 | +0.004 |
+| pct_below_035 | 26.7% | 40.0% | +13.3pp |
+
+**GOLD is completely unchanged** -- expected and correct: GOLD's own
+`liquidity` signal depends on `vix` only, never `stablecoin_supply_chg_pct`,
+and Item 2's news wiring has zero aggregate effect (per 2c) regardless of
+asset. **BITCOIN's agreement dropped by a real, sizeable 0.120** -- this
+sweep run's `sweep.py` script does not vary the stablecoin fetch across its
+30 seeds x 6 headlines (the value is fetched once per process via the
+process-lifetime cache and reused for all 180 cycles), so this delta
+reflects that one real snapshot's actual value (~0.044%, a small, near-flat
+real reading for that specific day) interacting with the other agents'
+per-seed mock/real signals for BTC, not a bug in the discount or
+aggregation math. **Whether this is a persistent characteristic of wiring
+this agent or an artifact of this one day's specific real stablecoin
+reading cannot be determined from a single snapshot** -- a multi-day
+measurement would be needed to know if BTC agreement typically drops this
+much, stays flat, or recovers on other days, mirroring exactly the
+"single-agent-can-make-things-worse-before-a-second-one-recovers-it"
+pattern this directive's own "lesson 1" warned about.
+
+**3b. FINDING -- a real, load-bearing correction to this directive's own
+"6 of 15" expectation.** By real agent-name (not field), the roster is:
+
+- **Real/mixed-capable (4, unchanged in COUNT by this directive, though
+  `liquidity`'s own ceiling improved from MIXED-only to REAL-capable)**:
+  `monetary_policy` (real_yield_10y, dxy), `liquidity` (vix, and now
+  stablecoin_supply_chg_pct), `derivatives_etf` (funding rate real; ETF
+  flows/skew/OI/gold-positioning still mock), `learning` (mechanically real
+  -- it genuinely tracks whatever it's fed -- but per `docs/
+  bellwether_audit.md`'s own item 15, currently fed synthetic-derived bias,
+  a real nuance worth preserving rather than counting as a clean "real"
+  agent).
+- **Genuinely real DATA in, but always reports SYNTHETIC (2, this
+  directive's own Item 2 -- confirmed-from-data, not a guess)**:
+  `news_intelligence`, `geopolitical` -- both now consume real RSS
+  headlines and produce real signals from them (per 2c), but neither's own
+  `AgentResult.provenance` logic was ever built to reflect that, so both
+  remain reported SYNTHETIC and excluded from the live aggregate.
+- **Downstream/composite, inherit real-or-mixed provenance from the above
+  when applicable (5)**: `gold_analysis`, `bitcoin_analysis`, `scenario`,
+  `risk`, `trade_recommendation`.
+- **Fully synthetic, no real path wired (4)**: `onchain` (the AGENT --
+  `exchange_netflow_btc`/`lth_supply_chg_pct`/`mvrv_z` remain unwired; this
+  agent does not itself consume `stablecoin_supply_chg_pct` at all, so
+  Item 1 does not touch it), `economic_calendar`, `correlation` (hardcoded
+  by design, confirmed permanently SYNTHETIC regardless of mode),
+  `historical_analog`.
+
+**This directive's own "should be 6 of 15" framing in its Context section
+is the stale figure this closing report is required to flag.** The real
+count of agents whose OWN reported provenance changed as a direct result of
+this directive is **zero new agent names** -- `liquidity` was already one
+of the pre-existing 4, and its ceiling improved (MIXED-only -> REAL-capable,
+confirmed live) without becoming a "new" entry; `news_intelligence`/
+`geopolitical` genuinely gained real input but neither's own provenance
+reporting reflects it, so neither counts as newly real by this project's
+own established "an agent's provenance is the one place this is actually
+decided" discipline (see `real_only_signals`'s own docstring). The
+**real, honest count stays 4 of 15 real/mixed-capable primary agents**,
+with one (`liquidity`) genuinely stronger than before, and 2 more
+(`news_intelligence`, `geopolitical`) now sitting one small, identified fix
+away from joining that count for real.
+
+**3c. Honest disclosure, not a forced clean win.** Item 1 (stablecoin) is a
+real, confirmed, working improvement to `liquidity`'s own provenance
+ceiling, but its measured real-sweep effect on BITCOIN's agreement was
+**negative** (-0.120) on the one real day measured, exactly the kind of
+result this directive's own "lesson 1" pre-warned about and asked to be
+reported honestly rather than framed as a win. Item 2 (RSS) is fully real
+and working at the ingestion/signal-production level, but has **zero**
+measured effect on the live aggregate today, due to a separate, pre-existing
+gap in the two consuming agents' own provenance logic -- also not a clean
+win, though also not a failure of this directive's own actual scope (wiring
+ingestion, not rewriting those two agents).
+
+### Test counts
+
+Bellwether (`vatican/bellwether/tests/`): 53 -> **59 passed, 1 skipped**
+(+6, Item 1's `test_vatican_onchain.py` plus updates to
+`test_vatican_provenance.py`). Vatican-core Python (`tests/`, full suite):
+before this directive (Rung 2's own last full-suite count) **2729 tests**;
+after this directive: **Ran 2734 tests in 693.6s** (+5, Item 2's new
+`BuildRealMacroEventsTest` tests in `test_bellwether_overlay.py`) --
+`FAILED (failures=1, errors=3, skipped=17)`, the same 4 pre-existing
+failures throughout by name (`test_lxml_is_importable`,
+`FetchKse100DailyTest`'s 2 PSX tests -- all 3 depend on `lxml`, not
+installed in this environment -- and
+`test_the_real_committed_eve_hypotheses_file_has_been_backfilled`, a
+real-data-drift assertion unrelated to anything this directive touched).
+Zero new failures from this directive's own changes.
+
+### No evidence-bar constant touched, confirmed
+
+This directive touches exactly: `vatican/bellwether/bellwether/data/
+providers.py`, `vatican/bellwether/bellwether/agents/liquidity.py`,
+`nero_core/execution/bellwether_overlay.py`, and three test files. Zero
+diff to `rule_dsl.py`, `macro_data.py`, `trial.py`, `repair_to_trial.py`,
+`graveyard_distillation.py`, or any Adam/Eve scoring/verdict path --
+confirmed via `git status --short`, which shows Rung 2's own 7 files
+unchanged by this directive's own commits (separate, disjoint file sets).
+Zero change to any admission criterion, frequency-gate constant, or
+FDR/bootstrap parameter.
+
+### What's still not real, and the next highest-priority candidate
+
+Still not real: `onchain` (the agent)'s own 3 remaining fields, ETF flows
+(confirmed blocked, `docs/etf_flow_audit.md`), derivatives skew/OI/gold
+positioning, economic-calendar surprise, and `correlation`/
+`historical_analog`'s own by-design-hardcoded content. **The single
+highest-priority next candidate is not a new data source at all**: fixing
+`news_intelligence.py`'s and `geopolitical.py`'s own provenance-reporting
+logic (have each set `provenance=DataProvenance.REAL` when `ctx.events` is
+non-empty and genuinely sourced from a confirmed-real ingestion path, the
+same pattern `monetary_policy.py`/`liquidity.py` already use) would let
+Item 2's already-real, already-working RSS wiring actually reach the live
+aggregate for the first time -- a small, targeted, already-scoped-by-this-
+report follow-up, not a new research task.
+
+### git log origin/main --oneline -3, per commit this directive
+
+Item 1 and Item 2 commits, verified on `origin/main` immediately after
+pushing (rebased cleanly onto 3 intervening automated bot commits --
+`signal-alerts`/`nero-live-scheduler`/`bellwether-overlay` data-only
+updates, zero code overlap):
+
+    ed46366 CC-1 directive Item 2: wire real RSS headlines into Bellwether ingestion
+    15dcc16 CC-1 directive Item 1: wire DefiLlama stablecoin supply real
+    2487e6e Update signal alerts state
