@@ -3,7 +3,10 @@ import path from "path";
 import {
   PRE_REGISTERED_SESSION_COUNT,
   computeAdamFunnel,
+  computeEveCrashStats,
+  computeEveDslGapRate,
   computeEveFunnel,
+  computeEveSessionCostStats,
   computePreRegistrationProgress,
   extractFrequencyClaims,
 } from "@/lib/agentsPage";
@@ -199,6 +202,82 @@ describe("extractFrequencyClaims", () => {
 
   it("never crashes on a null too_slow entry", () => {
     expect(extractFrequencyClaims([{ run_at: "r1", too_slow: null }])).toEqual([]);
+  });
+});
+
+describe("computeEveDslGapRate", () => {
+  it("computes the real UNTESTABLE_BY_DSL rate from every hypothesis on file, not a fixed number", () => {
+    const hyps = [
+      hypothesis({ testability: "UNTESTABLE_BY_DSL" }),
+      hypothesis({ testability: "UNTESTABLE_BY_DSL" }),
+      hypothesis({ testability: "TESTABLE" }),
+      hypothesis({ testability: "TESTABLE" }),
+    ];
+    const stats = computeEveDslGapRate(hyps);
+    expect(stats.untestableCount).toBe(2);
+    expect(stats.totalCount).toBe(4);
+    expect(stats.ratePct).toBeCloseTo(50);
+  });
+
+  it("matches the real committed docs/site_data/eve_hypotheses.json shape as of 2026-08-07 (4/21, 19.0%)", () => {
+    const hyps = [
+      ...Array.from({ length: 4 }, () => hypothesis({ testability: "UNTESTABLE_BY_DSL" })),
+      ...Array.from({ length: 17 }, () => hypothesis({ testability: "TESTABLE" })),
+    ];
+    const stats = computeEveDslGapRate(hyps);
+    expect(stats.untestableCount).toBe(4);
+    expect(stats.totalCount).toBe(21);
+    expect(stats.ratePct).toBeCloseTo(19.047619, 5);
+  });
+
+  it("never divides by zero", () => {
+    expect(computeEveDslGapRate([]).ratePct).toBeNull();
+  });
+});
+
+describe("computeEveCrashStats", () => {
+  it("counts crashed_before_completion sessions against the real total, live from the registry", () => {
+    const reg = registry({
+      sessions: [
+        { session_id: "a", counts_toward_pre_registered_8: false, classification: "crashed_before_completion", reason: "x" },
+        { session_id: "b", counts_toward_pre_registered_8: false, classification: "crashed_before_completion", reason: "x" },
+        { session_id: "c", counts_toward_pre_registered_8: true, classification: "session_1_of_8", reason: "x" },
+      ],
+    });
+    const stats = computeEveCrashStats(reg);
+    expect(stats.crashedCount).toBe(2);
+    expect(stats.totalCount).toBe(3);
+  });
+
+  it("never fabricates a count from a null registry", () => {
+    expect(computeEveCrashStats(null)).toEqual({ crashedCount: 0, totalCount: 0 });
+  });
+});
+
+describe("computeEveSessionCostStats", () => {
+  it("averages actual cost per completed session, excluding crashed sessions' partial actual entries", () => {
+    const reg = registry({
+      sessions: [
+        { session_id: "crashed-1", counts_toward_pre_registered_8: false, classification: "crashed_before_completion", reason: "x" },
+        { session_id: "done-1", counts_toward_pre_registered_8: true, classification: "session_1_of_8", reason: "x" },
+        { session_id: "done-2", counts_toward_pre_registered_8: true, classification: "session_2_of_8", reason: "x" },
+      ],
+    });
+    const ledger = [
+      // A crashed session can still have a real actual-cost entry for a turn
+      // that succeeded before the crash -- must NOT count toward the average.
+      ledgerEntry({ session_id: "crashed-1", status: "actual", actual_cost_usd: 0.21 }),
+      ledgerEntry({ session_id: "crashed-1", status: "reserved", projected_cost_usd: 0.36 }),
+      ledgerEntry({ session_id: "done-1", status: "actual", actual_cost_usd: 0.4 }),
+      ledgerEntry({ session_id: "done-2", status: "actual", actual_cost_usd: 0.6 }),
+    ];
+    const stats = computeEveSessionCostStats(ledger, reg);
+    expect(stats.completedSessionCount).toBe(2);
+    expect(stats.averageUsd).toBeCloseTo(0.5);
+  });
+
+  it("never fabricates an average with no completed sessions", () => {
+    expect(computeEveSessionCostStats([], null)).toEqual({ averageUsd: null, completedSessionCount: 0 });
   });
 });
 

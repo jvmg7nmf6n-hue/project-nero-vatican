@@ -115,6 +115,72 @@ export function computeAdamFunnel(adamPerformance: AgentPerformanceExport | null
   };
 }
 
+export interface EveDslGapStats {
+  untestableCount: number;
+  totalCount: number;
+  ratePct: number | null;
+}
+
+// CC-1 directive, "Detailed Adam/Eve briefing": the real DSL-vocabulary-gap
+// rate, computed live from every Eve hypothesis on file rather than
+// hardcoded -- it moved (40% -> 25% -> 19%) as more sessions ran after the
+// same-day 2026-08-03 fix, so a static number would already be stale.
+// Adam has no equivalent gap in his own real history (0 UNTESTABLE
+// verdicts across every committed test result) -- his own count is read
+// directly from agent_performance.json's cumulative.untestable field,
+// not computed here.
+export function computeEveDslGapRate(hypotheses: EveHypothesisRecord[]): EveDslGapStats {
+  const totalCount = hypotheses.length;
+  const untestableCount = hypotheses.filter((h) => h.testability === "UNTESTABLE_BY_DSL").length;
+  return {
+    untestableCount,
+    totalCount,
+    ratePct: totalCount > 0 ? (100 * untestableCount) / totalCount : null,
+  };
+}
+
+export interface EveCrashStats {
+  crashedCount: number;
+  totalCount: number;
+}
+
+export function computeEveCrashStats(registry: EveSessionRegistryExport | null): EveCrashStats {
+  const sessions = registry?.sessions ?? [];
+  return {
+    crashedCount: sessions.filter((s) => s.classification === "crashed_before_completion").length,
+    totalCount: sessions.length,
+  };
+}
+
+export interface EveSessionCostStats {
+  averageUsd: number | null;
+  completedSessionCount: number;
+}
+
+// "Completed" here means the registry's own classification says so, NOT
+// "has at least one actual-status ledger entry" -- 3 of the 6 crashed
+// sessions also have a real actual_cost_usd entry for turns that
+// succeeded before the crash, so that alone would misclassify them.
+export function computeEveSessionCostStats(
+  ledger: EveBudgetLedgerEntry[],
+  registry: EveSessionRegistryExport | null
+): EveSessionCostStats {
+  const completedSessionIds = new Set(
+    (registry?.sessions ?? []).filter((s) => s.classification !== "crashed_before_completion").map((s) => s.session_id)
+  );
+  const totalsBySession = new Map<string, number>();
+  for (const entry of ledger) {
+    if (entry.status !== "actual" || !completedSessionIds.has(entry.session_id)) continue;
+    totalsBySession.set(entry.session_id, (totalsBySession.get(entry.session_id) ?? 0) + (entry.actual_cost_usd ?? 0));
+  }
+  const completedSessionCount = totalsBySession.size;
+  const sum = Array.from(totalsBySession.values()).reduce((a, b) => a + b, 0);
+  return {
+    averageUsd: completedSessionCount > 0 ? sum / completedSessionCount : null,
+    completedSessionCount,
+  };
+}
+
 export interface FrequencyClaim {
   hypothesisName: string;
   claimedPerYear: number;
