@@ -93,6 +93,98 @@ def combined_provenance(ctx, signals: list[Signal]) -> DataProvenance:
     return weakest_provenance(provs)
 
 
+# CC-1 master directive (2026-08-07), Part B Rung 1: correlation discount for
+# `agreement`. Real pairwise Pearson correlation (LEVEL values -- matching
+# every formula below, which all compute LEVEL gaps/z-scores, e.g.
+# monetary_policy.py's `real_gap = m.real_yield_10y - _REAL_YIELD_NEUTRAL`,
+# not a period-over-period change) measured over n=1229 real overlapping
+# calendar days, 2021-08-09 to 2026-07-15, via
+# vatican/bellwether/tools/correlation_matrix.py -- see
+# docs/bellwether_stage2_report.md's Rung 1 section for the full matrix,
+# methodology, and the 20-trading-day-change variant (more relevant to
+# Rung 2's DSL fields, kept separate from this LEVEL-based table). This is a
+# fixed table, not re-fetched at runtime -- these are slow-moving structural
+# relationships between macro series, not something that needs measuring
+# fresh every Orchestrator cycle.
+_REAL_FIELD_CORRELATION: dict[frozenset[str], float] = {
+    frozenset({"real_yield_10y", "dxy"}): 0.4833,
+    frozenset({"real_yield_10y", "vix"}): -0.3444,
+    frozenset({"real_yield_10y", "funding_rate_bps"}): -0.1551,
+    frozenset({"dxy", "vix"}): 0.0870,
+    frozenset({"dxy", "funding_rate_bps"}): -0.0883,
+    frozenset({"vix", "funding_rate_bps"}): -0.2791,
+}
+
+# Which of the 4 real fields each Signal-EMITTING agent's own formula reads
+# (see each agent's own module for the exact weights: monetary_policy.py
+# blends real_yield_10y+dxy into one signal per asset; liquidity.py's GOLD
+# signal is vix-only; derivatives_etf.py's BTC signal has a funding-rate
+# threshold term). risk.py deliberately excluded: confirmed by reading
+# risk.py in full, it returns RiskFlags/a confidence haircut, never a
+# Signal -- it does not enter aggregate()'s relevant list at all, so it has
+# no bearing on `agreement`.
+_AGENT_REAL_FIELDS: dict[str, tuple[str, ...]] = {
+    "monetary_policy": ("real_yield_10y", "dxy"),
+    "liquidity": ("vix",),
+    "derivatives_etf": ("funding_rate_bps",),
+}
+
+
+def _agent_pair_correlation(agent_a: str, agent_b: str) -> float:
+    """Max absolute real-field correlation between two Signal-emitting
+    agents' own underlying real fields -- 0.0 if either agent isn't in
+    _AGENT_REAL_FIELDS (no measured relationship to discount by) or if
+    neither field pairing has a measured correlation. Two agents that
+    happen to read the literal SAME field (not the case for any pair
+    today, but handled for completeness) get 1.0 by construction."""
+    fields_a, fields_b = _AGENT_REAL_FIELDS.get(agent_a, ()), _AGENT_REAL_FIELDS.get(agent_b, ())
+    if not fields_a or not fields_b:
+        return 0.0
+    best = 0.0
+    for field_a in fields_a:
+        for field_b in fields_b:
+            if field_a == field_b:
+                best = max(best, 1.0)
+                continue
+            rho = _REAL_FIELD_CORRELATION.get(frozenset({field_a, field_b}))
+            if rho is not None:
+                best = max(best, abs(rho))
+    return best
+
+
+def _discounted_agreement_numerator(relevant: list[Signal]) -> float:
+    """CC-1 master directive Rung 1: `agreement` must not treat two agents
+    driven by correlated real macro fields as fully independent
+    confirmations when they happen to agree. Processes signals strongest
+    first; a signal whose bias AGREES with an already-counted signal from a
+    DIFFERENT, correlated real-field-driven agent has its contribution
+    discounted by (1 - |agent-pair correlation|) -- the fraction of an
+    agreeing signal a correlated peer already accounted for. A signal that
+    DISAGREES with a usually-correlated peer is left at full weight -- that
+    disagreement is genuinely more informative, not redundant. Divides by
+    the SAME (undiscounted) total_w coverage already uses, deliberately --
+    a fully redundant second signal (rho=1.0) then correctly SHRINKS the
+    resulting ratio toward zero rather than leaving it unchanged (which a
+    renormalized weighted average would do, since it's insensitive to
+    duplicate copies of the same score by construction -- verified against
+    this function's own regression test)."""
+    ordered = sorted(relevant, key=lambda s: s.strength, reverse=True)
+    counted: list[Signal] = []
+    discounted_sum = 0.0
+    for sig in ordered:
+        max_rho = 0.0
+        for prior in counted:
+            if prior.source_agent == sig.source_agent:
+                continue
+            if (prior.bias.score > 0) != (sig.bias.score > 0):
+                continue  # disagreement -- not redundant, full weight
+            max_rho = max(max_rho, _agent_pair_correlation(prior.source_agent, sig.source_agent))
+        effective_strength = sig.strength * (1.0 - max_rho)
+        discounted_sum += sig.bias.score * effective_strength
+        counted.append(sig)
+    return discounted_sum
+
+
 def aggregate(asset: Asset, signals: list[Signal]) -> AssetRead:
     """Confidence-weighted blend of every signal for one asset.
 
@@ -113,7 +205,13 @@ def aggregate(asset: Asset, signals: list[Signal]) -> AssetRead:
                      key=lambda s: s.weighted_score)
 
     # Confidence rises with (a) signal coverage and (b) agreement among signals.
-    agreement = abs(net) / 2.0                       # 0 (split) .. 1 (unanimous strong)
+    # `agreement` uses the CORRELATION-DISCOUNTED numerator (see
+    # _discounted_agreement_numerator's own docstring) over the SAME raw
+    # total_w coverage uses -- net_score/bias/probability_up below are
+    # deliberately left on the ORIGINAL undiscounted `net`, unchanged: this
+    # directive's own scope is `agreement` only, not the directional call.
+    net_discounted = _discounted_agreement_numerator(relevant) / total_w
+    agreement = abs(net_discounted) / 2.0             # 0 (split) .. 1 (unanimous strong)
     coverage = min(1.0, total_w / 4.0)                # how much intended signal mass showed up
     confidence = round(0.3 + 0.45 * agreement + 0.25 * coverage, 3)
 
