@@ -149,6 +149,53 @@ describe("AgentsPage", () => {
     expect(row).toHaveTextContent("claimed 35.0/yr, measured 0.5/yr");
   });
 
+  it("shows how-it-works and measured-characteristics sections", async () => {
+    await setupAndRender({});
+    expect(screen.getByTestId("how-it-works")).toBeInTheDocument();
+    expect(screen.getByTestId("measured-characteristics")).toBeInTheDocument();
+  });
+
+  // CC-1 follow-up directive, "make every Agents-page number live, not
+  // hardcoded": deliberately uses numbers that do NOT match production
+  // (2 of 5 UNTESTABLE_BY_DSL = 40%, 3 of 4 crashed, a single $0.30
+  // completed session) -- if a future edit hardcodes the real production
+  // figures (19.0%, 6 of 10, $0.5160) into the JSX instead of reading the
+  // computed props, this test fails because the rendered page would show
+  // the WRONG (real-looking but stale) numbers against this mock data.
+  it("computes measured-characteristics numbers from injected data, not hardcoded literals", async () => {
+    function hyp(testability: string): EveHypothesisRecord {
+      return {
+        session_id: "s",
+        raw_hypothesis: { hypothesis_name: "X" },
+        testability,
+        verdict_combined: null,
+        frequency_classification: null,
+        measured_trades_per_year: null,
+        contamination_tags: [],
+      };
+    }
+    await setupAndRender({
+      hypotheses: [hyp("UNTESTABLE_BY_DSL"), hyp("UNTESTABLE_BY_DSL"), hyp("TESTABLE"), hyp("TESTABLE"), hyp("TESTABLE")],
+      registry: registry({
+        sessions: [
+          { session_id: "eve-crash-1", counts_toward_pre_registered_8: false, classification: "crashed_before_completion", reason: "x" },
+          { session_id: "eve-crash-2", counts_toward_pre_registered_8: false, classification: "crashed_before_completion", reason: "x" },
+          { session_id: "eve-crash-3", counts_toward_pre_registered_8: false, classification: "crashed_before_completion", reason: "x" },
+          { session_id: "eve-done-1", counts_toward_pre_registered_8: true, classification: "session_1_of_8", reason: "x" },
+        ],
+      }),
+      ledger: [
+        { session_id: "eve-done-1", status: "actual", actual_cost_usd: 0.3, projected_cost_usd: 0.3, month: "2026-08" },
+      ],
+    });
+    const section = screen.getByTestId("measured-characteristics");
+    expect(section).toHaveTextContent("2 of 5 hypotheses on file (40.0%)");
+    expect(section).toHaveTextContent("3 of 4 recorded session attempts crashed");
+    expect(section).toHaveTextContent("$0.3000 across 1 completed session");
+    expect(section).not.toHaveTextContent("19.0%");
+    expect(section).not.toHaveTextContent("6 of 10");
+  });
+
   it("shows honest empty states, never a fabricated zero, when nothing has run", async () => {
     await setupAndRender({
       registry: null,

@@ -115,7 +115,7 @@ function RandomBaselinePanel() {
 // below in MeasuredCharacteristicsSection, not here.
 function HowItWorksSection() {
   return (
-    <section className="flex flex-col gap-6">
+    <section data-testid="how-it-works" className="flex flex-col gap-6">
       <h2 className="font-serif text-2xl text-parchment">How Adam and Eve actually work</h2>
       <p className="text-muted text-sm">
         Not a marketing description — the real control flow, traced from the code that runs today.
@@ -272,6 +272,7 @@ function MeasuredCharacteristicsSection({
   adamUntestableCount,
   adamHypothesesGenerated,
   adamLastUpdatedLabel,
+  eveMostRecentSessionId,
 }: {
   progress: ReturnType<typeof computePreRegistrationProgress>;
   eveDslGap: ReturnType<typeof computeEveDslGapRate>;
@@ -280,9 +281,10 @@ function MeasuredCharacteristicsSection({
   adamUntestableCount: number;
   adamHypothesesGenerated: number;
   adamLastUpdatedLabel: string;
+  eveMostRecentSessionId: string | null;
 }) {
   return (
-    <section className="flex flex-col gap-6">
+    <section data-testid="measured-characteristics" className="flex flex-col gap-6">
       <h2 className="font-serif text-2xl text-parchment">Measured characteristics</h2>
       <p className="text-muted text-sm">
         Not personality traits — every entry below is either a described real mechanism or a real number, with its
@@ -291,6 +293,7 @@ function MeasuredCharacteristicsSection({
 
       <div>
         <h3 className="font-serif text-lg text-parchment mb-3">Adam</h3>
+        <p className="text-muted text-xs mb-2">Numbers below as of {adamLastUpdatedLabel} (agent_performance.json).</p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <CharacteristicQuadrant
             title="Strengths"
@@ -389,6 +392,10 @@ function MeasuredCharacteristicsSection({
 
       <div>
         <h3 className="font-serif text-lg text-parchment mb-3">Eve</h3>
+        <p className="text-muted text-xs mb-2" data-testid="eve-characteristics-data-age">
+          Eve&apos;s own data has no single last-updated stamp; the numbers below are current as of the most recent
+          session attempt on file, {eveMostRecentSessionId ?? "none yet"}.
+        </p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <CharacteristicQuadrant
             title="Strengths"
@@ -707,6 +714,7 @@ export default async function AgentsPage() {
         adamUntestableCount={adamUntestableCount}
         adamHypothesesGenerated={adamHypothesesGenerated}
         adamLastUpdatedLabel={adamLastUpdatedLabel}
+        eveMostRecentSessionId={mostRecentSession?.session_id ?? null}
       />
 
       <section>
