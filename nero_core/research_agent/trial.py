@@ -130,7 +130,6 @@ class TrialRecord:
     projected_time_to_min_sample_label: str
     opened_at: str
     status: str
-    forward_tracking_db_ref: str
     # item 4c: attribution must be renderable wherever a Trial entry is
     # shown -- pre-formatted here from source_hypothesis_ref.origin_agent so
     # every caller (item 8's page, item 9's status export) gets an
@@ -151,7 +150,6 @@ class TrialRecord:
             "projected_time_to_min_sample_label": self.projected_time_to_min_sample_label,
             "opened_at": self.opened_at,
             "status": self.status,
-            "forward_tracking_db_ref": self.forward_tracking_db_ref,
             "attribution": self.attribution,
         }
 
@@ -175,11 +173,27 @@ def admit_to_trial(
     repair_chain_id: str | None = None,
     attempt_id: str | None = None,
     now: datetime | None = None,
-    forward_tracking_db_ref: Path = DEFAULT_FORWARD_TRACKING_DB_PATH,
 ) -> AdmissionResult:
     """The real gate is DSL-validity alone. The backtest verdict
     (`entry_verdict`) is NEVER a condition here either -- an advisory tag,
     stored as-is on the resulting record.
+
+    CC-1 DIRECTIVE (path-leak fix, 2026-08-07): `forward_tracking_db_ref`
+    was REMOVED from this signature and from `TrialRecord` entirely -- it
+    previously defaulted to `DEFAULT_FORWARD_TRACKING_DB_PATH` (an absolute
+    filesystem path on whichever machine ran the admission) and was
+    serialized verbatim into the publicly-committed
+    `docs/site_data/forward_trial.json`, leaking the local username and
+    directory layout of every machine that ever ran this function. Confirmed
+    non-load-bearing before removing it: `grep`'d every caller
+    (`tools/factory_loop_run.py`, `repair_to_trial.py`, every test in
+    `tests/test_trial_admission.py`) -- none ever passed this parameter
+    explicitly, all relied on the default, and no code anywhere reads the
+    field back out of a persisted record (the website's own
+    `TrialEntry` type in `website/lib/types.ts` already documented omitting
+    it as "not meaningful to a site reader"). This is a pure data-hygiene
+    fix -- no admission criterion, DSL-validity check, or evidence-bar
+    constant is touched by this change.
 
     FRESHNESS DISQUALIFICATION -- NOT CONSULTED HERE, DELIBERATELY (CC-1
     correction directive, reverting item 4e/7c): a `freshness_disqualified`
@@ -234,7 +248,6 @@ def admit_to_trial(
         projected_time_to_min_sample_label=projected_label,
         opened_at=now.isoformat(),
         status=STATUS_OPEN,
-        forward_tracking_db_ref=str(forward_tracking_db_ref),
     )
     return AdmissionResult(record, True, "admitted: DSL-valid and not freshness-disqualified")
 
