@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import FactoryLoopPage from "@/app/factory-loop/page";
 import * as data from "@/lib/data";
-import type { AgentPerformanceExport, FactoryLoopStatusExport, ForwardTrialRecord, GraveyardEntry } from "@/lib/types";
+import type { AgentPerformanceExport, FactoryLoopStatusExport, ForwardTrialRecord, GraveyardEntry, TrialEntry } from "@/lib/types";
 
 jest.mock("@/lib/data");
 
@@ -9,6 +9,25 @@ const mockFetchGraveyard = jest.mocked(data.fetchGraveyard);
 const mockFetchFactoryLoopStatus = jest.mocked(data.fetchFactoryLoopStatus);
 const mockFetchAgentPerformance = jest.mocked(data.fetchAgentPerformance);
 const mockFetchForwardTrial = jest.mocked(data.fetchForwardTrial);
+const mockFetchTrialEntries = jest.mocked(data.fetchTrialEntries);
+
+function trialEntry(overrides: Partial<TrialEntry> = {}): TrialEntry {
+  return {
+    execution_log_id: 1,
+    trial_id: "774476ca-8a12-453d-955b-52b8abfc294a",
+    hypothesis_name: "RSI2_TREND_PULLBACK_PAXG_4H",
+    origin_agent: "adam",
+    asset: "ETH",
+    timeframe: "4h",
+    direction: "SHORT",
+    entry_price: 1916.646594,
+    stop_loss: 1951.9973082857143,
+    target: 1881.2958797142858,
+    timestamp: "2026-08-05T23:07:36.307597+00:00",
+    candle_timestamp: 1785959999999,
+    ...overrides,
+  };
+}
 
 function forwardTrialRecord(overrides: Partial<ForwardTrialRecord> = {}): ForwardTrialRecord {
   return {
@@ -80,6 +99,7 @@ function statusExport(overrides: Partial<FactoryLoopStatusExport> = {}): Factory
 describe("FactoryLoopPage", () => {
   beforeEach(() => {
     mockFetchForwardTrial.mockResolvedValue(null);
+    mockFetchTrialEntries.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -206,5 +226,64 @@ describe("FactoryLoopPage", () => {
     render(await FactoryLoopPage());
 
     expect(screen.queryByTestId("forward-trial-table")).not.toBeInTheDocument();
+  });
+
+  // CC-1 directive, "Show real trial-entry activity on /factory-loop": a
+  // Trial ADMISSION (status=="OPEN") is not the same real fact as a
+  // genuine ENTRY (trial_entries.json, /signals' own real data) --
+  // reusing fetchTrialEntries here, not a second read of the same file.
+  it("shows a real OPEN position, not just admission status, when a matching trial_entries.json record exists", async () => {
+    mockFetchGraveyard.mockResolvedValue([]);
+    mockFetchFactoryLoopStatus.mockResolvedValue(
+      statusExport({ forward_trial: { count: 1, by_origin: { adam: 1, eve: 0, repaired: 0 }, unmeasurable_count: 0 } })
+    );
+    mockFetchAgentPerformance.mockResolvedValue(null);
+    mockFetchForwardTrial.mockResolvedValue([forwardTrialRecord()]);
+    mockFetchTrialEntries.mockResolvedValue({
+      schema_version: 1,
+      last_updated: "2026-08-05T23:10:08+00:00",
+      entries: [trialEntry({ trial_id: "774476ca-8a12-453d-955b-52b8abfc294a", direction: "SHORT", entry_price: 1916.646594 })],
+    });
+
+    render(await FactoryLoopPage());
+
+    const row = screen.getByTestId("forward-trial-row");
+    const position = screen.getByTestId("forward-trial-position");
+    expect(position).toHaveTextContent("OPEN SHORT @ 1916.6466");
+    // The pre-existing projection column must stay visible alongside it,
+    // not be replaced (item 1c).
+    expect(row).toHaveTextContent("40.1 years");
+  });
+
+  it("shows 'waiting' for an admission with no matching trial_entries.json record, never fabricating a position", async () => {
+    mockFetchGraveyard.mockResolvedValue([]);
+    mockFetchFactoryLoopStatus.mockResolvedValue(
+      statusExport({ forward_trial: { count: 1, by_origin: { adam: 1, eve: 0, repaired: 0 }, unmeasurable_count: 0 } })
+    );
+    mockFetchAgentPerformance.mockResolvedValue(null);
+    mockFetchForwardTrial.mockResolvedValue([forwardTrialRecord()]);
+    mockFetchTrialEntries.mockResolvedValue({ schema_version: 1, last_updated: "x", entries: [] });
+
+    render(await FactoryLoopPage());
+
+    expect(screen.getByTestId("forward-trial-position")).toHaveTextContent("Waiting");
+  });
+
+  it("never lets a DIFFERENT trial's real entry bleed onto an unrelated admission's row", async () => {
+    mockFetchGraveyard.mockResolvedValue([]);
+    mockFetchFactoryLoopStatus.mockResolvedValue(
+      statusExport({ forward_trial: { count: 1, by_origin: { adam: 1, eve: 0, repaired: 0 }, unmeasurable_count: 0 } })
+    );
+    mockFetchAgentPerformance.mockResolvedValue(null);
+    mockFetchForwardTrial.mockResolvedValue([forwardTrialRecord({ trial_id: "AAAA" })]);
+    mockFetchTrialEntries.mockResolvedValue({
+      schema_version: 1,
+      last_updated: "x",
+      entries: [trialEntry({ trial_id: "BBBB-different-trial" })],
+    });
+
+    render(await FactoryLoopPage());
+
+    expect(screen.getByTestId("forward-trial-position")).toHaveTextContent("Waiting");
   });
 });

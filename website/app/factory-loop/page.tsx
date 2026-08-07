@@ -1,6 +1,7 @@
 import FactoryLoopDiagram from "@/components/FactoryLoopDiagram";
 import PageHeader from "@/components/PageHeader";
-import { fetchAgentPerformance, fetchFactoryLoopStatus, fetchForwardTrial, fetchGraveyard } from "@/lib/data";
+import { fetchAgentPerformance, fetchFactoryLoopStatus, fetchForwardTrial, fetchGraveyard, fetchTrialEntries } from "@/lib/data";
+import type { TrialEntry } from "@/lib/types";
 
 export const revalidate = 300;
 
@@ -17,12 +18,34 @@ export const metadata = {
 // now, independent of whether item 9's aggregate export has real non-zero
 // data yet, as long as it states plainly what's live vs. designed-not-yet-
 // populated -- never implying more exists than does.
+// CC-1 directive, "Show real trial-entry activity on /factory-loop": a
+// Trial ADMISSION (forward_trial.json's own status=="OPEN") is not the
+// same real-world fact as a genuine Forward Trial ENTRY (trial_entries.json,
+// already correctly surfaced on /signals) -- see nero_core/execution/
+// export_trial_entries.py's own module docstring for the confirmed,
+// precise distinction (10 admissions on file, only 1 has ever produced a
+// real entry). Reuses fetchTrialEntries() unchanged -- the exact same
+// function /signals already calls -- rather than a second, independently-
+// maintained read of the same file, so the two pages can never disagree
+// about which admissions have a real position.
+function latestEntryByTrialId(entries: TrialEntry[]): Map<string, TrialEntry> {
+  const byTrial = new Map<string, TrialEntry>();
+  for (const entry of entries) {
+    const existing = byTrial.get(entry.trial_id);
+    if (!existing || new Date(entry.timestamp).getTime() > new Date(existing.timestamp).getTime()) {
+      byTrial.set(entry.trial_id, entry);
+    }
+  }
+  return byTrial;
+}
+
 export default async function FactoryLoopPage() {
-  const [graveyard, factoryLoopStatus, agentPerformance, forwardTrialRecords] = await Promise.all([
+  const [graveyard, factoryLoopStatus, agentPerformance, forwardTrialRecords, trialEntriesExport] = await Promise.all([
     fetchGraveyard(),
     fetchFactoryLoopStatus(),
     fetchAgentPerformance(),
     fetchForwardTrial(),
+    fetchTrialEntries(),
   ]);
 
   const graveyardCount = graveyard?.length ?? 0;
@@ -31,6 +54,7 @@ export default async function FactoryLoopPage() {
   const repairChainCount = factoryLoopStatus?.repair.count ?? 0;
   const statusIsLive = factoryLoopStatus !== null;
   const openTrialRecords = (forwardTrialRecords ?? []).filter((r) => r.status === "OPEN");
+  const entryByTrialId = latestEntryByTrialId(trialEntriesExport?.entries ?? []);
 
   const adamSurvived = agentPerformance?.cumulative.survived ?? 0;
   const adamPromisingWatchlist = agentPerformance?.cumulative.promising_watchlist ?? 0;
@@ -153,18 +177,31 @@ export default async function FactoryLoopPage() {
                   <th className="pr-3 py-1">Hypothesis</th>
                   <th className="pr-3 py-1">Origin</th>
                   <th className="pr-3 py-1">Entry verdict</th>
+                  <th className="pr-3 py-1">Position</th>
                   <th className="py-1">Projected time to measure</th>
                 </tr>
               </thead>
               <tbody>
-                {openTrialRecords.map((r) => (
-                  <tr key={r.trial_id} data-testid="forward-trial-row" className="border-b border-gold/10">
-                    <td className="pr-3 py-1 text-parchment">{r.source_hypothesis_ref.hypothesis_name}</td>
-                    <td className="pr-3 py-1 text-muted">{r.source_hypothesis_ref.origin_agent}</td>
-                    <td className="pr-3 py-1 text-muted">{String(r.entry_verdict.verdict ?? "—")}</td>
-                    <td className="py-1 text-muted">{r.projected_time_to_min_sample_label}</td>
-                  </tr>
-                ))}
+                {openTrialRecords.map((r) => {
+                  const entry = entryByTrialId.get(r.trial_id);
+                  return (
+                    <tr key={r.trial_id} data-testid="forward-trial-row" className="border-b border-gold/10">
+                      <td className="pr-3 py-1 text-parchment">{r.source_hypothesis_ref.hypothesis_name}</td>
+                      <td className="pr-3 py-1 text-muted">{r.source_hypothesis_ref.origin_agent}</td>
+                      <td className="pr-3 py-1 text-muted">{String(r.entry_verdict.verdict ?? "—")}</td>
+                      <td className="pr-3 py-1" data-testid="forward-trial-position">
+                        {entry ? (
+                          <span className={entry.direction === "LONG" ? "text-teal" : "text-loss"}>
+                            OPEN {entry.direction ?? ""} @ {entry.entry_price?.toFixed(4) ?? "n/a"}
+                          </span>
+                        ) : (
+                          <span className="text-muted">Waiting — no entry yet</span>
+                        )}
+                      </td>
+                      <td className="py-1 text-muted">{r.projected_time_to_min_sample_label}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
