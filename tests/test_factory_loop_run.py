@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 import pandas as pd
 
@@ -301,6 +301,99 @@ class AdvanceOpenTrialsTest(unittest.TestCase):
         mock_fetch.assert_not_called()
         self.assertFalse(outcomes[0].ticked)
         self.assertIn("no hypothesis record found", outcomes[0].reason)
+
+    def test_repaired_record_resolves_via_stripped_original_hypothesis_name(self) -> None:
+        # CC-1 DIRECTIVE (2026-08-07, Part A) regression guard: a repaired
+        # record's real hypothesis_name is "<original>__REPAIR_<attempt_id>"
+        # (repair_to_trial.admit_repair_to_trial's own construction) and its
+        # source_hypothesis_ref carries origin=ORIGIN_REPAIRED (set
+        # unconditionally by trial.admit_to_trial) -- hypothesis_lookup itself
+        # is keyed by the ORIGINAL, unsuffixed name (Adam/Eve's own raw
+        # candidate names), exactly as it would really be built from
+        # load_adam_candidates()/load_eve_candidates(). Before this fix, this
+        # record would have been reported "no hypothesis record found" and
+        # never ticked at all, forever.
+        candles = pd.DataFrame({
+            "date": pd.date_range("2026-01-01", periods=60, freq="4h", tz="UTC"),
+            "open": [100.0] * 60, "high": [101.0] * 60, "low": [99.0] * 60, "close": [100.0] * 60, "volume": [10.0] * 60,
+        })
+        records = [{
+            "trial_id": "t5", "status": trial.STATUS_OPEN,
+            "source_hypothesis_ref": {
+                "origin": trial.ORIGIN_REPAIRED, "hypothesis_name": "ORIGINAL_HYP__REPAIR_A1",
+                "repair_chain_id": "chain-1", "attempt_id": "A1",
+            },
+        }]
+        hypothesis_lookup = {"ORIGINAL_HYP": {"asset": "BTC", "timeframe": "4h", "structured_entry_rule": VALID_ENTRY, "structured_exit_plan": VALID_EXIT}}
+        with patch("tools.factory_loop_run.fetch_timeframe_candles", return_value=(candles, "NATIVE: test")) as mock_fetch, \
+             patch("nero_core.research_agent.trial.run_forward_tick") as mock_tick, \
+             patch("nero_core.research_agent.trial.compute_forward_verdict", return_value=None):
+            mock_tick.return_value = type("R", (), {"signal_type": "NO_TRADE"})()
+            outcomes = runner.advance_open_trials(records, NOW, live=True, hypothesis_lookup=hypothesis_lookup)
+
+        mock_fetch.assert_called_once_with(ANY, "BTC", "4h")
+        self.assertTrue(outcomes[0].ticked)
+        self.assertIn("PENDING_FORWARD_DATA", outcomes[0].reason)
+        # run_forward_tick must receive the RESOLVED hypothesis dict (asset/
+        # timeframe/structured fields), not an empty one -- proves the fix
+        # actually reaches the tick, not just avoids the "not found" branch.
+        mock_tick.assert_called_once_with("t5", hypothesis_lookup["ORIGINAL_HYP"], candles, NOW)
+
+    def test_repaired_record_advances_open_to_survived_exactly_like_a_fresh_record(self) -> None:
+        # A3: the repaired record's forward ticks must advance it through the
+        # SAME real status machine a fresh record uses -- trial.py's own
+        # real model is OPEN -> (SURVIVED_TRIAL | FAILED_TRIAL), a 2-outcome
+        # terminal transition (see trial.py:74-76: STATUS_OPEN,
+        # STATUS_SURVIVED_TRIAL, STATUS_FAILED_TRIAL -- there is no separate
+        # EARLY_POSITIVE/PROMISING status constant in the real code). This
+        # proves that once compute_forward_verdict returns a real verdict,
+        # update_trial_status is invoked with the correct terminal status for
+        # a repaired-origin record exactly as it would be for a fresh one.
+        candles = pd.DataFrame({
+            "date": pd.date_range("2026-01-01", periods=60, freq="4h", tz="UTC"),
+            "open": [100.0] * 60, "high": [101.0] * 60, "low": [99.0] * 60, "close": [100.0] * 60, "volume": [10.0] * 60,
+        })
+        records = [{
+            "trial_id": "t6", "status": trial.STATUS_OPEN,
+            "source_hypothesis_ref": {
+                "origin": trial.ORIGIN_REPAIRED, "hypothesis_name": "ORIGINAL_HYP__REPAIR_A2",
+                "repair_chain_id": "chain-1", "attempt_id": "A2",
+            },
+        }]
+        hypothesis_lookup = {"ORIGINAL_HYP": {"asset": "BTC", "timeframe": "4h", "structured_entry_rule": VALID_ENTRY, "structured_exit_plan": VALID_EXIT}}
+        with patch("tools.factory_loop_run.fetch_timeframe_candles", return_value=(candles, "NATIVE: test")), \
+             patch("nero_core.research_agent.trial.run_forward_tick") as mock_tick, \
+             patch("nero_core.research_agent.trial.compute_forward_verdict", return_value={"verdict": "SURVIVED_TRIAL", "reason": "2x MIN_SAMPLE_SIZE reached, positive"}), \
+             patch("nero_core.research_agent.trial.update_trial_status") as mock_update_status:
+            mock_tick.return_value = type("R", (), {"signal_type": "EXIT"})()
+            outcomes = runner.advance_open_trials(records, NOW, live=True, hypothesis_lookup=hypothesis_lookup)
+
+        mock_update_status.assert_called_once_with("t6", trial.STATUS_SURVIVED_TRIAL)
+        self.assertTrue(outcomes[0].ticked)
+        self.assertIn("RESOLVED -> SURVIVED_TRIAL", outcomes[0].reason)
+
+    def test_repaired_record_can_resolve_to_failed_trial_exactly_like_a_fresh_record(self) -> None:
+        candles = pd.DataFrame({
+            "date": pd.date_range("2026-01-01", periods=60, freq="4h", tz="UTC"),
+            "open": [100.0] * 60, "high": [101.0] * 60, "low": [99.0] * 60, "close": [100.0] * 60, "volume": [10.0] * 60,
+        })
+        records = [{
+            "trial_id": "t7", "status": trial.STATUS_OPEN,
+            "source_hypothesis_ref": {
+                "origin": trial.ORIGIN_REPAIRED, "hypothesis_name": "ORIGINAL_HYP__REPAIR_A3",
+                "repair_chain_id": "chain-1", "attempt_id": "A3",
+            },
+        }]
+        hypothesis_lookup = {"ORIGINAL_HYP": {"asset": "BTC", "timeframe": "4h", "structured_entry_rule": VALID_ENTRY, "structured_exit_plan": VALID_EXIT}}
+        with patch("tools.factory_loop_run.fetch_timeframe_candles", return_value=(candles, "NATIVE: test")), \
+             patch("nero_core.research_agent.trial.run_forward_tick") as mock_tick, \
+             patch("nero_core.research_agent.trial.compute_forward_verdict", return_value={"verdict": "DIED", "reason": "negative expectancy at 2x MIN_SAMPLE_SIZE"}), \
+             patch("nero_core.research_agent.trial.update_trial_status") as mock_update_status:
+            mock_tick.return_value = type("R", (), {"signal_type": "EXIT"})()
+            outcomes = runner.advance_open_trials(records, NOW, live=True, hypothesis_lookup=hypothesis_lookup)
+
+        mock_update_status.assert_called_once_with("t7", trial.STATUS_FAILED_TRIAL)
+        self.assertIn("RESOLVED -> FAILED_TRIAL", outcomes[0].reason)
 
 
 class BuildReportTest(unittest.TestCase):

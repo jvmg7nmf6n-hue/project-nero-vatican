@@ -315,10 +315,42 @@ def advance_open_trials(
     fields via `hypothesis_lookup` (built by the caller from the SAME
     Adam/Eve candidate sources load_adam_candidates/load_eve_candidates
     already read) keyed by hypothesis_name, rather than expecting the
-    Trial record to carry its own copy. A repaired-origin record's real
-    hypothesis_name includes a `__REPAIR_<attempt_id>` suffix that will never
-    match either lookup -- reported as a real, scoped limitation (0 repaired
-    admissions exist yet to be affected by it), not silently papered over."""
+    Trial record to carry its own copy.
+
+    CC-1 DIRECTIVE FIX (2026-08-07, Part A): a repaired-origin record's real
+    hypothesis_name carries a `"<original>__REPAIR_<attempt_id>"` suffix
+    (`repair_to_trial.admit_repair_to_trial`'s own
+    `f"{state['original_hypothesis_name']}__REPAIR_{attempt_id}"` construction)
+    that never matches `hypothesis_lookup`'s keys, which are always raw,
+    unsuffixed Adam/Eve candidate names. Fixed by detecting
+    `source_hypothesis_ref["origin"] == trial.ORIGIN_REPAIRED` (set
+    unconditionally by `trial.admit_to_trial` for every repaired record, the
+    authoritative signal -- not a string-pattern guess) and looking up the
+    ORIGINAL hypothesis name instead, recovered by splitting on the exact
+    same `"__REPAIR_"` marker the admission path itself uses. This resolves
+    correctly because both `load_adam_candidates`/`load_eve_candidates`
+    read from append-only stores (`agent_hypotheses.json`/
+    `eve_hypotheses.json`) that are never pruned when a hypothesis dies --
+    the ancestor a repair is based on is always still present. This is the
+    SAME `hypothesis_lookup` a fresh record already resolves through, no
+    new resolution pathway.
+
+    ONE REAL, NOT-YET-FIXED GAP, honestly scoped rather than silently
+    covered: `tools/repair_chain_launch.py`'s own `EVENT_ATTEMPT_LAUNCHED`
+    event never captures the modification's own `asset`/`timeframe` fields
+    (only `structured_entry_rule`/`structured_exit_plan`/`modification_type`)
+    -- for the common case (asset/timeframe unchanged from the original,
+    required for every modification_type except `asset_timeframe_change`,
+    per repair_lab.py's own `validate_modification`) this fallback to the
+    ORIGINAL hypothesis's asset/timeframe is correct. For the rarer
+    `asset_timeframe_change` case it would silently resolve to the WRONG
+    (original, pre-change) asset/timeframe. Confirmed via real data
+    (`docs/site_data/repair_attempts.json` does not exist -- zero repair
+    attempts of any kind have ever been launched in production) that this
+    edge case has zero real instances today; fixing it would require
+    changing the launch event's own write schema, a separate, larger change
+    than this directive's own "small, precise, no new resolution pathway"
+    scope."""
     outcomes: list[ForwardTickOutcome] = []
     hypothesis_lookup = hypothesis_lookup or {}
     open_records = [r for r in forward_trial_records if r.get("status") == trial.STATUS_OPEN]
@@ -332,13 +364,16 @@ def advance_open_trials(
     for r in open_records:
         ref = r.get("source_hypothesis_ref") or {}
         name = ref.get("hypothesis_name", "")
-        hypothesis = hypothesis_lookup.get(name)
+        lookup_name = name
+        if ref.get("origin") == trial.ORIGIN_REPAIRED and "__REPAIR_" in name:
+            lookup_name = name.rsplit("__REPAIR_", 1)[0]
+        hypothesis = hypothesis_lookup.get(lookup_name)
         asset, timeframe = (hypothesis or {}).get("asset"), (hypothesis or {}).get("timeframe")
         if not asset or not timeframe:
             outcomes.append(ForwardTickOutcome(
                 r["trial_id"], name, False,
-                f"no hypothesis record found for {name!r} in the current Adam/Eve candidate lookup -- cannot "
-                f"resolve asset/timeframe (repaired-origin lineage lookup is a known, real, not-yet-supported gap)",
+                f"no hypothesis record found for {lookup_name!r} (resolved from {name!r}) in the current "
+                f"Adam/Eve candidate lookup -- cannot resolve asset/timeframe",
             ))
             continue
         try:
