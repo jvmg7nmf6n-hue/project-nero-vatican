@@ -18,6 +18,7 @@ import type {
   QuantMetricsExport,
   RepairCandidate,
   SiteSummary,
+  MacroReadsExport,
   StatsExport,
   StrategiesExport,
   StrategyDescriptions,
@@ -158,6 +159,11 @@ export function fetchForwardTrial(): Promise<ForwardTrialRecord[] | null> {
 // the export has run at least once.
 export function fetchTrialEntries(): Promise<TrialEntriesExport | null> {
   return fetchJson<TrialEntriesExport>("trial_entries.json");
+}
+
+// CC-1 Part E: Bellwether's own macro reads + conflict-flag audit trail.
+export function fetchMacroReads(): Promise<MacroReadsExport | null> {
+  return fetchJson<MacroReadsExport>("macro_reads.json");
 }
 
 // CC-1 Master Directive, Phase 2.1: Eve's own three fetchable files -- see

@@ -29,6 +29,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/signals" className="hover:text-parchment">
                 Signals
               </Link>
+              <Link href="/macro" className="hover:text-parchment">
+                Macro
+              </Link>
               <Link href="/quant" className="hover:text-parchment">
                 Quant
               </Link>

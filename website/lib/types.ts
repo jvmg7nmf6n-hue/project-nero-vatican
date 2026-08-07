@@ -593,6 +593,52 @@ export interface TrialEntry {
   candle_timestamp: number;
 }
 
+// CC-1 Part E: nero_core/execution/bellwether_overlay.py::export_macro_reads_json's
+// own output shape -- one row per (run_id, asset) Bellwether run, plus every
+// ORDERFLOW_IMBALANCE/BTC ENTRY ever evaluated for a macro conflict.
+export type DataProvenanceLabel = "real" | "synthetic" | "mixed" | "unavailable";
+
+export interface MacroReadRecord {
+  run_id: string;
+  timestamp: string;
+  asset: "GOLD" | "BITCOIN";
+  bias: string;
+  confidence: number;
+  agreement: number;
+  coverage: number;
+  probability_up: number;
+  provenance_breakdown: Record<string, DataProvenanceLabel>;
+  reasoning: string;
+  risks: string[];
+  alternative_scenarios: Array<{
+    name: string;
+    probability: number;
+    gold_bias: string;
+    btc_bias: string;
+    narrative: string;
+  }>;
+  data_mode: string;
+}
+
+export interface MacroConflictFlagRecord {
+  execution_log_id: number;
+  macro_read_id: number | null;
+  strategy: string;
+  asset: string;
+  entry_direction: string | null;
+  conflicted: boolean;
+  status: "evaluated" | "insufficient_data" | "circuit_breaker_open";
+  reason: string;
+  evaluated_at: string;
+}
+
+export interface MacroReadsExport {
+  schema_version: number;
+  last_updated: string;
+  macro_reads: MacroReadRecord[];
+  conflict_flags: MacroConflictFlagRecord[];
+}
+
 export interface TrialEntriesExport {
   schema_version: number;
   last_updated: string;
