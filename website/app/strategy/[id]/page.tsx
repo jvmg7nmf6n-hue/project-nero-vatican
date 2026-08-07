@@ -36,6 +36,7 @@ import { findQuantMetricsForAsset } from "@/lib/quantPanel";
 import { deriveSignalState, SIGNAL_STATE_LABELS } from "@/lib/signalState";
 import { findEntryByStrategyId } from "@/lib/strategyId";
 import { classifyTier } from "@/lib/tier";
+import { computeTradeFrequency } from "@/lib/tradeFrequency";
 import { buildTradeHistory, type ResolvedTrade, type TradeResult } from "@/lib/tradeHistory";
 import { DEFAULT_BACKTEST_EVALUATION, type StrategyChatContext } from "@/lib/types";
 
@@ -117,6 +118,7 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
   const trades = buildTradeHistory(entry, ledgerExport?.rows ?? []);
   const hasResolvedTrades = (statsRow?.resolved_trades ?? 0) > 0;
   const equityCurve = hasResolvedTrades ? buildEquityCurve(trades) : null;
+  const tradeFrequency = computeTradeFrequency(ledgerExport?.rows ?? [], entry.name, entry.version, entry.asset);
 
   // Pair strategies (BTC-ETH, GOLD-SILVER) have no single price series -- Day 1's
   // export pipeline deliberately skips them (see nero_core/execution/
@@ -213,6 +215,27 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
             {FALLBACK_DESCRIPTION}
           </p>
         )}
+        {description?.entry_rule || description?.exit_rule ? (
+          <div data-testid="strategy-rules" className="mt-4 max-w-2xl grid gap-3 sm:grid-cols-2">
+            {description.entry_rule ? (
+              <div className="rounded-lg border border-gold/30 bg-ink p-3">
+                <h3 className="text-xs uppercase tracking-wide text-muted mb-1">Entry rule</h3>
+                <p className="text-sm text-parchment">{description.entry_rule}</p>
+              </div>
+            ) : null}
+            {description.exit_rule ? (
+              <div className="rounded-lg border border-gold/30 bg-ink p-3">
+                <h3 className="text-xs uppercase tracking-wide text-muted mb-1">Exit rule</h3>
+                <p className="text-sm text-parchment">{description.exit_rule}</p>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <p data-testid="strategy-rules-fallback" className="mt-4 max-w-2xl text-muted text-sm">
+            The exact entry/exit rule detail for this strategy hasn&apos;t been transcribed onto this page yet
+            &mdash; see the mechanism description above for the general approach.
+          </p>
+        )}
       </section>
 
       {!isPairAsset ? (
@@ -253,6 +276,30 @@ export default async function StrategyDetailPage({ params }: { params: { id: str
               value={statsRow.expectancy_r !== null ? statsRow.expectancy_r.toFixed(3) : "n/a"}
             />
           </div>
+        )}
+      </section>
+
+      <section>
+        <h2 className="font-serif text-xl text-parchment mb-4">Trade frequency</h2>
+        {tradeFrequency.sinceIso === null ? (
+          <p data-testid="frequency-unknown" className="text-muted text-sm">
+            No ledger history exists yet for this configuration.
+          </p>
+        ) : tradeFrequency.ratePerYear !== null ? (
+          <p data-testid="frequency-measured" className="text-parchment text-sm">
+            Real measured rate: <strong>{tradeFrequency.ratePerYear.toFixed(1)} trades/year</strong>, extrapolated
+            from {tradeFrequency.entryCount} real entries over {tradeFrequency.spanDays!.toFixed(1)} real days
+            (since {formatTimestamp(tradeFrequency.sinceIso)}) &mdash; a short observation window, not yet a
+            stable long-run average.
+          </p>
+        ) : (
+          <p data-testid="frequency-zero" className="text-muted text-sm">
+            {tradeFrequency.entryCount} trade{tradeFrequency.entryCount === 1 ? "" : "s"} since going live on{" "}
+            {formatTimestamp(tradeFrequency.sinceIso)}
+            {tradeFrequency.entryCount === 0
+              ? " — not enough real activity yet to estimate a frequency."
+              : " — a single entry isn't enough to estimate a rate yet."}
+          </p>
         )}
       </section>
 

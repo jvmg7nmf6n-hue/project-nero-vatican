@@ -221,6 +221,80 @@ describe("StrategyDetailPage", () => {
     expect(screen.getByText("A written description for this strategy hasn't been added yet.")).toBeInTheDocument();
   });
 
+  // CC-1 directive, "every strategy page must show entry/exit rules and
+  // trade frequency": entry_rule/exit_rule are hand-transcribed, real,
+  // Python-source-derived fields on strategy_descriptions.json -- optional,
+  // so a family without them yet must show an honest fallback, never a
+  // fabricated rule.
+  it("shows the real, hand-transcribed entry and exit rules when present", async () => {
+    setupMocks({
+      descriptions: {
+        BREAKOUT_MOMENTUM: {
+          mechanism: "Test mechanism.",
+          verification_note: "Test note.",
+          entry_rule: "Close breaks above the prior 20-bar high, AND closes above its 200-period moving average.",
+          exit_rule: "A stop-loss 1.2x ATR(14) below entry, or a fixed target at 1.25R.",
+        },
+      },
+    });
+
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    const rules = screen.getByTestId("strategy-rules");
+    expect(rules).toHaveTextContent("Close breaks above the prior 20-bar high");
+    expect(rules).toHaveTextContent("A stop-loss 1.2x ATR(14) below entry");
+    expect(screen.queryByTestId("strategy-rules-fallback")).not.toBeInTheDocument();
+  });
+
+  it("shows an honest fallback, never a fabricated rule, when a family's description exists but has no entry/exit rule yet", async () => {
+    setupMocks(); // DEFAULT_DESCRIPTIONS has mechanism/verification_note only, no entry_rule/exit_rule.
+
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    expect(screen.getByTestId("strategy-rules-fallback")).toBeInTheDocument();
+    expect(screen.queryByTestId("strategy-rules")).not.toBeInTheDocument();
+  });
+
+  // CC-1 directive item 2c: real trade frequency, computed from ledger_full.json
+  // (already fetched on this page), never fabricated for a zero-trade strategy.
+  it("shows an honest zero-trade state with a real 'since' date, never a fabricated frequency", async () => {
+    setupMocks({
+      ledger: {
+        schema_version: 1, last_updated: "x",
+        rows: [ledgerRow({ signal_type: "NO_TRADE", timestamp: "2026-07-31T01:06:07+00:00", entry_price: null })],
+      },
+    });
+
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    const zero = screen.getByTestId("frequency-zero");
+    expect(zero).toHaveTextContent("0 trades since going live on");
+    expect(zero).toHaveTextContent("not enough real activity yet");
+  });
+
+  it("shows a real measured trades/year rate, clearly labeled as a short real window, from 2+ real entries", async () => {
+    setupMocks({
+      ledger: {
+        schema_version: 1, last_updated: "x",
+        rows: [
+          ledgerRow({ signal_type: "ENTRY", timestamp: "2026-07-29T14:28:20+00:00" }),
+          ledgerRow({ signal_type: "ENTRY", timestamp: "2026-08-07T16:06:11+00:00" }),
+        ],
+      },
+    });
+
+    const jsx = await StrategyDetailPage({ params: { id: STRATEGY_ID } });
+    render(jsx);
+
+    const measured = screen.getByTestId("frequency-measured");
+    expect(measured).toHaveTextContent("trades/year");
+    expect(measured).toHaveTextContent("2 real entries");
+    expect(measured).toHaveTextContent("short observation window");
+  });
+
   it("shows a no-source-report message when source_report is null", async () => {
     setupMocks({
       strategies: {

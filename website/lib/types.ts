@@ -102,9 +102,18 @@ export interface StrategyRosterEntry {
 // (the family name, e.g. "PEAD"), one entry per family, not per individual
 // config/version/asset. verification_note is written honestly per family -- a
 // weak or thin edge-over-random result says so, never spun to sound stronger.
+// entry_rule/exit_rule (CC-1 directive, "every strategy page must show entry/
+// exit rules and trade frequency"): optional, hand-transcribed verbatim from
+// the real nero_core/strategies/*.py source (exact numeric parameters --
+// thresholds, multiples, periods) for families where this has been done so
+// far. Absent for a family means "not yet added," never a fabricated blank --
+// `mechanism` above (already prose, already real, just without exact numbers)
+// stays the fallback for those.
 export interface StrategyDescription {
   mechanism: string;
   verification_note: string;
+  entry_rule?: string;
+  exit_rule?: string;
 }
 
 export type StrategyDescriptions = Record<string, StrategyDescription>;
@@ -674,6 +683,12 @@ export interface EveRawHypothesis {
   mechanism?: string;
   asset?: string;
   timeframe?: string;
+  // CC-1 directive, "every strategy page must show entry/exit rules and
+  // trade frequency": the real DSL rule fields, already present on every
+  // committed eve_hypotheses.json record, just not read by this site until
+  // now -- see lib/ruleTranslation.ts.
+  structured_entry_rule?: Record<string, unknown> | null;
+  structured_exit_plan?: Record<string, unknown> | null;
 }
 
 export interface EveHypothesisRecord {

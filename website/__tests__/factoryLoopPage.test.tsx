@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import FactoryLoopPage from "@/app/factory-loop/page";
 import * as data from "@/lib/data";
-import type { AgentPerformanceExport, FactoryLoopStatusExport, ForwardTrialRecord, GraveyardEntry, TrialEntry } from "@/lib/types";
+import type { AgentHypothesis, AgentPerformanceExport, FactoryLoopStatusExport, ForwardTrialRecord, GraveyardEntry, TrialEntry } from "@/lib/types";
 
 jest.mock("@/lib/data");
 
@@ -10,6 +10,8 @@ const mockFetchFactoryLoopStatus = jest.mocked(data.fetchFactoryLoopStatus);
 const mockFetchAgentPerformance = jest.mocked(data.fetchAgentPerformance);
 const mockFetchForwardTrial = jest.mocked(data.fetchForwardTrial);
 const mockFetchTrialEntries = jest.mocked(data.fetchTrialEntries);
+const mockFetchAgentHypotheses = jest.mocked(data.fetchAgentHypotheses);
+const mockFetchEveHypotheses = jest.mocked(data.fetchEveHypotheses);
 
 function trialEntry(overrides: Partial<TrialEntry> = {}): TrialEntry {
   return {
@@ -100,6 +102,8 @@ describe("FactoryLoopPage", () => {
   beforeEach(() => {
     mockFetchForwardTrial.mockResolvedValue(null);
     mockFetchTrialEntries.mockResolvedValue(null);
+    mockFetchAgentHypotheses.mockResolvedValue(null);
+    mockFetchEveHypotheses.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -285,5 +289,47 @@ describe("FactoryLoopPage", () => {
     render(await FactoryLoopPage());
 
     expect(screen.getByTestId("forward-trial-position")).toHaveTextContent("Waiting");
+  });
+
+  // CC-1 directive, "every strategy page must show entry/exit rules and
+  // trade frequency", item 3c: a real structured_entry_rule/
+  // structured_exit_plan, cross-referenced from agent_hypotheses.json by
+  // hypothesis name, must render its real human-readable translation.
+  it("shows the real translated entry/exit rule for a Forward Trial hypothesis, cross-referenced by name", async () => {
+    mockFetchGraveyard.mockResolvedValue([]);
+    mockFetchFactoryLoopStatus.mockResolvedValue(
+      statusExport({ forward_trial: { count: 1, by_origin: { adam: 1, eve: 0, repaired: 0 }, unmeasurable_count: 0 } })
+    );
+    mockFetchAgentPerformance.mockResolvedValue(null);
+    mockFetchForwardTrial.mockResolvedValue([forwardTrialRecord({ trial_id: "T1", source_hypothesis_ref: { origin: "fresh", origin_agent: "adam", hypothesis_name: "RSI2_TREND_PULLBACK_PAXG_4H", session_id_or_run_ref: null } })]);
+    const hyp: AgentHypothesis = {
+      scan_finding: "x", scan_finding_type: "x", hypothesis_name: "RSI2_TREND_PULLBACK_PAXG_4H", mechanism: "x",
+      entry_rule: "x", exit_rule: "x", stop_rule: "x", asset: "PAXG", timeframe: "4h",
+      differs_from_graveyard: "x", expected_frequency_claim: null, generated_at: "x", cost_usd: 0, source: "scanner",
+      structured_entry_rule: { conditions: [{ field: "rsi14", op: "lt", value: 30 }] },
+      structured_exit_plan: { stop_atr_multiple: 1.5, target_r_multiple: 2.0 },
+    };
+    mockFetchAgentHypotheses.mockResolvedValue([hyp]);
+
+    render(await FactoryLoopPage());
+
+    const rulesRow = screen.getByTestId("forward-trial-rules-row");
+    expect(rulesRow).toHaveTextContent("Enter when 14-period RSI is below 30.");
+    expect(rulesRow).toHaveTextContent("a stop-loss 1.5x ATR(14) from entry");
+  });
+
+  it("shows an honest 'no rule available' note, never a fabricated one, when no matching hypothesis record exists", async () => {
+    mockFetchGraveyard.mockResolvedValue([]);
+    mockFetchFactoryLoopStatus.mockResolvedValue(
+      statusExport({ forward_trial: { count: 1, by_origin: { adam: 1, eve: 0, repaired: 0 }, unmeasurable_count: 0 } })
+    );
+    mockFetchAgentPerformance.mockResolvedValue(null);
+    mockFetchForwardTrial.mockResolvedValue([forwardTrialRecord()]);
+    mockFetchAgentHypotheses.mockResolvedValue([]);
+    mockFetchEveHypotheses.mockResolvedValue([]);
+
+    render(await FactoryLoopPage());
+
+    expect(screen.getByTestId("forward-trial-rules-row")).toHaveTextContent("No machine-checkable entry/exit rule available");
   });
 });

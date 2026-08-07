@@ -1,6 +1,17 @@
+import { Fragment } from "react";
 import FactoryLoopDiagram from "@/components/FactoryLoopDiagram";
 import PageHeader from "@/components/PageHeader";
-import { fetchAgentPerformance, fetchFactoryLoopStatus, fetchForwardTrial, fetchGraveyard, fetchTrialEntries } from "@/lib/data";
+import {
+  fetchAgentHypotheses,
+  fetchAgentPerformance,
+  fetchEveHypotheses,
+  fetchFactoryLoopStatus,
+  fetchForwardTrial,
+  fetchGraveyard,
+  fetchTrialEntries,
+} from "@/lib/data";
+import { buildHypothesisRuleLookup } from "@/lib/hypothesisRules";
+import { translateEntryRule, translateExitPlan } from "@/lib/ruleTranslation";
 import type { TrialEntry } from "@/lib/types";
 
 export const revalidate = 300;
@@ -40,13 +51,16 @@ function latestEntryByTrialId(entries: TrialEntry[]): Map<string, TrialEntry> {
 }
 
 export default async function FactoryLoopPage() {
-  const [graveyard, factoryLoopStatus, agentPerformance, forwardTrialRecords, trialEntriesExport] = await Promise.all([
-    fetchGraveyard(),
-    fetchFactoryLoopStatus(),
-    fetchAgentPerformance(),
-    fetchForwardTrial(),
-    fetchTrialEntries(),
-  ]);
+  const [graveyard, factoryLoopStatus, agentPerformance, forwardTrialRecords, trialEntriesExport, agentHypotheses, eveHypotheses] =
+    await Promise.all([
+      fetchGraveyard(),
+      fetchFactoryLoopStatus(),
+      fetchAgentPerformance(),
+      fetchForwardTrial(),
+      fetchTrialEntries(),
+      fetchAgentHypotheses(),
+      fetchEveHypotheses(),
+    ]);
 
   const graveyardCount = graveyard?.length ?? 0;
   const forwardTrialCount = factoryLoopStatus?.forward_trial.count ?? 0;
@@ -55,6 +69,12 @@ export default async function FactoryLoopPage() {
   const statusIsLive = factoryLoopStatus !== null;
   const openTrialRecords = (forwardTrialRecords ?? []).filter((r) => r.status === "OPEN");
   const entryByTrialId = latestEntryByTrialId(trialEntriesExport?.entries ?? []);
+  // CC-1 directive, "every strategy page must show entry/exit rules and
+  // trade frequency": Forward Trial's own admission record carries no
+  // structured_entry_rule/structured_exit_plan at all -- the real DSL rule
+  // lives only on the ORIGINAL hypothesis record (agent_hypotheses.json for
+  // Adam, eve_hypotheses.json for Eve), cross-referenced here by name.
+  const hypothesisRules = buildHypothesisRuleLookup(agentHypotheses ?? [], eveHypotheses ?? []);
 
   const adamSurvived = agentPerformance?.cumulative.survived ?? 0;
   const adamPromisingWatchlist = agentPerformance?.cumulative.promising_watchlist ?? 0;
@@ -184,22 +204,39 @@ export default async function FactoryLoopPage() {
               <tbody>
                 {openTrialRecords.map((r) => {
                   const entry = entryByTrialId.get(r.trial_id);
+                  const rules = hypothesisRules.get(r.source_hypothesis_ref.hypothesis_name);
+                  const entryRuleText = rules ? translateEntryRule(rules.structured_entry_rule) : null;
+                  const exitRuleText = rules ? translateExitPlan(rules.structured_exit_plan) : null;
                   return (
-                    <tr key={r.trial_id} data-testid="forward-trial-row" className="border-b border-gold/10">
-                      <td className="pr-3 py-1 text-parchment">{r.source_hypothesis_ref.hypothesis_name}</td>
-                      <td className="pr-3 py-1 text-muted">{r.source_hypothesis_ref.origin_agent}</td>
-                      <td className="pr-3 py-1 text-muted">{String(r.entry_verdict.verdict ?? "—")}</td>
-                      <td className="pr-3 py-1" data-testid="forward-trial-position">
-                        {entry ? (
-                          <span className={entry.direction === "LONG" ? "text-teal" : "text-loss"}>
-                            OPEN {entry.direction ?? ""} @ {entry.entry_price?.toFixed(4) ?? "n/a"}
-                          </span>
-                        ) : (
-                          <span className="text-muted">Waiting — no entry yet</span>
-                        )}
-                      </td>
-                      <td className="py-1 text-muted">{r.projected_time_to_min_sample_label}</td>
-                    </tr>
+                    <Fragment key={r.trial_id}>
+                      <tr data-testid="forward-trial-row" className="border-b border-gold/10">
+                        <td className="pr-3 py-1 text-parchment">{r.source_hypothesis_ref.hypothesis_name}</td>
+                        <td className="pr-3 py-1 text-muted">{r.source_hypothesis_ref.origin_agent}</td>
+                        <td className="pr-3 py-1 text-muted">{String(r.entry_verdict.verdict ?? "—")}</td>
+                        <td className="pr-3 py-1" data-testid="forward-trial-position">
+                          {entry ? (
+                            <span className={entry.direction === "LONG" ? "text-teal" : "text-loss"}>
+                              OPEN {entry.direction ?? ""} @ {entry.entry_price?.toFixed(4) ?? "n/a"}
+                            </span>
+                          ) : (
+                            <span className="text-muted">Waiting — no entry yet</span>
+                          )}
+                        </td>
+                        <td className="py-1 text-muted">{r.projected_time_to_min_sample_label}</td>
+                      </tr>
+                      <tr data-testid="forward-trial-rules-row" className="border-b border-gold/10">
+                        <td colSpan={5} className="pb-2 pt-0 text-xs text-muted">
+                          {entryRuleText || exitRuleText ? (
+                            <>
+                              {entryRuleText ? <div>{entryRuleText}</div> : null}
+                              {exitRuleText ? <div>{exitRuleText}</div> : null}
+                            </>
+                          ) : (
+                            <div>No machine-checkable entry/exit rule available for this hypothesis.</div>
+                          )}
+                        </td>
+                      </tr>
+                    </Fragment>
                   );
                 })}
               </tbody>
