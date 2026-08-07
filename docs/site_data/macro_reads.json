@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-07T04:07:43.007905+00:00",
+  "last_updated": "2026-08-07T09:15:33.499820+00:00",
   "macro_reads": [
     {
       "run_id": "bellwether-overlay-5df6a2126142",
@@ -89,6 +89,112 @@
           "probability": 0.5,
           "gold_bias": "BEARISH",
           "btc_bias": "STRONG_BULLISH",
+          "narrative": "Current drivers persist; net reads play out modestly."
+        },
+        {
+          "name": "Risk-on / easier policy",
+          "probability": 0.25,
+          "gold_bias": "BULLISH",
+          "btc_bias": "STRONG_BULLISH",
+          "narrative": "Softer data + dovish repricing lifts liquidity assets; BTC outperforms."
+        },
+        {
+          "name": "Risk-off / hawkish shock",
+          "probability": 0.25,
+          "gold_bias": "BULLISH",
+          "btc_bias": "BEARISH",
+          "narrative": "Stronger dollar / vol spike; gold gets haven bid, BTC de-risks."
+        }
+      ],
+      "data_mode": "live"
+    },
+    {
+      "run_id": "bellwether-overlay-5e2119b2d877",
+      "timestamp": "2026-08-07T09:15:33.477937+00:00",
+      "asset": "GOLD",
+      "bias": "NEUTRAL",
+      "confidence": 0.291,
+      "agreement": 0.0,
+      "coverage": 0.0,
+      "probability_up": 0.5,
+      "provenance_breakdown": {
+        "news_intelligence": "synthetic",
+        "economic_calendar": "synthetic",
+        "geopolitical": "synthetic",
+        "monetary_policy": "mixed",
+        "liquidity": "mixed",
+        "onchain": "synthetic",
+        "derivatives_etf": "synthetic",
+        "correlation": "synthetic",
+        "historical_analog": "synthetic",
+        "learning": "real",
+        "gold_analysis": "mixed",
+        "bitcoin_analysis": "mixed",
+        "scenario": "mixed",
+        "risk": "mixed",
+        "trade_recommendation": "mixed"
+      },
+      "reasoning": "GOLD \u2014 Gold net bias NEUTRAL (score +0.00, P(up)\u224850%). Supporting: no strong bullish drivers. BITCOIN \u2014 Bitcoin net bias BULLISH (score +1.00, P(up)\u224875%). Supporting: VIX 15.2, stablecoin supply +0.75%. No scored history yet \u2014 confidence uncalibrated, defaulting to neutral prior.",
+      "risks": [],
+      "alternative_scenarios": [
+        {
+          "name": "Base case",
+          "probability": 0.5,
+          "gold_bias": "NEUTRAL",
+          "btc_bias": "BULLISH",
+          "narrative": "Current drivers persist; net reads play out modestly."
+        },
+        {
+          "name": "Risk-on / easier policy",
+          "probability": 0.25,
+          "gold_bias": "BULLISH",
+          "btc_bias": "STRONG_BULLISH",
+          "narrative": "Softer data + dovish repricing lifts liquidity assets; BTC outperforms."
+        },
+        {
+          "name": "Risk-off / hawkish shock",
+          "probability": 0.25,
+          "gold_bias": "BULLISH",
+          "btc_bias": "BEARISH",
+          "narrative": "Stronger dollar / vol spike; gold gets haven bid, BTC de-risks."
+        }
+      ],
+      "data_mode": "live"
+    },
+    {
+      "run_id": "bellwether-overlay-5e2119b2d877",
+      "timestamp": "2026-08-07T09:15:33.477937+00:00",
+      "asset": "BITCOIN",
+      "bias": "BULLISH",
+      "confidence": 0.291,
+      "agreement": 0.5,
+      "coverage": 0.227,
+      "probability_up": 0.75,
+      "provenance_breakdown": {
+        "news_intelligence": "synthetic",
+        "economic_calendar": "synthetic",
+        "geopolitical": "synthetic",
+        "monetary_policy": "mixed",
+        "liquidity": "mixed",
+        "onchain": "synthetic",
+        "derivatives_etf": "synthetic",
+        "correlation": "synthetic",
+        "historical_analog": "synthetic",
+        "learning": "real",
+        "gold_analysis": "mixed",
+        "bitcoin_analysis": "mixed",
+        "scenario": "mixed",
+        "risk": "mixed",
+        "trade_recommendation": "mixed"
+      },
+      "reasoning": "GOLD \u2014 Gold net bias NEUTRAL (score +0.00, P(up)\u224850%). Supporting: no strong bullish drivers. BITCOIN \u2014 Bitcoin net bias BULLISH (score +1.00, P(up)\u224875%). Supporting: VIX 15.2, stablecoin supply +0.75%. No scored history yet \u2014 confidence uncalibrated, defaulting to neutral prior.",
+      "risks": [],
+      "alternative_scenarios": [
+        {
+          "name": "Base case",
+          "probability": 0.5,
+          "gold_bias": "NEUTRAL",
+          "btc_bias": "BULLISH",
           "narrative": "Current drivers persist; net reads play out modestly."
         },
         {
