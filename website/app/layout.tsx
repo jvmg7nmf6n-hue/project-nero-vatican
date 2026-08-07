@@ -20,7 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="font-serif tracking-[0.2em] text-parchment">VATICAN</span>
             </Link>
             <nav className="flex gap-6 text-sm text-muted">
-              <Link href="/#ledger" className="hover:text-parchment">
+              <Link href="/ledger" className="hover:text-parchment">
                 Ledger
               </Link>
               <Link href="/heatmap" className="hover:text-parchment">

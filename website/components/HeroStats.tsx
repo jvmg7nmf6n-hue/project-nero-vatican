@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import Logo from "./Logo";
 import SystemStatus from "./SystemStatus";
 import { useCountUp } from "@/lib/useCountUp";
@@ -70,12 +71,12 @@ export default function HeroStats({ summary, roster, heartbeat = null }: HeroSta
         public Truth Ledger. Nothing is hidden after the fact.
       </p>
       <div className="mt-6 flex justify-center gap-4">
-        <a
-          href="#ledger"
+        <Link
+          href="/ledger"
           className="rounded-md bg-gold px-5 py-2 text-ink font-medium hover:opacity-90"
         >
           View the live ledger
-        </a>
+        </Link>
         <a
           href="/methodology"
           className="rounded-md border border-gold/50 px-5 py-2 text-parchment hover:bg-gold/10"

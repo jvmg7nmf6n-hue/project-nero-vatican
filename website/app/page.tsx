@@ -1,9 +1,7 @@
 import Link from "next/link";
 import HeroStats from "@/components/HeroStats";
-import LedgerTable from "@/components/LedgerTable";
 import MarketsSection from "@/components/MarketsSection";
 import Panel from "@/components/Panel";
-import SectionHeader from "@/components/SectionHeader";
 import SplashScreen from "@/components/SplashScreen";
 import {
   fetchCandleData,
@@ -64,11 +62,6 @@ export default async function HomePage({
         volatilityRegimes={quantCrossAsset?.volatility_regimes ?? []}
         initialAssetFilter={assetFilter}
       />
-
-      <section id="ledger">
-        <SectionHeader title="Truth Ledger" />
-        <LedgerTable rows={rows} trackingSince={summary?.tracking_since} />
-      </section>
 
       <section>
         <Panel tone="loss" className="flex items-center justify-between gap-4">

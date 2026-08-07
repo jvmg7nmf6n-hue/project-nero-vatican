@@ -78,3 +78,30 @@ describe("resultLabel", () => {
     expect(resultLabel(row)).toBe("Opened @ 105");
   });
 });
+
+describe("LedgerTable commentary column", () => {
+  it("shows the Commentary header", () => {
+    render(<LedgerTable rows={[makeRow()]} />);
+    expect(screen.getByText("Commentary")).toBeInTheDocument();
+  });
+
+  it("shows a real negative percentage move for a losing EXIT row", () => {
+    const rows = [makeRow({ entry_price: 100, exit_price: 90 })];
+    render(<LedgerTable rows={rows} />);
+    const cell = screen.getByText("-10.00% vs entry");
+    expect(cell.className).toContain("text-loss");
+  });
+
+  it("shows a real positive percentage move for a winning EXIT row", () => {
+    const rows = [makeRow({ entry_price: 100, exit_price: 110 })];
+    render(<LedgerTable rows={rows} />);
+    const cell = screen.getByText("+10.00% vs entry");
+    expect(cell.className).not.toContain("text-loss");
+  });
+
+  it("shows an honest empty dash for an ENTRY row (no exit price to derive a move from)", () => {
+    const rows = [makeRow({ signal_type: "ENTRY", exit_price: null })];
+    render(<LedgerTable rows={rows} />);
+    expect(screen.getByText("—")).toBeInTheDocument();
+  });
+});

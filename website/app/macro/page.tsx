@@ -256,7 +256,7 @@ export default async function MacroPage() {
             )}
             <p className="text-muted text-xs mt-2">
               See the flagged trades themselves on the{" "}
-              <Link href="/#ledger" className="underline">
+              <Link href="/ledger" className="underline">
                 Truth Ledger
               </Link>
               .

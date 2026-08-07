@@ -1,4 +1,5 @@
 import type { LedgerRow } from "@/lib/types";
+import { deriveLedgerCommentary } from "@/lib/ledgerCommentary";
 
 export function formatTimestamp(iso: string): string {
   const date = new Date(iso);
@@ -64,11 +65,13 @@ export default function LedgerTable({ rows, trackingSince, id }: LedgerTableProp
             <th className="py-2 pr-4">Strategy</th>
             <th className="py-2 pr-4">Signal</th>
             <th className="py-2 pr-4">Result</th>
+            <th className="py-2 pr-4">Commentary</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row, index) => {
             const loss = isLoss(row);
+            const commentary = deriveLedgerCommentary(row);
             return (
               <tr
                 key={`${row.strategy}-${row.asset}-${row.candle_timestamp}-${index}`}
@@ -81,6 +84,9 @@ export default function LedgerTable({ rows, trackingSince, id }: LedgerTableProp
                 <td className="py-2 pr-4">{row.signal_type}</td>
                 <td className={`py-2 pr-4 ${loss ? "text-loss" : ""}`}>
                   {resultLabel(row)}
+                </td>
+                <td className={`py-2 pr-4 ${commentary.startsWith("-") ? "text-loss" : ""}`}>
+                  {commentary || <span className="text-muted">—</span>}
                 </td>
               </tr>
             );
