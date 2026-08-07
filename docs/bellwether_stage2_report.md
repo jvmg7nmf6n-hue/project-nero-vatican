@@ -1363,3 +1363,204 @@ one intervening `signal-alerts` automated data-only commit):
     fce917e CC-1 directive: fix news_intelligence/geopolitical provenance labeling
     47fdbb7 Update signal alerts state
     e474d48 CC-1 directive closing report: wire the 2 safest agents real
+
+---
+
+## 2026-08-07: CC-1 directive -- fix sweep.py to measure the real RSS path
+
+### Item 1 -- diagnosis
+
+**1a. FINDING** (confirmed-from-code, exact file+line).
+`vatican/bellwether/tools/sweep.py:57` (pre-fix):
+`out = await orch.analyze(events=[MacroEvent(headline=headline)],
+persist=False)`, where `headline` cycles through the 6 hand-authored
+`HEADLINE_SCENARIOS` strings. `MacroEvent(headline=headline)` never sets
+`provenance=`, so -- per the prior directive's own schema fix -- every one
+of these events defaults to `DataProvenance.SYNTHETIC`. **The exact
+divergence point from production**: `nero_core/execution/
+bellwether_overlay.py`'s real `_run_bellwether_live()` calls
+`build_real_macro_events()` (real RSS fetch, `provenance=REAL` on every
+event it returns); `sweep.py` never calls that function at all, anywhere
+-- confirmed by grepping the file for `build_real_macro_events` and
+`news_feed` (zero matches, pre-fix).
+
+**1b. FINDING** (confirmed-from-data, git history). `git log --follow
+-- vatican/bellwether/tools/sweep.py` shows exactly **one** commit ever
+touched this file: `f4425d2`, 2026-08-07 07:42 (Pakistan time) -- the
+"CC-1 Parts A/B" directive, which shipped the `agreement`/`coverage` split
+and the BTC funding-rate wiring. This is **before** any real RSS
+integration existed in this codebase at all (`build_real_macro_events`
+was added several directives later, same day). No comment, docstring, or
+design note anywhere in the file's own history suggests network-avoidance
+or reproducibility was a deliberate design decision specifically about the
+news/headline dimension -- the file's own docstring only explains the
+6-scenario x 30-seed = 180-cycle METHODOLOGY (matching an even earlier,
+uncommitted ad hoc sweep), never the choice of `MacroEvent(headline=...)`
+as a data-source stand-in. **Conclusion: this was not a deliberate
+"avoid the network for news" design choice -- it simply predates real RSS
+wiring by construction, and the hand-authored headlines were always meant
+as the sweep's own intentional "vary the macro narrative" test dimension,
+not a placeholder for a live feed.** This matters for 2a below: the fix
+should ADD the real path, not treat the existing scenario headlines as
+something to rip out.
+
+### Item 2 -- the fix
+
+**2a. RECOMMENDATION, with reasoning -- Option 2 (recorded-real),
+not Option 1 (live-per-cycle).** Considered both real options:
+1. **Live mode** (call the real RSS pipeline fresh every one of the 180
+   cycles): genuinely live, but reintroduces exactly the non-reproducibility
+   problem this tool exists to avoid -- every prior before/after table in
+   this report (VIX, funding rate, the correlation discount, the
+   stablecoin fix, the provenance fix) depended on comparable, controlled
+   runs. 180 live RSS fetches per sweep also has real, avoidable cost:
+   slower, and a real risk of hitting the underlying RSS feeds' own rate
+   limits for no benefit (real news content does not meaningfully change
+   within the seconds a sweep run takes).
+2. **Recorded-real mode** (fetch once, reuse across all 180 cycles):
+   **chosen.** This is not a new pattern invented for this fix -- it is the
+   EXACT SAME "fetch once per process, cache for the run's lifetime"
+   convention every other real field in this tool already uses
+   (`bellwether/data/providers.py`'s own `_DXY_CACHE`/`_VIX_CACHE`/
+   `_BTC_FUNDING_CACHE`/`_STABLECOIN_CACHE` -- confirmed by reading each:
+   all are simple process-lifetime dicts, fetched once, reused for every
+   one of the 180 cycles in a run). **The real tradeoff, disclosed plainly
+   per this directive's own instruction, not hidden**: a sweep's own "real
+   news" dimension reflects ONE moment's real content (whatever was
+   published at the run's own start time), not a continuously live feed --
+   this is NOT the same honesty level as "real, live, minute-by-minute,"
+   and is stated as such in the shipped code's own docstring. This is,
+   however, **not a new or additional honesty compromise** -- it is
+   exactly, consistently, the same real-but-frozen-for-one-run treatment
+   every other real field in this exact tool already receives and has
+   already been reported as such throughout this session.
+
+**2b. WHAT SHIPPED.** `vatican/bellwether/tools/sweep.py`: new
+`_fetch_real_news_events_once(mode)` -- returns `[]` immediately in
+`--mode mock` (mock mode stays fully synthetic across every field, as it
+always has -- confirmed unaffected, no code path change for `mode=="mock"`
+at all), else calls the real `build_real_macro_events()` exactly once,
+degrading to `[]` (never a guess) on any failure. `run_sweep()` now calls
+this ONCE before the seed/headline loop (not once per cycle) and combines
+the current cycle's own scenario headline with the fetched real events for
+every one of the 180 `orch.analyze()` calls:
+`cycle_events = [MacroEvent(headline=headline)] + real_news_events`. The
+existing 6-scenario x 30-seed dimension is completely unchanged in shape;
+the real events are ADDED, not substituted. **Confirmed the 4
+already-wired real macro fields are completely unaffected**: `run_sweep`'s
+own signature, its `Settings(data_mode=mode, seed=seed)` construction, and
+every dxy/vix/real_yield/funding/stablecoin code path are untouched --
+this fix touches only the `events=` argument passed to `orch.analyze()`.
+`run_sweep`'s own return type (`list[dict]`) is unchanged (a
+`real_news_event_count` key was added to each row instead of changing the
+function's signature) specifically so `tools/sweep_series.py`'s own
+existing `rows = await run_sweep(mode); return summarize(rows)` usage
+(confirmed by reading that file) keeps working unmodified -- zero risk of
+silently breaking that script.
+
+**2c. WHAT SHIPPED.** New file `vatican/bellwether/tests/
+test_sweep_real_news.py`, 4 tests: `--mode mock` never calls
+`build_real_macro_events` at all; `--mode live` calls the REAL, real
+production import path (`nero_core.execution.bellwether_overlay
+.build_real_macro_events`, not a reimplementation or parallel mock)
+**exactly once** for the full 180-cycle run, confirmed via
+`mock_fetch.assert_called_once()`; the fetched event's own REAL provenance
+demonstrably reaches `news_intelligence`'s real aggregate output (a
+zero-real-events baseline never shows REAL/MIXED; adding one real event
+makes every cycle MIXED, isolating the real news contribution as the only
+variable between the two runs); a fetch failure degrades to zero real
+events for the whole run, never a crash, never a guess. Full Bellwether
+suite: 75 passed (one previously-flaky DefiLlama-reachability test
+happened to pass rather than skip this run, an unrelated environmental
+timing difference, not a regression) -- was 70 passed/1 skipped before
+this directive's own 4 new tests (70 + 4 = 74; the 75th is that same
+flaky test converting from skip to pass). No regressions in any
+pre-existing test.
+
+### Item 3 -- the measurement this directive unblocks
+
+**3a. FINDING, confirmed-from-data.** Re-ran the identical 180-cycle sweep
+with the fixed tool (`tools/sweep.py --mode live`):
+
+| Metric | Before (prior directive, sweep.py blind to news) | After (this fix) | Δ |
+|---|---|---|---|
+| mean_confidence | 0.373 | 0.343 | -0.030 |
+| mean_gold_agreement | 0.361 | 0.297 | -0.064 |
+| mean_gold_coverage | 0.202 | **0.851** | **+0.649** |
+| mean_bitcoin_agreement | 0.393 | **0.123** | **-0.270** |
+| mean_bitcoin_coverage | 0.300 | 0.563 | +0.263 |
+| pct_bitcoin_neutral | 20.0% | **93.3%** | +73.3pp |
+| real_news_event_count | 0 (never fetched) | 11 (fetched once, reused) | -- |
+
+**Reported plainly, not spun**: `gold_coverage` jumping to 0.851 makes
+sense mechanically -- real news headlines add real signal mass that was
+completely absent before. `bitcoin_agreement` falling further, to 0.123,
+with `bitcoin_neutral` now true in 93.3% of cycles, is a real, substantial,
+negative-looking shift for BTC specifically, consistent with the same
+"a new real agent's effect is not guaranteed positive" pattern flagged
+honestly in both prior directives.
+
+**3b. FINDING -- does the earlier 0.513->0.393 finding need correction?
+No, but it is now known to be incomplete, not wrong.** Reconstructing the
+real, sequential chain across all 3 real sweep measurements:
+1. **0.513** -- baseline, before stablecoin/RSS wiring.
+2. **0.393** -- after stablecoin wiring, measured with the OLD (blind)
+   sweep.py. Confirmed correct as far as it went: the provenance-fix
+   directive's own Item 2b proved this number was **byte-identical**
+   whether news events were present or not (news_intelligence/geopolitical
+   were excluded from the aggregate regardless, due to the labeling bug
+   fixed in that directive) -- so 0.513->0.393 correctly, fully isolates
+   stablecoin's own real effect, uncontaminated by any news signal
+   (there wasn't one reaching the aggregate at that time regardless of
+   what sweep.py did). **This number does not need restating or
+   correcting.**
+3. **0.123** -- new, additional, real finding from THIS directive: once
+   news genuinely reaches the aggregate (both the provenance fix AND this
+   sweep-tool fix were required together), bitcoin_agreement drops further
+   still. This is a NEW data point the old tool was never capable of
+   producing (not a hidden flaw in the 0.393 figure), confirmed by the
+   fact that 0.393 was ALREADY measured correctly for what it was
+   measuring.
+
+**The honest summary**: BTC agreement has now moved 0.513 -> 0.393 -> 0.123
+across the wiring of 2 real agents (stablecoin, then news/geopolitical),
+each step measured correctly for what it isolated at the time. No prior
+number in this report needs correction; this directive adds a real,
+previously-unmeasurable data point, not a fix to a wrong one.
+
+### Test counts
+
+Bellwether (`vatican/bellwether/tests/`): 70 passed/1 skipped -> **75
+passed, 0 skipped** (+4 new tests; the pre-existing skip converted to a
+pass this run due to real-time network reachability of an unrelated
+DefiLlama check, not this directive's own change). Vatican-core Python
+(`tests/`, full suite): **unaffected, still 2734** -- confirmed via
+`git status --short`, this directive touches exactly one file
+(`vatican/bellwether/tools/sweep.py`) plus one new test file, both under
+`vatican/bellwether/`, zero `nero_core/` files touched.
+
+### No evidence-bar constant touched, confirmed
+
+This directive touches exactly `vatican/bellwether/tools/sweep.py` and one
+new test file. Zero diff to `rule_dsl.py`, `macro_data.py`, `trial.py`,
+`repair_to_trial.py`, `graveyard_distillation.py`, or any Adam/Eve
+scoring/verdict path -- confirmed via `git status --short`, which shows
+Rung 2's own 7 files unaffected by this directive's commits (separate,
+disjoint file sets, as in every prior directive this session). No GDELT
+wiring, no new data source, no new API key.
+
+### Stale figures found this directive, and the real values
+
+None found beyond what 3b already restates: no figure in this directive's
+own context section was wrong -- the "0.513->0.393" number was accurately
+described as measured with the old tool, and this directive confirms it
+was correct for what it measured, not stale.
+
+### git log origin/main --oneline -3
+
+Verified on `origin/main` immediately after pushing (no intervening
+commits this time):
+
+    c140934 CC-1 directive: fix sweep.py to measure the real RSS path
+    67caf29 CC-1 directive closing report: fix news_intelligence/geopolitical provenance
+    fce917e CC-1 directive: fix news_intelligence/geopolitical provenance labeling
