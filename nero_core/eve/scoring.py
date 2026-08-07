@@ -627,6 +627,70 @@ def apply_self_derivative_tags(scored_records: list[dict], eve_history: list[dic
     return updated
 
 
+def apply_declared_refinement_tags(scored_records: list[dict], known_hypothesis_names: set) -> list[dict]:
+    """CC-1 directive, "Fix the REFINEMENT tagging mechanism gap"
+    (2026-08-07): closes a real, confirmed gap in apply_self_derivative_tags
+    above. That function only ever reclassifies a SELF_DERIVATIVE flag into
+    REFINEMENT when tag_derivative's own similarity check (against
+    `eve_history`, PRIOR SESSIONS ONLY) happens to independently fire against
+    the declared parent -- so a hypothesis whose real, valid derived_from
+    names a parent that either (a) is in the SAME session (structurally
+    absent from `eve_history` by that function's own design, see its
+    docstring) or (b) simply never crosses DERIVATIVE_SIMILARITY_THRESHOLD,
+    gets ZERO contamination tags at all, indistinguishable from a hypothesis
+    that never declared a refinement in the first place.
+
+    Confirmed real, not hypothetical: CHANNEL_BREAKOUT_HIGH20_BTC_4H
+    (eve_hypotheses.json, session eve-20260806T180819Z-e777cdef) validly
+    declares VOL_CONFIRMED_CHANNEL_BREAKOUT_BTC_4H as its parent -- but that
+    parent is in the SAME session, so it was never in `eve_history` for
+    tag_derivative to compare against at all (their real lexical similarity
+    is actually 0.6638, ABOVE threshold -- the prior write-up describing this
+    gap as "never crossed the 0.6 threshold" was imprecise; the true cause is
+    same-session exclusion, confirmed by direct computation before this fix).
+
+    THE FIX: REFINEMENT should be a structural fact -- "a valid, real
+    derived_from parent is declared" -- independent of whether the
+    similarity mechanism happens to also fire. This function re-validates
+    each record's own derived_from via validate_derived_from (the SAME
+    validation session.py's pre-submit gate already ran, re-run here against
+    the SAME kind of known-names universe so an "inert" derived_from --
+    structurally incomplete, or naming a parent that never really existed,
+    per session.py's own documented retry-exhaustion behavior -- is correctly
+    never tagged) and adds an independent REFINEMENT tag whenever it's
+    valid, UNLESS apply_self_derivative_tags's own reclassification already
+    added one for the same declared parent (checked, never duplicated).
+
+    Purely ADDITIVE: never removes or alters any existing tag. A record can
+    still carry an unrelated SELF_DERIVATIVE flag against some OTHER,
+    undeclared prior hypothesis at the same time -- exactly the existing
+    "declaring one real parent does not launder an unrelated undeclared
+    near-duplicate" principle (apply_self_derivative_tags's own docstring),
+    completely unchanged by this function. Call this AFTER
+    apply_self_derivative_tags and BEFORE apply_fdr_correction, mirroring
+    that function's own required ordering."""
+    updated = []
+    for r in scored_records:
+        raw = r.get("raw_hypothesis") if isinstance(r.get("raw_hypothesis"), dict) else {}
+        derived_from = raw.get("derived_from") if isinstance(raw.get("derived_from"), dict) else None
+        tags = list(r.get("contamination_tags") or [])
+        if derived_from is not None:
+            valid, _ = validate_derived_from(raw, known_hypothesis_names)
+            parent_name = derived_from.get("parent_hypothesis_name")
+            already_credited = any(
+                t.get("tag") == REFINEMENT_TAG_NAME and t.get("matched_hypothesis_name") == parent_name
+                for t in tags
+            )
+            if valid and not already_credited:
+                tags.append({
+                    "tag": REFINEMENT_TAG_NAME,
+                    "matched_hypothesis_name": parent_name,
+                    "method": "declared_derived_from (validated structurally, independent of the similarity threshold)",
+                })
+        updated.append({**r, "contamination_tags": tags})
+    return updated
+
+
 def is_refinement(record: dict) -> bool:
     """True iff `record` carries a REFINEMENT contamination tag -- mirrors
     is_self_derivative's own shape exactly. Public for the same reason:

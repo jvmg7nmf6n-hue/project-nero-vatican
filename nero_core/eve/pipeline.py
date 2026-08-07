@@ -327,6 +327,25 @@ def run_pipeline(
         # already be attached by the time it runs.
         scored = scoring.apply_derivative_tags(scored, adam_history=adam_history)
         scored = scoring.apply_self_derivative_tags(scored, eve_history=eve_history)
+        # CC-1 directive, "Fix the REFINEMENT tagging mechanism gap"
+        # (2026-08-07): apply_self_derivative_tags above only reclassifies a
+        # REFINEMENT tag when tag_derivative's similarity check independently
+        # fires against `eve_history` (prior sessions only) -- a same-session
+        # declared parent, or one below the similarity threshold, would get
+        # no tag at all. known_hypothesis_names mirrors session.py's own
+        # pre-submit validation universe (Adam's history | Eve's prior
+        # sessions | this session's own now-finalized batch) so a same-
+        # session parent validates correctly here too.
+        known_hypothesis_names = (
+            {h.get("hypothesis_name") for h in adam_history if h.get("hypothesis_name")}
+            | {h.get("hypothesis_name") for h in eve_history if h.get("hypothesis_name")}
+            | {
+                r["raw_hypothesis"].get("hypothesis_name")
+                for r in scored
+                if isinstance(r.get("raw_hypothesis"), dict) and r["raw_hypothesis"].get("hypothesis_name")
+            }
+        )
+        scored = scoring.apply_declared_refinement_tags(scored, known_hypothesis_names)
         # CC-1 directive item 7: binding freshness disqualification MUST run
         # before apply_fdr_correction (same ordering requirement as the
         # self-derivative tags above -- see apply_fdr_correction's own

@@ -1312,7 +1312,13 @@
     "verdict_is": "PROMISING_WATCHLIST",
     "verdict_oos": "DIED",
     "verdict_combined": "DIED",
-    "contamination_tags": [],
+    "contamination_tags": [
+      {
+        "tag": "REFINEMENT",
+        "matched_hypothesis_name": "VOL_CONFIRMED_CHANNEL_BREAKOUT_BTC_4H",
+        "method": "declared_derived_from (validated structurally, independent of the similarity threshold)"
+      }
+    ],
     "supporting_source_urls": [],
     "citation_status": "no_sources_claimed",
     "supporting_source_urls_validated": [],

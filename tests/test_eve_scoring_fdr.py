@@ -493,5 +493,193 @@ class RefinementVsSelfDerivativeTest(unittest.TestCase):
         self.assertGreaterEqual(sum(fresh_survivals_excluded), sum(fresh_survivals_included))
 
 
+class DeclaredRefinementIndependentOfSimilarityTest(unittest.TestCase):
+    """CC-1 directive, "Fix the REFINEMENT tagging mechanism gap"
+    (2026-08-07): apply_self_derivative_tags's own reclassification (tested
+    above in RefinementVsSelfDerivativeTest) only ever fires when
+    tag_derivative's similarity check independently matches the declared
+    parent -- so a same-session parent (structurally absent from
+    `eve_history`) or a genuinely sub-threshold match gets NO tag at all.
+    apply_declared_refinement_tags closes that gap independently. Uses the
+    real, confirmed case: CHANNEL_BREAKOUT_HIGH20_BTC_4H (session
+    eve-20260806T180819Z-e777cdef) validly declares
+    VOL_CONFIRMED_CHANNEL_BREAKOUT_BTC_4H (same session) as its parent --
+    their real lexical similarity is 0.6638 (ABOVE threshold), but the
+    parent is same-session, so apply_self_derivative_tags's own eve_history
+    comparison never even considers it."""
+
+    def test_the_real_confirmed_case_same_session_parent_above_threshold_gets_refinement(self) -> None:
+        # Real mechanism text, real names, real derived_from -- reproduced
+        # from docs/site_data/eve_hypotheses.json as of 2026-08-07.
+        # Full, byte-identical mechanism text from docs/site_data/
+        # eve_hypotheses.json as of 2026-08-07 -- a shortened paraphrase
+        # would not reproduce the real 0.6638 similarity score.
+        parent = {
+            "hypothesis_name": "VOL_CONFIRMED_CHANNEL_BREAKOUT_BTC_4H",
+            "mechanism": (
+                "A close breaking above its own 20-period high is more likely to be a genuine, continuing "
+                "directional move rather than a false break if it occurs while the market's own recent volatility "
+                "(ATR14) is already elevated relative to a normal-range threshold, since high realized volatility "
+                "at the moment of a range breakout indicates strong participation and energy behind the move, not "
+                "a listless drift that happens to tag a new high. This is distinct from the "
+                "BB_SQUEEZE_BREAKOUT_PAXG_4H mechanism (which requires prior COMPRESSION before the breakout) and "
+                "from VOLCONFIRM_CHANNEL_BREAKOUT_ETH_4H (which filters by volume, not ATR) -- here the filter is "
+                "that volatility is already running hot at breakout time, i.e. trading breakouts that occur amid "
+                "an already-active regime rather than waiting for calm-before-storm compression. On BTC's fast 4h "
+                "chart, 20-bar-high breakouts combined with an ATR14 floor should recur often enough to be "
+                "tradeable at volume."
+            ),
+        }
+        child = {
+            "raw_hypothesis": {
+                "hypothesis_name": "CHANNEL_BREAKOUT_HIGH20_BTC_4H",
+                "mechanism": (
+                    "A close breaking above its own trailing 20-period high (high20) marks a genuine range "
+                    "expansion; requiring RSI to already be above the midline (rsi14 gt 50) confirms the breakout "
+                    "is occurring alongside positive momentum rather than as an isolated spike against a weak "
+                    "backdrop, which should filter out some low-quality breakouts without requiring the multi-bar "
+                    "compression precondition used in BB_SQUEEZE_BREAKOUT_PAXG_4H. This is a corrected, DSL-valid "
+                    "version of a volatility/momentum-confirmed breakout idea (the previous submission used an "
+                    "invalid ATR-baseline placeholder condition that amounted to a no-op filter); here the real "
+                    "filter is a momentum confirmation (rsi14) rather than a volatility-level confirmation, since "
+                    "the DSL has no rolling-ATR-baseline field to test the original volatility-confirmation "
+                    "mechanism directly."
+                ),
+                "derived_from": {
+                    "parent_hypothesis_name": "VOL_CONFIRMED_CHANNEL_BREAKOUT_BTC_4H",
+                    "parent_session_id": "this_session",
+                    "what_changed": "Replaced the invalid ATR-floor condition with a valid rsi14-based momentum confirmation.",
+                    "why_this_change": "The DSL has no rolling-ATR-baseline field, so the original condition could not test the intended mechanism.",
+                },
+            },
+            "contamination_tags": [],
+        }
+        # Confirm the real similarity IS above threshold -- proving the gap
+        # is same-session exclusion, not a sub-threshold miss.
+        similarity = scoring._term_frequency_cosine_similarity(
+            f"{child['raw_hypothesis']['hypothesis_name']} {child['raw_hypothesis']['mechanism']}",
+            f"{parent['hypothesis_name']} {parent['mechanism']}",
+        )
+        self.assertGreaterEqual(similarity, scoring.DERIVATIVE_SIMILARITY_THRESHOLD)
+
+        # Same-session parent is NOT in eve_history (prior sessions only) --
+        # apply_self_derivative_tags alone produces nothing for this record.
+        after_self_derivative = scoring.apply_self_derivative_tags([child], eve_history=[])
+        self.assertEqual(after_self_derivative[0]["contamination_tags"], [])
+
+        # The fix: apply_declared_refinement_tags, with the same-session
+        # sibling included in known_hypothesis_names (mirroring pipeline.py's
+        # real wiring), tags it REFINEMENT directly.
+        known_names = {"VOL_CONFIRMED_CHANNEL_BREAKOUT_BTC_4H", "CHANNEL_BREAKOUT_HIGH20_BTC_4H"}
+        fixed = scoring.apply_declared_refinement_tags(after_self_derivative, known_names)
+        self.assertTrue(scoring.is_refinement(fixed[0]))
+        self.assertFalse(scoring.is_self_derivative(fixed[0]))
+        self.assertEqual(fixed[0]["contamination_tags"][0]["matched_hypothesis_name"], "VOL_CONFIRMED_CHANNEL_BREAKOUT_BTC_4H")
+
+    def test_genuinely_undeclared_near_duplicate_is_still_self_derivative_unaffected_by_the_fix(self) -> None:
+        # Regression: the new function must never manufacture a REFINEMENT
+        # tag for a hypothesis that declared nothing.
+        prior = {"hypothesis_name": "RSI_DIP_BUY", "mechanism": "buy when rsi14 drops below 30 in an uptrend"}
+        child = {"raw_hypothesis": {"hypothesis_name": "RSI_DIP_BUY_TIGHTER", "mechanism": "buy when rsi14 drops below 30 in an uptrend"}, "contamination_tags": []}
+        after_self_derivative = scoring.apply_self_derivative_tags([child], eve_history=[prior])
+        fixed = scoring.apply_declared_refinement_tags(after_self_derivative, known_hypothesis_names={"RSI_DIP_BUY", "RSI_DIP_BUY_TIGHTER"})
+        self.assertTrue(scoring.is_self_derivative(fixed[0]))
+        self.assertFalse(scoring.is_refinement(fixed[0]))
+
+    def test_invalid_derived_from_naming_a_never_proposed_parent_is_never_tagged_refinement(self) -> None:
+        # session.py's own retry mechanism can finalize a record with an
+        # "inert" derived_from (retries exhausted, invented/invalid parent)
+        # -- must never be credited as REFINEMENT.
+        child = {
+            "raw_hypothesis": {
+                "hypothesis_name": "X",
+                "mechanism": "anything",
+                "derived_from": {
+                    "parent_hypothesis_name": "NEVER_PROPOSED", "parent_session_id": "eve-x",
+                    "what_changed": "x", "why_this_change": "y",
+                },
+            },
+            "contamination_tags": [],
+        }
+        fixed = scoring.apply_declared_refinement_tags([child], known_hypothesis_names={"SOME_OTHER_REAL_NAME"})
+        self.assertFalse(scoring.is_refinement(fixed[0]))
+        self.assertEqual(fixed[0]["contamination_tags"], [])
+
+    def test_does_not_duplicate_a_tag_already_added_by_reclassification(self) -> None:
+        # When similarity ALSO independently fires against the declared
+        # parent (the RefinementVsSelfDerivativeTest case above),
+        # apply_declared_refinement_tags must not add a second REFINEMENT
+        # entry for the same parent.
+        prior = {"hypothesis_name": "RSI_DIP_BUY", "mechanism": "buy when rsi14 drops below 30 in an uptrend"}
+        child = {
+            "raw_hypothesis": {
+                "hypothesis_name": "RSI_DIP_BUY_TIGHTER", "mechanism": "buy when rsi14 drops below 30 in an uptrend",
+                "derived_from": {
+                    "parent_hypothesis_name": "RSI_DIP_BUY", "parent_session_id": "eve-x",
+                    "what_changed": "tightened threshold", "why_this_change": "fewer false positives",
+                },
+            },
+            "contamination_tags": [],
+        }
+        already_reclassified = scoring.apply_self_derivative_tags([child], eve_history=[prior])
+        self.assertEqual(len(already_reclassified[0]["contamination_tags"]), 1)  # reclassification already fired
+        fixed = scoring.apply_declared_refinement_tags(already_reclassified, known_hypothesis_names={"RSI_DIP_BUY", "RSI_DIP_BUY_TIGHTER"})
+        refinement_tags = [t for t in fixed[0]["contamination_tags"] if t["tag"] == "REFINEMENT"]
+        self.assertEqual(len(refinement_tags), 1)  # still exactly one, not duplicated
+
+    def test_declared_refinement_plus_unrelated_similarity_gets_both_tags_and_stays_excluded_from_fdr(self) -> None:
+        # Item 2b's real edge case: a valid derived_from AND high similarity
+        # to a DIFFERENT, undeclared hypothesis. Both facts must be
+        # represented -- REFINEMENT for the declared parent (independent of
+        # similarity), SELF_DERIVATIVE for the unrelated match (unchanged,
+        # existing behavior) -- and the record stays excluded from the FDR
+        # family, exactly like the pre-existing
+        # test_a_record_with_both_a_refinement_and_an_unrelated_self_derivative_tag_is_still_excluded
+        # case above (that test starts from pre-built tags; this one
+        # exercises the real pipeline functions end to end).
+        declared_parent = {"hypothesis_name": "DECLARED_PARENT", "mechanism": "completely unrelated declared-parent text about funding rates"}
+        similar_other = {"hypothesis_name": "SIMILAR_OTHER", "mechanism": "buy when rsi14 drops below 30 in an uptrend"}
+        child = {
+            "raw_hypothesis": {
+                "hypothesis_name": "CHILD", "mechanism": "buy when rsi14 drops below 30 in an uptrend",
+                "derived_from": {
+                    "parent_hypothesis_name": "DECLARED_PARENT", "parent_session_id": "eve-x",
+                    "what_changed": "x", "why_this_change": "y",
+                },
+            },
+            "contamination_tags": [], "p_value_oos": 0.001, "p_value_is": 0.001,
+        }
+        after_self_derivative = scoring.apply_self_derivative_tags([child], eve_history=[declared_parent, similar_other])
+        # Similarity fired against SIMILAR_OTHER, not the declared parent --
+        # stays SELF_DERIVATIVE for that match (existing, correct behavior).
+        self.assertTrue(scoring.is_self_derivative(after_self_derivative[0]))
+        self.assertFalse(scoring.is_refinement(after_self_derivative[0]))
+
+        fixed = scoring.apply_declared_refinement_tags(
+            after_self_derivative, known_hypothesis_names={"DECLARED_PARENT", "SIMILAR_OTHER", "CHILD"},
+        )
+        tags = {t["tag"] for t in fixed[0]["contamination_tags"]}
+        self.assertEqual(tags, {"SELF_DERIVATIVE", "REFINEMENT"})
+
+        after_fdr = scoring.apply_fdr_correction(fixed, field="p_value_oos")
+        self.assertIsNone(after_fdr[0]["fdr_survives_oos"])
+        self.assertEqual(after_fdr[0]["excluded_from_fdr_family_reason"], "self_derivative")
+
+    def test_declared_refinement_alone_no_similarity_flag_at_all_is_not_excluded_from_fdr(self) -> None:
+        # Item 2c: confirm the FDR consequence directly for a record tagged
+        # REFINEMENT ONLY via the new declared-parent path (no similarity-
+        # based tag exists on it at all) -- must stay in the family.
+        record = {
+            "hypothesis_name": "CHANNEL_BREAKOUT_HIGH20_BTC_4H", "p_value_oos": 0.001, "p_value_is": 0.001,
+            "contamination_tags": [{
+                "tag": "REFINEMENT", "matched_hypothesis_name": "VOL_CONFIRMED_CHANNEL_BREAKOUT_BTC_4H",
+                "method": "declared_derived_from (validated structurally, independent of the similarity threshold)",
+            }],
+        }
+        updated = scoring.apply_fdr_correction([record], field="p_value_oos")
+        self.assertTrue(updated[0]["fdr_survives_oos"])
+        self.assertNotIn("excluded_from_fdr_family_reason", updated[0])
+
+
 if __name__ == "__main__":
     unittest.main()
