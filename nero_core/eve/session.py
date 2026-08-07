@@ -141,10 +141,20 @@ CURRENT_SESSION_REGIME = SESSION_REGIME_POST_INHERITANCE
 # kept in sync with rule_dsl.ALLOWED_FIELDS's own real addition; see that
 # module's own comment for what real hypothesis each field fixes and why
 # high20/low20 are computed from close, not the high/low columns.
+#
+# real_yield_10y_chg20/dxy_chg20/vix_chg20/funding_rate_bps added (CC-1
+# master directive, 2026-08-07, Part B Rung 2) -- the ONLY 4 Bellwether-real
+# macro fields, kept in sync with rule_dsl.ALLOWED_FIELDS/MACRO_CONDITION_
+# FIELDS; see that module's own comment for the real data path and lag
+# semantics of each, and docs/bellwether_stage2_report.md's Rung 2 section
+# for the full reasoning. Eve may combine ANY of these with a price field in
+# the same rule (see the worked example below) -- these are NOT a separate
+# vocabulary, just 4 more names in the same ALLOWED_FIELDS list.
 DSL_ALLOWED_FIELDS = (
     "close", "ma20", "ma50", "ma200", "zscore20", "atr14", "rsi14", "adx14",
     "bb_lower", "bb_upper", "ret_1", "volume", "hour_of_day", "high20",
-    "low20", "vol_ma20",
+    "low20", "vol_ma20", "real_yield_10y_chg20", "dxy_chg20", "vix_chg20",
+    "funding_rate_bps",
 )
 DSL_ALLOWED_OPS = ("gt", "gte", "lt", "lte", "eq", "cross_above", "cross_below")
 
@@ -216,6 +226,21 @@ recommended mechanism, just to show the shape):
   "asset": "BTC",
   "timeframe": "4h",
   "structured_entry_rule": {{"conditions": [{{"field": "close", "op": "gt", "value": 0}}]}},
+  "structured_exit_plan": {{"stop_atr_multiple": 1.0, "target_r_multiple": 1.0}}
+}}
+
+A macro field (real_yield_10y_chg20, dxy_chg20, vix_chg20, funding_rate_bps) can be
+combined with a price condition in the SAME rule (conditions are ANDed together) --
+same syntax, still an arbitrary example, not a suggested or recommended mechanism:
+{{
+  "hypothesis_name": "<your name for it>",
+  "mechanism": "<your free-text reasoning>",
+  "asset": "BTC",
+  "timeframe": "4h",
+  "structured_entry_rule": {{"conditions": [
+    {{"field": "zscore20", "op": "lt", "value": -2.0}},
+    {{"field": "dxy_chg20", "op": "lt", "value": 0}}
+  ]}},
   "structured_exit_plan": {{"stop_atr_multiple": 1.0, "target_r_multiple": 1.0}}
 }}"""
 

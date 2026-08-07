@@ -62,10 +62,19 @@ DEFAULT_SEED = 20260718  # same seed VALUE tools.backtest_statistics uses -- coi
 # (0-23, not price/volume-scale) -- added to _VALUE_RANGES with its own
 # real range, not the (-1.0, 1.0) fallback (which would be meaningless for
 # an hour).
+# real_yield_10y_chg20/dxy_chg20/vix_chg20/funding_rate_bps added (CC-1 master
+# directive, 2026-08-07, Part B Rung 2) -- kept in sync with rule_dsl.ALLOWED_FIELDS's
+# own real addition. All 4 are fixed-scale, asset-independent quantities (a %-point
+# change, an index-point change, bps) -- added to _VALUE_RANGES below with real
+# ranges measured from real historical data (see docs/bellwether_stage2_report.md's
+# Rung 2 section), NOT _FIELD_VS_FIELD_ONLY, matching zscore20/rsi14/adx14's own
+# treatment (a fixed universal scale, unlike price-scale fields unusable across
+# different assets' price levels).
 ALLOWED_FIELDS_COPY = (
     "close", "ma20", "ma50", "ma200", "zscore20", "atr14", "rsi14", "adx14",
     "bb_lower", "bb_upper", "ret_1", "volume", "hour_of_day", "high20",
-    "low20", "vol_ma20",
+    "low20", "vol_ma20", "real_yield_10y_chg20", "dxy_chg20", "vix_chg20",
+    "funding_rate_bps",
 )
 
 _VALUE_OPS = ("gt", "gte", "lt", "lte")
@@ -85,6 +94,15 @@ _VALUE_RANGES = {
     "volume": (0.0, 1.0),
     "vol_ma20": (0.0, 1.0),
     "hour_of_day": (0.0, 23.0),
+    # CC-1 master directive (2026-08-07), Part B Rung 2: real 1st/99th-percentile
+    # range of each field's real measured history (n=1229 real overlapping days,
+    # 2021-08-09 to 2026-07-15, vatican/bellwether/tools/correlation_matrix.py) --
+    # measured, not guessed, matching this project's own "never fabricate" rule
+    # even for a random-baseline sampling range.
+    "real_yield_10y_chg20": (-0.5, 0.75),
+    "dxy_chg20": (-5.5, 4.5),
+    "vix_chg20": (-14.0, 14.0),
+    "funding_rate_bps": (-1.0, 5.0),
 }
 
 

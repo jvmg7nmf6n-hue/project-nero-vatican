@@ -54,6 +54,16 @@ CHANGE_WINDOW_DAYS = 20
 DOLLAR_LAG_BUSINESS_DAYS = 1
 DFII10_LAG_BUSINESS_DAYS = 2
 
+# CC-1 master directive (2026-08-07), Part B Rung 2: lag constants for the 2 NEW real
+# fields wired into the DSL. DXY and VIX are both market-quoted levels (same day's
+# close is public the moment the market closes) -- the SAME category as the dollar
+# proxy above, not a genuine-reporting-lag series like DFII10 -- so they reuse the
+# identical t+1 standard-execution-buffer treatment DOLLAR_LAG_BUSINESS_DAYS already
+# uses, matching vatican/bellwether/bellwether/data/providers.py's own
+# _DXY_LAG_BUSINESS_DAYS/_VIX_LAG_BUSINESS_DAYS = 1 precedent exactly.
+DXY_LAG_BUSINESS_DAYS = 1
+VIX_LAG_BUSINESS_DAYS = 1
+
 
 class MacroDataUnavailableError(Exception):
     """Raised when no configured source (live or cached) could return usable macro
@@ -171,6 +181,75 @@ def fetch_dfii10_daily(api_key: str | None = None, use_cache: bool = True) -> tu
     series = frame.set_index("date")["value"].sort_index()
     _write_cache("dfii10", series)
     return series, "NATIVE: FRED DFII10 (10Y TIPS real yield, api.stlouisfed.org)"
+
+
+def fetch_dxy_daily(use_cache: bool = True) -> tuple[pd.Series, str]:
+    """Real, DXY-index-scale (~90-110) dollar strength via yfinance's `DX-Y.NYB` (ICE
+    US Dollar Index) -- confirmed real and available (14,116 daily rows back to 1971)
+    by vatican/bellwether/bellwether/data/providers.py's own
+    VaticanRealMarketData._fetch_real_dxy_level, which this function's cache-then-fetch
+    shape mirrors so nero_core gains the SAME confirmed-real series that module already
+    validated, rather than reusing this module's own OLDER fetch_dollar_proxy_daily
+    (UUP/DXY-symbol-attempt/EUR-USD fallback) -- DXY is confirmed NOT a valid Twelve
+    Data symbol (see fetch_dollar_proxy_daily's own docstring and
+    docs/macro_risk_on_report.md), which is why that older pipeline's own "DXY" branch
+    silently falls through to UUP or EUR/USD instead, a DIFFERENT, non-DXY-scale proxy.
+    This function is deliberately a SEPARATE fetch path, not a change to
+    fetch_dollar_proxy_daily (MACRO_RISK_ON's own dollar leg is unaffected). Raises
+    MacroDataUnavailableError on any failure (yfinance not importable, empty response,
+    network error) -- never substitutes a different series silently."""
+    if use_cache:
+        cached = _read_cache("dxy")
+        if cached is not None:
+            return cached, "CACHED: yfinance DX-Y.NYB (source recorded at fetch time; see data/macro_cache/dxy.csv)"
+
+    try:
+        import yfinance as yf
+    except ImportError as exc:
+        raise MacroDataUnavailableError(f"yfinance not importable: {exc}") from exc
+
+    try:
+        history = yf.Ticker("DX-Y.NYB").history(period="max", interval="1d")
+    except Exception as exc:  # noqa: BLE001 - yfinance raises assorted exception types on network/data failure
+        raise MacroDataUnavailableError(f"yfinance DX-Y.NYB fetch failed: {exc}") from exc
+    if history.empty:
+        raise MacroDataUnavailableError("yfinance: empty response for DX-Y.NYB")
+    series = history["Close"].copy()
+    series.index = pd.to_datetime(series.index).tz_localize(None).normalize()
+    series = series.sort_index()
+    series.index.name = "date"
+    _write_cache("dxy", series)
+    return series, "NATIVE: yfinance DX-Y.NYB (ICE US Dollar Index)"
+
+
+def fetch_vix_daily(use_cache: bool = True) -> tuple[pd.Series, str]:
+    """Real CBOE Volatility Index via yfinance's `^VIX` -- confirmed real and available
+    (9,217 daily rows back to 1990) by vatican/bellwether/bellwether/data/providers.py's
+    own VaticanRealMarketData._fetch_real_vix_level, mirrored here the same way
+    fetch_dxy_daily mirrors that module's own dxy fetch. Raises MacroDataUnavailableError
+    on any failure -- never substitutes a different series silently."""
+    if use_cache:
+        cached = _read_cache("vix")
+        if cached is not None:
+            return cached, "CACHED: yfinance ^VIX (source recorded at fetch time; see data/macro_cache/vix.csv)"
+
+    try:
+        import yfinance as yf
+    except ImportError as exc:
+        raise MacroDataUnavailableError(f"yfinance not importable: {exc}") from exc
+
+    try:
+        history = yf.Ticker("^VIX").history(period="max", interval="1d")
+    except Exception as exc:  # noqa: BLE001 - yfinance raises assorted exception types on network/data failure
+        raise MacroDataUnavailableError(f"yfinance ^VIX fetch failed: {exc}") from exc
+    if history.empty:
+        raise MacroDataUnavailableError("yfinance: empty response for ^VIX")
+    series = history["Close"].copy()
+    series.index = pd.to_datetime(series.index).tz_localize(None).normalize()
+    series = series.sort_index()
+    series.index.name = "date"
+    _write_cache("vix", series)
+    return series, "NATIVE: yfinance ^VIX (CBOE Volatility Index)"
 
 
 def compute_lagged_change(series: pd.Series, change_window_days: int, lag_business_days: int) -> pd.Series:

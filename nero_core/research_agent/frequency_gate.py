@@ -51,7 +51,13 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from nero_core.research_agent.rule_dsl import RuleAmbiguousError, compute_indicator_frame, count_triggers, parse_structured_rule
+from nero_core.research_agent.rule_dsl import (
+    RuleAmbiguousError,
+    compute_indicator_frame,
+    count_triggers,
+    parse_structured_rule,
+    rule_references_macro_fields,
+)
 
 FAST = "FAST"
 VIABLE = "VIABLE"
@@ -137,7 +143,11 @@ def measure_entry_frequency(
 
     try:
         rule = parse_structured_rule(structured_entry_rule)
-        indicator_frame = compute_indicator_frame(eligible)
+        # CC-1 master directive (2026-08-07), Part B Rung 2: macro fields are only
+        # fetched+attached when this SPECIFIC rule actually references one -- the
+        # overwhelming majority of hypotheses reference none and must see zero
+        # behavior/performance change from Rung 2 (rule_references_macro_fields).
+        indicator_frame = compute_indicator_frame(eligible, attach_macro=rule_references_macro_fields(rule))
         triggers = count_triggers(indicator_frame, rule)
     except RuleAmbiguousError as exc:
         return FrequencyMeasurement(UNMEASURABLE, None, None, 0, len(eligible), None, f"entry_rule ambiguous: {exc}")

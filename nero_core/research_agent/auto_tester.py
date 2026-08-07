@@ -75,6 +75,7 @@ from nero_core.research_agent.rule_dsl import (
     parse_bidirectional_entry_rules,
     parse_exit_plan,
     rule_fires_at,
+    rule_references_macro_fields,
 )
 from nero_core.research_agent.storage import append_json_list, read_json_list
 from nero_core.strategies.mean_reversion import (
@@ -667,9 +668,14 @@ def test_hypothesis(
         max_holding_hours=exit_plan.max_holding_hours,
     )
 
+    # CC-1 master directive (2026-08-07), Part B Rung 2: same conditional macro-fetch
+    # as frequency_gate.py -- only pay the fetch cost when the LONG or SHORT rule
+    # actually references a macro field, so every other hypothesis's backtest sees
+    # zero behavior/performance change from Rung 2.
+    needs_macro = rule_references_macro_fields(rule) or (short_rule is not None and rule_references_macro_fields(short_rule))
     train_raw, test_raw = split_chronological(candles)
-    train_frame = compute_indicator_frame(train_raw) if not train_raw.empty else train_raw
-    test_frame = compute_indicator_frame(test_raw) if not test_raw.empty else test_raw
+    train_frame = compute_indicator_frame(train_raw, attach_macro=needs_macro) if not train_raw.empty else train_raw
+    test_frame = compute_indicator_frame(test_raw, attach_macro=needs_macro) if not test_raw.empty else test_raw
 
     train_trades, _ = run_backtest(train_frame, rule, exit_plan, params, short_rule) if not train_frame.empty else ([], None)
     test_trades, _ = run_backtest(test_frame, rule, exit_plan, params, short_rule) if not test_frame.empty else ([], None)

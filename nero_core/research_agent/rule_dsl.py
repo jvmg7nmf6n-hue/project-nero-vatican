@@ -112,12 +112,94 @@ from nero_core.strategies.range_mean_reversion import adx as _range_mean_reversi
 # instead would not actually have fixed the real blocking case. Fixed-
 # period only (matching the ma20/ma50/ma200 convention), no arbitrary-
 # period support -- deferred per this directive's own explicit scope note.
+# real_yield_10y_chg20/dxy_chg20/vix_chg20/funding_rate_bps (CC-1 master directive,
+# 2026-08-07, Part B Rung 2): the ONLY 4 Bellwether-real macro fields wired into this
+# DSL -- see docs/bellwether_stage2_report.md's Rung 2 section for the full B2a
+# reasoning. real_yield_10y/dxy/vix are their 20-BUSINESS-DAY CHANGE, not their raw
+# level -- matching MACRO_RISK_ON's own already-vetted dfii10_change_20d/
+# dollar_change_20d convention (a level's "neutral" anchor drifts across multi-year
+# macro regimes; a change is regime-agnostic) and Rung 1's own correlation-matrix
+# finding that the 20-day-change relationships are the economically relevant ones for
+# a condition that reacts to MOVEMENT. funding_rate_bps is its raw LEVEL, deliberately
+# NOT a change -- it's naturally mean-reverting around 0 with occasional spikes, and
+# every existing real consumer (risk.py's `> 6 bps`, derivatives_etf.py's own
+# threshold) already treats the LEVEL, not its own change, as the economically
+# meaningful reading. See compute_indicator_frame's own attach_macro parameter and
+# _attach_macro_condition_fields for exactly how each is fetched/lagged/aligned --
+# every one of these is REAL-fetch-or-absent, never a synthetic/guessed value (a
+# fetch failure leaves the column simply absent, which this DSL's own pre-existing
+# "NaN = does not fire" convention already handles with no new logic).
 ALLOWED_FIELDS = (
     "close", "ma20", "ma50", "ma200", "zscore20", "atr14", "rsi14", "adx14",
     "bb_lower", "bb_upper", "ret_1", "volume", "hour_of_day", "high20",
-    "low20", "vol_ma20",
+    "low20", "vol_ma20", "real_yield_10y_chg20", "dxy_chg20", "vix_chg20",
+    "funding_rate_bps",
 )
+
+MACRO_CONDITION_FIELDS = ("real_yield_10y_chg20", "dxy_chg20", "vix_chg20", "funding_rate_bps")
 ALLOWED_OPS = ("gt", "gte", "lt", "lte", "eq", "cross_above", "cross_below")
+
+# CC-1 master directive (2026-08-07), Part B Rung 2, B2b: structural enforcement --
+# a field cannot enter ALLOWED_FIELDS without an explicit provenance declaration
+# here, and a field declared SYNTHETIC/UNAVAILABLE can never be one of them. Checked
+# by validate_field_provenance() at MODULE IMPORT TIME below (not only in a test) --
+# a future edit that adds a field to ALLOWED_FIELDS without a matching entry here, or
+# that (by mistake) marks a live macro field's real-data path as having regressed to
+# synthetic/unavailable while leaving it in ALLOWED_FIELDS, fails the import itself,
+# not just a test file that happens to get run. Every non-macro field is DERIVED
+# (computed purely from the candle's own OHLCV, e.g. via compute_indicator_frame) --
+# no external-data dependency, so no real/synthetic distinction applies to it at all.
+FIELD_PROVENANCE_DERIVED = "derived"
+FIELD_PROVENANCE_REAL = "real"
+FIELD_PROVENANCE_SYNTHETIC = "synthetic"
+FIELD_PROVENANCE_UNAVAILABLE = "unavailable"
+
+FIELD_PROVENANCE: dict[str, str] = {
+    "close": FIELD_PROVENANCE_DERIVED, "ma20": FIELD_PROVENANCE_DERIVED, "ma50": FIELD_PROVENANCE_DERIVED,
+    "ma200": FIELD_PROVENANCE_DERIVED, "zscore20": FIELD_PROVENANCE_DERIVED, "atr14": FIELD_PROVENANCE_DERIVED,
+    "rsi14": FIELD_PROVENANCE_DERIVED, "adx14": FIELD_PROVENANCE_DERIVED, "bb_lower": FIELD_PROVENANCE_DERIVED,
+    "bb_upper": FIELD_PROVENANCE_DERIVED, "ret_1": FIELD_PROVENANCE_DERIVED, "volume": FIELD_PROVENANCE_DERIVED,
+    "hour_of_day": FIELD_PROVENANCE_DERIVED, "high20": FIELD_PROVENANCE_DERIVED, "low20": FIELD_PROVENANCE_DERIVED,
+    "vol_ma20": FIELD_PROVENANCE_DERIVED,
+    # The 4 real macro fields -- see ALLOWED_FIELDS' own comment above for the
+    # per-field real data path each one traces to (FRED DFII10, yfinance DX-Y.NYB,
+    # yfinance ^VIX, Binance funding rate). None may ever be downgraded to
+    # FIELD_PROVENANCE_SYNTHETIC/FIELD_PROVENANCE_UNAVAILABLE here while remaining in
+    # ALLOWED_FIELDS -- if a real data path is ever lost, remove the field from
+    # ALLOWED_FIELDS in the SAME change that marks it here, not one without the other.
+    "real_yield_10y_chg20": FIELD_PROVENANCE_REAL,
+    "dxy_chg20": FIELD_PROVENANCE_REAL,
+    "vix_chg20": FIELD_PROVENANCE_REAL,
+    "funding_rate_bps": FIELD_PROVENANCE_REAL,
+}
+
+
+def validate_field_provenance(allowed_fields: tuple[str, ...], provenance: dict[str, str]) -> None:
+    """Raises RuntimeError if `allowed_fields` contains any field missing from
+    `provenance`, or any field whose declared provenance is SYNTHETIC/UNAVAILABLE --
+    the actual enforcement mechanism, called against the REAL ALLOWED_FIELDS/
+    FIELD_PROVENANCE at module import time below, and callable directly by a test
+    with a deliberately-bad `provenance` dict to prove the check itself actually
+    fires (not just that today's real data happens to pass it)."""
+    missing = [f for f in allowed_fields if f not in provenance]
+    if missing:
+        raise RuntimeError(
+            f"ALLOWED_FIELDS contains field(s) with no FIELD_PROVENANCE declaration: {missing} -- "
+            f"every field must be classified derived/real before it can be added."
+        )
+    unvetted = [
+        f for f in allowed_fields
+        if provenance[f] in (FIELD_PROVENANCE_SYNTHETIC, FIELD_PROVENANCE_UNAVAILABLE)
+    ]
+    if unvetted:
+        raise RuntimeError(
+            f"ALLOWED_FIELDS contains field(s) marked {{synthetic, unavailable}}, which may never "
+            f"reach this DSL: {unvetted} -- remove from ALLOWED_FIELDS or restore a confirmed-real "
+            f"data path before re-adding."
+        )
+
+
+validate_field_provenance(ALLOWED_FIELDS, FIELD_PROVENANCE)
 
 BOLLINGER_PERIOD = 20
 BOLLINGER_STD = 2.0
@@ -479,7 +561,83 @@ def parse_exit_plan(raw: object) -> ExitPlan:
     )
 
 
-def compute_indicator_frame(candles: pd.DataFrame) -> pd.DataFrame:
+def rule_references_macro_fields(rule: StructuredRule) -> bool:
+    """True if any condition in `rule` reads or compares against one of
+    MACRO_CONDITION_FIELDS. Callers (frequency_gate.py, auto_tester.py) use
+    this to decide whether to pay the (cached, but non-zero) cost of
+    fetching+attaching real macro data at all -- the overwhelming majority
+    of hypotheses reference no macro field and must see zero behavior or
+    performance change from Rung 2 (see docs/bellwether_stage2_report.md's
+    Rung 2 section)."""
+    for condition in rule.conditions:
+        if condition.field in MACRO_CONDITION_FIELDS:
+            return True
+        if condition.compare_to_field in MACRO_CONDITION_FIELDS:
+            return True
+    return False
+
+
+def _attach_macro_condition_fields(frame: pd.DataFrame) -> pd.DataFrame:
+    """Best-effort attach of the 4 real MACRO_CONDITION_FIELDS onto `frame`
+    (which must already carry a `date` column, e.g. from
+    compute_indicator_frame's own close_time-derived one). Each field is
+    fetched and merged INDEPENDENTLY -- a failure fetching one (missing API
+    key, network error, yfinance/nero_core import failure) leaves that
+    field's column simply ABSENT, never a guessed/synthetic value; this
+    DSL's own pre-existing "NaN = does not fire" convention
+    (evaluate_condition) already handles an absent field correctly with no
+    new logic. real_yield_10y/dxy/vix reuse
+    nero_core.data_sources.macro_data.compute_lagged_change/
+    align_macro_to_daily_candles UNCHANGED -- the SAME functions
+    MACRO_RISK_ON's own build_regime_frame uses, per this directive's own
+    "reuse that logic directly" instruction, not a re-derived copy. funding
+    reuses nero_core.data_sources.funding_data.load_funding_history
+    UNCHANGED, resampled to a daily mean (matching
+    vatican/bellwether/tools/correlation_matrix.py's own convention) before
+    the same alignment call -- funding needs no extra lag beyond that
+    (Binance's endpoint only ever returns already-settled events, per
+    funding_data.py's own docstring)."""
+    from nero_core.data_sources.macro_data import (
+        DFII10_LAG_BUSINESS_DAYS,
+        DXY_LAG_BUSINESS_DAYS,
+        VIX_LAG_BUSINESS_DAYS,
+        MacroDataUnavailableError,
+        align_macro_to_daily_candles,
+        compute_lagged_change,
+        fetch_dfii10_daily,
+        fetch_dxy_daily,
+        fetch_vix_daily,
+    )
+
+    change_window_days = 20
+    for fetch_fn, lag_days, column_name, level_series_name in (
+        (fetch_dfii10_daily, DFII10_LAG_BUSINESS_DAYS, "real_yield_10y_chg20", "real_yield_10y"),
+        (fetch_dxy_daily, DXY_LAG_BUSINESS_DAYS, "dxy_chg20", "dxy"),
+        (fetch_vix_daily, VIX_LAG_BUSINESS_DAYS, "vix_chg20", "vix"),
+    ):
+        try:
+            series, _source = fetch_fn()
+        except (MacroDataUnavailableError, ImportError):
+            continue
+        changed = compute_lagged_change(series, change_window_days, lag_days)
+        frame = align_macro_to_daily_candles(frame, changed, column_name)
+
+    try:
+        from nero_core.data_sources.funding_data import FundingDataUnavailableError, load_funding_history
+
+        result = load_funding_history("BTC")
+        settlements = result.settlements.copy()
+        settlements["_date"] = pd.to_datetime(settlements["settlement_date"]).dt.tz_localize(None).dt.normalize()
+        daily_funding_bps = settlements.groupby("_date")["funding_rate"].mean() * 10_000
+        daily_funding_bps.index.name = "date"
+        frame = align_macro_to_daily_candles(frame, daily_funding_bps, "funding_rate_bps")
+    except (FundingDataUnavailableError, ImportError):
+        pass
+
+    return frame
+
+
+def compute_indicator_frame(candles: pd.DataFrame, attach_macro: bool = False) -> pd.DataFrame:
     """Adds ma20/ma50/ma200/zscore20/atr14/rsi14/adx14/bb_lower/bb_upper/ret_1
     columns to a sorted copy of `candles` (which must carry close_time (epoch
     ms), close, high, low -- volume is optional, defaulted to NaN if absent).
@@ -569,6 +727,9 @@ def compute_indicator_frame(candles: pd.DataFrame) -> pd.DataFrame:
     # funding_extreme.py's own `.dt.hour` comparison. No lookahead risk (a
     # property of the row's own timestamp, not a rolling computation).
     frame["hour_of_day"] = frame["date"].dt.hour
+
+    if attach_macro:
+        frame = _attach_macro_condition_fields(frame)
 
     return frame
 
