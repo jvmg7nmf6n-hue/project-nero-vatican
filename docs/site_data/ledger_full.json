@@ -1,7 +1,62 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-07T07:37:41.032502+00:00",
+  "last_updated": "2026-08-07T09:12:23.802929+00:00",
   "rows": [
+    {
+      "timestamp": "2026-08-07T09:12:07.558961+00:00",
+      "strategy": "VOLATILITY_SQUEEZE",
+      "strategy_version": "volatility-squeeze-v1.1.0-ma100-silver-calibrated-24h",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "[CATCHUP] CLOSE_NOT_ABOVE_SQUEEZE_HIGH, CLOSE_NOT_ABOVE_TREND_MA",
+      "candle_timestamp": "2026-08-07T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T09:12:07.558961+00:00",
+      "strategy": "VOLATILITY_SQUEEZE",
+      "strategy_version": "volatility-squeeze-v1.1.0-ma150-silver-calibrated-24h",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "[CATCHUP] CLOSE_NOT_ABOVE_SQUEEZE_HIGH, CLOSE_NOT_ABOVE_TREND_MA",
+      "candle_timestamp": "2026-08-07T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T09:12:07.558961+00:00",
+      "strategy": "VOLATILITY_SQUEEZE",
+      "strategy_version": "volatility-squeeze-v1.1.0-ma200-silver-calibrated-24h",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "[CATCHUP] CLOSE_NOT_ABOVE_SQUEEZE_HIGH, CLOSE_NOT_ABOVE_TREND_MA",
+      "candle_timestamp": "2026-08-07T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T09:12:07.558961+00:00",
+      "strategy": "TREND_PULLBACK",
+      "strategy_version": "trend-pullback-v1.5.0-silver-calibrated-24h",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "[CATCHUP] NOT_IN_ESTABLISHED_UPTREND, CLOSE_NOT_BACK_ABOVE_MA50, RSI_OUTSIDE_NEUTRAL_BAND",
+      "candle_timestamp": "2026-08-07T04:00:00+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T09:12:07.558961+00:00",
+      "strategy": "BREAKOUT_MOMENTUM",
+      "strategy_version": "breakout-momentum-v1.6.0-silver-calibrated-24h",
+      "asset": "SILVER",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "[CATCHUP] CLOSE_NOT_ABOVE_BREAKOUT_HIGH, CLOSE_NOT_ABOVE_MA200",
+      "candle_timestamp": "2026-08-07T04:00:00+00:00"
+    },
     {
       "timestamp": "2026-08-07T07:37:28.411694+00:00",
       "strategy": "GOLD_SILVER_RATIO_MR",
