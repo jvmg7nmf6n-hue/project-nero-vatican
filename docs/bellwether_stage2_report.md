@@ -1126,3 +1126,240 @@ updates, zero code overlap):
     ed46366 CC-1 directive Item 2: wire real RSS headlines into Bellwether ingestion
     15dcc16 CC-1 directive Item 1: wire DefiLlama stablecoin supply real
     2487e6e Update signal alerts state
+
+---
+
+## 2026-08-07: CC-1 directive -- fix news_intelligence/geopolitical provenance
+
+### Item 1 -- fix the provenance labeling
+
+**1a. FINDING** (confirmed-from-code, exact file+line). Traced the real
+mechanism the 4 already-wired agents use:
+- `monetary_policy.py:55-62`: reads `m.provenance_of("real_yield_10y")` and
+  `m.provenance_of("dxy")` from the `MarketSnapshot` itself, then
+  `if both REAL: REAL elif either REAL: MIXED else: SYNTHETIC`.
+- `liquidity.py` (fixed in the prior directive): same pattern, reading
+  `m.provenance_of("vix")` and `ctx.data.onchain.provenance_of
+  ("stablecoin_supply_chg_pct")`.
+- `derivatives_etf.py:29,62-63`: reads `ctx.data.derivatives.provenance_of
+  ("btc_perp_funding_bps")`, `MIXED if REAL else SYNTHETIC` (a single real
+  input, so no third state possible).
+
+**The common shape**: an agent reads `provenance_of(field)` from the
+underlying data object it consumes, then sets its own `AgentResult
+.provenance=` explicitly in every `self.result(...)` call. `news_intelligence
+.py`/`geopolitical.py` could not follow this literally -- they don't consume
+a `MarketSnapshot`/`Provider` field, they consume a *list* of `MacroEvent`
+objects, which (confirmed-from-code) had **no provenance concept at all**
+before this directive (`bellwether/schemas.py`'s pre-fix `MacroEvent` had
+no `provenance` field; `AgentResult.provenance` defaults to SYNTHETIC per
+`schemas.py:202`, and neither agent's `_heuristic`/`_llm_classify`/`_llm`
+result-building ever set `provenance=` explicitly -- confirmed by reading
+every `self.result(...)` call site in both files).
+
+**1b. WHAT SHIPPED.**
+- `bellwether/schemas.py`: added `provenance: DataProvenance =
+  DataProvenance.SYNTHETIC` to `MacroEvent` -- the same "missing/unset means
+  never assumed real" default every other provenance-labeled value in this
+  schema module already uses. **A real bug caught before it ever shipped**:
+  `DataProvenance` was defined textually AFTER `MacroEvent` in the file;
+  `provenance: DataProvenance = DataProvenance.SYNTHETIC` evaluates its
+  default value eagerly at class-definition time (unlike the type
+  annotation itself, which `from __future__ import annotations` defers) --
+  importing the module raised `NameError: name 'DataProvenance' is not
+  defined`, confirmed by actually running the import before writing any
+  further code. Fixed by moving the `DataProvenance` class definition to
+  before `MacroEvent` (a pure reordering, zero behavior change to
+  `DataProvenance` itself) -- reconfirmed via the same import immediately
+  after, and the full Bellwether suite (59 passed, 1 skipped, no
+  regressions) before writing anything else.
+- `nero_core/execution/bellwether_overlay.py`'s `build_real_macro_events()`:
+  every event it constructs now gets `provenance=DataProvenance.REAL` --
+  correct because, per that function's own pre-existing contract (from the
+  prior directive), it only ever builds an event from a confirmed-live RSS
+  match, never a fallback.
+- `news_intelligence.py`/`geopolitical.py`: added a `_events_provenance()`
+  static method to each, combining the events actually consumed (all of
+  `ctx.events` for news_intelligence; the filtered `geo_events` subset for
+  geopolitical -- see 1c) via **all-real -> REAL, any-real -> MIXED,
+  none-real -> SYNTHETIC**, the same pattern `monetary_policy.py` already
+  uses, generalized from 2 fixed fields to N events. `provenance=` is now
+  set explicitly in every `self.result(...)` call in both files, including
+  the early-return "no events"/"no relevant events" branches, which now
+  correctly report `UNAVAILABLE` (matching `combined_provenance`'s own
+  established "empty means UNAVAILABLE, not SYNTHETIC" precedent in
+  `_synthesis.py`) rather than falling through to the SYNTHETIC default.
+  **A second real design correction made during implementation**: the
+  first draft reused `_synthesis.weakest_provenance` for this combination
+  and a test caught it immediately -- `weakest_provenance([REAL, SYNTHETIC])`
+  returns `SYNTHETIC` (it combines already-computed AGENT provenances,
+  where MIXED may already be a list member; it never synthesizes MIXED from
+  a raw REAL/SYNTHETIC blend). Since `DataProvenance.MIXED`'s own docstring
+  explicitly defines "an agent whose inputs are a genuine blend of REAL and
+  SYNTHETIC fields" as the textbook MIXED case, `weakest_provenance` was
+  the wrong tool; replaced with the explicit all/any/none-real logic before
+  committing anything.
+
+`geopolitical.py` stays **RSS-only for this directive**, per 1b's own
+instruction not to silently expand scope -- GDELT (flagged as a strong
+candidate in the prior data-source scoping report) is a real, separate
+follow-up: it would give `geopolitical.py` a purpose-built, pre-categorized
+event/tension signal instead of RSS headlines classified by keyword, but
+wiring a new source is out of this small directive's own scope.
+
+**1c. FINDING, confirmed-from-code and by test.** The provenance value is
+genuinely per-cycle, never a stale carry-over: neither agent holds any
+instance state between calls to `run()` -- `_events_provenance()` is a pure
+function recomputed fresh from `ctx.events` every single invocation. An RSS
+fetch failure (network error, feed down) is already handled honestly one
+layer down, per the prior directive's own design: `NewsFeedClient.load()`
+degrades to a `"fallback: ..."` status, and `build_real_macro_events()`
+already treats that as **zero events for that asset this cycle**, never
+fabricated ones. The natural, already-correct consequence is `ctx.events ==
+[]` (or a `geo_events` subset that's empty) on a failed cycle, which both
+agents' own pre-existing early-return already reports as `UNAVAILABLE` --
+no new failure-handling code was needed, only the correct default at that
+existing branch. Verified directly with a dedicated test
+(`test_news_intelligence_provenance_recomputed_fresh_each_call`): a REAL
+cycle immediately followed by an empty cycle correctly transitions
+REAL -> UNAVAILABLE, never staying stuck on the prior cycle's label.
+
+**WHAT SHIPPED (tests).** New file `vatican/bellwether/tests/
+test_vatican_news_geopolitical_provenance.py`, 11 tests: `MacroEvent`'s own
+SYNTHETIC default; both agents report UNAVAILABLE with no (relevant) events;
+REAL when all consumed events are REAL; SYNTHETIC when none are; MIXED when
+genuinely blended; provenance recomputed fresh per cycle (1c); geopolitical
+correctly ignores an irrelevant REAL event when computing its own
+provenance (uses `geo_events`, not all of `ctx.events`) and is not falsely
+dragged to MIXED by an irrelevant SYNTHETIC one. `tests/
+test_bellwether_overlay.py`'s existing `test_live_result_produces_matching_
+macro_events` extended with a `provenance == REAL` assertion on the real
+production path. Full Bellwether suite: 59 -> **70 passed, 1 skipped**
+(+11), zero regressions.
+
+### Item 2 -- re-measured real effect
+
+**2a. FINDING, confirmed-from-data.** Re-ran the exact same before/after
+cycle from the prior directive's own Item 2c (`Settings(data_mode="live",
+seed=1)`, `events=[]` vs. `build_real_macro_events()`):
+
+| | Before (`events=[]`) | After (real RSS events, this fix) |
+|---|---|---|
+| `news_intelligence` provenance | UNAVAILABLE | **REAL** |
+| `geopolitical` provenance | UNAVAILABLE | **REAL** |
+| `gold_bias` | BEARISH | **BULLISH** |
+| `gold_agreement` | 0.468 | 0.368 |
+| `gold_coverage` | 0.279 | **1.0** |
+| `bitcoin_agreement` | 0.039 | 0.167 |
+| `bitcoin_coverage` | 0.324 | 0.524 |
+
+**Not byte-identical** -- confirmed, this is the real fix working:
+`gold_bias` genuinely flips direction once the real news/geopolitical
+signals are actually counted, and `gold_coverage` reaches its maximum
+(1.0), a real, substantial, measured change directly attributable to this
+fix (nothing else in the pipeline changed between the two calls).
+
+**2b. FINDING -- a real, honest, structural limitation of the sweep
+methodology itself, not of this fix.** Re-ran the identical 180-cycle sweep
+(`tools/sweep.py --mode live`). Result: **byte-identical to the prior
+directive's own post-Item-1/2 numbers** (`mean_gold_agreement` 0.361,
+`mean_bitcoin_agreement` 0.393, `mean_gold_coverage` 0.202,
+`mean_bitcoin_coverage` 0.300 -- unchanged to 3 decimal places). Traced why,
+confirmed-from-code (`vatican/bellwether/tools/sweep.py:57`):
+`orch.analyze(events=[MacroEvent(headline=headline)], persist=False)` --
+`sweep.py` builds its own `MacroEvent`s directly from its 6 hand-authored
+`HEADLINE_SCENARIOS` strings, **never calling `build_real_macro_events()`
+at all**. Per this directive's own new schema default, an event built this
+way stays SYNTHETIC (confirmed: the sweep run's own last-cycle breakdown
+showed `news_intelligence: 'synthetic'`, `geopolitical: 'unavailable'`) --
+correctly, since `sweep.py`'s scenario headlines are hand-authored test
+strings, not real RSS content, and this fix's own schema docstring says
+exactly that ("`tools/sweep.py`'s own hand-authored scenario headlines...
+correctly stay on this default"). **The 180-cycle sweep is structurally
+incapable of measuring this fix's real effect** -- it exercises a
+completely different, synthetic-by-design event-construction path than
+`bellwether_overlay.py`'s real production one. This is reported plainly as
+a real limitation of the measurement tool, not spun as "no effect" -- 2a's
+own direct `Orchestrator.analyze()` comparison is the correct, and only,
+way this fix's real effect has actually been measured.
+
+**2c. FINDING -- the corrected real provenance count.** Ran the real
+production path (`build_real_macro_events()` -> `Orchestrator.analyze()`,
+11 real headlines fetched live) and read the full `provenance_breakdown`
+directly:
+
+- **Real/mixed-capable primary agents (6 of 15, up from 4 before this
+  directive)**: `monetary_policy` (REAL), `liquidity` (REAL), `learning`
+  (REAL), `news_intelligence` (**REAL, this directive**), `geopolitical`
+  (**REAL, this directive**), `derivatives_etf` (MIXED -- funding real,
+  other fields still mock).
+- **Downstream/composite (5), inherit real-or-mixed provenance from the
+  above when applicable**: `gold_analysis`, `bitcoin_analysis`, `scenario`,
+  `risk`, `trade_recommendation` -- all reported MIXED in this real cycle.
+- **Fully synthetic, no real path wired (4)**: `economic_calendar`,
+  `onchain`, `correlation`, `historical_analog`.
+
+**This corrects the prior directive's own "should be 6 of 15" prediction
+-- which was directionally right, but for the wrong immediate reason.**
+The prior directive predicted 6 by assuming wiring 2 new DATA SOURCES
+(stablecoin, RSS) would itself produce 2 new real agents; the real,
+measured result at the time was that the count stayed at 4, because RSS
+wiring alone left news_intelligence/geopolitical's own provenance LOGIC
+unfixed (2c of that directive's own honest finding). **It took this
+follow-up directive -- fixing the labeling gap specifically, not adding any
+new data -- to actually realize the 6th (and 5th) real agent.** The real
+number, today, confirmed-from-data: **6 of 15**.
+
+### Test counts
+
+Bellwether (`vatican/bellwether/tests/`): 59 -> **70 passed, 1 skipped**
+(+11). Vatican-core Python (`tests/`, full suite): before this directive
+**2734 tests**; after: **Ran 2734 tests in 679.8s** (unchanged -- this
+directive's only nero_core-level test change was 3 assertion lines added
+to an *existing* test method in `test_bellwether_overlay.py`, not a new
+test function; all 11 new tests live in the Bellwether-side pytest suite,
+counted separately above) -- `FAILED (failures=1, errors=3, skipped=17)`,
+the same 4 pre-existing failures by name (`test_lxml_is_importable`,
+`FetchKse100DailyTest`'s 2 PSX tests, and
+`test_the_real_committed_eve_hypotheses_file_has_been_backfilled`). Zero
+new failures from this directive's own changes.
+
+### No evidence-bar constant touched, confirmed
+
+This directive touches exactly: `vatican/bellwether/bellwether/schemas.py`
+(one field addition + a pure class-ordering fix), `vatican/bellwether/
+bellwether/agents/news_intelligence.py`, `vatican/bellwether/bellwether/
+agents/geopolitical.py`, `nero_core/execution/bellwether_overlay.py` (one
+kwarg added to an existing dict literal), and two test files (one new, one
+extended). Zero diff to `rule_dsl.py`, `macro_data.py`, `trial.py`,
+`repair_to_trial.py`, `graveyard_distillation.py`, or any Adam/Eve
+scoring/verdict path -- confirmed via `git status --short`, which shows
+Rung 2's own 7 files unaffected by this directive's own commits (separate,
+disjoint file sets, as in every prior directive this session). Zero change
+to any admission criterion, frequency-gate constant, or FDR/bootstrap
+parameter. No GDELT wiring, no new data source, no new API key -- per this
+directive's own explicit OUT OF SCOPE list.
+
+### What's still not real, and the next highest-priority candidate
+
+Still not real: `onchain`'s own 3 remaining fields (exchange netflow, LTH
+supply, MVRV-Z -- no free source found in the earlier scoping report), ETF
+flows (confirmed blocked), derivatives skew/OI/gold positioning,
+economic-calendar surprise (dates are free via FRED; consensus estimates
+are not), and `correlation`/`historical_analog`'s own by-design-hardcoded
+content. **The next highest-priority candidate, per 1b's own explicit
+flag**: wiring GDELT into `geopolitical.py` as a second, complementary
+event source alongside RSS -- a purpose-built, pre-categorized
+tension/escalation signal (300+ event categories, a built-in tone score)
+rather than keyword-classified headlines, real and free, already scoped in
+the earlier data-source report, deliberately not attempted here to keep
+this directive small and precise.
+
+### git log origin/main --oneline -3
+
+Verified on `origin/main` immediately after pushing (rebased cleanly onto
+one intervening `signal-alerts` automated data-only commit):
+
+    fce917e CC-1 directive: fix news_intelligence/geopolitical provenance labeling
+    47fdbb7 Update signal alerts state
+    e474d48 CC-1 directive closing report: wire the 2 safest agents real
