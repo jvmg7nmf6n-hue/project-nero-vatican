@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-07T00:45:28.621757+00:00",
+  "last_updated": "2026-08-07T03:14:23.758514+00:00",
   "rows": [
     {
       "timestamp": "2026-08-07T00:44:18.278432+00:00",
@@ -892,6 +892,17 @@
       "exit_price": null,
       "reasoning": "direction=SHORT stop_loss=63665.38571429 imbalance_ratio=0.0764",
       "candle_timestamp": "2026-08-03T01:59:59.999000+00:00"
+    },
+    {
+      "timestamp": "2026-08-07T03:13:40.822501+00:00",
+      "strategy": "DONCHIAN_TREND",
+      "strategy_version": "donchian-trend-v2.0.0-bracket-gold-n20-1week",
+      "asset": "GOLD",
+      "signal_type": "NO_TRADE",
+      "entry_price": null,
+      "exit_price": null,
+      "reasoning": "NO_BREAKOUT",
+      "candle_timestamp": "2026-08-03T00:00:00+00:00"
     },
     {
       "timestamp": "2026-08-07T00:11:18.530552+00:00",
