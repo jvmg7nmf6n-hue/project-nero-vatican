@@ -9,7 +9,7 @@ happens in the orchestrator once the final output exists, via persist().
 """
 from __future__ import annotations
 
-from ..schemas import AgentResult, Asset
+from ..schemas import AgentResult, Asset, DataProvenance
 from ..store import PredictionStore
 from .base import AnalysisContext, BaseAgent
 
@@ -36,6 +36,18 @@ class LearningAgent(BaseAgent):
         return self.result(
             facts=facts,
             confidence=0.5,
+            # VATICAN INTEGRATION (Stage 2, "close the provenance leak"
+            # directive): unlike the other 9 producer agents, this one was
+            # never mock-flavoured to begin with -- rolling_accuracy()/
+            # brier() are computed straight from PredictionStore's own
+            # recorded (prediction, realized_outcome) pairs, with a
+            # well-defined neutral-prior default (0.5/0.25) when n==0, never
+            # a random.uniform() draw. Genuinely REAL bookkeeping in every
+            # data_mode -- distinct from the separate question of whether
+            # the PREDICTIONS being scored were themselves built from real
+            # or mock inputs (that's tracked on each prediction's own
+            # record, not here).
+            provenance=DataProvenance.REAL,
             meta={
                 "rolling_accuracy": overall,
                 "gold_accuracy": gold_acc,

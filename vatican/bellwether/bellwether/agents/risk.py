@@ -7,7 +7,8 @@ trade engine must apply.
 """
 from __future__ import annotations
 
-from ..schemas import AgentResult, Asset, Bias, RiskFlag
+from ..schemas import AgentResult, Asset, Bias, DataProvenance, RiskFlag
+from ._synthesis import combined_provenance, real_only_signals, weakest_provenance
 from .base import AnalysisContext, BaseAgent
 
 
@@ -15,12 +16,25 @@ class RiskAgent(BaseAgent):
     name = "risk"
 
     async def run(self, ctx: AnalysisContext) -> AgentResult:
+        # VATICAN INTEGRATION (Stage 2, "close the provenance leak"
+        # directive): in live mode every check below only fires from
+        # real/mixed-provenance data — a check whose OWN provider has no
+        # real implementation yet (derivatives, on-chain, calendar; VIX
+        # until it's wired) is skipped entirely rather than silently
+        # computed from the mock draw and folded into a haircut that then
+        # gets applied on top of a real read. Mock mode (default) is
+        # UNCHANGED — every check runs exactly as before.
+        live = ctx.settings.data_mode == "live"
         flags: list[RiskFlag] = []
         haircut = 0.0
+        contributing_provenances: list[DataProvenance] = []
 
         # 1) Signal disagreement per asset.
         for asset in (Asset.GOLD, Asset.BITCOIN):
-            sigs = [s for s in ctx.all_signals(asset) if s.bias != Bias.NEUTRAL]
+            asset_signals = real_only_signals(ctx, asset) if live else ctx.all_signals(asset)
+            sigs = [s for s in asset_signals if s.bias != Bias.NEUTRAL]
+            if live and asset_signals:
+                contributing_provenances.append(combined_provenance(ctx, asset_signals))
             if len(sigs) >= 3:
                 bulls = sum(1 for s in sigs if s.bias.score > 0)
                 bears = sum(1 for s in sigs if s.bias.score < 0)
@@ -31,36 +45,52 @@ class RiskAgent(BaseAgent):
                                           detail=f"{bulls} bullish vs {bears} bearish drivers"))
                     haircut += 0.1
 
-        # 2) Crowded leverage / froth from derivatives + on-chain.
-        d = ctx.data.derivatives.metrics()
-        if d.get("btc_perp_funding_bps", 0) > 6:
-            flags.append(RiskFlag(label="BTC leverage crowded", severity=0.6,
-                                  detail=f"perp funding {d['btc_perp_funding_bps']:+.1f} bps"))
-            haircut += 0.08
-        mvrv = ctx.data.onchain.metrics().get("mvrv_z", 1.0)
-        if mvrv > 3.0:
-            flags.append(RiskFlag(label="BTC valuation hot", severity=0.5,
-                                  detail=f"MVRV-Z {mvrv:.2f} (>3 historically frothy)"))
-            haircut += 0.05
+        # 2) Crowded leverage / froth from derivatives + on-chain. No live
+        # DerivativesProvider/OnChainProvider exists yet (see build_data_hub)
+        # -- these providers are ALWAYS mock today, in both "mock" and
+        # "live" data_mode, so this check is skipped entirely in live mode
+        # rather than computed from a value that can never currently be real.
+        if not live:
+            d = ctx.data.derivatives.metrics()
+            if d.get("btc_perp_funding_bps", 0) > 6:
+                flags.append(RiskFlag(label="BTC leverage crowded", severity=0.6,
+                                      detail=f"perp funding {d['btc_perp_funding_bps']:+.1f} bps"))
+                haircut += 0.08
+            mvrv = ctx.data.onchain.metrics().get("mvrv_z", 1.0)
+            if mvrv > 3.0:
+                flags.append(RiskFlag(label="BTC valuation hot", severity=0.5,
+                                      detail=f"MVRV-Z {mvrv:.2f} (>3 historically frothy)"))
+                haircut += 0.05
 
-        # 3) Imminent catalysts within ~3 days.
-        cal = ctx.result("economic_calendar")
-        catalysts = (cal.meta.get("catalysts", []) if cal else [])
-        soon = [c for c in catalysts if "FOMC" in c["name"] or "CPI" in c["name"] or "NFP" in c["name"]]
-        if soon:
-            flags.append(RiskFlag(label="High-impact catalyst ahead", severity=0.55,
-                                  detail=", ".join(c["name"] for c in soon[:3])))
-            haircut += 0.1
+        # 3) Imminent catalysts within ~3 days. economic_calendar has no
+        # live provider yet either (MockCalendar in both modes) -- same
+        # skip-in-live-mode treatment as (2).
+        if not live:
+            cal = ctx.result("economic_calendar")
+            catalysts = (cal.meta.get("catalysts", []) if cal else [])
+            soon = [c for c in catalysts if "FOMC" in c["name"] or "CPI" in c["name"] or "NFP" in c["name"]]
+            if soon:
+                flags.append(RiskFlag(label="High-impact catalyst ahead", severity=0.55,
+                                      detail=", ".join(c["name"] for c in soon[:3])))
+                haircut += 0.1
 
-        # 4) Vol regime.
-        if ctx.market.vix > 25:
-            flags.append(RiskFlag(label="Elevated volatility regime", severity=0.5,
-                                  detail=f"VIX {ctx.market.vix:.1f}"))
-            haircut += 0.05
+        # 4) Vol regime -- gated on VIX's OWN field provenance (currently
+        # always synthetic; this becomes live automatically once VIX is
+        # wired, no further change needed here).
+        vix_provenance = ctx.market.provenance_of("vix")
+        if (not live) or vix_provenance in (DataProvenance.REAL, DataProvenance.MIXED):
+            if ctx.market.vix > 25:
+                flags.append(RiskFlag(label="Elevated volatility regime", severity=0.5,
+                                      detail=f"VIX {ctx.market.vix:.1f}"))
+                haircut += 0.05
+            if live:
+                contributing_provenances.append(vix_provenance)
 
         haircut = round(min(0.5, haircut), 3)
+        provenance = weakest_provenance(contributing_provenances) if live else DataProvenance.SYNTHETIC
         return self.result(
             risks=[f"{f.label}: {f.detail}" for f in flags],
             confidence=0.6,
+            provenance=provenance,
             meta={"haircut": haircut, "flags": [f.model_dump() for f in flags]},
         )

@@ -6,7 +6,7 @@ stablecoin supply growth from the on-chain feed (dry powder entering crypto).
 """
 from __future__ import annotations
 
-from ..schemas import AgentResult, Asset, Bias, Category, Signal
+from ..schemas import AgentResult, Asset, Bias, Category, DataProvenance, Signal
 from .base import AnalysisContext, BaseAgent
 
 _VIX_CALM = 15.0
@@ -45,5 +45,18 @@ class LiquidityAgent(BaseAgent):
             f"MOVE (bond vol): {m.move_index}",
             f"Stablecoin supply change: {stable_growth:+.2f}%",
         ]
-        return self.result(signals=signals, facts=facts, confidence=0.65,
-                           meta={"vix_z": round(vix_z, 3), "risk_on": round(risk_on, 3)})
+        # VATICAN INTEGRATION: this agent's own honest provenance. The GOLD
+        # signal depends only on vix; the BTC signal ALSO depends on
+        # oc["stablecoin_supply_chg_pct"] (still mock — no live OnChainProvider
+        # exists yet). AgentResult.provenance is a single value for the whole
+        # agent (not per-signal), so once vix is real this is honestly MIXED
+        # (not REAL) even though the GOLD signal alone doesn't touch the
+        # still-mock stablecoin figure — a known, deliberate coarseness at
+        # this provenance granularity, same as monetary_policy's own
+        # real_yield-real/dxy-still-mock MIXED state before dxy was wired.
+        vix_provenance = m.provenance_of("vix")
+        provenance = (DataProvenance.MIXED if vix_provenance == DataProvenance.REAL
+                     else DataProvenance.SYNTHETIC)
+        return self.result(signals=signals, facts=facts, confidence=0.65, provenance=provenance,
+                           meta={"vix_z": round(vix_z, 3), "risk_on": round(risk_on, 3),
+                                 "vix_provenance": vix_provenance.value})

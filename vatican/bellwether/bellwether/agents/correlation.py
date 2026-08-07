@@ -7,7 +7,7 @@ It nudges confidence rather than adding fresh directional pressure.
 """
 from __future__ import annotations
 
-from ..schemas import AgentResult
+from ..schemas import AgentResult, DataProvenance
 from .base import AnalysisContext, BaseAgent
 
 
@@ -32,6 +32,19 @@ class CorrelationAgent(BaseAgent):
         return self.result(
             facts=notes,
             confidence=0.5,
+            # VATICAN INTEGRATION (Stage 2, "close the provenance leak"
+            # directive): the three coefficients above are hardcoded design
+            # constants (-0.7, 0.55/0.35, 0.4/0.2), not computed from data —
+            # confirmed in docs/bellwether_audit.md ("not even mock-random").
+            # Which branch gets picked depends on real_yield_10y/vix/dxy, but
+            # the OUTPUT is always one of a fixed handful of numbers either
+            # way — this agent structurally can never be REAL until it's
+            # rewritten to compute an actual rolling correlation from real
+            # candle history (a real future addition, not a wiring gap).
+            # Unconditionally SYNTHETIC, in every data_mode. Emits no
+            # signals, so it was never at risk of leaking into
+            # gold_analysis/bitcoin_analysis's aggregate in the first place.
+            provenance=DataProvenance.SYNTHETIC,
             meta={
                 "gold_realyield_corr": gold_realyield_corr,
                 "btc_risk_corr": btc_risk_corr,

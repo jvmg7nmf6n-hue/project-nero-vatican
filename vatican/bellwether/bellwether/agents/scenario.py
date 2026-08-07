@@ -7,7 +7,8 @@ than a single point call.
 from __future__ import annotations
 
 from ..llm import LLMUnavailable
-from ..schemas import AgentResult, Asset, Bias, Scenario
+from ..schemas import AgentResult, Asset, Bias, DataProvenance, Scenario
+from ._synthesis import weakest_provenance
 from .base import AnalysisContext, BaseAgent
 
 
@@ -26,7 +27,17 @@ class ScenarioAgent(BaseAgent):
                 scenarios = await self._llm_scenarios(ctx, g_bias, b_bias) or scenarios
         except LLMUnavailable:
             pass
-        return self.result(confidence=0.55, meta={"scenarios": [s.model_dump() for s in scenarios]})
+        # VATICAN INTEGRATION (Stage 2, "close the provenance leak"
+        # directive): scenario just narrates gold_analysis/bitcoin_analysis's
+        # own biases, so it can never be more trustworthy than the weaker of
+        # the two -- this needs no live/mock branch of its own, since those
+        # two agents already encode the mode-dependent behavior correctly.
+        provenance = weakest_provenance([
+            gold.provenance if gold else DataProvenance.UNAVAILABLE,
+            btc.provenance if btc else DataProvenance.UNAVAILABLE,
+        ])
+        return self.result(confidence=0.55, provenance=provenance,
+                           meta={"scenarios": [s.model_dump() for s in scenarios]})
 
     def _heuristic_scenarios(self, g: Bias, b: Bias) -> list[Scenario]:
         return [

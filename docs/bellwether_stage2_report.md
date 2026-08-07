@@ -1,8 +1,84 @@
 # Bellwether Stage 1 + Stage 2 Report
 
 Date: 2026-08-07. Follows `docs/bellwether_audit.md` (Stage 0). Stage 1
-(vendor) and Stage 2 priority-1 (`monetary_policy` real wiring) are done;
-priorities 2/3 (VIX, funding rate) are not started this session.
+(vendor) is done. Stage 2: `monetary_policy` fully real (real_yield_10y AND
+dxy — see the 2026-08-07 update below), VIX wired for `liquidity`, the
+provenance leak in `risk`/`scenario`/`correlation`/`trade_recommendation`
+closed. BTC funding rate (priority-3) not started this session. **Read the
+2026-08-07 update section first** — it supersedes several numbers in the
+original report below, kept for the historical record of what was found and
+in what order.
+
+---
+
+## 2026-08-07 update: dxy + VIX wired, provenance leak closed
+
+Three follow-ups from the original report below, all landed same-day:
+
+1. **`dxy` is now real too**, not left synthetic. A dedicated availability
+   check (per explicit instruction, before picking a fix) found yfinance's
+   `DX-Y.NYB` (ICE US Dollar Index) returns real, DXY-index-scale data
+   (~99.9, confirmed live 2026-08-07, 14,116 daily rows back to 1971, free,
+   no key) — option (a), no formula rewrite needed.
+   **Why MACRO_RISK_ON used UUP in the first place, confirmed documented,
+   not guessed**: `docs/macro_risk_on_report.md` states plainly that DXY
+   "is not a valid Twelve Data symbol" — a genuine provider limitation of
+   the Twelve Data pipeline `nero_core/data_sources/macro_data.py` uses,
+   not a quality preference for UUP. `DX-Y.NYB` is sourced via a different
+   provider (yfinance, already a soft dependency for the DFII10 path via
+   `nero_core`), independent of that limitation.
+   `monetary_policy.py`'s own formula is completely unchanged — this was a
+   sourcing fix, not a formula rewrite.
+2. **VIX is now real for `liquidity`**, via the same yfinance pattern
+   (`^VIX`, confirmed live: 9,217 daily rows back to 1990, ~15-16 currently).
+   `risk.py`'s "elevated volatility regime" check picks this up
+   automatically — no code change needed there, it was already gated on
+   `vix`'s own field provenance.
+3. **The provenance leak is closed.** `RiskAgent`, `ScenarioAgent`,
+   `CorrelationAgent`, and `TradeRecommendationAgent` all now compute and
+   report their own honest provenance, and — critically — `RiskAgent`'s
+   signal-disagreement check, leverage/froth check, and catalyst check now
+   only fire from real/mixed-provenance data in live mode (the
+   derivatives/onchain/calendar checks are skipped entirely in live mode
+   today, since no live provider exists for any of those three yet — not
+   silently computed from data that can never currently be real).
+   `CorrelationAgent` is now explicitly labelled always-SYNTHETIC (its
+   coefficients are hardcoded design constants, confirmed in Stage 0 —
+   never becomes real regardless of data_mode). A genuine regression test
+   (`test_no_agent_calls_ctx_all_signals_for_gold_or_bitcoin_in_live_mode`)
+   tracks the actual `ctx.all_signals()` call, not just output values.
+
+**Updated real-vs-mock sweep** (same 180-cycle methodology, re-run after
+each wiring step, all same session for direct comparability):
+
+| | MOCK baseline | LIVE, 1 real agent (`monetary_policy` only) | LIVE, 2 real-ish agents (+ `liquidity` MIXED via VIX) |
+|---|---|---|---|
+| mean confidence | 0.295 | 0.281 | **0.392** |
+| % below 0.35 threshold | 80.6% | 100.0% | **23.3%** |
+| gold NEUTRAL | 78.3% | 0.0% | 0.0% |
+| bitcoin NEUTRAL | 73.3% | 100.0% | **23.3%** |
+
+**This is the clean confirmation of the mass-recovery hypothesis from the
+original report below**: adding a SECOND real-provenance agent didn't just
+move confidence up incrementally — it pushed the live-mode mean *above* the
+mock baseline (0.392 vs 0.295) and cut the below-threshold rate from 100%
+to 23.3%. The mechanism is exactly what was traced before (aggregate()'s
+`mass` term recovering as more signals contribute) — now demonstrated with
+real data, not just predicted. Full discussion of what this means for the
+formula's validity at full wiring: `docs/bellwether_aggregation_formula_report.md`
+(report-only, no formula change made, per explicit instruction).
+
+**LLM streaming**: still deferred, now explicitly documented as a
+prerequisite in `README_VATICAN.md` — ships first if any LLM path with web
+search is ever turned on, not as a follow-up.
+
+**Tests**: 34 passed, 1 skipped (standalone, no `PYTHONPATH`) — up from 21/1
+in the original report, all new tests exercise real network calls
+(DX-Y.NYB, ^VIX) when yfinance is reachable, skip cleanly otherwise.
+
+---
+
+## Original report (2026-08-07, pre-update)
 
 ## Stage 1 — vendored
 

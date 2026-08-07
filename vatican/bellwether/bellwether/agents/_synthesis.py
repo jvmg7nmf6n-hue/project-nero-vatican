@@ -39,26 +39,44 @@ def real_only_signals(ctx, asset: Asset) -> list[Signal]:
     return out
 
 
+_PROVENANCE_RANK = {
+    DataProvenance.UNAVAILABLE: 0,
+    DataProvenance.SYNTHETIC: 1,
+    DataProvenance.MIXED: 2,
+    DataProvenance.REAL: 3,
+}
+
+
+def weakest_provenance(provenances: list[DataProvenance]) -> DataProvenance:
+    """VATICAN INTEGRATION (Stage 2, "close the provenance leak" directive):
+    THE one place two-or-more provenances combine into one, so every
+    downstream/composite agent (risk, scenario, trade_recommendation, and
+    gold_analysis/bitcoin_analysis's own combined_provenance below) agrees
+    on the same rule rather than each re-deriving its own. A composite is
+    only ever as trustworthy as its WEAKEST contributing input — UNAVAILABLE
+    < SYNTHETIC < MIXED < REAL — never rounded up. Empty input means nothing
+    contributed at all, which is UNAVAILABLE (not, say, defaulting to
+    SYNTHETIC — an agent that consulted zero sources didn't "use mock data,"
+    it used none)."""
+    if not provenances:
+        return DataProvenance.UNAVAILABLE
+    return min(provenances, key=lambda p: _PROVENANCE_RANK[p])
+
+
 def combined_provenance(ctx, signals: list[Signal]) -> DataProvenance:
     """VATICAN INTEGRATION (Stage 2): the honest provenance for a synthesis
     agent (gold_analysis/bitcoin_analysis) built from `signals`. UNAVAILABLE
     if `signals` is empty (e.g. real_only_signals found nothing real for
     this asset this cycle — "insufficient data" is reported honestly, not
     silently defaulted to a mock-derived NEUTRAL read that LOOKS like a real
-    absence-of-signal rather than an absence-of-real-data). REAL only if
-    EVERY contributing source agent's own result is REAL; MIXED otherwise
-    (covers both "some sources MIXED" and "some sources REAL, some
-    SYNTHETIC" — the latter should not reach here if the caller already
-    filtered via real_only_signals, but this function doesn't assume that)."""
+    absence-of-signal rather than an absence-of-real-data). Otherwise the
+    WEAKEST of every distinct contributing source agent's own provenance
+    (via weakest_provenance) — REAL only if every source is REAL."""
     if not signals:
         return DataProvenance.UNAVAILABLE
     source_agents = {sig.source_agent for sig in signals}
-    provs = {ctx.results[name].provenance for name in source_agents if name in ctx.results}
-    if provs and provs == {DataProvenance.REAL}:
-        return DataProvenance.REAL
-    if provs & {DataProvenance.REAL, DataProvenance.MIXED}:
-        return DataProvenance.MIXED
-    return DataProvenance.SYNTHETIC
+    provs = [ctx.results[name].provenance for name in source_agents if name in ctx.results]
+    return weakest_provenance(provs)
 
 
 def aggregate(asset: Asset, signals: list[Signal]) -> AssetRead:
