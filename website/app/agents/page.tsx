@@ -1,3 +1,4 @@
+import LearningCurveSection from "@/components/LearningCurveSection";
 import PageHeader from "@/components/PageHeader";
 import {
   computeAdamFunnel,
@@ -14,10 +15,19 @@ import {
   fetchAgentRunSummaries,
   fetchEveBudgetLedger,
   fetchEveHypotheses,
+  fetchEveSessionRecord,
   fetchEveSessionRegistry,
+  fetchForwardTrial,
 } from "@/lib/data";
 import type { AgentFunnel } from "@/lib/agentsPage";
-import type { EveSessionRegistryEntry } from "@/lib/types";
+import {
+  computeAdamHypothesisQuality,
+  computeAdamReliability,
+  computeEveHypothesisQuality,
+  computeEveReliability,
+  computeNearMissFunnel,
+} from "@/lib/learningCurve";
+import type { EveSessionRecord, EveSessionRegistryEntry } from "@/lib/types";
 
 export const revalidate = 300;
 
@@ -568,6 +578,30 @@ export default async function AgentsPage() {
 
   const crashedSessions = sessions.filter((s) => s.classification === "crashed_before_completion");
 
+  // CC-1 overnight directive, Part 1 (Learning Curve): only sessions NOT
+  // classified as crashed_before_completion have a real auto-written
+  // eve_sessions/<id>.json (the 6 real crashes predate that mechanism
+  // entirely -- see lib/learningCurve.ts's own module docstring). Fetching
+  // only those avoids wasted requests for files that are known never to
+  // exist.
+  const sessionIdsWithFiles = sessions.filter((s) => s.classification !== "crashed_before_completion").map((s) => s.session_id);
+  const sessionRecordResults = await Promise.all(sessionIdsWithFiles.map((id) => fetchEveSessionRecord(id)));
+  const sessionRecordsById = new Map<string, EveSessionRecord | null>(
+    sessionIdsWithFiles.map((id, i) => [id, sessionRecordResults[i]])
+  );
+
+  const forwardTrialRecords = await fetchForwardTrial();
+  const forwardTrialHypothesisNames = new Set(
+    (forwardTrialRecords ?? []).map((r) => r.source_hypothesis_ref.hypothesis_name)
+  );
+
+  const eveReliability = computeEveReliability(eveRegistry, sessionRecordsById);
+  const adamReliability = computeAdamReliability(adamPerformance);
+  const eveQuality = computeEveHypothesisQuality(hypotheses);
+  const adamQuality = computeAdamHypothesisQuality(adamPerformance);
+  const nearMissFunnel = computeNearMissFunnel(hypotheses, forwardTrialHypothesisNames);
+  const refinementTaggedCount = hypotheses.filter((h) => h.contamination_tags.some((t) => t.tag === "REFINEMENT")).length;
+
   return (
     <div className="flex flex-col gap-10">
       <PageHeader
@@ -715,6 +749,16 @@ export default async function AgentsPage() {
         adamHypothesesGenerated={adamHypothesesGenerated}
         adamLastUpdatedLabel={adamLastUpdatedLabel}
         eveMostRecentSessionId={mostRecentSession?.session_id ?? null}
+      />
+
+      <LearningCurveSection
+        eveReliability={eveReliability}
+        adamReliability={adamReliability}
+        eveQuality={eveQuality}
+        adamQuality={adamQuality}
+        nearMissFunnel={nearMissFunnel}
+        refinementTaggedCount={refinementTaggedCount}
+        totalHypothesesCount={hypotheses.length}
       />
 
       <section>

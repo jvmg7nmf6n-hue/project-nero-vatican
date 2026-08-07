@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import AgentsPage from "@/app/agents/page";
 import * as data from "@/lib/data";
 import type { AgentPerformanceExport, AgentRunSummary, EveBudgetLedgerEntry, EveHypothesisRecord, EveSessionRegistryExport } from "@/lib/types";
@@ -10,6 +10,8 @@ const mockFetchEveHypotheses = jest.mocked(data.fetchEveHypotheses);
 const mockFetchEveBudgetLedger = jest.mocked(data.fetchEveBudgetLedger);
 const mockFetchAgentPerformance = jest.mocked(data.fetchAgentPerformance);
 const mockFetchAgentRunSummaries = jest.mocked(data.fetchAgentRunSummaries);
+const mockFetchEveSessionRecord = jest.mocked(data.fetchEveSessionRecord);
+const mockFetchForwardTrial = jest.mocked(data.fetchForwardTrial);
 
 function registry(overrides: Partial<EveSessionRegistryExport> = {}): EveSessionRegistryExport {
   return {
@@ -68,12 +70,17 @@ async function setupAndRender(options: {
   ledger?: EveBudgetLedgerEntry[] | null;
   performance?: AgentPerformanceExport | null;
   runSummaries?: AgentRunSummary[] | null;
+  sessionRecordFor?: (sessionId: string) => { session_id: string; terminated_because: string; partial?: boolean } | null;
 }) {
   mockFetchEveSessionRegistry.mockResolvedValue("registry" in options ? options.registry! : registry());
   mockFetchEveHypotheses.mockResolvedValue("hypotheses" in options ? options.hypotheses! : []);
   mockFetchEveBudgetLedger.mockResolvedValue("ledger" in options ? options.ledger! : []);
   mockFetchAgentPerformance.mockResolvedValue("performance" in options ? options.performance! : performance());
   mockFetchAgentRunSummaries.mockResolvedValue("runSummaries" in options ? options.runSummaries! : []);
+  mockFetchEveSessionRecord.mockImplementation(async (sessionId: string) =>
+    options.sessionRecordFor ? options.sessionRecordFor(sessionId) : { session_id: sessionId, terminated_because: "end_session_called" }
+  );
+  mockFetchForwardTrial.mockResolvedValue(null);
   render(await AgentsPage());
 }
 
@@ -207,5 +214,66 @@ describe("AgentsPage", () => {
     expect(screen.getByTestId("session-health-empty")).toBeInTheDocument();
     expect(screen.getByTestId("frequency-claims-empty")).toBeInTheDocument();
     expect(screen.getAllByText(/not yet reporting/).length).toBeGreaterThan(0);
+  });
+
+  // CC-1 overnight directive, Part 1.1: the Reliability chart must read a
+  // completed session's real crash/clean status from its own auto-written
+  // eve_sessions/<id>.json file (fetchEveSessionRecord), NOT the manually-
+  // curated registry classification -- this test injects a session file
+  // showing a real crash (terminated_because != end_session_called) for a
+  // session the REGISTRY itself classifies as a normal completion, and
+  // asserts the page reflects the FILE's real status, proving it actually
+  // reads from there and doesn't just trust the registry.
+  it("Learning Curve Reliability chart reads crash/clean status from the real auto-written session file, not the registry", async () => {
+    await setupAndRender({
+      registry: registry({
+        sessions: [
+          {
+            session_id: "eve-20260804T020749Z-4cf6e4c9",
+            counts_toward_pre_registered_8: true,
+            classification: "session_1_of_8", // registry says this completed normally...
+            reason: "Ran to completion.",
+          },
+        ],
+      }),
+      sessionRecordFor: (sessionId) => ({ session_id: sessionId, terminated_because: "crashed_mid_session", partial: true }),
+    });
+
+    const dots = screen.getByTestId("reliability-dots-eve").querySelectorAll("div[title]");
+    expect(dots.length).toBe(1);
+    // ...but the real session file says it crashed -- the chart must show that, not the registry's claim.
+    expect(dots[0].getAttribute("title")).toContain("crashed");
+    expect(dots[0].className).toContain("bg-loss");
+  });
+
+  it("Learning Curve shows real reliability, quality, and near-miss data end to end", async () => {
+    await setupAndRender({
+      registry: registry({
+        sessions: [
+          { session_id: "eve-crash-1", counts_toward_pre_registered_8: false, classification: "crashed_before_completion", reason: "x" },
+          { session_id: "eve-done-1", counts_toward_pre_registered_8: true, classification: "session_1_of_8", reason: "x" },
+        ],
+      }),
+      hypotheses: [
+        {
+          session_id: "eve-done-1", raw_hypothesis: { hypothesis_name: "A" }, testability: "UNTESTABLE_BY_DSL",
+          verdict_combined: null, frequency_classification: null, measured_trades_per_year: null, contamination_tags: [],
+        },
+        {
+          session_id: "eve-done-1", raw_hypothesis: { hypothesis_name: "B" }, testability: "TESTABLE",
+          verdict_combined: "DIED", frequency_classification: "VIABLE", measured_trades_per_year: 10, contamination_tags: [],
+        },
+      ],
+    });
+
+    expect(screen.getByTestId("learning-curve-section")).toBeInTheDocument();
+    expect(screen.getByText(/not a claim that either agent is getting/)).toBeInTheDocument();
+    expect(screen.getByTestId("reliability-dots-eve").children.length).toBe(2);
+
+    fireEvent.click(screen.getByTestId("learning-curve-tab-quality"));
+    expect(screen.getByTestId("learning-curve-quality")).toHaveTextContent("1 of 2 DSL-invalid");
+
+    fireEvent.click(screen.getByTestId("learning-curve-tab-near-miss"));
+    expect(screen.getByTestId("learning-curve-near-miss")).toBeInTheDocument();
   });
 });

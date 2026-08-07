@@ -6,6 +6,7 @@ import type {
   AgentRunSummary,
   AgentTestResult,
   EveBudgetLedgerEntry,
+  EveSessionRecord,
   EveHypothesisRecord,
   EveSessionRegistryExport,
   FactoryLoopStatusExport,
@@ -176,6 +177,17 @@ export function fetchEveHypotheses(): Promise<EveHypothesisRecord[] | null> {
 
 export function fetchEveSessionRegistry(): Promise<EveSessionRegistryExport | null> {
   return fetchJson<EveSessionRegistryExport>("eve_session_registry.json");
+}
+
+// CC-1 overnight directive, Part 1.1 (Learning Curve, Reliability chart):
+// the real, auto-written per-session record (one file per real session,
+// under docs/site_data/eve_sessions/<id>.json) -- NOT eve_session_registry.json,
+// whose `classification` field is manually curated and carries a real
+// stale-risk for a future session run from the Operator Panel. Fetched by
+// session_id (known from the registry's own session list), one request per
+// session -- there are only a handful of these, ever.
+export function fetchEveSessionRecord(sessionId: string): Promise<EveSessionRecord | null> {
+  return fetchJson<EveSessionRecord>(`eve_sessions/${sessionId}.json`);
 }
 
 export function fetchEveBudgetLedger(): Promise<EveBudgetLedgerEntry[] | null> {

@@ -689,6 +689,10 @@ export interface EveRawHypothesis {
   // now -- see lib/ruleTranslation.ts.
   structured_entry_rule?: Record<string, unknown> | null;
   structured_exit_plan?: Record<string, unknown> | null;
+  // CC-1 overnight directive, Part 1.3 (Learning Curve, Near-miss funnel):
+  // real, already-validated declared-refinement field -- see B1's own work
+  // (nero_core/eve/scoring.py::validate_derived_from).
+  derived_from?: { parent_hypothesis_name?: string } | null;
 }
 
 export interface EveHypothesisRecord {
@@ -699,6 +703,14 @@ export interface EveHypothesisRecord {
   frequency_classification: string | null;
   measured_trades_per_year: number | null;
   contamination_tags: Array<{ tag: string }>;
+  // CC-1 overnight directive, Part 1.3 (Learning Curve, Near-miss funnel):
+  // real fields already on every committed record, just not read by this
+  // site until now -- see nero_core/eve/context.py's own _is_near_miss logic
+  // (reproduced client-side in lib/learningCurve.ts).
+  verdict_is?: string | null;
+  verdict_oos?: string | null;
+  fdr_survives_is?: boolean | null;
+  fdr_survives_oos?: boolean | null;
 }
 
 export interface EveSessionRegistryEntry {
@@ -719,6 +731,19 @@ export interface EveSessionRegistryExport {
   pre_registration: EveSessionRegistryPreRegistration;
   sessions: EveSessionRegistryEntry[];
   next_countable_session_number: number;
+}
+
+// CC-1 overnight directive, Part 1.1 (Learning Curve): the real, auto-written
+// per-session record under docs/site_data/eve_sessions/<id>.json. Deliberately
+// minimal -- only the two fields the Reliability chart needs, matching this
+// file's own "only the fields this site reads" discipline. `terminated_because`
+// is always a real string on a written file ("end_session_called" on a clean
+// completion, "crashed_mid_session" on a crash the crash-safety mechanism
+// caught); `partial` is `true` only on a crash-caught record.
+export interface EveSessionRecord {
+  session_id: string;
+  terminated_because: string;
+  partial?: boolean;
 }
 
 export interface EveBudgetLedgerEntry {
