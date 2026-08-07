@@ -1,3 +1,104 @@
+## 2026-08-07 CLOSING REPORT — CC-1 comprehensive directive (Parts A, B, C, E)
+
+Covers Parts A, B, C, E of the "CC-1 comprehensive directive — Fix
+Bellwether's formula, correct the overlay, ship the facelift, then surface
+Bellwether." **Parts D and F are reported in
+`docs/investigations/factory_loop_implementation_report.md`'s own closing
+section** — consolidating into these two existing canonical locations
+rather than a third new file, per the directive's own "or say which you
+chose if you consolidate." Per-part depth lives in dedicated docs (linked
+below); this section is the checklist the directive's own closing section
+asked for.
+
+**A1's split metric + A4's re-measured baseline** (`agreement`/`coverage`
+reported separately): see the "Part A4 / Part B2" section below for the
+full 4-configuration table (mock / 1-real / 2-real-ish / current). Headline:
+current wiring gives GOLD agreement 0.372 / coverage 0.200, BITCOIN
+agreement 0.522 / coverage 0.280 — full numbers and two genuine findings
+the split itself surfaced (a discretization artifact, and a real
+provenance-granularity leak) in that section.
+
+**A2's correlation-discount proposal**: NOT implemented, per explicit
+instruction. Two concrete options proposed in
+`docs/bellwether_aggregation_formula_report.md`'s 2026-08-07 update;
+recommended waiting for `correlation.py` to compute real agent-pair
+correlations before discounting, rather than borrowing a coefficient
+computed for a different pair.
+
+**B3's funding-rate independence finding**: measured with 2 years of real
+daily data (DFII10, DX-Y.NYB, ^VIX, Binance funding), not asserted — funding
+rate's day-to-day CHANGES are ≤0.041 correlated with every other real input,
+confirming it's a genuinely independent fourth input, not disguised
+redundancy. Full correlation matrices in the section below.
+
+**C2's real ORDERFLOW_IMBALANCE cadence + alignment finding**: 54 real BTC
+entries, mean gap 8.09h / median 6.14h between entries, median hold 2.28h —
+justifies the overlay's 8h cadence (matches BTC funding's own settlement
+schedule, the fastest-changing real input). Full writeup in the Part C
+section below.
+
+**C4's actual threshold numbers**: flag `conflicted=True` only when BTC
+bias opposes the entry AND `agreement >= 0.6` AND `coverage >= 0.15` AND
+the read's own `bitcoin_analysis` provenance is real/mixed. Reasoning for
+both numbers (0.6 above the measured live-wiring mean ~0.52; 0.15 above the
+single-signal-discretization floor ~0.135) in the Part C section below.
+
+**E1's data-plumbing finding**: no macro export existed before this
+directive (`docs/site_data/macro_reads.json` didn't exist — the overlay
+workflow hadn't had its first scheduled tick). The export mechanism was
+already built in Part C; ran it for real against production
+(commit `a6d664a`) to seed genuine data rather than build the `/macro` page
+speculatively. Every real number the page renders, and the full E1-E4
+writeup: `docs/investigations/website_macro_page_e1.md`.
+
+**Test counts, Python, before vs after this directive** (via
+`python -m unittest discover -s tests`): baseline at session start (commit
+`4ad5854`) was the pre-directive suite; after all of Parts A/B/C/D6a/F,
+the full suite reports **2690 tests** (39 new: 6 aggregation + 6 funding +
+8 macro_reads + 12 bellwether_overlay + 7 export_trial_entries), same **4
+pre-existing failures** throughout (2x missing `lxml` module in this
+environment, 1 PSX test depending on the same, 1 real-data-drift assertion
+in `test_eve_citation_freshness.py` unrelated to any file this directive
+touched) — confirmed via `git diff 4ad5854..HEAD -- nero_core/research_agent/
+nero_core/eve/` returning **empty**, zero changes to either directory this
+entire session.
+
+**No evidence-bar constant changed, confirmed**: `TARGET_RESOLVED_TRADES`
+(frequency_gate.py), `DEFAULT_FDR_ALPHA`/`MIN_SAMPLE_SIZE` (eve/scoring.py)
+and every other admission-criteria constant are covered by the same zero-diff
+check above — this directive's Python work was scoped entirely to
+`vatican/bellwether/`, `nero_core/execution/`, and `nero_core/truth_ledger/`,
+never `nero_core/research_agent/` or `nero_core/eve/`.
+
+**Every new package, license, pinned version**: none in Parts A/B/C/E
+(Python-only, no new pip dependencies). Part D's packages are listed in the
+factory_loop_implementation_report.md closing section.
+
+**Push verification, every commit this directive, `git log origin/main
+--oneline`** (pasted after the final push, see the other report's closing
+section for the full chronological list across all parts).
+
+**What this system still cannot do** (stated once, covers both closing
+sections): Bellwether cannot compute a correlation-discounted confidence
+(A2, deferred pending real agent-pair correlations); cannot show per-agent
+SIGNAL detail on `/macro` (only provenance, E1's disclosed limitation);
+cannot fix its own live-scheduler drop rate (F3, reported not implemented);
+ETF flows remain permanently blocked as a real Bellwether input (pre-existing,
+re-confirmed, not touched this directive); and ORDERFLOW_IMBALANCE remains
+permanently unbacktestable by construction (order-book snapshots have no
+history) — the macro-conflict overlay annotates a real but never-verified
+strategy, stated plainly in the design, not fixed by this directive.
+
+**Stale figures found this directive, and the real values**: the "~6
+trades/year" GOLD-1wk Momentum figure from earlier Stage 5 planning is
+confirmed wrong (real number: 0, C1); the directive's claim that
+`/heatmap` is the right page for the 3D surface is corrected (it's `/quant`
+— see the other report's D4/D5 section); the directive's claim the site
+"uses generic default styling" is corrected (a distinctive palette already
+existed — see the other report's D1 section).
+
+---
+
 ## 2026-08-07 update 2: aggregation formula split (Part A) + BTC funding rate (Part B)
 
 Follows the "CC-1 comprehensive directive" (Parts A/B). Read this section

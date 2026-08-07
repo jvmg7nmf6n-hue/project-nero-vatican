@@ -3586,3 +3586,156 @@ repeats the exact reasoning gap this investigation just found (the 07-28/29 fix 
 tolerance-window problem without checking whether trigger reliability was the actual
 bottleneck). Not implementing any of these three without that decision, per the directive's
 explicit instruction to report before implementing.
+
+---
+
+## 2026-08-07: CLOSING REPORT -- CC-1 comprehensive directive (Parts D, F)
+
+Covers Parts D (website facelift/charts/diagram/3D-4D/signals) and F (GOLD
+staleness investigation) of the "CC-1 comprehensive directive." **Parts A,
+B, C, E are reported in `docs/bellwether_stage2_report.md`'s own closing
+section** -- consolidated into these two existing canonical locations
+rather than a third new file, per the directive's own "or say which you
+chose if you consolidate." Full per-part depth lives in dedicated docs:
+
+- `docs/investigations/website_design_tokens_d1.md` (D1)
+- `docs/investigations/website_chart_overlays_d2.md` (D2)
+- `docs/investigations/website_3d4d_correlation_d4d5.md` (D4/D5)
+- `docs/investigations/website_signals_d6.md` (D6/D6a/D6b/D6c)
+- `docs/investigations/website_macro_page_e1.md` (E, cross-referenced from
+  the other report since it depends on Part D's tokens)
+- This file's own Part F section above (F1/F2/F3)
+- D3 (React Flow diagram) is documented in its own commit message
+  (`501a884`) -- small enough not to need a dedicated file.
+
+### D1's before/after screenshots and design tokens
+
+**Stale premise corrected**: the directive's claim that the site "uses
+generic default styling" does not match reality -- `tailwind.config.js`
+already had a documented, distinctive navy/gold/parchment "book of records"
+palette before this directive. What was genuinely missing (and shipped):
+a formal token layer above the colors -- `PageHeader`/`SectionHeader`/
+`Panel` components and `lib/designTokens.ts`'s table className constants,
+replacing three independently-drifting copies of the same header/panel/
+table markup across all 9 named pages. Before/after Playwright screenshots
+of Pricing, Heatmap, and Quant were taken during the session to verify the
+change visually (not committed to the repo -- ephemeral verification
+artifacts); the real, lasting artifact is the token components themselves
+plus the design-tokens report.
+
+### Every new package, license, pinned version (all of Part D)
+
+| Package | Version | License | Part | Notes |
+|---|---|---|---|---|
+| `@xyflow/react` | 12.11.2 | MIT | D3 | Free core only, no Pro-tier import. |
+| `plotly.js-dist` | 3.7.0 | MIT | D4/D5 | Client-side dynamic import only, not SSR'd. |
+| `@types/plotly.js` | 3.0.13 (dev) | MIT | D4/D5 | Types shim in `website/types/plotly-js-dist.d.ts`. |
+
+**Evaluated and NOT added** (real, confirmed incompatibilities -- see
+`website_chart_overlays_d2.md` for the full `npm view` trail):
+`lightweight-charts-indicators` (every version requires
+`lightweight-charts@^5.0.0` via `oakscriptjs`, incompatible with this
+project's `^4.2.0` pin) and `lightweight-charts-drawing` (same root cause).
+MA/EMA/Bollinger Bands/VWAP/Fibonacci/TrendLine hand-rolled instead
+(`website/lib/indicators.ts`, `website/lib/fibonacci.ts`).
+
+`npm audit`: 6 pre-existing high-severity advisories in `next`/
+`eslint-config-next`'s own transitive tree (`glob`, `js-yaml`, `postcss`,
+`next` itself), confirmed unrelated to every package this directive added
+(each new package confirmed as a dependency-free or near-dependency-free
+leaf via `npm ls`). Full list: `website/THIRD_PARTY_LICENSES.md`.
+
+### D6a's exact ENTRY-event definition + NTFY_TOPIC confirmation
+
+An `execution_log` row (in `data/repair_lab_forward_tracking.db`, a SEPARATE
+database from `truth_ledger.db`) with `strategy` matching `TRIAL:<trial_id>`
+and `signal_type == "ENTRY"` -- confirmed via
+`nero_core/research_agent/trial.py`/`repair_forward_tracker.py`, not
+assumed. Explicitly distinct from `forward_trial.json`'s `status=="OPEN"`
+(Trial admission, not a live position) -- real numbers: 10 admissions exist,
+only 1 real ENTRY (`ETH_BIDIRECTIONAL_ZSCORE_FADE`, the directive's own
+named example). Full writeup: `website_signals_d6.md`.
+
+**`NTFY_TOPIC` confirmed never printed or logged**: `signal_alerts.js`
+reads it via `process.env.NTFY_TOPIC` only; every `console.log` call in the
+file was checked directly -- the one presence-check message
+("NTFY_TOPIC not set...") is a hardcoded literal, never the variable's
+actual value.
+
+### Test counts, website, before vs after this directive
+
+Baseline (first `npx jest` run this session, before any Part D test file
+was added -- D1 itself added none): **54 suites / 632 tests, 630 passing**
+(2 pre-existing failures, `siteDataSchema.test.ts` against real data drift
+in `docs/site_data/failure_patterns.json`, unrelated to this directive).
+After Parts D2/D3/D4/D5/D6/E: **60 suites / 671 tests, 669 passing** -- same
+2 pre-existing failures throughout, confirmed unchanged at every
+intermediate check this session. 39 new tests added
+(`indicators.test.ts`, `fibonacci.test.ts`, `rollingCorrelation.test.ts`,
+`signalsPage.test.tsx`, `macroReads.test.ts`, `macroPage.test.tsx`, plus
+additions to `CandlestickChart.test.tsx` and `quantPage.test.tsx`).
+
+### F1/F2's real cause and re-measurement
+
+Residual of the documented 2026-07-28/29 cron-drop incident, NOT a new or
+1week-specific bug -- re-measured directly against `execution_metadata`
+(never done since the original fix): ~61% drop rate today, essentially
+unchanged from the originally-documented 63-77% range. Full numbers and 3
+gaps exceeding the single-shot tolerance window, in this file's own Part F
+section above. F3 proposed, not implemented, per explicit instruction.
+
+### No evidence-bar constant touched
+
+`git diff 4ad5854..HEAD -- nero_core/research_agent/ nero_core/eve/`
+returns empty -- confirmed zero changes to either directory this entire
+session (Parts D/F never touch Python judgment logic at all; Parts A/B/C
+stayed within `vatican/bellwether/`/`nero_core/execution/`/
+`nero_core/truth_ledger/`). `website/`'s own D2/D3/D4/D5/D6 changes are
+utility/display/data-plumbing only, per the directive's own ground rule --
+no `trial.py`, `repair_to_trial.py`, `graveyard_distillation.py`, or
+Adam/Eve scoring path touched (confirmed via the same diff).
+
+### git log origin/main --oneline, every commit this directive (real, pasted)
+
+    8c03ca8 CC-1 Part E: /macro page -- real Bellwether reads, provenance-first
+    a6d664a CC-1: first real Bellwether macro overlay run (seeds macro_reads for Part E)
+    af078e0 CC-1 Part D6: Signals page -- real Forward Trial ENTRY events with D2 overlays
+    277e2e0 CC-1 Part D6b/D6c: push alerts for new Forward Trial ENTRY events
+    50d6db2 CC-1 Part D6a: export genuine Forward Trial ENTRY events
+    b12b0c0 Update live scheduler execution log (automated, unrelated)
+    eed7a31 CC-1 Parts D4/D5: 3D/4D correlation surface on /quant (plotly.js-dist, MIT)
+    ca4c6c0 CC-1 Part D2: hand-rolled chart overlays (MA/EMA/BB/VWAP/Fib/TrendLine)
+    501a884 CC-1 Part D3: Factory Loop diagram upgraded to React Flow (@xyflow/react, MIT)
+    868623f Update live scheduler execution log (automated, unrelated)
+    b6c2d42 CC-1 Part D1: design tokens (PageHeader/SectionHeader/Panel) + consistency pass
+    3b71343 CC-1 Part F: GOLD/BREAKOUT_MOMENTUM staleness is a residual cron-drop issue, not new
+    05d57d5 CC-1 Part C docs: overlay design writeup, retarget reasoning, README update
+    7688bf3 CC-1 Part C: retarget macro_conflicted overlay to ORDERFLOW_IMBALANCE/BTC, build it
+    f4425d2 CC-1 Parts A/B docs: aggregation split reasoning, funding correlation data, re-measured sweep series
+    cf0e81a CC-1 Part B1: wire real BTC funding rate for derivatives_etf/risk
+    8cd43ed CC-1 Part A1: split confidence into separate agreement/coverage fields
+
+Every commit individually verified against `origin/main` immediately after
+pushing, per this branch's own standing convention (see
+`[[feedback_cc1_directive_conventions]]`).
+
+### What this system still cannot do (same statement as the other report)
+
+Bellwether cannot compute a correlation-discounted confidence (A2,
+deferred); cannot show per-agent SIGNAL detail on `/macro` (only
+provenance); cannot fix its own live-scheduler drop rate (F3, reported not
+implemented); ETF flows remain permanently blocked as a real input;
+ORDERFLOW_IMBALANCE remains permanently unbacktestable by construction.
+Fibonacci/TrendLine math is real and tested but has no chart-embedded UI
+yet (no swing-point picker built this pass). The `/macro` page's
+conflict-annotation table doesn't yet deep-link each row to its own
+`macro_reads` record (the data is there; a dedicated route wasn't built).
+
+### Stale figures found this directive, and the real values
+
+The directive named `/heatmap` for the 3D surface; the real x/y/z data is
+`/quant`'s existing 2D matrix (`/heatmap` shows one value per asset, no
+pairwise relationship) -- surface built on `/quant` instead. The directive's
+"generic default styling" claim for the site is stale -- a distinctive
+palette already existed; the genuine gap was a formal token layer above it,
+not a wholesale redesign.
