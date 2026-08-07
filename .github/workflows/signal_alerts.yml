@@ -1,0 +1,57 @@
+name: Signal Alerts
+
+# CC-1 Part D6b. Cadence matches live_scheduler.yml's own baseline hourly tick
+# (Forward Trial ticks happen at most once per scheduler run) -- every 15
+# minutes would just re-read the same unchanged trial_entries.json between
+# scheduler runs; hourly is the real refresh rate of the underlying data.
+on:
+  schedule:
+    - cron: "11 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: signal-alerts
+  cancel-in-progress: false
+
+jobs:
+  signal-alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Export Forward Trial ENTRY events
+        run: python -m nero_core.execution.export_trial_entries
+        continue-on-error: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Check for new Forward Trial entries and push alerts
+        run: node signal_alerts.js
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        continue-on-error: true
+      - name: Save state
+        run: |
+          git config user.name "signal-alerts"
+          git config user.email "actions@users.noreply.github.com"
+          git pull --rebase origin main || git rebase --abort || true
+          if [ -f docs/site_data/trial_entries.json ]; then
+            git add -f docs/site_data/trial_entries.json
+          fi
+          if [ -f signal_alerts_state.json ]; then
+            git add -f signal_alerts_state.json
+          fi
+          if git diff --cached --quiet; then
+            echo "no changes"
+            exit 0
+          fi
+          git commit -m "Update signal alerts state"
+          git pull --rebase origin main || git rebase --abort || true
+          git push || echo "signal alerts push skipped; next run will retry"
