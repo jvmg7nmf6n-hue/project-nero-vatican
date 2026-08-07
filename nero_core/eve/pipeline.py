@@ -382,9 +382,10 @@ def run_pipeline(
         entire_session_disqualified = bool(scored) and all(scoring.is_freshness_disqualified(r) for r in scored)
         if entire_session_disqualified:
             print(
-                f"WARNING: session {result.session_id} -- 100% of its {len(scored)} hypothesis(es) were "
-                f"freshness-disqualified (item 7, Variant C, {scoring.FRESHNESS_DISQUALIFICATION_WINDOW_DAYS}-day "
-                f"window) -- this session contributes ZERO admissible data points this run.",
+                f"INFO: session {result.session_id} -- 100% of its {len(scored)} hypothesis(es) were "
+                f"flagged by the item 7, Variant C, {scoring.FRESHNESS_DISQUALIFICATION_WINDOW_DAYS}-day "
+                f"freshness check -- informational only, not excluded: this flag has no effect on "
+                f"scoring, Trial admission, or FDR correction (see commit 3697e75).",
                 file=sys.stderr,
             )
         # CC-1 directive (2026-08-05) item 1: FAIL LOUD on a citation that
