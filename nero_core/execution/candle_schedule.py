@@ -149,6 +149,70 @@ def candle_boundary_due(timeframe: str, now: datetime, tolerance_minutes: int | 
     return offset < effective_tolerance
 
 
+def catch_up_due(
+    timeframe: str,
+    now: datetime,
+    last_logged_candle_close_ms: int | None,
+    tolerance_minutes: int | None = None,
+) -> bool:
+    """CC-1 DIRECTIVE (2026-08-07, retry/catch-up): True if this (asset,
+    strategy) config has fallen far enough behind its OWN expected schedule
+    that a real evaluation opportunity was definitely missed -- regardless
+    of whether `now` happens to fall inside candle_boundary_due's own
+    narrow, cheap pre-filter window.
+
+    WHY THIS EXISTS, PRECISELY: GitHub Actions silently drops a majority
+    (confirmed ~68%, docs/investigations/factory_loop_implementation_report.md)
+    of this project's scheduled `schedule:` event triggers, in CLUSTERED
+    bursts, not independently -- occasionally dropping every tick inside a
+    single-shot timeframe's entire tolerance window (3 such full-window
+    misses confirmed in 9 days of real data). `nero_core.execution.replay`'s
+    own generic replay mechanism ALREADY self-heals correctly once invoked
+    -- its own module docstring: "a missed/delayed run self-heals on the
+    next one" -- every `replay_*_events` function emits an event for every
+    candle strictly after `already_logged_close_time_ms`, not just the
+    newest one. The ONLY real gap is that `process_*` never gets CALLED AT
+    ALL while `candle_boundary_due` keeps returning False, so that already-
+    correct self-healing mechanism never gets a chance to run. This
+    function is deliberately NOT a change to `candle_boundary_due`'s own
+    tolerance (out of scope, per explicit instruction not to widen
+    tolerance as a substitute for real catch-up) -- it is a SEPARATE,
+    LATER-firing check: only true once `now` is more than one full period
+    PAST the point `candle_boundary_due` should already have caught. A
+    genuinely on-schedule config never reaches this threshold at all
+    (`candle_boundary_due` itself satisfies the normal case well before
+    this function's own threshold is reached) -- confirmed by construction
+    below, not merely hoped for: the threshold is `period + tolerance`,
+    and `candle_boundary_due`'s own window closes at `tolerance` past the
+    boundary, so there is no time at which BOTH `candle_boundary_due` is
+    still correctly False for the CURRENT period AND this function
+    incorrectly fires early.
+
+    Returns False (never "due") when `last_logged_candle_close_ms` is None
+    -- catch-up is for an ALREADY-tracked account that has fallen behind,
+    not a fresh deployment, which already has its own correct "start at
+    the newest candle only" rule (nero_core.execution.replay.
+    find_account_start_index) that this function must never interfere
+    with. Returns False for any timeframe not in HOURS_PER_TIMEFRAME
+    (e.g. "1h", which gets 24 opportunities/day and doesn't need this)."""
+    if last_logged_candle_close_ms is None:
+        return False
+    now_utc = _require_utc(now)
+    period_hours = HOURS_PER_TIMEFRAME.get(timeframe)
+    if period_hours is None:
+        return False
+    if period_hours == 24 or timeframe == "1week":
+        default_tolerance = SINGLE_SHOT_TOLERANCE_MINUTES
+    elif period_hours == 12:
+        default_tolerance = MULTI_SHOT_TOLERANCE_MINUTES
+    else:
+        default_tolerance = DEFAULT_TOLERANCE_MINUTES
+    effective_tolerance = tolerance_minutes if tolerance_minutes is not None else default_tolerance
+    candle_closed_at = datetime.fromtimestamp(last_logged_candle_close_ms / 1000.0, tz=timezone.utc)
+    hours_since_candle_closed = (now_utc - candle_closed_at).total_seconds() / 3600.0
+    return hours_since_candle_closed > period_hours + (effective_tolerance / 60.0)
+
+
 def daily_time_due(hour_utc: int, now: datetime, tolerance_minutes: int = SINGLE_SHOT_TOLERANCE_MINUTES) -> bool:
     """True if `now` falls within `tolerance_minutes` after `hour_utc:00` UTC on any
     day — used for the once-daily News Sentiment run, which isn't tied to a candle close

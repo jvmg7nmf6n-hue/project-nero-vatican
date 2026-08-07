@@ -17,8 +17,11 @@ from nero_core.data_sources.orderbook_data import OrderbookSnapshot
 from nero_core.execution import live_scheduler
 from nero_core.strategies.news_sentiment import STRATEGY_VERSION as NEWS_SENTIMENT_V1_VERSION
 from nero_core.strategies.news_sentiment_llm import STRATEGY_VERSION as NEWS_SENTIMENT_V2_VERSION
+from nero_core.strategies.trend_pullback import STRATEGY_ID as TREND_PULLBACK_ID
+from nero_core.strategies.trend_pullback import STRATEGY_VERSION as TREND_PULLBACK_VERSION
 from nero_core.truth_ledger.execution_log import (
     has_news_sentiment_logged_today,
+    insert_execution_log_row,
     latest_news_sentiment_fetch_timestamp,
     list_execution_log,
     list_execution_metadata,
@@ -904,6 +907,83 @@ class ApiKeyStartupValidationTest(LiveSchedulerTestCase):
         serialized = str(result.errors_encountered) + str(result.assets_skipped) + str(result.assets_evaluated)
         for value in self._ALL_KEYS_PRESENT.values():
             self.assertNotIn(value, serialized)
+
+
+class CatchUpMechanismTest(LiveSchedulerTestCase):
+    """CC-1 DIRECTIVE (2026-08-07, retry/catch-up), item 2c: simulates a genuine
+    missed-tick gap (not just a delayed-but-still-in-window run, which
+    RedundantTriggerTest-style scenarios already cover) and confirms
+    candle_schedule.catch_up_due fires process_single_asset even though
+    candle_boundary_due itself is False at NOT_DUE_UTC, and that every event it
+    logs is marked [CATCHUP] (live_scheduler._mark_reasoning) so it never blends
+    into a normal on-schedule run's own log rows."""
+
+    def _seed_stale_bnb_row(self) -> None:
+        # BNB/TREND_PULLBACK is the one SINGLE_ASSET_CONFIGS entry with a single,
+        # unambiguous config for this asset (see live_scheduler.py's own
+        # SINGLE_ASSET_CONFIGS list) -- no risk of colliding with a second BNB
+        # config's own already_logged cursor. candle_timestamp is chosen from deep
+        # inside _flat_history's own close_time range (index 100 of 260, each 12h
+        # apart) so replay still finds later fixture candles to emit fresh events
+        # for; timestamp=2020-01-01 is irrelevant to catch_up_due (it reads
+        # candle_timestamp, not this row's own timestamp column).
+        insert_execution_log_row(
+            run_id="pretest-seed-stale-bnb",
+            strategy=TREND_PULLBACK_ID,
+            strategy_version=TREND_PULLBACK_VERSION,
+            asset="BNB",
+            signal_type="NO_TRADE",
+            reasoning="seed row simulating a stale already-logged candle",
+            candle_timestamp=100 * 12 * 3_600_000,
+            timestamp=datetime(2020, 1, 1, tzinfo=timezone.utc),
+            data_source="test-fixture",
+            db_path=self.db_path,
+        )
+
+    def test_missed_tick_is_not_caught_up_without_the_mechanism_present(self) -> None:
+        """Sanity check on the fixture itself: at NOT_DUE_UTC, BNB/12h is genuinely
+        not on-schedule (candle_boundary_due alone says no) -- proves the gap this
+        test creates is real, not an artifact of a badly-chosen `now`."""
+        self.assertFalse(live_scheduler.candle_boundary_due("12h", NOT_DUE_UTC))
+
+    def test_catch_up_due_fires_and_process_single_asset_backfills_the_missed_candle(self) -> None:
+        self._seed_stale_bnb_row()
+        client = self._patched_client()
+
+        result = live_scheduler.run_once(client=client, now=NOT_DUE_UTC, db_path=self.db_path, sleep_fn=lambda s: None)
+
+        # BNB is evaluated even though candle_boundary_due("12h", NOT_DUE_UTC) is
+        # False -- every other config with no seeded stale row stays a genuine
+        # NOT_DUE skip (this isn't candle_boundary_due itself changing behavior).
+        self.assertIn("BNB", result.assets_evaluated)
+        skipped_assets = {r["asset"] for r in result.assets_skipped}
+        self.assertNotIn("BNB", skipped_assets)
+        self.assertIn("GOLD", skipped_assets)  # unaffected control: GOLD has no seeded row, stays NOT_DUE
+
+        bnb_rows = list_execution_log(db_path=self.db_path, asset="BNB")
+        backfilled_rows = [r for r in bnb_rows if r.run_id == result.run_id]
+        self.assertGreater(len(backfilled_rows), 0)
+        self.assertTrue(
+            all(r.reasoning.startswith(live_scheduler.CATCHUP_REASONING_MARKER) for r in backfilled_rows),
+            "every row logged by the catch-up-triggered run must carry the [CATCHUP] marker",
+        )
+        # The manually seeded stale row itself predates the mechanism and must be
+        # untouched -- the marker is applied only to NEWLY logged catch-up rows.
+        seed_row = next(r for r in bnb_rows if r.run_id == "pretest-seed-stale-bnb")
+        self.assertFalse(seed_row.reasoning.startswith(live_scheduler.CATCHUP_REASONING_MARKER))
+
+    def test_a_normal_on_schedule_run_never_gets_the_catchup_marker(self) -> None:
+        """Regression guard on the OTHER branch of _mark_reasoning: a config that
+        IS on-schedule (no gap at all) must log completely unmarked reasoning,
+        proving the marker is conditioned on is_catchup, not applied unconditionally."""
+        client = self._patched_client()
+
+        result = live_scheduler.run_once(client=client, now=WEEKLY_BOUNDARY_MIDNIGHT_UTC, db_path=self.db_path, sleep_fn=lambda s: None)
+
+        self.assertIn("BNB", result.assets_evaluated)
+        bnb_rows = [r for r in list_execution_log(db_path=self.db_path, asset="BNB") if r.run_id == result.run_id]
+        self.assertGreater(len(bnb_rows), 0)
+        self.assertTrue(all(not r.reasoning.startswith(live_scheduler.CATCHUP_REASONING_MARKER) for r in bnb_rows))
 
 
 if __name__ == "__main__":

@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from nero_core.execution.candle_schedule import (
     DEFAULT_TOLERANCE_MINUTES,
     MULTI_SHOT_TOLERANCE_MINUTES,
     SINGLE_SHOT_TOLERANCE_MINUTES,
     candle_boundary_due,
+    catch_up_due,
     daily_time_due,
 )
+
+
+def _ms(year, month, day, hour, minute) -> int:
+    return int(_utc(year, month, day, hour, minute).timestamp() * 1000)
 
 
 def _utc(year, month, day, hour, minute) -> datetime:
@@ -166,6 +171,58 @@ class DailyTimeDueTest(unittest.TestCase):
         # fails loudly.
         self.assertGreater(SINGLE_SHOT_TOLERANCE_MINUTES, DEFAULT_TOLERANCE_MINUTES)
         self.assertTrue(daily_time_due(19, _utc(2026, 7, 17, 22, 0)))
+
+
+class CatchUpDueTest(unittest.TestCase):
+    """CC-1 directive (2026-08-07, retry/catch-up)."""
+
+    def test_none_last_logged_is_never_due_fresh_accounts_are_unaffected(self) -> None:
+        self.assertFalse(catch_up_due("1week", _utc(2026, 12, 31, 0, 5), None))
+        self.assertFalse(catch_up_due("24h", _utc(2026, 12, 31, 0, 5), None))
+
+    def test_1week_not_due_within_the_normal_period_plus_tolerance(self) -> None:
+        # Last candle closed Monday 2026-07-13 00:00 UTC. A normal on-time run the
+        # FOLLOWING Monday (2026-07-20), even a few minutes into its own tolerance
+        # window, must NOT be flagged as catch-up -- this is the ordinary case.
+        last_logged = _ms(2026, 7, 13, 0, 0)
+        self.assertFalse(catch_up_due("1week", _utc(2026, 7, 20, 0, 5), last_logged))
+        self.assertFalse(catch_up_due("1week", _utc(2026, 7, 20, 3, 59), last_logged))
+
+    def test_1week_due_once_a_full_extra_period_has_elapsed(self) -> None:
+        # Same last-logged candle, but now is TWO weeks later (2026-07-27) -- an
+        # entire extra period was missed with no new log row. This is the exact
+        # real scenario measured for GOLD (167.1h between its own two real
+        # evaluations was fine; a run at, say, 11 days after the last log is not).
+        last_logged = _ms(2026, 7, 13, 0, 0)
+        self.assertTrue(catch_up_due("1week", _utc(2026, 7, 27, 0, 5), last_logged))
+
+    def test_never_fires_while_candle_boundary_due_would_still_correctly_say_not_yet(self) -> None:
+        """The core correctness property: for every minute of the CURRENT period
+        (before the next real boundary opportunity even opens), catch_up_due must
+        stay False -- it only ever fires for a period the config already had a
+        full, tolerance-padded chance to catch and didn't."""
+        last_logged = _ms(2026, 7, 13, 0, 0)
+        # Every day between last Monday and the next Monday's own tolerance window
+        # closing -- none of these should ever be flagged.
+        for day_offset in range(0, 7):
+            probe = _utc(2026, 7, 13, 0, 0) + timedelta(days=day_offset, hours=3)
+            with self.subTest(probe=probe.isoformat()):
+                self.assertFalse(catch_up_due("1week", probe, last_logged))
+
+    def test_24h_due_after_more_than_a_day_plus_tolerance(self) -> None:
+        last_logged = _ms(2026, 7, 17, 0, 0)
+        self.assertFalse(catch_up_due("24h", _utc(2026, 7, 18, 3, 0), last_logged))  # 27h, within 24+4
+        self.assertTrue(catch_up_due("24h", _utc(2026, 7, 19, 0, 0), last_logged))  # 48h, a full day missed
+
+    def test_12h_uses_the_multi_shot_tolerance(self) -> None:
+        last_logged = _ms(2026, 7, 17, 0, 0)
+        self.assertFalse(catch_up_due("12h", _utc(2026, 7, 17, 14, 0), last_logged))  # 14h, within 12+2.5
+        self.assertTrue(catch_up_due("12h", _utc(2026, 7, 18, 1, 0), last_logged))  # 25h, a full 12h period missed
+
+    def test_unsupported_timeframe_returns_false_not_an_error(self) -> None:
+        # "1h" has no single-shot exposure at all (24 opportunities/day) -- catch-up
+        # is meaningless for it, and this must degrade honestly, never raise.
+        self.assertFalse(catch_up_due("1h", _utc(2026, 7, 20, 0, 5), _ms(2026, 7, 17, 0, 0)))
 
 
 if __name__ == "__main__":

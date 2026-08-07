@@ -126,7 +126,7 @@ from nero_core.data_sources.market_data import MarketDataClient, MarketDataUnava
 from nero_core.data_sources.news_feed import NewsFeedClient
 from nero_core.data_sources.orderbook_data import OrderbookDataUnavailableError, fetch_and_cache_snapshot
 from nero_core.data_sources.stock_data import StockDataUnavailableError, fetch_stock_ohlcv
-from nero_core.execution.candle_schedule import candle_boundary_due, daily_time_due
+from nero_core.execution.candle_schedule import candle_boundary_due, catch_up_due, daily_time_due
 from nero_core.execution.heartbeat import write_heartbeat
 from nero_core.execution.replay import (
     replay_gold_silver_ratio_events,
@@ -256,6 +256,22 @@ ORDERFLOW_MA_ATR_WARMUP_CANDLES = 20
 _ORDERFLOW_DIRECTION_PATTERN = re.compile(r"direction=(LONG|SHORT)")
 _ORDERFLOW_STOP_LOSS_PATTERN = re.compile(r"stop_loss=([-+]?\d*\.?\d+)")
 
+# CC-1 DIRECTIVE (2026-08-07, retry/catch-up), item 2b: every event logged during
+# a catch-up-triggered call (candle_boundary_due was False, catch_up_due was True)
+# gets this marker prepended to its own reasoning text -- the SAME "encode extra
+# metadata in the existing reasoning TEXT column" convention this file's own
+# _ORDERFLOW_DIRECTION_PATTERN/notify_ntfy.py's r_multiple parsing already use,
+# deliberately not a new execution_log column (no migration, no change to any
+# existing row-count/schema test). A catch-up run can legitimately backfill
+# MULTIPLE missed candles in one call (replay.py's own self-healing already
+# handles that) -- every event emitted during such a call gets this marker, not
+# just the oldest one, since the run itself is what makes them all late.
+CATCHUP_REASONING_MARKER = "[CATCHUP]"
+
+
+def _mark_reasoning(reasoning: str, is_catchup: bool) -> str:
+    return f"{CATCHUP_REASONING_MARKER} {reasoning}" if is_catchup else reasoning
+
 
 @dataclass(frozen=True)
 class SingleAssetConfig:
@@ -364,6 +380,7 @@ def process_single_asset(
     now: datetime,
     sleep_fn: Callable[[float], None] = time.sleep,
     db_path: Path = DEFAULT_DB_PATH,
+    is_catchup: bool = False,
 ) -> tuple[str, dict[str, Any] | None]:
     """Returns ("EVALUATED", None) or ("SKIPPED", record)."""
     spec = VARIANT_SPECS[config.variant_key]
@@ -391,7 +408,7 @@ def process_single_asset(
     for event in events:
         insert_execution_log_row(
             run_id=run_id, strategy=config.strategy_id, strategy_version=config.strategy_version,
-            asset=config.asset, signal_type=event.signal_type, reasoning=event.reasoning,
+            asset=config.asset, signal_type=event.signal_type, reasoning=_mark_reasoning(event.reasoning, is_catchup),
             candle_timestamp=event.candle_close_time, entry_price=event.entry_price, exit_price=event.exit_price,
             timestamp=now, data_source=source, db_path=db_path,
         )
@@ -404,6 +421,7 @@ def process_pairs(
     now: datetime,
     sleep_fn: Callable[[float], None] = time.sleep,
     db_path: Path = DEFAULT_DB_PATH,
+    is_catchup: bool = False,
 ) -> tuple[str, dict[str, Any] | None]:
     x_name, y_name = PAIRS_ASSETS
     label = f"{x_name}-{y_name}"
@@ -435,7 +453,7 @@ def process_pairs(
     for event in events:
         insert_execution_log_row(
             run_id=run_id, strategy=COINTEGRATION_PAIRS_ID, strategy_version=COINTEGRATION_PAIRS_VERSION,
-            asset=label, signal_type=event.signal_type, reasoning=event.reasoning,
+            asset=label, signal_type=event.signal_type, reasoning=_mark_reasoning(event.reasoning, is_catchup),
             candle_timestamp=event.candle_close_time, entry_price=event.entry_price, exit_price=event.exit_price,
             timestamp=now, data_source=data_source, db_path=db_path,
         )
@@ -448,6 +466,7 @@ def process_gold_silver_ratio(
     now: datetime,
     sleep_fn: Callable[[float], None] = time.sleep,
     db_path: Path = DEFAULT_DB_PATH,
+    is_catchup: bool = False,
 ) -> tuple[str, dict[str, Any] | None]:
     """GOLD_SILVER_RATIO_MR/1day (watchlist) -- a genuine two-leg pairs trade
     (both LONG and SHORT legs), unlike COINTEGRATION_PAIRS' own long-leg-only
@@ -486,7 +505,7 @@ def process_gold_silver_ratio(
     for event in events:
         insert_execution_log_row(
             run_id=run_id, strategy=GOLD_SILVER_RATIO_ID, strategy_version=GOLD_SILVER_RATIO_VERSION,
-            asset=GOLD_SILVER_RATIO_LABEL, signal_type=event.signal_type, reasoning=event.reasoning,
+            asset=GOLD_SILVER_RATIO_LABEL, signal_type=event.signal_type, reasoning=_mark_reasoning(event.reasoning, is_catchup),
             candle_timestamp=event.candle_close_time, entry_price=event.entry_price, exit_price=event.exit_price,
             timestamp=now, data_source=data_source, db_path=db_path,
         )
@@ -499,6 +518,7 @@ def process_pead_config(
     now: datetime,
     sleep_fn: Callable[[float], None] = time.sleep,
     db_path: Path = DEFAULT_DB_PATH,
+    is_catchup: bool = False,
 ) -> tuple[str, dict[str, Any] | None]:
     """PEAD (3%/hold10 and 8%/hold10, both survivor-bias-caveated) -- one
     (ticker, config) at a time, matching the other 14 = 7 tickers x 2 configs
@@ -537,7 +557,7 @@ def process_pead_config(
     for event in events:
         insert_execution_log_row(
             run_id=run_id, strategy=PEAD_ID, strategy_version=config.strategy_version,
-            asset=config.ticker, signal_type=event.signal_type, reasoning=event.reasoning,
+            asset=config.ticker, signal_type=event.signal_type, reasoning=_mark_reasoning(event.reasoning, is_catchup),
             candle_timestamp=event.candle_close_time, entry_price=event.entry_price, exit_price=event.exit_price,
             timestamp=now, data_source=data_source, db_path=db_path,
         )
@@ -550,6 +570,7 @@ def process_donchian_forex_config(
     now: datetime,
     sleep_fn: Callable[[float], None] = time.sleep,
     db_path: Path = DEFAULT_DB_PATH,
+    is_catchup: bool = False,
 ) -> tuple[str, dict[str, Any] | None]:
     """DONCHIAN_TREND bracket-exit, forex leg of the Donchian Cross-Asset Deep-Dive
     promotion list (EUR/USD, GBP/USD @ N20; USD/JPY @ N40 -- see DONCHIAN_FOREX_CONFIGS).
@@ -585,7 +606,7 @@ def process_donchian_forex_config(
     for event in events:
         insert_execution_log_row(
             run_id=run_id, strategy=DONCHIAN_TREND_ID, strategy_version=config.strategy_version,
-            asset=config.pair, signal_type=event.signal_type, reasoning=event.reasoning,
+            asset=config.pair, signal_type=event.signal_type, reasoning=_mark_reasoning(event.reasoning, is_catchup),
             candle_timestamp=event.candle_close_time, entry_price=event.entry_price, exit_price=event.exit_price,
             timestamp=now, data_source=data_source, db_path=db_path,
         )
@@ -832,11 +853,14 @@ def run_once(
     errors_encountered: list[dict[str, Any]] = list(_missing_api_key_warnings())
 
     for config in SINGLE_ASSET_CONFIGS:
-        if not candle_boundary_due(config.timeframe, now):
+        on_schedule = candle_boundary_due(config.timeframe, now)
+        last_logged = latest_logged_candle_timestamp(config.strategy_id, config.strategy_version, config.asset, db_path)
+        is_catchup = not on_schedule and catch_up_due(config.timeframe, now, last_logged)
+        if not (on_schedule or is_catchup):
             assets_skipped.append({"asset": config.asset, "strategy": config.strategy_id, "classification": "NOT_DUE"})
             continue
         try:
-            status, record = process_single_asset(config, client, run_id, now, sleep_fn, db_path)
+            status, record = process_single_asset(config, client, run_id, now, sleep_fn, db_path, is_catchup=is_catchup)
         except Exception as exc:  # noqa: BLE001 - one config's unexpected failure must not abort the run
             errors_encountered.append(
                 {"asset": config.asset, "strategy": config.strategy_id, "classification": "FATAL", "message": f"{exc.__class__.__name__}: {exc}"}
@@ -850,9 +874,12 @@ def run_once(
             assets_skipped.append(record)
 
     pairs_label = "-".join(PAIRS_ASSETS)
-    if candle_boundary_due(PAIRS_TIMEFRAME, now):
+    pairs_on_schedule = candle_boundary_due(PAIRS_TIMEFRAME, now)
+    pairs_last_logged = latest_logged_candle_timestamp(COINTEGRATION_PAIRS_ID, COINTEGRATION_PAIRS_VERSION, pairs_label, db_path)
+    pairs_is_catchup = not pairs_on_schedule and catch_up_due(PAIRS_TIMEFRAME, now, pairs_last_logged)
+    if pairs_on_schedule or pairs_is_catchup:
         try:
-            status, record = process_pairs(client, run_id, now, sleep_fn, db_path)
+            status, record = process_pairs(client, run_id, now, sleep_fn, db_path, is_catchup=pairs_is_catchup)
         except Exception as exc:  # noqa: BLE001
             errors_encountered.append(
                 {"asset": pairs_label, "strategy": COINTEGRATION_PAIRS_ID, "classification": "FATAL", "message": f"{exc.__class__.__name__}: {exc}"}
@@ -867,9 +894,12 @@ def run_once(
     else:
         assets_skipped.append({"asset": pairs_label, "strategy": COINTEGRATION_PAIRS_ID, "classification": "NOT_DUE"})
 
-    if candle_boundary_due(GOLD_SILVER_RATIO_TIMEFRAME, now):
+    gsr_on_schedule = candle_boundary_due(GOLD_SILVER_RATIO_TIMEFRAME, now)
+    gsr_last_logged = latest_logged_candle_timestamp(GOLD_SILVER_RATIO_ID, GOLD_SILVER_RATIO_VERSION, GOLD_SILVER_RATIO_LABEL, db_path)
+    gsr_is_catchup = not gsr_on_schedule and catch_up_due(GOLD_SILVER_RATIO_TIMEFRAME, now, gsr_last_logged)
+    if gsr_on_schedule or gsr_is_catchup:
         try:
-            status, record = process_gold_silver_ratio(client, run_id, now, sleep_fn, db_path)
+            status, record = process_gold_silver_ratio(client, run_id, now, sleep_fn, db_path, is_catchup=gsr_is_catchup)
         except Exception as exc:  # noqa: BLE001
             errors_encountered.append(
                 {"asset": GOLD_SILVER_RATIO_LABEL, "strategy": GOLD_SILVER_RATIO_ID, "classification": "FATAL", "message": f"{exc.__class__.__name__}: {exc}"}
@@ -884,43 +914,47 @@ def run_once(
     else:
         assets_skipped.append({"asset": GOLD_SILVER_RATIO_LABEL, "strategy": GOLD_SILVER_RATIO_ID, "classification": "NOT_DUE"})
 
-    if candle_boundary_due("24h", now):
-        for pead_config in PEAD_CONFIGS:
-            try:
-                status, record = process_pead_config(pead_config, run_id, now, sleep_fn, db_path)
-            except Exception as exc:  # noqa: BLE001 - one ticker/config's unexpected failure must not abort the others
-                errors_encountered.append(
-                    {"asset": pead_config.ticker, "strategy": PEAD_ID, "classification": "FATAL", "message": f"{exc.__class__.__name__}: {exc}"}
-                )
-                continue
-            if status == "EVALUATED":
-                assets_evaluated.append(f"PEAD:{pead_config.strategy_version}:{pead_config.ticker}")
-            elif record["classification"] == "FATAL":
-                errors_encountered.append(record)
-            else:
-                assets_skipped.append(record)
-    else:
-        for pead_config in PEAD_CONFIGS:
+    pead_on_schedule = candle_boundary_due("24h", now)
+    for pead_config in PEAD_CONFIGS:
+        pead_last_logged = latest_logged_candle_timestamp(PEAD_ID, pead_config.strategy_version, pead_config.ticker, db_path)
+        pead_is_catchup = not pead_on_schedule and catch_up_due("24h", now, pead_last_logged)
+        if not (pead_on_schedule or pead_is_catchup):
             assets_skipped.append({"asset": pead_config.ticker, "strategy": PEAD_ID, "classification": "NOT_DUE"})
+            continue
+        try:
+            status, record = process_pead_config(pead_config, run_id, now, sleep_fn, db_path, is_catchup=pead_is_catchup)
+        except Exception as exc:  # noqa: BLE001 - one ticker/config's unexpected failure must not abort the others
+            errors_encountered.append(
+                {"asset": pead_config.ticker, "strategy": PEAD_ID, "classification": "FATAL", "message": f"{exc.__class__.__name__}: {exc}"}
+            )
+            continue
+        if status == "EVALUATED":
+            assets_evaluated.append(f"PEAD:{pead_config.strategy_version}:{pead_config.ticker}")
+        elif record["classification"] == "FATAL":
+            errors_encountered.append(record)
+        else:
+            assets_skipped.append(record)
 
-    if candle_boundary_due(DONCHIAN_FOREX_TIMEFRAME, now):
-        for donchian_config in DONCHIAN_FOREX_CONFIGS:
-            try:
-                status, record = process_donchian_forex_config(donchian_config, run_id, now, sleep_fn, db_path)
-            except Exception as exc:  # noqa: BLE001 - one pair's unexpected failure must not abort the others
-                errors_encountered.append(
-                    {"asset": donchian_config.pair, "strategy": DONCHIAN_TREND_ID, "classification": "FATAL", "message": f"{exc.__class__.__name__}: {exc}"}
-                )
-                continue
-            if status == "EVALUATED":
-                assets_evaluated.append(donchian_config.pair)
-            elif record["classification"] == "FATAL":
-                errors_encountered.append(record)
-            else:
-                assets_skipped.append(record)
-    else:
-        for donchian_config in DONCHIAN_FOREX_CONFIGS:
+    donchian_on_schedule = candle_boundary_due(DONCHIAN_FOREX_TIMEFRAME, now)
+    for donchian_config in DONCHIAN_FOREX_CONFIGS:
+        donchian_last_logged = latest_logged_candle_timestamp(DONCHIAN_TREND_ID, donchian_config.strategy_version, donchian_config.pair, db_path)
+        donchian_is_catchup = not donchian_on_schedule and catch_up_due(DONCHIAN_FOREX_TIMEFRAME, now, donchian_last_logged)
+        if not (donchian_on_schedule or donchian_is_catchup):
             assets_skipped.append({"asset": donchian_config.pair, "strategy": DONCHIAN_TREND_ID, "classification": "NOT_DUE"})
+            continue
+        try:
+            status, record = process_donchian_forex_config(donchian_config, run_id, now, sleep_fn, db_path, is_catchup=donchian_is_catchup)
+        except Exception as exc:  # noqa: BLE001 - one pair's unexpected failure must not abort the others
+            errors_encountered.append(
+                {"asset": donchian_config.pair, "strategy": DONCHIAN_TREND_ID, "classification": "FATAL", "message": f"{exc.__class__.__name__}: {exc}"}
+            )
+            continue
+        if status == "EVALUATED":
+            assets_evaluated.append(donchian_config.pair)
+        elif record["classification"] == "FATAL":
+            errors_encountered.append(record)
+        else:
+            assets_skipped.append(record)
 
     if daily_time_due(NEWS_PARAMS.daily_run_hour_utc, now):
         try:
