@@ -4617,3 +4617,139 @@ threshold constant (`MIN_SAMPLE_SIZE`, frequency floor, FDR alpha, bootstrap
 CI) -- confirmed via `git diff --name-only` showing only the two files named
 above.
 
+## 2026-08-07: CC-1 directive -- Detailed Adam/Eve briefing + measured characteristics on the Agents page
+
+Website-layer only, as scoped. Zero diff to `trial.py`, `repair_to_trial.py`,
+`graveyard_distillation.py`, or any Adam/Eve scoring/verdict logic --
+confirmed via `git status --short` before starting (only Rung 2's own 7
+uncommitted `nero_core/` files were present, none touched) and via
+`git show --stat` on the shipped commit (3 files, all under `website/`).
+
+### Item 1 -- real "how it works" content, sourced
+
+Traced fresh from code via three parallel read-only research passes
+(`nero_core/research_agent/hypothesis_gen.py`, `nero_core/eve/session.py` +
+`tools_defs.py`, and the shared `rule_dsl.py`/`frequency_gate.py`/
+`auto_tester.py`/`trial.py` pipeline), each citation independently spot-checked
+against the real file before use. Existing docs found and used as background,
+not copied wholesale: `docs/investigations/factory_loop_specification.md`
+(191 lines, especially its 2026-08-06 addendum on Eve's real search/proposal
+ordering) and `docs/investigations/eve_engine_v1_report.md`'s Phase 2/3
+sections. `factory_loop_implementation_report.md`'s own Item 2 (Adam
+web-search timeouts) was found to be **stale** -- it describes the
+pre-streaming, non-streaming call path and was not adapted. `website/app/
+factory-loop/page.tsx` already carries public prose for the shared
+DSL-validate -> frequency-gate -> backtest -> verdict -> Trial-admission
+pipeline; the new Agents-page content links to it and to `/methodology`
+instead of duplicating that description a third time.
+
+Two corrections to premises this directive itself assumed, found during
+research and reflected honestly in the shipped copy rather than silently
+matched to the prompt:
+
+- **Eve's search is not reliably front-loaded.** Three real sessions'
+  turn-by-turn logs were checked directly (`eve_session_registry.json` +
+  each session's own JSON). Only Session 1 of 8 front-loaded every search
+  before any proposal; Session 0 and Session 0-B both genuinely interleaved
+  searching and proposing across turns. The shipped page states this as an
+  observation with its evidence, not a guaranteed protocol.
+- **No "proven-mechanism" context channel exists in the code.** Searched
+  `nero_core/eve/context.py`, `session.py`, `scoring.py`, and every
+  `docs/investigations/*.md` file for the term -- not found anywhere. The
+  real, shipped context channel is the **near-miss** list (`context.py`,
+  session 2 onward). The page states plainly that a proven-mechanism channel
+  was checked for and does not exist today, rather than describing it as
+  shipped.
+
+### Item 2 -- measured characteristics, full quadrant content
+
+Section heading renamed to **"Measured characteristics"** (the four-quadrant
+shape -- Strengths / Weaknesses / Opportunities / Risks going forward -- kept,
+per the directive's own suggestion). Every entry is either a cited mechanism
+or a number with a named source; nothing was included without one (Item 2e).
+
+**Two real figures the directive cited were checked against live data and
+found stale/imprecise; the shipped page uses the corrected values, not the
+directive's own numbers:**
+
+| Cited in directive | Real current value | Source |
+|---|---|---|
+| DSL-vocabulary-gap rate, 13% | **19.0% (4/21)**, and it's an **Eve-only** figure -- Adam has 0 UNTESTABLE verdicts across his own real history | `docs/site_data/eve_hypotheses.json` (21 records), `docs/site_data/agent_test_results.json` (10 records, 0 UNTESTABLE), recomputed directly with Python before writing any copy |
+| "6 crashed sessions of 7... before Phase 1's streaming fix" (implies streaming caused the improvement) | **6 of 10** real session attempts crashed, lifetime total. Real commit timestamps: the last crash (`243d095f`, 2026-08-04 01:58 UTC) predates the streaming commit (`1d0bc45`, 2026-08-05 22:46 UTC) by ~1.5 days. The 60s->120s->180s timeout-ceiling raise (`31e1955`, 2026-08-04 02:07 UTC -- 23 seconds before Session 1 started) is the better-supported explanation for why crashes stopped. Only **one** real session (Session 2 of 8) has run since streaming itself shipped -- not enough data to credit streaming specifically | `docs/site_data/eve_session_registry.json`, `git log`/`git show -s --format=%ci` on `1d0bc45` and `31e1955`, cross-checked against each crashed session's own timestamp |
+
+B7/J2 multi-timeframe cost estimates (directive's Item 2c) were searched for
+directly (`grep -rn "B7"` / `"J2"` across `docs/` and the repo) -- `J2`
+appears nowhere in this repo; `B7` exists only as a scope discussion in
+`factory_loop_specification.md` with no dollar estimate anywhere in it.
+**Omitted from the page** per Item 2e's own instruction to leave out anything
+without a real, traceable number.
+
+Full quadrant content shipped (Adam and Eve, each four quadrants) is in
+`website/app/agents/page.tsx`'s `MeasuredCharacteristicsSection` -- not
+reproduced in full here to avoid a second copy drifting from the shipped
+prose; see that component directly for the exact wording and citations.
+
+### Item 3 -- placement, live wiring, and what could not be verified visually
+
+**Placement (proposed, not assumed):** "How Adam and Eve actually work" was
+placed directly under the page header, before the live Pre-registration
+Progress panel -- mechanism first, then the numbers it produces.
+"Measured characteristics" was placed after the existing Cost section, before
+the "Last updated" footer -- a synthesis of everything above it, last on the
+page by design.
+
+**Live wiring, not hardcoded, wherever the source data supported it:** three
+new pure functions in `website/lib/agentsPage.ts`
+(`computeEveDslGapRate`, `computeEveCrashStats`, `computeEveSessionCostStats`)
+compute the DSL-gap rate, crash count, and per-session average cost live at
+render time from `eve_hypotheses.json`, `eve_session_registry.json`, and
+`eve_budget_ledger.json` respectively -- all already fetched at the top of
+`AgentsPage()` via the existing `fetchJson`/`revalidate=300` pattern, no new
+fetch or dependency added. Orphaned-reservation count/dollar figure and
+Adam's recorded cost reuse the page's own existing `computePreRegistrationProgress`
+output rather than recomputing it a second time. Verified against production
+data by starting a real local production server (`next build` + `next start`)
+and curling the rendered `/agents` HTML directly: the page rendered "4 of 21
+hypotheses on file (19.0%)", "6 of 10 recorded session attempts crashed", and
+"$0.5160 across 4 completed sessions" -- matching independent, separately-run
+Python computations against the same live JSON files exactly. Genuinely
+one-time historical facts that aren't machine-readable numbers (the specific
+crash-cause breakdown, commit hashes/dates, the ALLOWED_FIELDS incident) are
+dated, cited prose, matching this site's own `RandomBaselinePanel` convention
+for one-time historical measurements -- not left as ordinary hardcoded
+numbers pretending to be live.
+
+**Screenshot: not produced.** No browser-automation or screenshot tool
+(Playwright, Puppeteer, chromium-cli) is installed or available in this
+environment, and none was added (installing one was judged out of scope for
+a "website-layer, small-ish" directive without being asked). Verified instead
+via `npx next build` (clean production build, `/agents` compiles with no
+errors) and `npx next start` + `curl` against the real rendered HTML, both
+confirming the page renders correctly with real data end to end. Flagged
+honestly per this project's own "say so explicitly rather than claiming
+success" discipline for UI verification that wasn't actually visual.
+
+### Test counts
+
+`website/__tests__/agentsPage.test.ts`: 11 -> 18 tests (7 new, covering the
+three new pure functions), all passing. Full website suite: 678 tests, 676
+passing, 2 failing -- both in `__tests__/siteDataSchema.test.ts` against
+`docs/site_data/failure_patterns.json`, confirmed via `git status --short`
+to be **pre-existing and unrelated** (that file and test were not touched by
+this directive; the graveyard's real family count has grown past what that
+test's own fixture expected). Not fixed here -- out of scope for an
+Agents-page directive.
+
+### Shipped
+
+```
+git log origin/main --oneline -3
+ba0adf8 Agents page: real how-it-works content + measured characteristics
+f337920 Fix market_data.py missing 1week/2h Twelve Data interval entries
+0ca771f Update signal alerts state
+```
+
+Commit `ba0adf8`: `website/app/agents/page.tsx`,
+`website/lib/agentsPage.ts`, `website/__tests__/agentsPage.test.ts` --
+3 files, no other diff.
+
