@@ -1,4 +1,5 @@
 import FactoryLoopDiagram from "@/components/FactoryLoopDiagram";
+import PageHeader from "@/components/PageHeader";
 import { fetchAgentPerformance, fetchFactoryLoopStatus, fetchForwardTrial, fetchGraveyard } from "@/lib/data";
 
 export const revalidate = 300;
@@ -36,12 +37,12 @@ export default async function FactoryLoopPage() {
 
   return (
     <div className="prose-vatican max-w-2xl">
-      <h1 className="font-serif text-3xl text-parchment">Factory Loop</h1>
-      <p className="text-muted mt-2">
-        How a trading idea moves through this project, end to end: proposed, tested,
+      <PageHeader
+        title="Factory Loop"
+        description="How a trading idea moves through this project, end to end: proposed, tested,
         and either watched forward or retired — honestly, with every stage labeled by
-        whether it is live today or still just designed.
-      </p>
+        whether it is live today or still just designed."
+      />
 
       <section className="mt-8">
         <FactoryLoopDiagram />

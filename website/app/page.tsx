@@ -2,6 +2,8 @@ import Link from "next/link";
 import HeroStats from "@/components/HeroStats";
 import LedgerTable from "@/components/LedgerTable";
 import MarketsSection from "@/components/MarketsSection";
+import Panel from "@/components/Panel";
+import SectionHeader from "@/components/SectionHeader";
 import SplashScreen from "@/components/SplashScreen";
 import {
   fetchCandleData,
@@ -64,12 +66,12 @@ export default async function HomePage({
       />
 
       <section id="ledger">
-        <h2 className="font-serif text-2xl text-parchment mb-4">Truth Ledger</h2>
+        <SectionHeader title="Truth Ledger" />
         <LedgerTable rows={rows} trackingSince={summary?.tracking_since} />
       </section>
 
       <section>
-        <div className="rounded-lg border border-loss/30 bg-ink p-6 flex items-center justify-between gap-4">
+        <Panel tone="loss" className="flex items-center justify-between gap-4">
           <div>
             <h2 className="font-serif text-xl text-parchment">The graveyard</h2>
             <p className="text-muted text-sm mt-1">
@@ -84,7 +86,7 @@ export default async function HomePage({
           >
             View graveyard
           </Link>
-        </div>
+        </Panel>
       </section>
     </div>
   );

@@ -1,4 +1,5 @@
 import GraveyardCard from "@/components/GraveyardCard";
+import PageHeader from "@/components/PageHeader";
 import { fetchGraveyard } from "@/lib/data";
 
 export const revalidate = 300;
@@ -8,11 +9,12 @@ export default async function GraveyardPage() {
 
   return (
     <div>
-      <h1 className="font-serif text-3xl text-parchment">The Graveyard</h1>
-      <p className="text-muted mt-2 max-w-2xl">
-        Every strategy family we tested and killed on the evidence, with the report
-        it came from. We don&apos;t quietly drop failed research — it stays here.
-      </p>
+      <PageHeader
+        eyebrow="No quiet failures"
+        title="The Graveyard"
+        description="Every strategy family we tested and killed on the evidence, with the report
+        it came from. We don't quietly drop failed research — it stays here."
+      />
 
       {graveyard === null ? (
         <p className="text-muted mt-8">

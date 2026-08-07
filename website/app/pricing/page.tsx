@@ -1,3 +1,6 @@
+import PageHeader from "@/components/PageHeader";
+import Panel from "@/components/Panel";
+
 export const metadata = {
   title: "Pricing — Vatican",
 };
@@ -46,15 +49,15 @@ const TIERS: Tier[] = [
 export default function PricingPage() {
   return (
     <div>
-      <h1 className="font-serif text-3xl text-parchment">Pricing</h1>
-      <p className="text-muted mt-2 max-w-2xl">
-        Coming soon — currently in the live-tracking phase. Every tier below is
-        informational only; nothing on this page is purchasable yet.
-      </p>
+      <PageHeader
+        title="Pricing"
+        description="Coming soon — currently in the live-tracking phase. Every tier below is
+        informational only; nothing on this page is purchasable yet."
+      />
 
       <div className="mt-8 grid gap-6 sm:grid-cols-3">
         {TIERS.map((tier) => (
-          <div key={tier.name} className="rounded-lg border border-gold/30 bg-ink p-6">
+          <Panel key={tier.name} tone="gold">
             <h2 className="font-serif text-xl text-parchment">{tier.name}</h2>
             <div className="mt-1 text-2xl text-gold">{tier.price}</div>
             <p className="text-muted text-sm mt-2">{tier.description}</p>
@@ -63,7 +66,7 @@ export default function PricingPage() {
                 <li key={feature}>&middot; {feature}</li>
               ))}
             </ul>
-          </div>
+          </Panel>
         ))}
       </div>
 

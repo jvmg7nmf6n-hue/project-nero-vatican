@@ -1,3 +1,4 @@
+import PageHeader from "@/components/PageHeader";
 import {
   computeAdamFunnel,
   computeEveFunnel,
@@ -171,18 +172,20 @@ export default async function AgentsPage() {
 
   return (
     <div className="flex flex-col gap-10">
-      <div>
-        <h1 className="font-serif text-3xl text-parchment">Agents</h1>
-        <p className="text-muted mt-2 max-w-2xl">
-          What Adam and Eve are actually doing, in real numbers read directly from the same files
-          this project&apos;s own harness writes — including the sessions that crashed and produced
-          nothing. See the{" "}
-          <a href="/factory-loop" className="underline">
-            Factory Loop
-          </a>{" "}
-          page for how a hypothesis moves through this system end to end.
-        </p>
-      </div>
+      <PageHeader
+        title="Agents"
+        description={
+          <>
+            What Adam and Eve are actually doing, in real numbers read directly from the same files
+            this project&apos;s own harness writes — including the sessions that crashed and produced
+            nothing. See the{" "}
+            <a href="/factory-loop" className="underline">
+              Factory Loop
+            </a>{" "}
+            page for how a hypothesis moves through this system end to end.
+          </>
+        }
+      />
 
       <section data-testid="pre-registration-progress" className="rounded-lg border border-gold/40 bg-ink p-5">
         <h2 className="font-serif text-xl text-parchment mb-3">Pre-registration progress</h2>

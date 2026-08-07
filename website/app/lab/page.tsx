@@ -1,6 +1,8 @@
+import PageHeader from "@/components/PageHeader";
 import RepairWorkbench from "@/components/RepairWorkbench";
 import ResearchAgentPanel from "@/components/ResearchAgentPanel";
 import ResearchScoreboard from "@/components/ResearchScoreboard";
+import SectionHeader from "@/components/SectionHeader";
 import {
   fetchAgentHypotheses,
   fetchAgentPerformance,
@@ -52,17 +54,15 @@ export default async function LabPage() {
 
   return (
     <div className="flex flex-col gap-10">
-      <div>
-        <h1 className="font-serif text-3xl text-parchment">Research Lab</h1>
-        <p className="text-muted mt-2 max-w-2xl">
-          Every strategy this project has ever tested — verified, watchlisted, killed, or
+      <PageHeader
+        title="Research Lab"
+        description="Every strategy this project has ever tested — verified, watchlisted, killed, or
           blocked on missing data — plus the active workbench where diagnosed graveyard
-          failures get a mechanism-justified second attempt.
-        </p>
-      </div>
+          failures get a mechanism-justified second attempt."
+      />
 
       <section>
-        <h2 className="font-serif text-2xl text-parchment mb-4">Research Scoreboard</h2>
+        <SectionHeader title="Research Scoreboard" />
         <ResearchScoreboard rows={rows} />
       </section>
 
@@ -71,12 +71,12 @@ export default async function LabPage() {
             now belongs to item 5's real repair_lab.py-driven Repair->Trial
             pipeline (see /factory-loop), and this section is the small,
             hand-curated repair_candidates.json list, matching its own file name. */}
-        <h2 className="font-serif text-2xl text-parchment mb-4">Repair Candidates</h2>
+        <SectionHeader title="Repair Candidates" />
         <RepairWorkbench candidates={repairCandidates ?? []} />
       </section>
 
       <section>
-        <h2 className="font-serif text-2xl text-parchment mb-4">Research Agent</h2>
+        <SectionHeader title="Research Agent" />
         <ResearchAgentPanel
           hypotheses={agentHypotheses ?? []}
           testResults={agentTestResults ?? []}

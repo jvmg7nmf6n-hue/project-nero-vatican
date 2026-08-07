@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PageHeader from "@/components/PageHeader";
 import { buildAssetHeatmap, heatmapTileColor } from "@/lib/assetHeatmap";
 import { fetchStats, fetchStrategies } from "@/lib/data";
 
@@ -16,14 +17,13 @@ export default async function HeatmapPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-serif text-3xl text-parchment">Asset Heatmap</h1>
-        <p className="text-muted mt-2 max-w-2xl">
-          At-a-glance aggregate win rate per asset, across every strategy wired to it.
+      <PageHeader
+        eyebrow="Cross-asset"
+        title="Asset Heatmap"
+        description="At-a-glance aggregate win rate per asset, across every strategy wired to it.
           Gray tiles have no resolved trades yet — never a fabricated color. Click a
-          tile to jump to that asset on the dashboard.
-        </p>
-      </div>
+          tile to jump to that asset on the dashboard."
+      />
 
       {tiles.length === 0 ? (
         <p className="text-muted">No assets registered yet.</p>

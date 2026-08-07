@@ -1,3 +1,5 @@
+import PageHeader from "@/components/PageHeader";
+
 export const metadata = {
   title: "Methodology — Vatican",
 };
@@ -5,11 +7,11 @@ export const metadata = {
 export default function MethodologyPage() {
   return (
     <div className="prose-vatican max-w-2xl">
-      <h1 className="font-serif text-3xl text-parchment">Methodology</h1>
-      <p className="text-muted mt-2">
-        Plain-language notes on how we decide whether a strategy is worth watching,
-        worth trading on paper, or worth killing.
-      </p>
+      <PageHeader
+        title="Methodology"
+        description="Plain-language notes on how we decide whether a strategy is worth watching,
+        worth trading on paper, or worth killing."
+      />
 
       <section className="mt-8">
         <h2 className="font-serif text-xl text-parchment">Train/test split</h2>
