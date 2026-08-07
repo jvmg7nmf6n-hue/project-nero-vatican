@@ -58,6 +58,46 @@ regression test (`tests/test_vatican_provenance.py::
 test_no_agent_calls_ctx_all_signals_for_gold_or_bitcoin_in_live_mode`) that
 tracks the actual call, not just the output shape.
 
+## Deliberate divergences from upstream Bellwether
+
+Two changes so far go beyond "wire a real data source" into actually
+changing agent-internal behavior. Both are reasoned, documented decisions —
+not silent drift from the vendored source — same category as the dxy
+unit-mismatch fix above.
+
+- **`_synthesis.aggregate()`'s confidence formula is split into `agreement`
+  and `coverage`, reported separately** (Stage 2, "fix the aggregation
+  formula" directive; full reasoning in
+  `docs/bellwether_aggregation_formula_report.md`). Upstream blends "how
+  much the available signals agree" and "how much of the intended signal
+  set showed up" into one `confidence` scalar
+  (`0.3 + 0.45*agreement + 0.25*coverage`) — measured directly this session:
+  a single real agent can score LOWER confidence than a 9-agent mock blend
+  purely because `coverage` collapses, nothing to do with the real signal
+  being less trustworthy. `confidence` itself is UNCHANGED (same formula,
+  byte-identical output) so no existing consumer's behavior changes;
+  `agreement`/`coverage` are additive fields on `AssetRead`,
+  `gold_analysis`/`bitcoin_analysis`'s `meta`, and four new fields on
+  `AnalysisOutput` (`gold_agreement`, `gold_coverage`, `bitcoin_agreement`,
+  `bitcoin_coverage`). A correlation-aware discount on top of this (using
+  `correlation.py`'s coefficients to down-weight redundant contributing
+  agents) was proposed, not implemented — seeded coefficients would have to
+  be borrowed across assets to apply today, which is closer to guessing
+  than measuring; see the report's 2026-08-07 update for the full
+  reasoning on why that's deferred until `correlation.py` computes real
+  agent-pair correlations instead of hardcoded regime constants.
+- **BTC perp funding rate is real** (Stage 2, Part B), via
+  `nero_core.data_sources.funding_data.load_funding_history("BTC")` (free
+  Binance public endpoint, no key) — same wiring shape as VIX/DXY:
+  `VaticanRealDerivatives` wraps `MockDerivatives`, overrides only
+  `btc_perp_funding_bps`, falls back to the mock draw and reports
+  SYNTHETIC on any failure. `derivatives_etf`'s own provenance becomes
+  MIXED when funding is real (ETF flows/skew/positioning remain
+  unresearched-or-blocked, so this agent can never be fully REAL on funding
+  alone). `risk.py`'s crowded-leverage check now fires in live mode too,
+  gated on the funding field's own provenance — same pattern as its
+  existing VIX gate, not a new mechanism.
+
 ## What this is NOT doing (as of Stage 1 — vendoring only)
 
 - **No trade-log writes.** Bellwether's own `PredictionStore`

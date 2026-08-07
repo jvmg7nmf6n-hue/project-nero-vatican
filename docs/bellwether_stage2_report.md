@@ -1,3 +1,140 @@
+## 2026-08-07 update 2: aggregation formula split (Part A) + BTC funding rate (Part B)
+
+Follows the "CC-1 comprehensive directive" (Parts A/B). Read this section
+first for the current state of the formula and real-data wiring; sections
+below are earlier, superseded snapshots kept for the historical record.
+
+### Part A — `agreement`/`coverage` split (A1, shipped)
+
+`_synthesis.aggregate()`'s confidence formula is **unchanged**
+(`0.3 + 0.45*agreement + 0.25*coverage` — `coverage` is `mass`, renamed).
+What changed: `agreement` and `coverage` are now their own fields on
+`AssetRead`, propagated to `gold_analysis`/`bitcoin_analysis`'s `meta`,
+`trade_recommendation`'s per-asset `recommendations`, and four new
+top-level `AnalysisOutput` fields (`gold_agreement`, `gold_coverage`,
+`bitcoin_agreement`, `bitcoin_coverage`). Full reasoning and the A2
+correlation-discount proposal (NOT implemented, per explicit instruction):
+`docs/bellwether_aggregation_formula_report.md`'s 2026-08-07 update.
+6 new tests (`tests/test_vatican_aggregation.py`).
+
+### Part A4 / Part B2 — re-measured sweep series, same session, directly comparable
+
+Ran `tools/sweep_series.py` (new, committed — the original Stage 0/Stage 2
+sweeps were ad hoc and never committed as a script; this tool matches the
+same 30-seeds x 6-headlines = 180-cycle methodology, but headline text is
+newly authored, not preserved from the original session — see the tool's
+own docstring for that caveat). All four configurations in one run, same
+process, same cached real fetches:
+
+| | mock | live, 1 real (real_yield only) | live, 2 real-ish (+VIX) | live, current (+DXY, +funding) |
+|---|---|---|---|---|
+| mean confidence | 0.297 | 0.283 | 0.394 | 0.392 |
+| % below 0.35 | 77.8% | 100.0% | 23.3% | 33.3% |
+| gold NEUTRAL | 81.7% | 0.0% | 0.0% | 30.0% |
+| bitcoin NEUTRAL | 73.3% | 100.0% | 23.3% | 20.0% |
+| gold agreement (mean) | 0.351 | **0.500 (constant, stdev 0)** | 0.500 (constant) | 0.372 |
+| gold coverage (mean) | 0.272 | 0.135 | 0.135 | 0.200 |
+| bitcoin agreement (mean) | 0.401 | 0.0 | 0.533 | 0.522 |
+| bitcoin coverage (mean) | 0.385 | 0.0 | 0.154 | 0.280 |
+
+**Two genuine findings from having `agreement`/`coverage` separated, not
+visible before A1:**
+
+1. **"1 real agent" gold agreement is EXACTLY 0.500 with zero variance
+   across all 180 cycles — a real, explained mechanism, not a bug.** With
+   only `real_yield_10y` real (fixed across every seed — it's a single live
+   DFII10 fetch, not seed-dependent) and `dxy` falling back to a per-seed
+   mock draw, `monetary_policy`'s continuous `gold_score` varies slightly
+   seed to seed, but stays entirely within the `Bias.BEARISH` band
+   (`-1.5 < x <= -0.5`) for every seed tested — `Bias.from_score` discretizes
+   to the same enum value regardless. With exactly one contributing GOLD
+   signal, `aggregate()`'s `net = bias.score` exactly (weighted average of
+   one term), so `agreement = |net|/2 = 0.5` no matter how the underlying
+   continuous score wobbles within that band. This is the discretization
+   step (`Bias.from_score`) hiding continuous variation, not a defect in
+   the new split — worth knowing if `agreement`'s near-zero variance is
+   ever mistaken for "very stable real signal" rather than "a single
+   signal's score happens to sit mid-band."
+2. **A genuine, newly-surfaced provenance-granularity leak, found BECAUSE
+   of the split (this is worth fixing in a future increment, not fixed
+   here — outside Part A/B's scope).** Wiring BTC funding rate makes
+   `derivatives_etf`'s overall provenance `MIXED` (per-AGENT granularity,
+   the same coarseness already disclosed in `liquidity.py`'s own
+   docstring). But `derivatives_etf` ALSO emits a GOLD signal
+   (`gold-ETF flow`, `mgr net-long %`) built ENTIRELY from mock ETF-flow
+   and positioning data — confirmed by direct inspection (seed 0): once
+   `derivatives_etf` is `MIXED` via its unrelated BTC-funding leg,
+   `real_only_signals(ctx, Asset.GOLD)` includes this 100%-mock GOLD
+   signal (`BEARISH, strength 0.488, "gold-ETF -83M, mgr net-long 34%"`)
+   in the live-mode GOLD aggregate. This is why `live_current`'s gold
+   agreement (0.372) is LOWER and more variable than `live_2_real_ish`'s
+   constant 0.5 — a genuinely mock-derived signal is now blending into a
+   number a consumer would read as "real read." **Not a regression this
+   directive introduced by accident — a pre-existing per-agent-not-per-signal
+   granularity limitation that funding wiring happened to newly trigger.**
+   Flagging for a future increment: either move provenance to per-signal
+   granularity, or split `derivatives_etf` into two agents (BTC leg /
+   GOLD leg) so a partial real wiring on one side can't leak the other
+   side's mock signal into a live-mode aggregate.
+
+### Part B — BTC funding rate (B1, shipped)
+
+`VaticanRealDerivatives` (`vatican/bellwether/bellwether/data/providers.py`)
+wraps `MockDerivatives`, overrides only `btc_perp_funding_bps` via
+`nero_core.data_sources.funding_data.load_funding_history("BTC")` (free
+Binance public endpoint, no key) — confirmed live 2026-08-07: latest
+settled funding rate 0.6045 bps. Same shape as VIX/DXY: process-lifetime
+cache, falls back to the mock draw and reports SYNTHETIC on any failure,
+never guesses. `derivatives_etf`'s own provenance is `MIXED` when funding
+is real (its ETF-flow/skew/positioning legs remain mock). `risk.py`'s
+crowded-leverage check (`> 6 bps`) now fires in live mode too, gated on
+`ctx.data.derivatives.provenance_of("btc_perp_funding_bps")` — same pattern
+as the existing VIX gate. 6 new tests (`tests/test_vatican_funding.py`).
+34+6+6 = 46 tests total, 1 skipped, full suite green.
+
+**B3 — does funding rate correlate with the real-yields/DXY/VIX cluster, or
+is it a genuinely independent input? Measured with real historical data,
+not asserted.** Pulled 2 years of daily DFII10 (cached), DX-Y.NYB and ^VIX
+(yfinance), and BTC perp funding (Binance, resampled to daily mean) for the
+same overlapping window (482 days). Two correlation matrices, because level
+correlations on trending series are misleading (classic spurious-regression
+risk) while day-to-day CHANGES are the honest test of whether they move
+together:
+
+| levels | real_yield | dxy | vix | funding |
+|---|---|---|---|---|
+| real_yield | 1.000 | 0.348 | 0.062 | 0.192 |
+| dxy | 0.348 | 1.000 | -0.011 | 0.382 |
+| vix | 0.062 | -0.011 | 1.000 | -0.271 |
+| funding | 0.192 | 0.382 | -0.271 | 1.000 |
+
+| daily changes | real_yield | dxy | vix | funding |
+|---|---|---|---|---|
+| real_yield | 1.000 | 0.287 | 0.105 | 0.041 |
+| dxy | 0.287 | 1.000 | 0.016 | -0.015 |
+| vix | 0.105 | 0.016 | 1.000 | 0.007 |
+| funding | 0.041 | -0.015 | 0.007 | 1.000 |
+
+**Finding: funding rate is genuinely a fourth independent input, not part
+of the real-yields/DXY/VIX cluster.** The level correlations (0.19-0.38)
+mostly wash out once measured as day-to-day changes (|r| ≤ 0.041 against
+every other real field) — consistent with co-trending over the measurement
+window rather than a structural relationship. Real yields and DXY DO show
+a real, moderate day-to-day relationship even in changes (r=0.287) —
+mechanistically expected (both are policy/dollar-strength expressions) and
+the strongest candidate for a future correlation-cluster discount if A2's
+option 2 (measured, not asserted, coefficients) is ever implemented. VIX
+and funding are both close to zero against everything, including each
+other — funding adding real signal COUNT does not just add correlated
+redundancy, it adds a field the data says is genuinely close to orthogonal
+to the other three. This directly answers A2/A4's open question for this
+specific field: funding wiring is closer to "genuine new evidence" than
+"disguised repetition," per the codebase's own measured data rather than
+`correlation.py`'s hardcoded (and, per that module's own comment, always-
+synthetic) coefficients.
+
+---
+
 # Bellwether Stage 1 + Stage 2 Report
 
 Date: 2026-08-07. Follows `docs/bellwether_audit.md` (Stage 0). Stage 1
