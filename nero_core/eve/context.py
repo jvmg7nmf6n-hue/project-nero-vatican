@@ -44,6 +44,20 @@ DEFAULT_ADAM_HYPOTHESES_PATH = REPO_ROOT / "docs" / "site_data" / "agent_hypothe
 # gets shown and why it's safe/intentional, not a silent contradiction of
 # the "outcomes deliberately withheld" framing used for Adam's history.
 DEFAULT_EVE_HYPOTHESES_PATH = REPO_ROOT / "docs" / "site_data" / "eve_hypotheses.json"
+
+# CC-1 directive Part C: this project's 3 fully-verified survivor strategies
+# (predate Adam/Eve entirely -- no session record, no hypothesis_name in
+# either agent's own history, confirmed by direct search of both
+# agent_hypotheses.json and eve_hypotheses.json). Shown as REFERENCE ONLY,
+# never as a derived_from-eligible parent -- see
+# tests/test_eve_proven_mechanism_context.py's own structural-guard test:
+# these names are deliberately excluded from known_hypothesis_names
+# (session.py's own derived_from validation set), so a declared derived_from
+# naming one of these always fails validation, by construction, with no
+# extra code needed here.
+PROVEN_MECHANISM_NAMES = ("BREAKOUT_MOMENTUM", "TREND_PULLBACK", "COINTEGRATION_PAIRS")
+DEFAULT_STRATEGY_DESCRIPTIONS_PATH = REPO_ROOT / "docs" / "site_data" / "strategy_descriptions.json"
+DEFAULT_STRATEGIES_PATH = REPO_ROOT / "docs" / "site_data" / "strategies.json"
 # Real per-entry size measured against the one real near-miss on file
 # (BTC_MOMENTUM_IGNITION): mechanism text alone is 772 chars (~193 tokens
 # at ~4 chars/token), plus name/p-values/verdict framing -- call it ~250-
@@ -174,6 +188,65 @@ def load_near_misses(path: Path = DEFAULT_EVE_HYPOTHESES_PATH, cap: int = NEAR_M
     return near_misses[:cap]
 
 
+def load_proven_mechanisms(
+    names: tuple[str, ...] = PROVEN_MECHANISM_NAMES,
+    descriptions_path: Path = DEFAULT_STRATEGY_DESCRIPTIONS_PATH,
+    strategies_path: Path = DEFAULT_STRATEGIES_PATH,
+) -> list[dict]:
+    """Real entry/exit rule + mechanism (reused verbatim from
+    strategy_descriptions.json -- already hand-transcribed and verified by a
+    prior directive, never re-derived here) plus real asset/timeframe/
+    verification_status (from strategies.json's own roster) for each of the
+    3 fully-verified survivors. Never includes a verdict/backtest-number
+    claim beyond what's already in verification_note -- this is a mechanism
+    reference, not a performance pitch."""
+    if not descriptions_path.exists() or not strategies_path.exists():
+        return []
+    try:
+        descriptions = json.loads(descriptions_path.read_text(encoding="utf-8"))
+        strategies_data = json.loads(strategies_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    roster = strategies_data.get("strategies", []) if isinstance(strategies_data, dict) else []
+
+    out: list[dict] = []
+    for name in names:
+        desc = descriptions.get(name) if isinstance(descriptions, dict) else None
+        if not isinstance(desc, dict):
+            continue
+        # First roster entry for this name -- the survivor's own primary
+        # (asset, timeframe), not every calibrated variant on the roster.
+        roster_entry = next((r for r in roster if isinstance(r, dict) and r.get("name") == name), None)
+        out.append({
+            "name": name,
+            "mechanism": desc.get("mechanism"),
+            "entry_rule": desc.get("entry_rule"),
+            "exit_rule": desc.get("exit_rule"),
+            "verification_note": desc.get("verification_note"),
+            "asset": roster_entry.get("asset") if roster_entry else None,
+            "timeframe": roster_entry.get("timeframe") if roster_entry else None,
+            "verification_status": roster_entry.get("verification_status") if roster_entry else None,
+        })
+    return out
+
+
+def format_proven_mechanisms(mechanisms: list[dict]) -> str:
+    if not mechanisms:
+        return "(none on file)"
+    lines = []
+    for m in mechanisms:
+        name = m.get("name") or "(unnamed)"
+        asset = m.get("asset") or "?"
+        timeframe = m.get("timeframe") or "?"
+        status = m.get("verification_status") or "?"
+        lines.append(
+            f"- {name} ({asset}/{timeframe}, {status}): {m.get('mechanism') or ''}\n"
+            f"  Entry: {m.get('entry_rule') or 'n/a'}\n"
+            f"  Exit: {m.get('exit_rule') or 'n/a'}"
+        )
+    return "\n".join(lines)
+
+
 def format_tracked_pairs(pairs: list[tuple[str, str]]) -> str:
     return ", ".join(f"{asset}/{timeframe}" for asset, timeframe in pairs) or "(none currently tracked)"
 
@@ -223,6 +296,7 @@ class EveContext:
     graveyard: list[dict]
     adam_history: list[dict]
     near_misses: list[dict] = field(default_factory=list)
+    proven_mechanisms: list[dict] = field(default_factory=list)
 
     def as_prompt_text(self) -> str:
         return (
@@ -249,6 +323,18 @@ class EveContext:
             "your own proposals aren't contaminated by seeing which ones already succeeded on this "
             "same historical data:\n"
             f"{format_adam_history(self.adam_history)}\n\n"
+            "PROVEN MECHANISM REFERENCE, NOT A PARENT HYPOTHESIS (this project's 3 fully-verified "
+            "survivor strategies -- each cleared full statistical verification on its own real "
+            "(asset, timeframe) and predates both Adam and you: no session record exists for any of "
+            "them, so none can ever be a valid derived_from parent -- declaring one will simply fail "
+            "validation, since only a name that genuinely appears in this platform's own hypothesis "
+            "history can be a parent. You may propose a related mechanism on a DIFFERENT asset/"
+            "timeframe as an independent, fully-tested new hypothesis, not as a declared refinement. "
+            "This is a second, complementary source of inspiration alongside your own ability to "
+            "propose macro-conditioned or any other kind of hypothesis independently -- you have "
+            "already demonstrated that (PAXG_RISKOFF_VIX_SPIKE_LONG_4H, a real vix_chg20-conditioned "
+            "hypothesis), and this reference does not replace or gate that capability:\n"
+            f"{format_proven_mechanisms(self.proven_mechanisms)}\n\n"
             "ALL OF THE ABOVE IS REFERENCE ONLY. You may use any of it, ignore all of it, or "
             "propose something with no relationship to any of it -- none of it constrains what "
             "you are allowed to propose."
@@ -261,4 +347,5 @@ def load_context() -> EveContext:
         graveyard=load_graveyard(),
         adam_history=load_adam_history_verdict_stripped(),
         near_misses=load_near_misses(),
+        proven_mechanisms=load_proven_mechanisms(),
     )

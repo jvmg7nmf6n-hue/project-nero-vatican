@@ -89,6 +89,17 @@ DEFAULT_HYPOTHESES_PATH = REPO_ROOT / "docs" / "site_data" / "agent_hypotheses.j
 # agree on what "currently tracked" means from the exact same export.
 DEFAULT_QUANT_METRICS_PATH = REPO_ROOT / "docs" / "site_data" / "quant_metrics.json"
 
+# CC-1 directive Part C: this project's 3 fully-verified survivor strategies
+# -- predate Adam/Eve entirely (no hypothesis_name record for any of them in
+# this file's own DEFAULT_HYPOTHESES_PATH or Eve's eve_hypotheses.json),
+# shown as REFERENCE ONLY, never a check_graveyard_match/near-miss/parent
+# lineage claim. Independently defined here rather than imported from
+# nero_core.eve.context -- same "Adam and Eve stay two fully independent
+# systems with no cross-import" reasoning as DataSourceRefusedError above.
+PROVEN_MECHANISM_NAMES = ("BREAKOUT_MOMENTUM", "TREND_PULLBACK", "COINTEGRATION_PAIRS")
+DEFAULT_STRATEGY_DESCRIPTIONS_PATH = REPO_ROOT / "docs" / "site_data" / "strategy_descriptions.json"
+DEFAULT_STRATEGIES_PATH = REPO_ROOT / "docs" / "site_data" / "strategies.json"
+
 DEFAULT_MAX_CALLS_PER_RUN = 10
 
 # Web-sourced discovery (added 2026-07-31): a SEPARATE, independent channel and
@@ -310,6 +321,61 @@ def check_duplicate(finding: ScanFinding, existing_hypotheses: list[dict]) -> Du
     )
 
 
+def load_proven_mechanisms(
+    names: tuple[str, ...] = PROVEN_MECHANISM_NAMES,
+    descriptions_path: Path = DEFAULT_STRATEGY_DESCRIPTIONS_PATH,
+    strategies_path: Path = DEFAULT_STRATEGIES_PATH,
+) -> list[dict]:
+    """Real entry/exit rule + mechanism (reused verbatim from
+    strategy_descriptions.json, never re-derived) plus real asset/timeframe/
+    verification_status (from strategies.json's roster) for each of the 3
+    fully-verified survivors -- mirrors nero_core.eve.context's own
+    load_proven_mechanisms exactly (same real source files, same shape),
+    independently implemented per this module's own no-cross-import
+    convention."""
+    if not descriptions_path.exists() or not strategies_path.exists():
+        return []
+    try:
+        descriptions = json.loads(descriptions_path.read_text(encoding="utf-8"))
+        strategies_data = json.loads(strategies_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    roster = strategies_data.get("strategies", []) if isinstance(strategies_data, dict) else []
+
+    out: list[dict] = []
+    for name in names:
+        desc = descriptions.get(name) if isinstance(descriptions, dict) else None
+        if not isinstance(desc, dict):
+            continue
+        roster_entry = next((r for r in roster if isinstance(r, dict) and r.get("name") == name), None)
+        out.append({
+            "name": name,
+            "mechanism": desc.get("mechanism"),
+            "entry_rule": desc.get("entry_rule"),
+            "exit_rule": desc.get("exit_rule"),
+            "asset": roster_entry.get("asset") if roster_entry else None,
+            "timeframe": roster_entry.get("timeframe") if roster_entry else None,
+            "verification_status": roster_entry.get("verification_status") if roster_entry else None,
+        })
+    return out
+
+
+def _format_proven_mechanisms(mechanisms: list[dict]) -> str:
+    if not mechanisms:
+        return "(none on file)"
+    lines = []
+    for m in mechanisms:
+        name = m.get("name") or "(unnamed)"
+        asset = m.get("asset") or "?"
+        timeframe = m.get("timeframe") or "?"
+        status = m.get("verification_status") or "?"
+        lines.append(
+            f"- {name} ({asset}/{timeframe}, {status}): {m.get('mechanism') or ''} "
+            f"Entry: {m.get('entry_rule') or 'n/a'} Exit: {m.get('exit_rule') or 'n/a'}"
+        )
+    return "\n".join(lines)
+
+
 def _format_failure_patterns(failure_patterns: list[dict]) -> str:
     if not failure_patterns:
         return "(none on file)"
@@ -322,12 +388,21 @@ def _format_failure_patterns(failure_patterns: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _build_prompt(finding: ScanFinding, failure_patterns: list[dict]) -> str:
+def _build_prompt(finding: ScanFinding, failure_patterns: list[dict], proven_mechanisms: list[dict] = ()) -> str:
     freq_line = (
         f"Historically, this exact condition has measured {finding.measured_frequency_per_year:.1f} "
         f"occurrences/year on this asset/timeframe ({finding.measurement_note})"
         if finding.measured_frequency_per_year is not None
         else f"No reliable historical frequency is available for this exact condition yet ({finding.measurement_note})."
+    )
+    proven_mechanism_block = (
+        "\nPROVEN MECHANISM REFERENCE, NOT A REQUIRED TEMPLATE (this project's 3 fully-verified "
+        "survivor strategies -- each cleared full statistical verification on its own real "
+        "(asset, timeframe); none has a check_graveyard_match/lineage relationship to anything you "
+        "propose, and referencing one does not exempt a new hypothesis from the graveyard check "
+        "below):\n"
+        f"{_format_proven_mechanisms(proven_mechanisms)}\n"
+        if proven_mechanisms else ""
     )
 
     return f"""You are a quantitative research assistant for Project Vatican, a paper-trading
@@ -337,6 +412,7 @@ hypothesis to test.
 
 SCAN FINDING: {finding.description}
 {freq_line}
+{proven_mechanism_block}
 
 KNOWN DEAD MECHANISMS (never propose a hypothesis whose core mechanism matches one of
 these -- they have already been tested on this platform and failed):
@@ -898,6 +974,7 @@ def generate_hypotheses(
     now: datetime | None = None,
     params: HypothesisGenParameters = DEFAULT_PARAMETERS,
     run_id: str | None = None,
+    proven_mechanisms: list[dict] = (),
 ) -> GenerationRunResult:
     """One hypothesis per scan finding, in order, skipping duplicates and
     stopping at `max_calls_per_run`. `existing_hypotheses` seeds duplicate
@@ -959,7 +1036,7 @@ def generate_hypotheses(
         # never just the last. See its own docstring for exactly which
         # failure class earns the one bounded retry (and why the others
         # deliberately don't).
-        attempts = call_claude_with_bounded_retry(_build_prompt(finding, failure_patterns), api_key, params)
+        attempts = call_claude_with_bounded_retry(_build_prompt(finding, failure_patterns, proven_mechanisms), api_key, params)
         data = None
         usage: dict = {}
         for i, attempt in enumerate(attempts):
@@ -1052,10 +1129,21 @@ WEB_HYPOTHESIS_JSON_KEYS = (
 
 
 def _build_web_search_prompt(
-    tracked_pairs: list[tuple[str, str]], known_hypothesis_names: list[str], failure_patterns: list[dict]
+    tracked_pairs: list[tuple[str, str]],
+    known_hypothesis_names: list[str],
+    failure_patterns: list[dict],
+    proven_mechanisms: list[dict] = (),
 ) -> str:
     pairs_line = ", ".join(f"{asset}/{timeframe}" for asset, timeframe in tracked_pairs) or "(none currently tracked)"
     known_line = ", ".join(n for n in known_hypothesis_names if n) or "(none yet)"
+    proven_mechanism_block = (
+        "\nPROVEN MECHANISM REFERENCE, NOT A REQUIRED TEMPLATE (this project's 3 fully-verified "
+        "survivor strategies -- each cleared full statistical verification on its own real "
+        "(asset, timeframe); this is not one of the sources listed above, referencing it earns no "
+        "sourcing-tier credit):\n"
+        f"{_format_proven_mechanisms(proven_mechanisms)}\n"
+        if proven_mechanisms else ""
+    )
 
     return f"""You are a quantitative research assistant for Project Vatican, a paper-trading
 research platform (never real-money execution) for gold, crypto, forex, and stocks.
@@ -1078,7 +1166,7 @@ ALREADY-PROPOSED HYPOTHESES (avoid a near-duplicate of any of these):
 KNOWN DEAD MECHANISMS (never propose a hypothesis whose core mechanism matches one of
 these -- they have already been tested on this platform and failed):
 {_format_failure_patterns(failure_patterns)}
-
+{proven_mechanism_block}
 CRITICAL SOURCING RULES -- read carefully, these are non-negotiable:
 1. Web provenance is NOT a credibility shortcut. This hypothesis will go through the exact
    same measured-frequency gate and statistical harness as every other hypothesis on this
@@ -1231,6 +1319,7 @@ def generate_web_hypotheses(
     now: datetime | None = None,
     params: HypothesisGenParameters = DEFAULT_PARAMETERS,
     run_id: str | None = None,
+    proven_mechanisms: list[dict] = (),
 ) -> GenerationRunResult:
     """Web-search-based discovery -- an INDEPENDENT, parallel channel from
     generate_hypotheses (the scanner path), per this project's own approved
@@ -1299,7 +1388,7 @@ def generate_web_hypotheses(
         errors.append({"scan_finding": "(preflight key validation)", "message": preflight_note})
 
     for _ in range(max_calls_per_run):
-        prompt = _build_web_search_prompt(tracked_pairs, known_names, failure_patterns)
+        prompt = _build_web_search_prompt(tracked_pairs, known_names, failure_patterns, proven_mechanisms)
         # CC-1 directive (2026-08-06): see call_claude_with_bounded_retry's
         # own docstring for exactly which failure class earns the one
         # bounded retry -- every real attempt (1 or 2) is accounted for

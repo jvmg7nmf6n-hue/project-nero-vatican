@@ -287,10 +287,11 @@ def run_pipeline(
     scoreable_findings = [f for f in all_findings if (f.asset, f.timeframe) in APPROVED_RESEARCH_UNIVERSE]
 
     failure_patterns = _load_failure_patterns(DEFAULT_FAILURE_PATTERNS_PATH)
+    proven_mechanisms = hypothesis_gen.load_proven_mechanisms()
     existing_hypotheses = hypothesis_gen.load_existing_hypotheses()
     generation = hypothesis_gen.generate_hypotheses(
         scoreable_findings, failure_patterns, api_key, existing_hypotheses, max_calls_per_run, now,
-        run_id=run_id,
+        run_id=run_id, proven_mechanisms=proven_mechanisms,
     )
     hypothesis_gen.persist_hypotheses(generation.hypotheses)
 
@@ -319,7 +320,7 @@ def run_pipeline(
     tracked_pairs = sorted(APPROVED_RESEARCH_UNIVERSE)
     web_generation = hypothesis_gen.generate_web_hypotheses(
         existing_hypotheses + generation.hypotheses, failure_patterns, api_key, tracked_pairs, web_max_calls_per_run, now,
-        run_id=run_id,
+        run_id=run_id, proven_mechanisms=proven_mechanisms,
     )
     hypothesis_gen.persist_hypotheses(web_generation.hypotheses)
 
