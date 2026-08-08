@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-08T03:50:22.401145+00:00",
+  "last_updated": "2026-08-08T04:18:06.072136+00:00",
   "distances": [
     {
       "strategy_id": "BREAKOUT_MOMENTUM",
@@ -25,7 +25,7 @@
           "distance": -13.779
         }
       ],
-      "computed_at": "2026-08-08T03:50:22.401145+00:00"
+      "computed_at": "2026-08-08T04:18:06.072136+00:00"
     },
     {
       "strategy_id": "TREND_PULLBACK",
@@ -61,7 +61,7 @@
           "note": "positive means already inside the band (distance to nearer edge); negative means outside it"
         }
       ],
-      "computed_at": "2026-08-08T03:50:22.401145+00:00"
+      "computed_at": "2026-08-08T04:18:06.072136+00:00"
     },
     {
       "strategy_id": "COINTEGRATION_PAIRS",
@@ -77,7 +77,7 @@
           "raw_zscore": 0.6029
         }
       ],
-      "computed_at": "2026-08-08T03:50:22.401145+00:00"
+      "computed_at": "2026-08-08T04:18:06.072136+00:00"
     }
   ],
   "errors": []
