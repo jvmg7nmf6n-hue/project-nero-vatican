@@ -76,21 +76,24 @@ class RegistryShapeTest(unittest.TestCase):
             self.assertIsInstance(entry["counts_toward_pre_registered_8"], bool)
             self.assertTrue(entry.get("reason"), f"{entry['session_id']} has no reason recorded")
 
-    def test_exactly_two_sessions_count_so_far(self) -> None:
+    def test_exactly_three_sessions_count_so_far(self) -> None:
         # 2026-08-04: eve-20260804T020749Z-4cf6e4c9 is Session 1 of 8 -- the
         # first session to run to completion under the fully-corrected
         # system. 2026-08-06: eve-20260806T180819Z-e777cdef is Session 2 of
-        # 8, applying the SAME counting_rule (this registry's own field) --
-        # see that session's own registry entry for the full real-data
-        # reasoning. Every OTHER entry (2 spec-defect sessions, 3 crashed
-        # attempts) must still not count.
+        # 8. 2026-08-07: eve-20260807T233723Z-6b5bc5d4 is Session 3 of 8 --
+        # the first session to propose a real macro-conditioned hypothesis
+        # (PAXG_RISKOFF_VIX_SPIKE_LONG_4H, vix_chg20). All three apply the
+        # SAME counting_rule (this registry's own field) -- see each
+        # session's own registry entry for the full real-data reasoning.
+        # Every OTHER entry (2 spec-defect sessions, 3 crashed attempts)
+        # must still not count.
         counting = [e for e in self.registry["sessions"] if e["counts_toward_pre_registered_8"]]
-        self.assertEqual(len(counting), 2)
+        self.assertEqual(len(counting), 3)
         self.assertEqual(
             {e["session_id"] for e in counting},
-            {"eve-20260804T020749Z-4cf6e4c9", "eve-20260806T180819Z-e777cdef"},
+            {"eve-20260804T020749Z-4cf6e4c9", "eve-20260806T180819Z-e777cdef", "eve-20260807T233723Z-6b5bc5d4"},
         )
-        self.assertEqual(self.registry["next_countable_session_number"], 3)
+        self.assertEqual(self.registry["next_countable_session_number"], 4)
 
     def test_freshness_gate_reversal_is_recorded_with_dates_and_confirmed_homogeneity(self) -> None:
         # CC-1 correction directive (2026-08-05): the binding freshness gate

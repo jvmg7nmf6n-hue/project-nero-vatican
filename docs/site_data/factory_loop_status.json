@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-06T11:44:45.473979+00:00",
+  "last_updated": "2026-08-08T00:26:05.220935+00:00",
   "forward_trial": {
-    "count": 10,
+    "count": 20,
     "by_origin": {
-      "adam": 4,
-      "eve": 6,
+      "adam": 6,
+      "eve": 14,
       "repaired": 0
     },
-    "unmeasurable_count": 1
+    "unmeasurable_count": 2
   },
   "graveyard": {
     "count": 25,

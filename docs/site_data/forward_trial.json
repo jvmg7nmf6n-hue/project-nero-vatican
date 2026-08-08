@@ -208,5 +208,215 @@
     "opened_at": "2026-08-06T04:39:43.908671+00:00",
     "status": "OPEN",
     "attribution": "Explored by Adam, our research agent."
+  },
+  {
+    "trial_id": "ded8e81f-c70a-4903-850c-6031ebb78463",
+    "source_hypothesis_ref": {
+      "origin": "fresh",
+      "origin_agent": "adam",
+      "hypothesis_name": "VOLWEIGHTED_MA_CROSS_ETH_4H",
+      "session_id_or_run_ref": "d9ca129c-c102-46d7-8713-78d8f7004630"
+    },
+    "entry_verdict": {
+      "verdict": "SKIPPED",
+      "review_status": "rejected_too_slow",
+      "frequency_classification": "TOO_SLOW",
+      "reason": "Measured 25 trigger(s) over 733 eligible days (12.45 trades/year) -> ~28.9 months to 30 resolved trades -> TOO_SLOW."
+    },
+    "measured_trades_per_year": 12.45453512161855,
+    "projected_time_to_min_sample_years": 1.6058407483458819,
+    "projected_time_to_min_sample_label": "1.6 years at the currently measured rate (12.45 trades/year)",
+    "opened_at": "2026-08-08T00:17:06.945011+00:00",
+    "status": "OPEN",
+    "attribution": "Explored by Adam, our research agent."
+  },
+  {
+    "trial_id": "d160ca24-905e-4d83-a8e3-b4abd01e5b74",
+    "source_hypothesis_ref": {
+      "origin": "fresh",
+      "origin_agent": "adam",
+      "hypothesis_name": "CHANNEL_LOW_PULLBACK_UPTREND_SOL_4H",
+      "session_id_or_run_ref": "d9ca129c-c102-46d7-8713-78d8f7004630"
+    },
+    "entry_verdict": {
+      "verdict": "DIED",
+      "review_status": "dead",
+      "frequency_classification": "VIABLE",
+      "reason": "train: N=26 ExpR=0.004; test: N=7 ExpR=-1.068 -> DIED"
+    },
+    "measured_trades_per_year": 58.28722436917481,
+    "projected_time_to_min_sample_years": 0.34312836503117133,
+    "projected_time_to_min_sample_label": "0.3 years at the currently measured rate (58.29 trades/year)",
+    "opened_at": "2026-08-08T00:17:06.945011+00:00",
+    "status": "OPEN",
+    "attribution": "Explored by Adam, our research agent."
+  },
+  {
+    "trial_id": "e7305986-9717-4590-8a18-2ae61b060839",
+    "source_hypothesis_ref": {
+      "origin": "fresh",
+      "origin_agent": "eve",
+      "hypothesis_name": "ADX_EXHAUSTION_FADE_SOL_4H",
+      "session_id_or_run_ref": "eve-20260806T180819Z-e777cdef"
+    },
+    "entry_verdict": {
+      "verdict": "SKIPPED",
+      "verdict_is": null,
+      "verdict_oos": null,
+      "frequency_classification": "TOO_SLOW"
+    },
+    "measured_trades_per_year": 9.465446692430097,
+    "projected_time_to_min_sample_years": 2.112948353086687,
+    "projected_time_to_min_sample_label": "2.1 years at the currently measured rate (9.47 trades/year) -- EXCEEDS the 2-year visibility horizon (item 4b)",
+    "opened_at": "2026-08-08T00:17:06.945011+00:00",
+    "status": "OPEN",
+    "attribution": "Explored by Eve, our research agent."
+  },
+  {
+    "trial_id": "757a5610-8be4-4659-818a-fe3e44809fa5",
+    "source_hypothesis_ref": {
+      "origin": "fresh",
+      "origin_agent": "eve",
+      "hypothesis_name": "VOL_CONFIRMED_CHANNEL_BREAKOUT_BTC_4H",
+      "session_id_or_run_ref": "eve-20260806T180819Z-e777cdef"
+    },
+    "entry_verdict": {
+      "verdict": "DIED",
+      "verdict_is": "PROMISING_WATCHLIST",
+      "verdict_oos": "DIED",
+      "frequency_classification": "FAST"
+    },
+    "measured_trades_per_year": 247.59615821777675,
+    "projected_time_to_min_sample_years": 0.08077669760291156,
+    "projected_time_to_min_sample_label": "0.1 years at the currently measured rate (247.60 trades/year)",
+    "opened_at": "2026-08-08T00:17:06.945011+00:00",
+    "status": "OPEN",
+    "attribution": "Explored by Eve, our research agent."
+  },
+  {
+    "trial_id": "2662f907-303f-4977-8fe1-fae10a72a53c",
+    "source_hypothesis_ref": {
+      "origin": "fresh",
+      "origin_agent": "eve",
+      "hypothesis_name": "CHANNEL_BREAKOUT_HIGH20_BTC_4H",
+      "session_id_or_run_ref": "eve-20260806T180819Z-e777cdef"
+    },
+    "entry_verdict": {
+      "verdict": "DIED",
+      "verdict_is": "PROMISING_WATCHLIST",
+      "verdict_oos": "DIED",
+      "frequency_classification": "FAST"
+    },
+    "measured_trades_per_year": 247.59615821777675,
+    "projected_time_to_min_sample_years": 0.08077669760291156,
+    "projected_time_to_min_sample_label": "0.1 years at the currently measured rate (247.60 trades/year)",
+    "opened_at": "2026-08-08T00:17:06.945011+00:00",
+    "status": "OPEN",
+    "attribution": "Explored by Eve, our research agent."
+  },
+  {
+    "trial_id": "1955d4e8-11ff-4391-9f92-cb5aa8919eb5",
+    "source_hypothesis_ref": {
+      "origin": "fresh",
+      "origin_agent": "eve",
+      "hypothesis_name": "RSI_BOUNCE_FADE_DOWNTREND_ETH_4H",
+      "session_id_or_run_ref": "eve-20260806T180819Z-e777cdef"
+    },
+    "entry_verdict": {
+      "verdict": "SKIPPED",
+      "verdict_is": null,
+      "verdict_oos": null,
+      "frequency_classification": "TOO_SLOW"
+    },
+    "measured_trades_per_year": 17.43634917026597,
+    "projected_time_to_min_sample_years": 1.1470291059613442,
+    "projected_time_to_min_sample_label": "1.1 years at the currently measured rate (17.44 trades/year)",
+    "opened_at": "2026-08-08T00:17:06.945011+00:00",
+    "status": "OPEN",
+    "attribution": "Explored by Eve, our research agent."
+  },
+  {
+    "trial_id": "1c4efc28-1aa5-423a-8310-4290cd717501",
+    "source_hypothesis_ref": {
+      "origin": "fresh",
+      "origin_agent": "eve",
+      "hypothesis_name": "VOLUME_CAPITULATION_REVERSAL_SOL_4H",
+      "session_id_or_run_ref": "eve-20260806T180819Z-e777cdef"
+    },
+    "entry_verdict": {
+      "verdict": "DIED",
+      "verdict_is": "DIED",
+      "verdict_oos": "DIED",
+      "frequency_classification": "FAST"
+    },
+    "measured_trades_per_year": 173.86531029779493,
+    "projected_time_to_min_sample_years": 0.11503157223108038,
+    "projected_time_to_min_sample_label": "0.1 years at the currently measured rate (173.87 trades/year)",
+    "opened_at": "2026-08-08T00:17:06.945011+00:00",
+    "status": "OPEN",
+    "attribution": "Explored by Eve, our research agent."
+  },
+  {
+    "trial_id": "9b9b6f57-df84-4ff6-9481-d0bbdfc0d77c",
+    "source_hypothesis_ref": {
+      "origin": "fresh",
+      "origin_agent": "eve",
+      "hypothesis_name": "ATR_EXHAUSTION_SNAPBACK_SOL_4H",
+      "session_id_or_run_ref": "eve-20260807T233723Z-6b5bc5d4"
+    },
+    "entry_verdict": {
+      "verdict": "DIED",
+      "verdict_is": "DIED",
+      "verdict_oos": "DIED",
+      "frequency_classification": "FAST"
+    },
+    "measured_trades_per_year": 66.75630825187542,
+    "projected_time_to_min_sample_years": 0.29959715454214214,
+    "projected_time_to_min_sample_label": "0.3 years at the currently measured rate (66.76 trades/year)",
+    "opened_at": "2026-08-08T00:17:06.945011+00:00",
+    "status": "OPEN",
+    "attribution": "Explored by Eve, our research agent."
+  },
+  {
+    "trial_id": "79219ab3-c311-485e-905d-4d5b5c9f1b72",
+    "source_hypothesis_ref": {
+      "origin": "fresh",
+      "origin_agent": "eve",
+      "hypothesis_name": "VOLCONFIRM_ADX_TREND_RIDE_BTC_4H",
+      "session_id_or_run_ref": "eve-20260807T233723Z-6b5bc5d4"
+    },
+    "entry_verdict": {
+      "verdict": "DIED",
+      "verdict_is": "PROMISING_WATCHLIST",
+      "verdict_oos": "DIED",
+      "frequency_classification": "FAST"
+    },
+    "measured_trades_per_year": 117.07263014321437,
+    "projected_time_to_min_sample_years": 0.1708341221644555,
+    "projected_time_to_min_sample_label": "0.2 years at the currently measured rate (117.07 trades/year)",
+    "opened_at": "2026-08-08T00:17:06.945011+00:00",
+    "status": "OPEN",
+    "attribution": "Explored by Eve, our research agent."
+  },
+  {
+    "trial_id": "9241729e-316b-4a52-bd91-2401883adb0a",
+    "source_hypothesis_ref": {
+      "origin": "fresh",
+      "origin_agent": "eve",
+      "hypothesis_name": "PAXG_RISKOFF_VIX_SPIKE_LONG_4H",
+      "session_id_or_run_ref": "eve-20260807T233723Z-6b5bc5d4"
+    },
+    "entry_verdict": {
+      "verdict": "DIED",
+      "verdict_is": "PROMISING_WATCHLIST",
+      "verdict_oos": "DIED",
+      "frequency_classification": "FAST"
+    },
+    "measured_trades_per_year": 612.2649465787679,
+    "projected_time_to_min_sample_years": 0.032665596996458136,
+    "projected_time_to_min_sample_label": "0.0 years at the currently measured rate (612.26 trades/year)",
+    "opened_at": "2026-08-08T00:17:06.945011+00:00",
+    "status": "OPEN",
+    "attribution": "Explored by Eve, our research agent."
   }
 ]
