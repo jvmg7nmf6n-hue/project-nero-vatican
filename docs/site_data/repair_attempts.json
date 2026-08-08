@@ -1,0 +1,44 @@
+[
+  {
+    "event": "chain_opened",
+    "repair_chain_id": "RC-CHANNEL_LOW_PULLBACK_UPTREND_SOL_4H",
+    "original_hypothesis_name": "CHANNEL_LOW_PULLBACK_UPTREND_SOL_4H",
+    "original_failure_type": "DIED",
+    "original_result_ref": null,
+    "opened_at": "2026-08-08T06:24:55.040051+00:00"
+  },
+  {
+    "event": "attempt_launched",
+    "repair_chain_id": "RC-CHANNEL_LOW_PULLBACK_UPTREND_SOL_4H",
+    "attempt_id": "A1",
+    "origin_agent": "adam",
+    "fresh_data_method": "forward_testing",
+    "structured_entry_rule": {
+      "conditions": [
+        {
+          "field": "close",
+          "op": "gt",
+          "compare_to_field": "ma200"
+        },
+        {
+          "field": "close",
+          "op": "lte",
+          "compare_to_field": "low20"
+        }
+      ]
+    },
+    "structured_entry_rule_short": null,
+    "structured_exit_plan": {
+      "stop_atr_multiple": 2.0,
+      "dynamic_target_condition": {
+        "field": "close",
+        "op": "gte",
+        "compare_to_field": "ma20"
+      },
+      "max_holding_hours": 240
+    },
+    "modification_type": "exit_structure",
+    "launched_at": "2026-08-08T06:24:55.040051+00:00",
+    "fresh_data_snapshot_ref": "forward-tracking started 2026-08-08T06:24:55.040051+00:00"
+  }
+]
