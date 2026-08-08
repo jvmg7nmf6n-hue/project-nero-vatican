@@ -1555,5 +1555,511 @@
     "fdr_survives_oos": null,
     "excluded_from_fdr_family_reason": "self_derivative",
     "fdr_survives_is": null
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260807T233723Z-6b5bc5d4",
+    "turn_index": 0,
+    "tool_use_id": "toolu_01Q3yTmRmZtRhqqbhVMEDVtw",
+    "proposed_at": "2026-08-07T23:37:23.908692+00:00",
+    "raw_hypothesis": {
+      "hypothesis_name": "ATR_EXHAUSTION_SNAPBACK_SOL_4H",
+      "mechanism": "Volatility clusters and cycles between expansion and contraction. When a sharp, high-ATR directional move stalls -- i.e. ATR has clearly expanded (current ATR far above its recent norm, proxied by comparing price's extension from ma20 via zscore20) while momentum is already decelerating (RSI already retreating from an extreme) -- the move is exhausting rather than accelerating, and price tends to snap back toward the mean before resuming any longer trend. This differs from the graveyard's RANGE_MEAN_REVERSION variants (which faded static oversold/overbought thresholds in a persistent range/trend context and failed edge-over-random) because the trigger here requires the volatility SPIKE itself as a precondition (zscore20 extreme move accompanied by high ATR read relative to price), i.e. explicitly a post-expansion exhaustion fade on a fast-moving altcoin, not a routine dip-buy. SOL is chosen because it is a high-beta, retail-heavy asset with sharp overextension/snapback cycles noted in recent Bollinger-squeeze commentary on SOL's 4h/daily charts.",
+      "asset": "SOL",
+      "timeframe": "4h",
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "zscore20",
+            "op": "gt",
+            "value": 2.0
+          },
+          {
+            "field": "rsi14",
+            "op": "lt",
+            "value": 70
+          },
+          {
+            "field": "adx14",
+            "op": "gt",
+            "value": 25
+          }
+        ],
+        "structured_entry_rule_short": null
+      },
+      "structured_entry_rule_short": {
+        "conditions": [
+          {
+            "field": "zscore20",
+            "op": "lt",
+            "value": -2.0
+          },
+          {
+            "field": "rsi14",
+            "op": "gt",
+            "value": 30
+          },
+          {
+            "field": "adx14",
+            "op": "gt",
+            "value": 25
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_atr_multiple": 1.5,
+        "target_r_multiple": 1.2,
+        "max_holding_hours": 48
+      },
+      "supporting_source_urls": [
+        "https://cripton.ai/en/guides/bollinger-bands-crypto",
+        "https://bravenewcoin.com/insights/solana-price-prediction-sol-eyes-100-breakout-as-bollinger-band-squeeze-signals-volatility-surge"
+      ],
+      "generated_at": "2026-08-07T23:37:23.908692+00:00"
+    },
+    "testability": "TESTABLE",
+    "verdict_is": "DIED",
+    "verdict_oos": "DIED",
+    "verdict_combined": "DIED",
+    "contamination_tags": [],
+    "supporting_source_urls": [
+      "https://cripton.ai/en/guides/bollinger-bands-crypto",
+      "https://bravenewcoin.com/insights/solana-price-prediction-sol-eyes-100-breakout-as-bollinger-band-squeeze-signals-volatility-surge"
+    ],
+    "citation_status": "cited",
+    "supporting_source_urls_validated": [
+      "https://cripton.ai/en/guides/bollinger-bands-crypto",
+      "https://bravenewcoin.com/insights/solana-price-prediction-sol-eyes-100-breakout-as-bollinger-band-squeeze-signals-volatility-surge"
+    ],
+    "supporting_source_urls_invalid": [],
+    "per_hypothesis_freshness": {
+      "result": "checked_clean",
+      "hypothesis_name": "ATR_EXHAUSTION_SNAPBACK_SOL_4H"
+    },
+    "origin_agent": "eve",
+    "origin_chain": null,
+    "testability_reason": "structured_entry_rule and structured_exit_plan both parse via rule_dsl",
+    "p_value_is": 0.0014639134048946012,
+    "p_value_oos": 0.48285945337276104,
+    "frequency_classification": "FAST",
+    "measured_trades_per_year": 66.75630825187542,
+    "candle_data_source": "research_export",
+    "candle_row_count": 4400,
+    "freshness_disqualified": true,
+    "freshness_disqualification_reason": [
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "ATR_EXHAUSTION_SNAPBACK_SOL_4H",
+        "turn_index": 0,
+        "offending_source_url": "https://medium.com/cryptocurrency-scripts/asian-session-gold-strategy-how-to-trade-xauusd-like-a-pro-before-london-opens-8614172d4e06",
+        "parsed_pub_date": "2026-07-17T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '3 weeks ago' (parsed 2026-07-17) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "ATR_EXHAUSTION_SNAPBACK_SOL_4H",
+        "turn_index": 0,
+        "offending_source_url": "https://fortraders.com/blog/momentum-vs-mean-reversion-strategies-for-challenges",
+        "parsed_pub_date": "2026-07-24T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '2 weeks ago' (parsed 2026-07-24) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "ATR_EXHAUSTION_SNAPBACK_SOL_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://www.coinreporter.io/2026/07/ethereum-outperforms-bitcoin-signaling-potential-altcoin-strength/",
+        "parsed_pub_date": "2026-07-24T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '2 weeks ago' (parsed 2026-07-24) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "ATR_EXHAUSTION_SNAPBACK_SOL_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://www.investing.com/analysis/ethbtc-breakout-signals-growing-altcoin-strength-but-bitcoin-recovery-stays-key-200684058",
+        "parsed_pub_date": "2026-07-17T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '3 weeks ago' (parsed 2026-07-17) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "ATR_EXHAUSTION_SNAPBACK_SOL_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://www.fxstreet.com/cryptocurrencies/news/ethbtc-breakout-signals-growing-altcoin-strength-but-bitcoin-recovery-remains-key-202607200957",
+        "parsed_pub_date": "2026-07-17T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '3 weeks ago' (parsed 2026-07-17) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "ATR_EXHAUSTION_SNAPBACK_SOL_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://www.markets4you.com/en/blog/market-analysis/why-bitcoin-dominance-at-58-could-be-the-quiet-signal-that-altcoin-season-is-closer-than-it-looks/",
+        "parsed_pub_date": "2026-07-31T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '1 week ago' (parsed 2026-07-31) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "ATR_EXHAUSTION_SNAPBACK_SOL_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://www.barchart.com/story/news/3332355/ethbtc-breakout-signals-growing-altcoin-strength-but-bitcoin-recovery-remains-key",
+        "parsed_pub_date": "2026-07-17T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '3 weeks ago' (parsed 2026-07-17) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "ATR_EXHAUSTION_SNAPBACK_SOL_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://ambcrypto.com/ethereum-just-hit-a-3-month-high-against-bitcoin-2464-is-the-next-target/",
+        "parsed_pub_date": "2026-07-24T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '2 weeks ago' (parsed 2026-07-24) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "ATR_EXHAUSTION_SNAPBACK_SOL_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://cryptoslate.com/how-thin-weekend-liquidity-turns-minor-geopolitical-news-into-massive-monday-price-gaps-for-etf-holders/",
+        "parsed_pub_date": "2026-07-31T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '1 week ago' (parsed 2026-07-31) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "ATR_EXHAUSTION_SNAPBACK_SOL_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://cryptonews.net/news/bitcoin/33235529/",
+        "parsed_pub_date": "2026-07-31T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '1 week ago' (parsed 2026-07-31) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      }
+    ],
+    "fdr_survives_oos": false,
+    "fdr_survives_is": true
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260807T233723Z-6b5bc5d4",
+    "turn_index": 1,
+    "tool_use_id": "toolu_01JYTC1N481LBUaBWn2pwkRw",
+    "proposed_at": "2026-08-07T23:37:23.908692+00:00",
+    "raw_hypothesis": {
+      "hypothesis_name": "VOLCONFIRM_ADX_TREND_RIDE_BTC_4H",
+      "mechanism": "Distinct from the graveyard's BOS_CONTINUATION (which failed because its structural swing-point stop was almost always dominated by a generic 3x ATR cap, secretly making it plain trend-following with an ATR stop) and from BTC_MOMENTUM_IGNITION (a near-miss single-candle ret_1 trigger), this hypothesis makes NO structural claim at all -- it is deliberately, purely a volume-and-trend-strength continuation filter with a plain ATR stop from the outset, so there is nothing to dilute. The idea: a 20-period high breakout (high20) combined with already-elevated trend strength (adx14 > 25, confirming the market is trending rather than choppy) and above-average volume (volume > vol_ma20, confirming genuine participation rather than a low-volume false break) should identify continuation moves with more follow-through than an unfiltered breakout. Volume-confirmed breakouts are widely cited in the technical literature as separating real regime shifts from noise-driven false breaks that quickly mean-revert.",
+      "asset": "BTC",
+      "timeframe": "4h",
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "close",
+            "op": "gt",
+            "compare_to_field": "high20"
+          },
+          {
+            "field": "adx14",
+            "op": "gt",
+            "value": 25
+          },
+          {
+            "field": "volume",
+            "op": "gt",
+            "compare_to_field": "vol_ma20"
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_atr_multiple": 2.0,
+        "target_r_multiple": 1.5,
+        "max_holding_hours": 72
+      },
+      "supporting_source_urls": [
+        "https://www.coinquant.ai/blog/breakout-trading-strategy-does-it-work-on-crypto-backtested"
+      ],
+      "generated_at": "2026-08-07T23:37:23.908692+00:00"
+    },
+    "testability": "TESTABLE",
+    "verdict_is": "PROMISING_WATCHLIST",
+    "verdict_oos": "DIED",
+    "verdict_combined": "DIED",
+    "contamination_tags": [
+      {
+        "tag": "SELF_DERIVATIVE",
+        "matched_hypothesis_name": "BTC_VOL_EXPANSION_BREAKOUT",
+        "similarity": 0.6559,
+        "method": "term-frequency cosine similarity (lexical, not semantic)"
+      }
+    ],
+    "supporting_source_urls": [
+      "https://www.coinquant.ai/blog/breakout-trading-strategy-does-it-work-on-crypto-backtested"
+    ],
+    "citation_status": "cited",
+    "supporting_source_urls_validated": [
+      "https://www.coinquant.ai/blog/breakout-trading-strategy-does-it-work-on-crypto-backtested"
+    ],
+    "supporting_source_urls_invalid": [],
+    "per_hypothesis_freshness": {
+      "result": "checked_clean",
+      "hypothesis_name": "VOLCONFIRM_ADX_TREND_RIDE_BTC_4H"
+    },
+    "origin_agent": "eve",
+    "origin_chain": null,
+    "testability_reason": "structured_entry_rule and structured_exit_plan both parse via rule_dsl",
+    "p_value_is": 0.1996961895237983,
+    "p_value_oos": 0.06358660788525583,
+    "frequency_classification": "FAST",
+    "measured_trades_per_year": 117.07263014321437,
+    "candle_data_source": "research_export",
+    "candle_row_count": 4400,
+    "freshness_disqualified": true,
+    "freshness_disqualification_reason": [
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "VOLCONFIRM_ADX_TREND_RIDE_BTC_4H",
+        "turn_index": 0,
+        "offending_source_url": "https://medium.com/cryptocurrency-scripts/asian-session-gold-strategy-how-to-trade-xauusd-like-a-pro-before-london-opens-8614172d4e06",
+        "parsed_pub_date": "2026-07-17T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '3 weeks ago' (parsed 2026-07-17) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "VOLCONFIRM_ADX_TREND_RIDE_BTC_4H",
+        "turn_index": 0,
+        "offending_source_url": "https://fortraders.com/blog/momentum-vs-mean-reversion-strategies-for-challenges",
+        "parsed_pub_date": "2026-07-24T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '2 weeks ago' (parsed 2026-07-24) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "VOLCONFIRM_ADX_TREND_RIDE_BTC_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://www.coinreporter.io/2026/07/ethereum-outperforms-bitcoin-signaling-potential-altcoin-strength/",
+        "parsed_pub_date": "2026-07-24T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '2 weeks ago' (parsed 2026-07-24) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "VOLCONFIRM_ADX_TREND_RIDE_BTC_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://www.investing.com/analysis/ethbtc-breakout-signals-growing-altcoin-strength-but-bitcoin-recovery-stays-key-200684058",
+        "parsed_pub_date": "2026-07-17T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '3 weeks ago' (parsed 2026-07-17) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "VOLCONFIRM_ADX_TREND_RIDE_BTC_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://www.fxstreet.com/cryptocurrencies/news/ethbtc-breakout-signals-growing-altcoin-strength-but-bitcoin-recovery-remains-key-202607200957",
+        "parsed_pub_date": "2026-07-17T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '3 weeks ago' (parsed 2026-07-17) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "VOLCONFIRM_ADX_TREND_RIDE_BTC_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://www.markets4you.com/en/blog/market-analysis/why-bitcoin-dominance-at-58-could-be-the-quiet-signal-that-altcoin-season-is-closer-than-it-looks/",
+        "parsed_pub_date": "2026-07-31T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '1 week ago' (parsed 2026-07-31) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "VOLCONFIRM_ADX_TREND_RIDE_BTC_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://www.barchart.com/story/news/3332355/ethbtc-breakout-signals-growing-altcoin-strength-but-bitcoin-recovery-remains-key",
+        "parsed_pub_date": "2026-07-17T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '3 weeks ago' (parsed 2026-07-17) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "VOLCONFIRM_ADX_TREND_RIDE_BTC_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://ambcrypto.com/ethereum-just-hit-a-3-month-high-against-bitcoin-2464-is-the-next-target/",
+        "parsed_pub_date": "2026-07-24T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '2 weeks ago' (parsed 2026-07-24) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "VOLCONFIRM_ADX_TREND_RIDE_BTC_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://cryptoslate.com/how-thin-weekend-liquidity-turns-minor-geopolitical-news-into-massive-monday-price-gaps-for-etf-holders/",
+        "parsed_pub_date": "2026-07-31T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '1 week ago' (parsed 2026-07-31) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "VOLCONFIRM_ADX_TREND_RIDE_BTC_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://cryptonews.net/news/bitcoin/33235529/",
+        "parsed_pub_date": "2026-07-31T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '1 week ago' (parsed 2026-07-31) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      }
+    ],
+    "fdr_survives_oos": null,
+    "excluded_from_fdr_family_reason": "self_derivative",
+    "fdr_survives_is": null
+  },
+  {
+    "schema_version": 1,
+    "session_id": "eve-20260807T233723Z-6b5bc5d4",
+    "turn_index": 2,
+    "tool_use_id": "toolu_01BCmyjMLrCjk2yoihyK97UZ",
+    "proposed_at": "2026-08-07T23:37:23.908692+00:00",
+    "raw_hypothesis": {
+      "hypothesis_name": "PAXG_RISKOFF_VIX_SPIKE_LONG_4H",
+      "mechanism": "Gold (via PAXG) is a classic flight-to-safety asset: sharp spikes in equity-market implied volatility (VIX) tend to coincide with risk-off flows into gold as investors de-risk from equities. Unlike the graveyard's MACRO_RISK_ON family (which failed to transfer across BTC/metals/stocks/forex on a generic 'risk-on regime' framing), this hypothesis is narrower and directionally opposite in spirit: it targets a SPECIFIC acute VIX-spike event (a sharp 20-day rise in vix_chg20) as the trigger for a tactical long in gold over the following days, rather than a persistent regime classification. It also requires price already showing some upward momentum (close above ma20) so the entry isn't fighting the immediate tape. This is a narrow, event-driven variant rather than a regime-allocator, which is the mechanism diagnosed as not transferring previously.",
+      "asset": "PAXG",
+      "timeframe": "4h",
+      "structured_entry_rule": {
+        "conditions": [
+          {
+            "field": "vix_chg20",
+            "op": "gt",
+            "value": 0.15
+          },
+          {
+            "field": "close",
+            "op": "gt",
+            "compare_to_field": "ma20"
+          }
+        ]
+      },
+      "structured_exit_plan": {
+        "stop_atr_multiple": 1.5,
+        "target_r_multiple": 2.0,
+        "max_holding_hours": 96
+      },
+      "supporting_source_urls": [],
+      "generated_at": "2026-08-07T23:37:23.908692+00:00"
+    },
+    "testability": "TESTABLE",
+    "verdict_is": "PROMISING_WATCHLIST",
+    "verdict_oos": "DIED",
+    "verdict_combined": "DIED",
+    "contamination_tags": [],
+    "supporting_source_urls": [],
+    "citation_status": "no_sources_claimed",
+    "supporting_source_urls_validated": [],
+    "supporting_source_urls_invalid": [],
+    "per_hypothesis_freshness": {
+      "result": "nothing_to_check",
+      "hypothesis_name": "PAXG_RISKOFF_VIX_SPIKE_LONG_4H"
+    },
+    "origin_agent": "eve",
+    "origin_chain": null,
+    "testability_reason": "structured_entry_rule and structured_exit_plan both parse via rule_dsl",
+    "p_value_is": 0.5787841163422405,
+    "p_value_oos": 0.07989201101483534,
+    "frequency_classification": "FAST",
+    "measured_trades_per_year": 612.2649465787679,
+    "candle_data_source": "research_export",
+    "candle_row_count": 4400,
+    "freshness_disqualified": true,
+    "freshness_disqualification_reason": [
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "PAXG_RISKOFF_VIX_SPIKE_LONG_4H",
+        "turn_index": 0,
+        "offending_source_url": "https://medium.com/cryptocurrency-scripts/asian-session-gold-strategy-how-to-trade-xauusd-like-a-pro-before-london-opens-8614172d4e06",
+        "parsed_pub_date": "2026-07-17T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '3 weeks ago' (parsed 2026-07-17) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "PAXG_RISKOFF_VIX_SPIKE_LONG_4H",
+        "turn_index": 0,
+        "offending_source_url": "https://fortraders.com/blog/momentum-vs-mean-reversion-strategies-for-challenges",
+        "parsed_pub_date": "2026-07-24T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '2 weeks ago' (parsed 2026-07-24) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "PAXG_RISKOFF_VIX_SPIKE_LONG_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://www.coinreporter.io/2026/07/ethereum-outperforms-bitcoin-signaling-potential-altcoin-strength/",
+        "parsed_pub_date": "2026-07-24T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '2 weeks ago' (parsed 2026-07-24) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "PAXG_RISKOFF_VIX_SPIKE_LONG_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://www.investing.com/analysis/ethbtc-breakout-signals-growing-altcoin-strength-but-bitcoin-recovery-stays-key-200684058",
+        "parsed_pub_date": "2026-07-17T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '3 weeks ago' (parsed 2026-07-17) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "PAXG_RISKOFF_VIX_SPIKE_LONG_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://www.fxstreet.com/cryptocurrencies/news/ethbtc-breakout-signals-growing-altcoin-strength-but-bitcoin-recovery-remains-key-202607200957",
+        "parsed_pub_date": "2026-07-17T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '3 weeks ago' (parsed 2026-07-17) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "PAXG_RISKOFF_VIX_SPIKE_LONG_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://www.markets4you.com/en/blog/market-analysis/why-bitcoin-dominance-at-58-could-be-the-quiet-signal-that-altcoin-season-is-closer-than-it-looks/",
+        "parsed_pub_date": "2026-07-31T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '1 week ago' (parsed 2026-07-31) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "PAXG_RISKOFF_VIX_SPIKE_LONG_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://www.barchart.com/story/news/3332355/ethbtc-breakout-signals-growing-altcoin-strength-but-bitcoin-recovery-remains-key",
+        "parsed_pub_date": "2026-07-17T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '3 weeks ago' (parsed 2026-07-17) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "PAXG_RISKOFF_VIX_SPIKE_LONG_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://ambcrypto.com/ethereum-just-hit-a-3-month-high-against-bitcoin-2464-is-the-next-target/",
+        "parsed_pub_date": "2026-07-24T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '2 weeks ago' (parsed 2026-07-24) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "PAXG_RISKOFF_VIX_SPIKE_LONG_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://cryptoslate.com/how-thin-weekend-liquidity-turns-minor-geopolitical-news-into-massive-monday-price-gaps-for-etf-holders/",
+        "parsed_pub_date": "2026-07-31T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '1 week ago' (parsed 2026-07-31) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      },
+      {
+        "tag": "FRESHNESS_DISQUALIFIED",
+        "hypothesis_name": "PAXG_RISKOFF_VIX_SPIKE_LONG_4H",
+        "turn_index": 3,
+        "offending_source_url": "https://cryptonews.net/news/bitcoin/33235529/",
+        "parsed_pub_date": "2026-07-31T23:37:23.908692+00:00",
+        "rule_fired": "variant_c_30day",
+        "reason": "source dated '1 week ago' (parsed 2026-07-31) is within 30 days of this session's own start (2026-08-07) -- Variant C binding disqualification"
+      }
+    ],
+    "fdr_survives_oos": false,
+    "fdr_survives_is": false
   }
 ]
