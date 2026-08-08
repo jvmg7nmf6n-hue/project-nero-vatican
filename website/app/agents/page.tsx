@@ -374,10 +374,12 @@ function MeasuredCharacteristicsSection({
               {
                 text: (
                   <>
-                    Macro-conditioned hypotheses (4 real fields — 10-year real yield, DXY, VIX, funding rate — being
-                    wired into the DSL): real, substantial code exists as of this writing but is{" "}
-                    <span className="text-parchment">not yet committed or live</span>. Nothing to report as shipped
-                    yet — flagged here honestly rather than overstated.
+                    Macro-conditioned hypotheses (4 real fields — 10-year real yield, DXY, VIX, funding rate) are now{" "}
+                    <span className="text-parchment">committed and live</span> in the DSL (
+                    <code>rule_dsl.py</code>&apos;s <code>ALLOWED_FIELDS</code>) as of the CC-1 master directive&apos;s
+                    Part B Rung 2. Adam has not yet proposed one — no <code>agent_hypotheses.json</code> record
+                    references any of the 4 fields — so this remains a real, currently-unused opportunity, not a
+                    shipped result, for Adam specifically. (Eve has: see her own panel.)
                   </>
                 ),
               },
@@ -495,8 +497,24 @@ function MeasuredCharacteristicsSection({
               {
                 text: (
                   <>
-                    Macro-conditioned hypotheses (same 4 real fields as Adam&apos;s panel): real, substantial code
-                    exists as of this writing but is <span className="text-parchment">not yet committed or live</span>.
+                    Macro-conditioned hypotheses (same 4 real fields as Adam&apos;s panel) are now{" "}
+                    <span className="text-parchment">committed and live</span>, and Eve has already used one: her
+                    session on 2026-08-07 proposed <code>PAXG_RISKOFF_VIX_SPIKE_LONG_4H</code> — a real gold
+                    (PAXG) long conditioned on <code>vix_chg20 &gt; 0.15</code> (a sharp 20-day VIX spike)
+                    alongside <code>close &gt; ma20</code>. It parsed and ran a real backtest:{" "}
+                    <span className="text-parchment">PROMISING-WATCHLIST</span> in-sample,{" "}
+                    <span className="text-loss">DIED</span> out-of-sample — combined verdict{" "}
+                    <span className="text-loss">DIED</span>. One data point — and a fresh K=200 random-baseline
+                    rerun with the macro fields wired (not the static baseline panel above, which predates that
+                    rerun) found PROMISING-WATCHLIST now clears somewhat more easily by chance alone across all
+                    5 pairs (+1.5pp to +12.0pp) since the macro vocabulary widened, so the OOS DIED result, not
+                    the in-sample PROMISING-WATCHLIST, is the one worth weighting here. Not evidence of macro
+                    edge yet, in either direction; the door is open, not yet walked through successfully.
+                    Admission to Forward Trial is DSL-validity-only, never verdict-gated — so this DIED
+                    hypothesis was admitted anyway on 2026-08-08 (<code>tools/factory_loop_run.py --live</code>),
+                    the first macro-conditioned hypothesis ever to reach Forward Trial. It now ticks forward on
+                    real closed candles like any other open Trial record — a DIED backtest verdict is a label on
+                    the historical window tested, not a bar to being watched going forward.
                   </>
                 ),
               },
