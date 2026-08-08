@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-07T17:07:04.971632+00:00",
+  "last_updated": "2026-08-08T02:21:17.173643+00:00",
   "macro_reads": [
     {
       "run_id": "bellwether-overlay-5df6a2126142",
@@ -301,6 +301,112 @@
           "probability": 0.5,
           "gold_bias": "BULLISH",
           "btc_bias": "NEUTRAL",
+          "narrative": "Current drivers persist; net reads play out modestly."
+        },
+        {
+          "name": "Risk-on / easier policy",
+          "probability": 0.25,
+          "gold_bias": "BULLISH",
+          "btc_bias": "STRONG_BULLISH",
+          "narrative": "Softer data + dovish repricing lifts liquidity assets; BTC outperforms."
+        },
+        {
+          "name": "Risk-off / hawkish shock",
+          "probability": 0.25,
+          "gold_bias": "BULLISH",
+          "btc_bias": "BEARISH",
+          "narrative": "Stronger dollar / vol spike; gold gets haven bid, BTC de-risks."
+        }
+      ],
+      "data_mode": "live"
+    },
+    {
+      "run_id": "bellwether-overlay-26b5c4c69624",
+      "timestamp": "2026-08-08T02:21:17.129259+00:00",
+      "asset": "GOLD",
+      "bias": "BULLISH",
+      "confidence": 0.49,
+      "agreement": 0.615,
+      "coverage": 0.812,
+      "probability_up": 0.795,
+      "provenance_breakdown": {
+        "news_intelligence": "real",
+        "economic_calendar": "synthetic",
+        "geopolitical": "real",
+        "monetary_policy": "mixed",
+        "liquidity": "real",
+        "onchain": "synthetic",
+        "derivatives_etf": "synthetic",
+        "correlation": "synthetic",
+        "historical_analog": "synthetic",
+        "learning": "real",
+        "gold_analysis": "mixed",
+        "bitcoin_analysis": "mixed",
+        "scenario": "mixed",
+        "risk": "mixed",
+        "trade_recommendation": "mixed"
+      },
+      "reasoning": "GOLD \u2014 Gold net bias BULLISH (score +1.23, P(up)\u224880%). Supporting: 3 escalation vs 0 de-escalation keywords; keyword match in: Cyberattack on Ceva Logistics warehouses in Europe impacts retailers; keyword match in: As Warsh and the Fed contemplate fewer meetings, markets brace for potential volatility ahead. BITCOIN \u2014 Bitcoin net bias BEARISH (score -0.73, P(up)\u224831%). Supporting: VIX 15.2, stablecoin supply +0.05%. No scored history yet \u2014 confidence uncalibrated, defaulting to neutral prior.",
+      "risks": [],
+      "alternative_scenarios": [
+        {
+          "name": "Base case",
+          "probability": 0.5,
+          "gold_bias": "BULLISH",
+          "btc_bias": "BEARISH",
+          "narrative": "Current drivers persist; net reads play out modestly."
+        },
+        {
+          "name": "Risk-on / easier policy",
+          "probability": 0.25,
+          "gold_bias": "BULLISH",
+          "btc_bias": "STRONG_BULLISH",
+          "narrative": "Softer data + dovish repricing lifts liquidity assets; BTC outperforms."
+        },
+        {
+          "name": "Risk-off / hawkish shock",
+          "probability": 0.25,
+          "gold_bias": "BULLISH",
+          "btc_bias": "BEARISH",
+          "narrative": "Stronger dollar / vol spike; gold gets haven bid, BTC de-risks."
+        }
+      ],
+      "data_mode": "live"
+    },
+    {
+      "run_id": "bellwether-overlay-26b5c4c69624",
+      "timestamp": "2026-08-08T02:21:17.129259+00:00",
+      "asset": "BITCOIN",
+      "bias": "BEARISH",
+      "confidence": 0.49,
+      "agreement": 0.368,
+      "coverage": 0.612,
+      "probability_up": 0.308,
+      "provenance_breakdown": {
+        "news_intelligence": "real",
+        "economic_calendar": "synthetic",
+        "geopolitical": "real",
+        "monetary_policy": "mixed",
+        "liquidity": "real",
+        "onchain": "synthetic",
+        "derivatives_etf": "synthetic",
+        "correlation": "synthetic",
+        "historical_analog": "synthetic",
+        "learning": "real",
+        "gold_analysis": "mixed",
+        "bitcoin_analysis": "mixed",
+        "scenario": "mixed",
+        "risk": "mixed",
+        "trade_recommendation": "mixed"
+      },
+      "reasoning": "GOLD \u2014 Gold net bias BULLISH (score +1.23, P(up)\u224880%). Supporting: 3 escalation vs 0 de-escalation keywords; keyword match in: Cyberattack on Ceva Logistics warehouses in Europe impacts retailers; keyword match in: As Warsh and the Fed contemplate fewer meetings, markets brace for potential volatility ahead. BITCOIN \u2014 Bitcoin net bias BEARISH (score -0.73, P(up)\u224831%). Supporting: VIX 15.2, stablecoin supply +0.05%. No scored history yet \u2014 confidence uncalibrated, defaulting to neutral prior.",
+      "risks": [],
+      "alternative_scenarios": [
+        {
+          "name": "Base case",
+          "probability": 0.5,
+          "gold_bias": "BULLISH",
+          "btc_bias": "BEARISH",
           "narrative": "Current drivers persist; net reads play out modestly."
         },
         {
@@ -937,6 +1043,28 @@
       "status": "evaluated",
       "reason": "BTC bias BULLISH does not oppose a LONG entry",
       "evaluated_at": "2026-08-07T17:07:04.969234+00:00"
+    },
+    {
+      "execution_log_id": 387,
+      "macro_read_id": 6,
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "entry_direction": "LONG",
+      "conflicted": false,
+      "status": "evaluated",
+      "reason": "BTC bias NEUTRAL does not oppose a LONG entry",
+      "evaluated_at": "2026-08-08T02:21:17.169765+00:00"
+    },
+    {
+      "execution_log_id": 389,
+      "macro_read_id": 6,
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "asset": "BTC",
+      "entry_direction": "LONG",
+      "conflicted": false,
+      "status": "evaluated",
+      "reason": "BTC bias NEUTRAL does not oppose a LONG entry",
+      "evaluated_at": "2026-08-08T02:21:17.171757+00:00"
     }
   ]
 }
