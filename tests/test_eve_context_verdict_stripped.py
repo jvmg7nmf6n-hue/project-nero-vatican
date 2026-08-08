@@ -156,14 +156,17 @@ class LoadNearMissesTest(unittest.TestCase):
         path.write_text(json.dumps(records))
         return path
 
-    def test_real_committed_data_yields_exactly_one_near_miss(self) -> None:
+    def test_real_committed_data_yields_two_near_misses(self) -> None:
         # CC-1 directive, item B2: real count against the actual, currently
         # committed docs/site_data/eve_hypotheses.json -- re-derived here,
         # not assumed, so this test fails the moment that file's real
-        # content changes in a way that changes the real count.
+        # content changes in a way that changes the real count. Re-derived
+        # 2026-08-08: ATR_EXHAUSTION_SNAPBACK_SOL_4H (proposed 2026-08-07,
+        # fdr_survives_is=True/fdr_survives_oos=False, verdict_combined=DIED)
+        # is a second, genuine near-miss added after BTC_MOMENTUM_IGNITION.
         near_misses = context.load_near_misses()
         names = [m["hypothesis_name"] for m in near_misses]
-        self.assertEqual(names, ["BTC_MOMENTUM_IGNITION"])
+        self.assertEqual(names, ["BTC_MOMENTUM_IGNITION", "ATR_EXHAUSTION_SNAPBACK_SOL_4H"])
 
     def test_cap_is_enforced(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
