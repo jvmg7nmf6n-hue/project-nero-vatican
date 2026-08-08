@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-08T11:37:00.174039+00:00",
+  "last_updated": "2026-08-08T13:06:45.192331+00:00",
   "distances": [
     {
       "strategy_id": "BREAKOUT_MOMENTUM",
@@ -25,23 +25,23 @@
           "distance": -13.779
         }
       ],
-      "computed_at": "2026-08-08T11:37:00.174039+00:00"
+      "computed_at": "2026-08-08T13:06:45.192331+00:00"
     },
     {
       "strategy_id": "TREND_PULLBACK",
       "asset": "BNB",
       "timeframe": "12h",
-      "candle_close_time_ms": 1786104000000,
+      "candle_close_time_ms": 1786147200000,
       "conditions": [
         {
           "label": "close vs 200-period moving average (established uptrend)",
           "unit": "pct",
-          "distance": -2.075
+          "distance": -1.409
         },
         {
           "label": "50-period MA vs 200-period MA (established uptrend)",
           "unit": "pct",
-          "distance": -4.525
+          "distance": -4.426
         },
         {
           "label": "prior candle already pulled back near 50-period MA",
@@ -52,32 +52,32 @@
         {
           "label": "close vs 50-period moving average (recovery above)",
           "unit": "pct",
-          "distance": 2.566
+          "distance": 3.157
         },
         {
           "label": "RSI(14) within neutral band [40.0, 60.0]",
           "unit": "rsi_points",
-          "distance": 3.898,
+          "distance": -8.893,
           "note": "positive means already inside the band (distance to nearer edge); negative means outside it"
         }
       ],
-      "computed_at": "2026-08-08T11:37:00.174039+00:00"
+      "computed_at": "2026-08-08T13:06:45.192331+00:00"
     },
     {
       "strategy_id": "COINTEGRATION_PAIRS",
       "asset": "BTC-ETH",
       "timeframe": "12h",
-      "candle_close_time_ms": 1786147199999,
+      "candle_close_time_ms": 1786190399999,
       "conditions": [
         {
           "label": "|z-score of spread| vs entry threshold (2.0)",
           "unit": "z_units",
-          "distance": 1.3971,
+          "distance": 1.3626,
           "note": "the spread's real current z-score is already a normalized distance; this is entry_z - |z| (0 or below means the threshold is currently met)",
-          "raw_zscore": 0.6029
+          "raw_zscore": 0.6374
         }
       ],
-      "computed_at": "2026-08-08T11:37:00.174039+00:00"
+      "computed_at": "2026-08-08T13:06:45.192331+00:00"
     }
   ],
   "errors": []
