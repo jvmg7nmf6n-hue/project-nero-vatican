@@ -835,6 +835,11 @@ describe("API key server-only boundary", () => {
           walk(full);
         } else if (/\.(ts|tsx)$/.test(entry.name)) {
           if (full.endsWith(path.join("api", "chat", "route.ts"))) continue;
+          // Wise Man (CC-1 directive v3) is a second, equally server-only
+          // route -- no "use client", key never reaches the browser, same
+          // convention as the chat route above -- reading its own copy of
+          // the same shared ANTHROPIC_API_KEY env var by design.
+          if (full.endsWith(path.join("api", "wise-man", "route.ts"))) continue;
           const contents = fs.readFileSync(full, "utf-8");
           if (!contents.includes("ANTHROPIC_API_KEY")) continue;
 
