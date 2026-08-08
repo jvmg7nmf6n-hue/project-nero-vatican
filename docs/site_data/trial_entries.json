@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-08T05:56:01.794090+00:00",
+  "last_updated": "2026-08-08T07:13:28.293690+00:00",
   "entries": [
     {
       "execution_log_id": 1,
@@ -15,6 +15,62 @@
       "target": 1881.2958797142858,
       "timestamp": "2026-08-05T23:07:36.307597+00:00",
       "candle_timestamp": 1785959999999
+    },
+    {
+      "execution_log_id": 3,
+      "trial_id": "268bb030-f7bb-44b3-9885-39d02ebdaf19",
+      "hypothesis_name": "INTRADAY_TSMOM_BTC_4H",
+      "origin_agent": "adam",
+      "asset": "BTC",
+      "timeframe": null,
+      "direction": "LONG",
+      "entry_price": 65046.0066,
+      "stop_loss": 64342.78088571429,
+      "target": 66452.45802857143,
+      "timestamp": "2026-08-08T06:44:55.757415+00:00",
+      "candle_timestamp": 1786161599999
+    },
+    {
+      "execution_log_id": 4,
+      "trial_id": "757a5610-8be4-4659-818a-fe3e44809fa5",
+      "hypothesis_name": "VOL_CONFIRMED_CHANNEL_BREAKOUT_BTC_4H",
+      "origin_agent": "eve",
+      "asset": "BTC",
+      "timeframe": "4h",
+      "direction": "LONG",
+      "entry_price": 65046.0066,
+      "stop_loss": 64108.37231428571,
+      "target": 66921.27517142857,
+      "timestamp": "2026-08-08T06:44:55.757415+00:00",
+      "candle_timestamp": 1786161599999
+    },
+    {
+      "execution_log_id": 5,
+      "trial_id": "2662f907-303f-4977-8fe1-fae10a72a53c",
+      "hypothesis_name": "CHANNEL_BREAKOUT_HIGH20_BTC_4H",
+      "origin_agent": "eve",
+      "asset": "BTC",
+      "timeframe": "4h",
+      "direction": "LONG",
+      "entry_price": 65046.0066,
+      "stop_loss": 64108.37231428571,
+      "target": 66921.27517142857,
+      "timestamp": "2026-08-08T06:44:55.757415+00:00",
+      "candle_timestamp": 1786161599999
+    },
+    {
+      "execution_log_id": 6,
+      "trial_id": "9b9b6f57-df84-4ff6-9481-d0bbdfc0d77c",
+      "hypothesis_name": "ATR_EXHAUSTION_SNAPBACK_SOL_4H",
+      "origin_agent": "eve",
+      "asset": "SOL",
+      "timeframe": "4h",
+      "direction": "LONG",
+      "entry_price": 74.844966,
+      "stop_loss": 73.60425171428571,
+      "target": 76.33382314285714,
+      "timestamp": "2026-08-08T06:44:55.757415+00:00",
+      "candle_timestamp": 1786161599999
     }
   ]
 }
