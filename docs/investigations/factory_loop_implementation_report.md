@@ -5033,3 +5033,230 @@ Commit `45d1b7c`: `docs/site_data/strategy_descriptions.json`,
 Rung 2's 7 uncommitted `nero_core/` files confirmed untouched throughout
 (`git status --short` before and after).
 
+## 2026-08-08: CC-1 master directive CLOSING REPORT -- "Close the backlog: macro-conditioning ladder + repair resolution fix" (Part A -> Rung 1 -> Rung 2 -> Rung 3 -> Agents page -> Factory Loop live run)
+
+Covers the full arc of this master directive from Part A through Rung 3 and
+its consequences. Per-part depth lives in dedicated sections (this file and
+`docs/bellwether_stage2_report.md`, linked below); this section is the
+checklist a closing report requires.
+
+### Part A -- `advance_open_trials` fix for repaired records (2026-08-07, already shipped)
+
+One-line summary, full detail already in this file above (2026-08-07: CC-1
+master directive, Part A): a repaired record's suffixed hypothesis_name
+(`f"{original}__REPAIR_{attempt_id}"`) never matched `hypothesis_lookup`'s
+raw, unsuffixed keys, so repaired records were detected as unresolvable but
+never actually ticked. Fixed by resolving `ORIGIN_REPAIRED` records via the
+original hypothesis name, recovered by splitting on the same `"__REPAIR_"`
+marker `admit_repair_to_trial` itself uses. No new resolution pathway.
+
+### Rung 1 -- correlation discount for `agreement` (2026-08-07)
+
+Full detail: `docs/bellwether_stage2_report.md`, "2026-08-07: CC-1 master
+directive, Part B Rung 1 -- correlation discount for `agreement`". Real
+pairwise correlation matrix over n=1229 overlapping calendar days
+(2021-08-09 to 2026-07-15) across the 4 real macro fields found only
+`real_yield_10y`/`dxy` meaningfully correlated (0.48 level / 0.56 20-day
+change); every other pair weak (|rho| < 0.35). Shipped a pairwise
+correlation-discount on Bellwether's own `agreement` metric only (`net_score`/
+`bias`/`probability_up` untouched) -- a real, modest downward correction on a
+180-cycle live sweep (GOLD agreement -3.0%, BTC agreement -4.5%, `coverage`
+byte-identical before/after, confirming no leak into the field the discount
+was designed to leave alone).
+
+### Rung 2 -- macro fields wired into the DSL + noise-floor finding (2026-08-08)
+
+Full detail: `docs/bellwether_stage2_report.md`, "2026-08-08: CC-1 master
+directive, Part B Rung 2 -- fresh K=200 random-baseline rerun with macro
+fields wired". `real_yield_10y_chg20`, `dxy_chg20`, `vix_chg20`,
+`funding_rate_bps` wired into `rule_dsl.py`'s `ALLOWED_FIELDS` and
+`random_baseline.py`'s own sampler. A fresh K=200 random-baseline rerun
+(same seed, same 5 real pairs) found the PROMISING-WATCHLIST rate rose in
+**5/5 pairs by chance alone** (+1.5pp to +12.0pp, mean +6.2pp) purely from
+the wider field vocabulary -- real, reproducible noise inflation, not edge
+(every config in that sweep is a random baseline by construction). The
+evidence bar itself (30/yr threshold, 70/30 split, `MIN_SAMPLE_SIZE`, FDR
+alpha, bootstrap CI) was explicitly left untouched, flagged as a Rung 3+
+decision for the owner, not silently patched.
+
+### Rung 3 -- first real macro-conditioned hypothesis (2026-08-08, this session)
+
+**FINDING (confirmed-from-data).** Retried the Eve pipeline
+(`EVE_ENABLED=1 python -m nero_core.eve.pipeline`) in a fresh session, after
+first fingerprinting (length + sha256, never the raw value) that the
+`ANTHROPIC_API_KEY` actually loaded into `os.environ` via
+`nero_core.config.load_dotenv()` matched `.env`'s own declared key
+(`len=108 sha256_12=d257ffacd9e1` on both sides, no shell-env shadowing).
+Session `eve-20260807T233723Z-6b5bc5d4` ran to completion (4 turns, 5 real
+web searches, 3 hypotheses proposed, real spend $0.4538,
+`terminated_because=end_session_called`). All 3 DSL-valid on first attempt,
+all 3 targeted an `APPROVED_RESEARCH_UNIVERSE` pair, all 3 reached the real
+backtest harness. Verdicts (`verdict_combined`): 3/3 DIED -- none SURVIVED.
+
+- `ATR_EXHAUSTION_SNAPBACK_SOL_4H`: DIED both halves by verdict
+  (p_value_is=0.00146, p_value_oos=0.4829) -- but its IS half is real,
+  independently FDR-significant, a genuine new near-miss by this project's
+  own `fdr_survives_is=True`/`fdr_survives_oos`-not-`True` definition,
+  distinct from the verdict label.
+- `VOLCONFIRM_ADX_TREND_RIDE_BTC_4H`: verdict_is=PROMISING_WATCHLIST
+  (p=0.1997), verdict_oos=DIED (p=0.0636). Independently tagged
+  SELF_DERIVATIVE against Session 1's own `BTC_VOL_EXPANSION_BREAKOUT`
+  (similarity 0.6559) and correctly excluded from the FDR family for that
+  reason.
+- `PAXG_RISKOFF_VIX_SPIKE_LONG_4H`: **the first real macro-conditioned
+  hypothesis Eve has ever proposed.** `structured_entry_rule`:
+  `{"field": "vix_chg20", "op": "gt", "value": 0.15}` AND
+  `{"field": "close", "op": "gt", "compare_to_field": "ma20"}`.
+  verdict_is=PROMISING_WATCHLIST (p=0.5788), verdict_oos=DIED (p=0.0799),
+  verdict_combined=DIED. Parsed and backtested exactly like any other
+  hypothesis -- not evidence of macro edge in either direction on this one
+  data point, and per Rung 2's own finding, PROMISING-WATCHLIST now clears
+  somewhat more easily by chance since the macro vocabulary widened, so the
+  OOS DIED result is the one worth weighting.
+
+All 3 carry `freshness_disqualified=True` (item 7 Variant C session-wide
+flag, 10 real flagged search results) -- **confirmed informational only, not
+binding** (commit `3697e75`): all 3 still received real, non-null
+p_value_is/p_value_oos and went through normal scoring.
+
+**WHAT SHIPPED, separately:** the item 7 Variant C log message
+(`nero_core/eve/pipeline.py`) previously read "... freshness-disqualified
+... this session contributes ZERO admissible data points this run" --
+alarming, binding-sounding phrasing for a check that has been
+informational-only since `3697e75`. Reworded to "... flagged by the item 7,
+Variant C, 30-day freshness check -- informational only, not excluded: this
+flag has no effect on scoring, Trial admission, or FDR correction (see
+commit 3697e75)." Committed and pushed alone, `c9986da` -- no other file
+touched, 39 tests unaffected (`tests/test_eve_freshness_disqualification.py`,
+`tests/test_trial_admission.py`).
+
+### Factory Loop live run (2026-08-08, `tools/factory_loop_run.py --live`)
+
+**Dry-run first, per standing instruction.** Real output: 10 admissions, not
+the 3 originally assumed -- Rung 3's 3 plus a real 7-item backlog (2 Adam:
+`VOLWEIGHTED_MA_CROSS_ETH_4H`, `CHANNEL_LOW_PULLBACK_UPTREND_SOL_4H`; 5 Eve
+from sessions since the last live run) that had never been run through
+`admit_to_trial` since the last live run (`edf3df8`, "real Factory Loop live
+run against the new Adam data"). This mismatch against the stated
+expectation (Forward Trial 10 -> 13) was surfaced and confirmed with the
+owner before proceeding to `--live`, per the directive's own "confirm the
+dry-run output matches expectation" instruction.
+
+**Live run, real results:**
+- Forward Trial: **10 -> 20** (`by_origin`: adam=6, eve=14, repaired=0).
+  `PAXG_RISKOFF_VIX_SPIKE_LONG_4H` confirmed as a real `forward_trial.json`
+  entry -- **the first macro-conditioned hypothesis ever admitted to Forward
+  Trial**, despite its DIED backtest verdict (admission is DSL-validity-only,
+  unchanged; a DIED verdict is a label on the historical window tested, not
+  a bar to being watched going forward).
+- Graveyard distillation: family "Range Mean Reversion" (7 DIED) hit
+  `DIED_COUNT_TRIGGER`. One real LLM call made, real cost **$0.008420
+  billed** -- but the call's own validation caught a factual error in the
+  LLM's response (it claimed `n_no_oos_pvalue=None` when the real count
+  across the 7 member records actually shown to it is 3) and refused to
+  persist the draft. **Zero drafts written**, nothing at
+  `REVIEW_PENDING`, real cost incurred for a rejected call -- the intended
+  safety behavior working as designed, not a bug.
+- Forward ticks: 20 OPEN records ticked against real, already-closed
+  candles (`tools.timeframe_data.fetch_timeframe_candles`) -- 19 `NO_TRADE`,
+  1 `EXIT` (`ETH_BIDIRECTIONAL_ZSCORE_FADE`). All 20 still
+  `PENDING_FORWARD_DATA` (below 2*`MIN_SAMPLE_SIZE` resolved trades).
+- `factory_loop_status.json` regenerated:
+  `forward_trial.count=20 (adam=6, eve=14, repaired=0, unmeasurable=2)`,
+  `graveyard.count=25 (distilled_this_period=0, pending_review=0)`,
+  `repair.count=0`.
+
+### Registry-completeness gap found and fixed, same session
+
+**FINDING.** The full Python suite run after Rung 3's session (before any
+registry fix) surfaced 2 *genuine, new* failures beyond the known
+pre-existing 2:
+`tests.test_eve_session_registry.RegistryMatchesRealLedgerTest.test_every_ledger_session_id_is_present_in_the_registry`
+and
+`...test_the_one_real_session_file_that_exists_matches_its_registry_classification`.
+Root cause: `docs/site_data/eve_session_registry.json` was never updated
+with an entry for `eve-20260807T233723Z-6b5bc5d4` -- a real, mechanical gap
+(a session ran, but the registry this project's own regression tests
+cross-check against was never told about it), not a pre-existing issue.
+
+**WHAT SHIPPED.** Added a real entry (`session_3_of_8`,
+`counts_toward_pre_registered_8: true`, `session_label: "Session 3 of 8 --
+first real macro-conditioned hypothesis"`), mirroring Session 1/Session 2's
+own shape and level of detail, with a `reason` field derived entirely from
+real data in the session's own record and `eve_hypotheses.json` (verdicts,
+p-values, freshness/self-derivative tags, the PAXG macro-conditioning
+milestone). Added the matching `counts_toward_pre_registered_8`/
+`session_label`/`counting_reason` fields directly to the session's own file
+(`docs/site_data/eve_sessions/eve-20260807T233723Z-6b5bc5d4.json`), the same
+pattern Session 1's and Session 2's own files carry. Bumped
+`next_countable_session_number` 3 -> 4. Updated
+`tests/test_eve_session_registry.py`'s `test_exactly_two_sessions_count_so_far`
+(hardcoded at 2 since 2026-08-06) to `test_exactly_three_sessions_count_so_far`
+(now 3) -- legitimate real-data growth, the same category as the two
+still-failing pre-existing stale-count tests below, not a silent patch: the
+test's own real assertion changed because a real, new countable session now
+exists.
+
+### Agents page (2026-08-08, `website/app/agents/page.tsx`)
+
+Both Adam's and Eve's "Opportunities" quadrants previously read "real,
+substantial code exists as of this writing but is not yet committed or
+live" for macro-conditioned hypotheses -- true when written, stale after
+Rung 2. Updated honestly: Adam's now states the DSL fields are committed
+and live, but Adam has not yet proposed one (`agent_hypotheses.json` has
+zero references to any of the 4 fields, confirmed by direct search). Eve's
+now states the real outcome: `PAXG_RISKOFF_VIX_SPIKE_LONG_4H`'s real
+mechanism, its PROMISING-WATCHLIST-in-sample/DIED-out-of-sample verdict, the
+Rung 2 noise-floor caveat, and its real Forward Trial admission -- not
+evidence of macro edge yet, in either direction. Verified via
+`agentsPageRender.test.tsx` (renders the full page with mocked fetch data)
+and `agentsPage.test.ts`, both passing.
+
+### Evidence-bar and admission-criteria confirmation
+
+`MIN_SAMPLE_SIZE`, the 30/yr frequency floor, the 70/30 split, FDR alpha,
+and the bootstrap CI construction are untouched this entire directive
+(`git diff origin/main..HEAD -- nero_core/eve/scoring.py
+nero_core/research_agent/frequency_gate.py nero_core/research_agent/trial.py`
+returns empty). Trial admission stayed DSL-valid-only throughout -- every
+one of the 10 fresh admissions this session (including `PAXG_RISKOFF_VIX_
+SPIKE_LONG_4H`'s DIED verdict) went through the exact same unmodified gate
+as every prior admission. Nothing at `REVIEW_PENDING` was approved (the
+one distillation attempt was rejected by its own validation before it ever
+reached that status).
+
+### Test counts
+
+- **Vatican-core (`tests/`, from repo root):** before this session's registry
+  fix, 2763 tests, 4 failures (the 2 pre-existing stale-count tests below
+  plus the 2 real registry-gap tests this session's own Rung 3 session
+  caused). After the registry fix: **2763 tests, 2 failures, 17 skipped,
+  0 errors** -- confirmed the only 2 remaining are pre-existing and
+  unrelated to this directive's own diff:
+  1. `test_eve_citation_freshness.py::RealCommittedDataBackfilledTest::test_the_real_committed_eve_hypotheses_file_has_been_backfilled`
+     -- asserts exactly 16 records; real count is now 24 (real data growth
+     across multiple directives, not this session's diff alone).
+  2. `test_eve_context_verdict_stripped.py::LoadNearMissesTest::test_real_committed_data_yields_exactly_one_near_miss`
+     -- asserts exactly `["BTC_MOMENTUM_IGNITION"]`; real list is now
+     `["BTC_MOMENTUM_IGNITION", "ATR_EXHAUSTION_SNAPBACK_SOL_4H"]`, a real
+     new near-miss this session's own Rung 3 data legitimately produced (see
+     Rung 3 section above).
+- **Bellwether (`vatican/bellwether/tests/`, from its own directory):**
+  **75 passed**, unchanged, reconfirmed this session.
+- **Website (`website/`, `npm test`):** **748 passed**, 2 pre-existing
+  failures in `siteDataSchema.test.ts` (`failure_patterns.json` count/shape
+  checks, `git log` confirms this file untouched by any commit this
+  session) -- reconfirmed clean on a second run after a first run's
+  `useCountUp.test.ts` worker crash (transient, unrelated jest-worker
+  SIGTERM under concurrent background load, not a real failure).
+
+### Files touched this directive's Rung 3 + Factory Loop + registry-fix work
+
+`nero_core/eve/pipeline.py` (log wording only), `docs/site_data/eve_budget_
+ledger.json`, `docs/site_data/eve_hypotheses.json`, `docs/site_data/eve_
+sessions/eve-20260807T233723Z-6b5bc5d4.json` (new + counting fields),
+`docs/site_data/eve_session_registry.json`, `docs/site_data/forward_trial.
+json`, `docs/site_data/factory_loop_status.json`, `data/repair_lab_forward_
+tracking.db`, `tests/test_eve_session_registry.py`, `website/app/agents/
+page.tsx`, this file. Zero other `nero_core/` files touched.
+
