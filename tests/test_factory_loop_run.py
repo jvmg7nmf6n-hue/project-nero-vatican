@@ -396,6 +396,131 @@ class AdvanceOpenTrialsTest(unittest.TestCase):
         self.assertIn("RESOLVED -> FAILED_TRIAL", outcomes[0].reason)
 
 
+class AdvanceOpenRepairAttemptsTest(unittest.TestCase):
+    def _launched_event(self, chain_id: str = "RC-ORIGINAL_HYP", attempt_id: str = "A1") -> list[dict]:
+        return [
+            {"event": repair_lab.EVENT_CHAIN_OPENED, "repair_chain_id": chain_id, "original_hypothesis_name": chain_id[len("RC-"):], "opened_at": NOW.isoformat()},
+            {
+                "event": repair_lab.EVENT_ATTEMPT_LAUNCHED, "repair_chain_id": chain_id, "attempt_id": attempt_id,
+                "origin_agent": "adam", "fresh_data_method": "forward_testing",
+                "structured_entry_rule": VALID_ENTRY, "structured_entry_rule_short": None,
+                "structured_exit_plan": VALID_EXIT, "modification_type": "exit_structure",
+                "launched_at": NOW.isoformat(),
+            },
+        ]
+
+    def test_dry_run_never_fetches_or_ticks(self) -> None:
+        with patch("tools.factory_loop_run.fetch_timeframe_candles") as mock_fetch:
+            outcomes = runner.advance_open_repair_attempts(self._launched_event(), NOW, live=False)
+        mock_fetch.assert_not_called()
+        self.assertEqual(len(outcomes), 1)
+        self.assertFalse(outcomes[0].ticked)
+
+    def test_resolved_or_historical_reservation_attempts_are_never_ticked(self) -> None:
+        events = self._launched_event() + [
+            {"event": repair_lab.EVENT_ATTEMPT_RESOLVED, "repair_chain_id": "RC-ORIGINAL_HYP", "attempt_id": "A1", "status": repair_lab.ATTEMPT_DIED, "resolved_at": NOW.isoformat()},
+        ]
+        outcomes = runner.advance_open_repair_attempts(events, NOW, live=False)
+        self.assertEqual(outcomes, [])
+
+    def test_no_hypothesis_in_lookup_is_reported_not_crashed(self) -> None:
+        with patch("tools.factory_loop_run.fetch_timeframe_candles") as mock_fetch:
+            outcomes = runner.advance_open_repair_attempts(self._launched_event(), NOW, live=True, hypothesis_lookup={})
+        mock_fetch.assert_not_called()
+        self.assertFalse(outcomes[0].ticked)
+        self.assertIn("no hypothesis record found", outcomes[0].reason)
+
+    def test_live_tick_uses_the_modified_rule_not_the_original(self) -> None:
+        candles = pd.DataFrame({
+            "date": pd.date_range("2026-01-01", periods=60, freq="4h", tz="UTC"),
+            "open": [100.0] * 60, "high": [101.0] * 60, "low": [99.0] * 60, "close": [100.0] * 60, "volume": [10.0] * 60,
+        })
+        original_entry = {"conditions": [{"field": "rsi14", "op": "lt", "value": 30.0}]}
+        hypothesis_lookup = {"ORIGINAL_HYP": {"asset": "SOL", "timeframe": "4h", "structured_entry_rule": original_entry, "structured_exit_plan": VALID_EXIT}}
+        with patch("tools.factory_loop_run.fetch_timeframe_candles", return_value=(candles, "NATIVE: test")) as mock_fetch, \
+             patch("nero_core.research_agent.repair_forward_tracker.evaluate_forward_tick") as mock_tick, \
+             patch("nero_core.research_agent.repair_forward_tracker.compute_forward_verdict", return_value=None):
+            mock_tick.return_value = type("R", (), {"signal_type": "NO_TRADE"})()
+            outcomes = runner.advance_open_repair_attempts(self._launched_event(), NOW, live=True, hypothesis_lookup=hypothesis_lookup)
+
+        mock_fetch.assert_called_once_with(ANY, "SOL", "4h")
+        self.assertTrue(outcomes[0].ticked)
+        self.assertIn("PENDING_FORWARD_DATA", outcomes[0].reason)
+        # tick_id must be globally unique (original_hypothesis_name__REPAIR_attempt_id),
+        # never the bare per-chain attempt_id "A1" -- see this function's own docstring
+        # on why a bare id would collide across two different chains' own "A1".
+        tick_call_args = mock_tick.call_args[0]
+        self.assertEqual(tick_call_args[0], "ORIGINAL_HYP__REPAIR_A1")
+        # The MODIFIED entry rule (VALID_ENTRY) must be used, not the original's own
+        # rule (original_entry) -- the whole point of a repair attempt is testing the
+        # modification, not re-testing what already DIED.
+        self.assertEqual(tick_call_args[1]["structured_entry_rule"], VALID_ENTRY)
+
+    def test_resolution_writes_a_real_attempt_resolved_event_with_correct_status(self) -> None:
+        # Regression guard on a real bug caught before this ever ran live:
+        # VERDICT_PROMISING_WATCHLIST's own real string value is hyphenated
+        # ("PROMISING-WATCHLIST", tools/backtest_statistics.py) -- comparing
+        # against an underscored literal would have silently mapped every real
+        # PROMISING-WATCHLIST resolution to DIED.
+        candles = pd.DataFrame({
+            "date": pd.date_range("2026-01-01", periods=60, freq="4h", tz="UTC"),
+            "open": [100.0] * 60, "high": [101.0] * 60, "low": [99.0] * 60, "close": [100.0] * 60, "volume": [10.0] * 60,
+        })
+        hypothesis_lookup = {"ORIGINAL_HYP": {"asset": "SOL", "timeframe": "4h", "structured_entry_rule": VALID_ENTRY, "structured_exit_plan": VALID_EXIT}}
+        with patch("tools.factory_loop_run.fetch_timeframe_candles", return_value=(candles, "NATIVE: test")), \
+             patch("nero_core.research_agent.repair_forward_tracker.evaluate_forward_tick") as mock_tick, \
+             patch("nero_core.research_agent.repair_forward_tracker.compute_forward_verdict", return_value={"verdict": repair_lab.VERDICT_PROMISING_WATCHLIST, "reason": "positive both halves, CI crosses zero"}), \
+             patch("nero_core.research_agent.repair_lab.append_repair_event") as mock_append:
+            mock_tick.return_value = type("R", (), {"signal_type": "EXIT"})()
+            outcomes = runner.advance_open_repair_attempts(self._launched_event(), NOW, live=True, hypothesis_lookup=hypothesis_lookup)
+
+        mock_append.assert_called_once()
+        written_event = mock_append.call_args[0][0]
+        self.assertEqual(written_event["event"], repair_lab.EVENT_ATTEMPT_RESOLVED)
+        self.assertEqual(written_event["status"], repair_lab.ATTEMPT_PROMISING_WATCHLIST)
+        self.assertEqual(written_event["repair_chain_id"], "RC-ORIGINAL_HYP")
+        self.assertEqual(written_event["attempt_id"], "A1")
+        self.assertIn("RESOLVED -> PROMISING-WATCHLIST", outcomes[0].reason)
+
+    def test_resolution_to_died_writes_died_status(self) -> None:
+        candles = pd.DataFrame({
+            "date": pd.date_range("2026-01-01", periods=60, freq="4h", tz="UTC"),
+            "open": [100.0] * 60, "high": [101.0] * 60, "low": [99.0] * 60, "close": [100.0] * 60, "volume": [10.0] * 60,
+        })
+        hypothesis_lookup = {"ORIGINAL_HYP": {"asset": "SOL", "timeframe": "4h", "structured_entry_rule": VALID_ENTRY, "structured_exit_plan": VALID_EXIT}}
+        with patch("tools.factory_loop_run.fetch_timeframe_candles", return_value=(candles, "NATIVE: test")), \
+             patch("nero_core.research_agent.repair_forward_tracker.evaluate_forward_tick") as mock_tick, \
+             patch("nero_core.research_agent.repair_forward_tracker.compute_forward_verdict", return_value={"verdict": repair_lab.VERDICT_DIED, "reason": "negative expectancy"}), \
+             patch("nero_core.research_agent.repair_lab.append_repair_event") as mock_append:
+            mock_tick.return_value = type("R", (), {"signal_type": "EXIT"})()
+            runner.advance_open_repair_attempts(self._launched_event(), NOW, live=True, hypothesis_lookup=hypothesis_lookup)
+
+        written_event = mock_append.call_args[0][0]
+        self.assertEqual(written_event["status"], repair_lab.ATTEMPT_DIED)
+
+    def test_two_different_chains_each_with_their_own_a1_never_collide(self) -> None:
+        # The exact real scenario this function's tracking_id scheme exists to
+        # prevent: two unrelated repair chains, each launching their own first
+        # attempt named bare "A1".
+        events = self._launched_event("RC-HYP_ONE", "A1") + self._launched_event("RC-HYP_TWO", "A1")
+        candles = pd.DataFrame({
+            "date": pd.date_range("2026-01-01", periods=60, freq="4h", tz="UTC"),
+            "open": [100.0] * 60, "high": [101.0] * 60, "low": [99.0] * 60, "close": [100.0] * 60, "volume": [10.0] * 60,
+        })
+        hypothesis_lookup = {
+            "HYP_ONE": {"asset": "BTC", "timeframe": "4h", "structured_entry_rule": VALID_ENTRY, "structured_exit_plan": VALID_EXIT},
+            "HYP_TWO": {"asset": "SOL", "timeframe": "4h", "structured_entry_rule": VALID_ENTRY, "structured_exit_plan": VALID_EXIT},
+        }
+        with patch("tools.factory_loop_run.fetch_timeframe_candles", return_value=(candles, "NATIVE: test")), \
+             patch("nero_core.research_agent.repair_forward_tracker.evaluate_forward_tick") as mock_tick, \
+             patch("nero_core.research_agent.repair_forward_tracker.compute_forward_verdict", return_value=None):
+            mock_tick.return_value = type("R", (), {"signal_type": "NO_TRADE"})()
+            runner.advance_open_repair_attempts(events, NOW, live=True, hypothesis_lookup=hypothesis_lookup)
+
+        tick_ids = {call.args[0] for call in mock_tick.call_args_list}
+        self.assertEqual(tick_ids, {"HYP_ONE__REPAIR_A1", "HYP_TWO__REPAIR_A1"})
+
+
 class BuildReportTest(unittest.TestCase):
     def test_dry_run_label_appears(self) -> None:
         report = runner.build_report([], [], {}, [], live=False)

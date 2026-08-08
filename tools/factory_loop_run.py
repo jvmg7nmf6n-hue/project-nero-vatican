@@ -56,7 +56,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from nero_core.data_sources.market_data import MarketDataClient, MarketDataUnavailableError
-from nero_core.research_agent import graveyard_distillation, repair_lab, repair_to_trial, trial
+from nero_core.research_agent import graveyard_distillation, repair_forward_tracker, repair_lab, repair_to_trial, trial
 from nero_core.research_agent.hypothesis_gen import DEFAULT_HYPOTHESES_PATH, DEFAULT_PARAMETERS
 from nero_core.research_agent.storage import append_json_list, read_json_list
 from tools import factory_loop_status_summary as status_summary
@@ -392,6 +392,140 @@ def advance_open_trials(
     return outcomes
 
 
+@dataclass(frozen=True)
+class RepairAttemptTickOutcome:
+    repair_chain_id: str
+    attempt_id: str
+    ticked: bool
+    reason: str
+
+
+def advance_open_repair_attempts(
+    repair_events: list[dict], now: datetime, live: bool, hypothesis_lookup: dict[str, dict] | None = None,
+) -> list[RepairAttemptTickOutcome]:
+    """Real gap found and closed (2026-08-08): repair_lab.py/repair_forward_
+    tracker.py/repair_chain_launch.py build every piece needed to forward-
+    track a launched repair attempt (repair_forward_tracker.evaluate_
+    forward_tick, compute_forward_verdict), but nothing in this codebase
+    ever CALLED evaluate_forward_tick for a PENDING_FORWARD_DATA repair
+    attempt before this function -- confirmed by grepping every non-test
+    file for both names. trial.run_forward_tick (used by advance_open_
+    trials above) is a thin wrapper around the exact same function, but
+    only ever for an ALREADY-ADMITTED Forward Trial record, never a raw,
+    still-pending repair_attempts.json entry. This is that missing piece,
+    mirroring advance_open_trials's own real-candle-fetch, one-tick-per-run
+    discipline exactly.
+
+    GLOBALLY-UNIQUE KEY, not the bare per-chain attempt_id: the launcher's
+    own commit-and-launch step (tools/repair_chain_launch.py) mints
+    attempt_id as f"A{n}" -- unique WITHIN one chain, but NOT across chains
+    (two different repair chains can each have their own "A1").
+    repair_forward_tracker's own execution_log key
+    is f"{strategy_prefix}:{attempt_id}" -- passing bare "A1" would let a
+    second chain's own "A1" silently write into and read from the SAME
+    execution_log rows as this chain's "A1" (confirmed via
+    repair_forward_tracker._strategy_key; the ONE existing collision test,
+    test_trial_and_repair_attempt_with_same_literal_id_never_collide,
+    covers Trial-vs-repair-attempt collision, not repair-chain-vs-repair-
+    chain). Passes f"{original_hypothesis_name}__REPAIR_{attempt_id}"
+    instead -- globally unique since hypothesis names are, and the SAME
+    naming convention repair_to_trial.admit_repair_to_trial already uses
+    for a PROMOTED attempt's own Trial hypothesis_name, so this isn't an
+    invented scheme.
+
+    Ticks the MODIFIED structured_entry_rule/structured_exit_plan (the
+    attempt's own launched fields -- what's actually being tested), never
+    the original hypothesis's own rule. Asset/timeframe resolved from the
+    ORIGINAL hypothesis via hypothesis_lookup -- correct for every
+    modification_type except asset_timeframe_change, whose own real
+    asset/timeframe is not yet captured on the launch event at all (a
+    separate, already-documented gap in repair_chain_launch.py; zero real
+    attempts of that modification_type exist yet, so this has no live
+    instance to get wrong today).
+
+    Only attempts with fresh_data_method="forward_testing" (the default,
+    and the only method any real launch has used so far) and a current
+    status of PENDING_FORWARD_DATA are ticked -- an already-resolved or
+    historical_reservation attempt is left untouched. On resolution
+    (compute_forward_verdict returns non-None), appends a REAL
+    EVENT_ATTEMPT_RESOLVED event (a real event type this codebase already
+    defines and reconstruct_chain_state already knows how to replay, but
+    which nothing has ever emitted before this function -- confirmed via
+    grep) -- never an intermediate per-tick event, mirroring Forward
+    Trial's own "only write on actual state change" discipline."""
+    outcomes: list[RepairAttemptTickOutcome] = []
+    hypothesis_lookup = hypothesis_lookup or {}
+    chain_ids = sorted({e.get("repair_chain_id") for e in repair_events if e.get("repair_chain_id")})
+    pending: list[tuple[str, dict]] = []
+    for chain_id in chain_ids:
+        state = repair_lab.reconstruct_chain_state(chain_id, repair_events)
+        for attempt in state["attempts"]:
+            if attempt.get("status") != repair_lab.ATTEMPT_PENDING_FORWARD_DATA:
+                continue
+            if attempt.get("fresh_data_method") != "forward_testing":
+                continue
+            pending.append((chain_id, attempt))
+
+    if not live:
+        for chain_id, attempt in pending:
+            outcomes.append(RepairAttemptTickOutcome(chain_id, str(attempt.get("attempt_id")), False, "dry-run -- no candles fetched, no tick performed"))
+        return outcomes
+
+    client = MarketDataClient()
+    for chain_id, attempt in pending:
+        attempt_id = str(attempt.get("attempt_id"))
+        original_name = chain_id[len("RC-"):] if chain_id.startswith("RC-") else chain_id
+        original_hypothesis = hypothesis_lookup.get(original_name)
+        asset, timeframe = (original_hypothesis or {}).get("asset"), (original_hypothesis or {}).get("timeframe")
+        if not asset or not timeframe:
+            outcomes.append(RepairAttemptTickOutcome(
+                chain_id, attempt_id, False,
+                f"no hypothesis record found for {original_name!r} in the current Adam/Eve candidate "
+                f"lookup -- cannot resolve asset/timeframe",
+            ))
+            continue
+        tracking_id = f"{original_name}__REPAIR_{attempt_id}"
+        modified_hypothesis = {
+            **(original_hypothesis or {}),
+            "asset": asset,
+            "timeframe": timeframe,
+            "structured_entry_rule": attempt.get("structured_entry_rule"),
+            "structured_entry_rule_short": attempt.get("structured_entry_rule_short"),
+            "structured_exit_plan": attempt.get("structured_exit_plan"),
+        }
+        try:
+            candles, _method = fetch_timeframe_candles(client, asset, timeframe)
+        except MarketDataUnavailableError as exc:
+            outcomes.append(RepairAttemptTickOutcome(chain_id, attempt_id, False, f"candle fetch failed: {exc}"))
+            continue
+        tick_result = repair_forward_tracker.evaluate_forward_tick(tracking_id, modified_hypothesis, candles, now)
+        verdict = repair_forward_tracker.compute_forward_verdict(tracking_id)
+        if verdict is not None:
+            # Real constants, not hardcoded literals -- VERDICT_PROMISING_WATCHLIST's
+            # own real string value is hyphenated ("PROMISING-WATCHLIST"), confirmed
+            # in tools/backtest_statistics.py; a literal-string comparison here would
+            # have silently misclassified every real PROMISING-WATCHLIST as DIED.
+            if verdict["verdict"] == repair_lab.ATTEMPT_SURVIVED:
+                new_status = repair_lab.ATTEMPT_SURVIVED
+            elif verdict["verdict"] == repair_lab.ATTEMPT_PROMISING_WATCHLIST:
+                new_status = repair_lab.ATTEMPT_PROMISING_WATCHLIST
+            else:
+                new_status = repair_lab.ATTEMPT_DIED
+            repair_lab.append_repair_event({
+                "event": repair_lab.EVENT_ATTEMPT_RESOLVED,
+                "repair_chain_id": chain_id,
+                "attempt_id": attempt_id,
+                "status": new_status,
+                "result_ref": tracking_id,
+                "result": verdict,
+                "resolved_at": now.isoformat(),
+            })
+            outcomes.append(RepairAttemptTickOutcome(chain_id, attempt_id, True, f"{tick_result.signal_type} tick logged; RESOLVED -> {new_status} ({verdict['reason']})"))
+        else:
+            outcomes.append(RepairAttemptTickOutcome(chain_id, attempt_id, True, f"{tick_result.signal_type} tick logged; still PENDING_FORWARD_DATA"))
+    return outcomes
+
+
 def build_report(
     fresh_attempts: list[AdmissionAttempt],
     repair_attempts: list[RepairAdmissionAttempt],
@@ -452,8 +586,20 @@ def main() -> None:
     tick_input_records = forward_trial_records + new_records if live else forward_trial_records
     hypothesis_lookup = {c.hypothesis_name: c.hypothesis_record for c in candidates}
     tick_outcomes = advance_open_trials(tick_input_records, now, live=live, hypothesis_lookup=hypothesis_lookup)
+    # Real gap closed 2026-08-08: a repair attempt still PENDING (not yet
+    # admitted to Forward Trial) was never ticked forward by anything --
+    # advance_open_trials above only ever sees ALREADY-ADMITTED records.
+    # This advances the raw repair_attempts.json chains themselves, so a
+    # newly-launched attempt (e.g. the first real one, RC-CHANNEL_LOW_
+    # PULLBACK_UPTREND_SOL_4H) actually accrues real forward trades instead
+    # of sitting frozen at PENDING_FORWARD_DATA forever.
+    repair_tick_outcomes = advance_open_repair_attempts(repair_events, now, live=live, hypothesis_lookup=hypothesis_lookup)
 
     print(build_report(fresh_attempts, repair_attempts, distillation_ready, tick_outcomes, live))
+    if repair_tick_outcomes:
+        print(f"\nRepair attempt forward ticks: {len(repair_tick_outcomes)} PENDING_FORWARD_DATA attempt(s).")
+        for o in repair_tick_outcomes:
+            print(f"  {o.repair_chain_id}/{o.attempt_id}: {o.reason}")
 
     if not live:
         print("\n(dry-run -- nothing written; re-run with --live to admit/draft/tick/regenerate status for real)")
