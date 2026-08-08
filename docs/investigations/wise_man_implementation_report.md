@@ -299,5 +299,208 @@ bug this caught and the fix that was verified.
 
 ---
 
+## ADDENDUM (2026-08-08) — GATE B Follow-Up Directive: Bellwether count + Redis fail-closed
+
+CC-1 directive "Wise Man: GATE B Follow-Up (Pre-Merge Clarifications)".
+Resolves exactly the two items that directive raised. Does not open GATE C.
+
+### 1. Bellwether test-count discrepancy — GATE A/B report was wrong, corrected
+
+**FINDING:** The GATE B closing report's "Bellwether: 25/25 pass" identified
+the **wrong suite entirely**. `tests/test_macro_reads.py` +
+`tests/test_bellwether_overlay.py` (root `tests/` dir, run via `unittest`)
+are Vatican-side tests of a Bellwether-*overlay-consuming* feature
+(`nero_core/execution/bellwether_overlay.py`) — a real but different thing
+from the actual **Bellwether engine**, a separate, independently-versioned
+Python project living at `vatican/bellwether/` with its own
+`pyproject.toml`/`pytest.ini` (`asyncio_mode = "auto"`, `testpaths =
+["tests"]`), its own `requirements-lock.txt`, and its own 10-file `tests/`
+directory (75 test functions). This second suite was never discovered or
+run during GATE A's Sec 1.9 baseline research — a real gap in that research
+agent's search, not a Wise Man regression.
+
+Real, verified numbers, run exactly as the subproject specifies:
+
+```
+cd vatican/bellwether
+pip install -r requirements-lock.txt   # installed into the repo's shared .venv;
+                                        # confirmed no conflicts (5 packages added:
+                                        # fastapi, starlette, uvicorn, click, annotated-doc --
+                                        # pydantic/httpx/pytest/pytest-asyncio already
+                                        # satisfied the pin)
+python -m pytest -q
+```
+```
+........................................................................ [ 96%]
+...                                                                      [100%]
+75 passed in 29.02s
+```
+
+**75 passed, 0 failed, 0 skipped** — matching the directive's stated
+baseline exactly (75/0), not the GATE B report's "25/25" (wrong suite) and
+not `vatican/bellwether/README_VATICAN.md:153`'s own documented figure
+("30 passed, 1-2 skipped") either — that README line is itself now stale
+(the suite has grown to 75 since it was written, the same kind of
+count-drift found and corrected in the root Python suite's
+`test_eve_citation_freshness.py` during GATE A). Not fixed here — out of
+this directive's scope (only the closing report's own count needed
+correcting) and it's a pre-existing doc, not something this branch touched.
+
+**`git diff --stat main...feature/wise-man -- vatican/`** → **empty
+output**. `feature/wise-man` touches nothing under `vatican/` at all.
+`vatican/bellwether/pytest.ini` already exists on `main`
+(`git show main:vatican/bellwether/pytest.ini` confirms it). So the real
+75/0 result is unaffected by this branch either way — the "25/25" number in
+the prior report was a pure identification error in GATE A's own research,
+corrected here, not a masked regression.
+
+**On the "asyncio_mode collision" issue** named in the directive: verified
+directly, not assumed. Running plain `pytest --collect-only -q` from the
+**repo root** (no scoping) collects **2880 tests** — both the root
+`unittest`-style `tests/` directory AND `vatican/bellwether/tests/` in one
+pytest session, because there is no root-level `pytest.ini` to scope
+collection and pytest's default rootdir search reaches both trees. This
+confirms the two suites are not just conceptually separate but must be
+**invoked separately, from their own directories, with their own runners**
+(`unittest discover -s tests` from repo root; `pytest -q` from
+`vatican/bellwether/`) — mixing them in one bare `pytest` invocation is a
+real, reproducible collision risk, not a hypothetical one. CONFIDENCE:
+confirmed-from-data (both counts and the collision are real command output,
+not inferred).
+
+**Safety-relevant coverage check**: none of the 75 Bellwether tests were
+skipped, deselected, or removed to reach this number — all 75 ran and
+passed. No evidence-bar or correlation-discount logic lives in
+`vatican/bellwether/` (that logic is in `nero_core/eve/scoring.py` and
+`tools/backtest_statistics.py`, covered by the root Python suite and
+`tests/test_evidence_bar_unchanged.py`, both separately confirmed unchanged
+in the main GATE C checklist above).
+
+**RECOMMENDATION:** correct the GATE B report's "Section 1: Test counts"
+table (item 1 in this same file, above) — done: the "Before/After" Bellwether
+row should read **75 tests, all pass** for both columns (this branch never
+touched Bellwether), not 25/25. Left the original text as-is above (per
+this directive's own instruction: this addendum corrects it "in place" by
+being the authoritative dated correction) rather than silently editing the
+historical entry, so the error and its correction are both on record.
+
+### 2. Production Redis dependency — fail-closed shipped
+
+**FINDING (exact mechanism, file+line, corrected from the GATE B report's
+vaguer "silently ineffective" phrasing):** Before this fix,
+`website/app/api/wise-man/route.ts:78` called `loadStore()` fresh on
+**every POST request**, with no module-level caching. When
+`UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` were unset,
+`loadStore()` returned `createInMemoryCounterStore()`
+(`website/lib/wiseMan/budget.ts:43-51`), which constructs a **brand-new,
+empty `Map<string, number>()` on that call**. Because this happened inside
+the request handler itself rather than at module scope, every single
+request got its own fresh counter starting at zero — the rate limiter and
+spend cap could **never** reach any cap, regardless of request volume. This
+is a complete no-op, not a degraded-but-functional mechanism (the GATE B
+report's phrasing undersold the severity). CONFIDENCE: confirmed-from-code.
+
+**Options considered (per the directive's instruction not to silently
+pick):**
+
+| Option | Behavior | Trade-off |
+|---|---|---|
+| (a) Fail closed | Refuse to serve any Wise Man request while the flag is on and no real store is configured; loud server log | Safe by default — an unconfigured deploy simply can't spend money without a cap. Costs availability: Wise Man silently (from the visitor's perspective) doesn't work until Redis is linked. |
+| (b) Loud warning, still serve | Log loudly but proceed using the no-op in-memory store | Availability-first — Wise Man "works" the moment the flag flips. Requires a human to actually notice a log line before the spend/rate protection is real; the exact silent-failure shape this directive was raised to close. |
+
+**WHAT SHIPPED: (a), fail closed.** Consistent with the fail-closed posture
+already used everywhere else in this build (the guardrail's own
+`checkGuardrail()`, the rate limiter, and the budget check in
+`handleRequest.ts` all fail closed on their own errors already — see the
+main checklist above) — extending the same posture to a *misconfiguration*
+rather than only a *runtime error* was a natural, justified default, not an
+arbitrary pick. (b) was rejected specifically because a log line nobody is
+guaranteed to read is not a real substitute for the cap actually existing
+when real money is on the line.
+
+**Real code change:** `website/app/api/wise-man/route.ts` — a new
+`hasRealCounterStoreConfigured()` check (also matching `@upstash/redis`'s
+own `Redis.fromEnv()` fallback to the legacy `KV_REST_API_URL`/`_TOKEN`
+names, verified directly against `node_modules/@upstash/redis/nodejs.js:
+5708-5729` — the initial version of this check would have been a false
+negative on a deployment still using those legacy names) gates the top of
+`POST()`: if `isWiseManEnabled()` is true and no real store is configured,
+log one CRITICAL-tagged line naming the missing env vars and return 503
+with the new `storage_not_configured` bilingual error code
+(`website/lib/wiseMan/errors.ts`) — before parsing the request body, before
+any network call. 4 new tests in `website/__tests__/wiseManRoute.test.ts`
+(`@jest-environment node`, calling the real `POST` handler directly, same
+pattern as `chatRoute.test.ts`): fails closed with the CRITICAL log and
+zero model calls when flag-on/no-Redis; does not fire when the flag is off;
+does not fire when Redis is configured via either naming convention. Full
+website suite after this change: **85/85 suites, 947/947 tests**; `next
+build`/`next lint` clean. Commit: `3b8a3ad`.
+
+**Concrete Upstash Redis linking steps for this repo's own deploy setup**
+(not a generic tutorial — scoped to what's actually true here): this repo
+has no root-level `vercel.json`; only `website/vercel.json` exists
+(`{"framework": "nextjs"}`), consistent with the Vercel project's **Root
+Directory** being set to `website` in this monorepo (GATE A finding 1.5's
+own confirmation that the live deploy is `https://project-nero-vatican.vercel.app`,
+serving from this subfolder). Steps:
+
+1. In the Vercel dashboard, open the `project-nero-vatican` project (the
+   one whose Root Directory is `website`).
+2. Go to the **Storage** tab (or **Integrations** → **Browse Marketplace**
+   → search "Upstash") and add an **Upstash** Redis database/integration.
+3. Sign in to (or create) the Upstash account when prompted, then choose
+   **Create Database** (or link an existing Redis instance if one already
+   exists for this project) when the integration asks which database to
+   use.
+4. **Select `project-nero-vatican` as the project to connect it to** — this
+   is the step that actually writes the environment variables into this
+   Vercel project's env var settings; skipping it (e.g. creating the
+   database in the Upstash console directly, outside the Vercel
+   integration flow) will NOT populate them automatically and requires
+   copying `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` in by hand
+   instead from the Upstash console's own database details page.
+5. Confirm the two variables landed in **Project Settings → Environment
+   Variables** for this project: `UPSTASH_REDIS_REST_URL` and
+   `UPSTASH_REDIS_REST_TOKEN` (these exact names — verified directly
+   against the installed `@upstash/redis` package's own `Redis.fromEnv()`
+   source, not assumed from generic docs). Apply them to the Production
+   environment at minimum (Preview/Development too, if Wise Man should be
+   testable pre-merge on preview deploys).
+6. Redeploy (or trigger a new deployment) so the running instance picks up
+   the new environment variables — Vercel does not hot-reload env vars into
+   already-running serverless functions.
+7. Verify: with `WISE_MAN_ENABLED=1` also set, a request to `/api/wise-man`
+   should no longer produce the `[wise-man] CRITICAL:` log line added in
+   this directive's fix. If it still does, re-check step 5 — the most
+   common failure mode is the variables landing in a different Vercel
+   *environment* (e.g. only Preview, not Production) than the one actually
+   serving traffic.
+
+Source for the general integration flow: Vercel Marketplace's own Upstash
+integration page (accessed 2026-08-08); the exact env var names and their
+legacy fallback were verified directly against this repo's own installed
+`@upstash/redis` package source, not the marketplace page (which does not
+state the variable names explicitly).
+
+### Push verification
+
+```
+git log origin/feature/wise-man --oneline -3
+```
+```
+3b8a3ad Wise Man: fail closed when enabled with no real counter store configured
+484fdb6 Wise Man: closing implementation report / Sec 10 GATE C checklist
+fe36854 Wise Man: GOLDEN_QUESTIONS acceptance run (19/19) + real cost benchmark
+```
+
+### This remains a hard stop
+
+Per this directive's own explicit scope: **no GATE C activity was
+performed and none is implied by this addendum.** Both items raised are now
+resolved with real, verified evidence. No merge to `main` without an
+explicit, separate human go-ahead.
+
+---
+
 **This report is the GATE C checklist. Per Sec 0.2/Sec 10: stop and ask.**
 No merge to `main` will be performed without an explicit human go-ahead.
