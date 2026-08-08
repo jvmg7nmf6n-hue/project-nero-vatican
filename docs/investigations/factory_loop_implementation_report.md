@@ -5260,3 +5260,247 @@ json`, `docs/site_data/factory_loop_status.json`, `data/repair_lab_forward_
 tracking.db`, `tests/test_eve_session_registry.py`, `website/app/agents/
 page.tsx`, this file. Zero other `nero_core/` files touched.
 
+## 2026-08-08: CC-1 DIRECTIVE CLOSING REPORT -- "Final backlog: repair alert, homepage survivors, proven-mechanism context"
+
+Three genuinely unbuilt items closed out: a repair-launchable ntfy alert
+(Part A), a homepage survivors section with a live distance-to-trigger
+visualization (Part B), and a proven-mechanism context channel for
+Adam/Eve (Part C). Re-verified real current state before building, per
+the directive's own instruction: `docs/site_data/forward_trial.json` = 20
+records, `eve_session_registry.json` = 11 sessions / next_countable=4 (3
+countable), `graveyard_distillation_drafts.json` = 1 entry -- all
+unchanged since the prior closing report (commit `1941ba7`), confirmed
+fresh, not assumed.
+
+### Part A -- ntfy alert for repair-chain launchability (`aeec6d6`)
+
+**FINDING.** `tools/repair_alert.py`'s `find_newly_launchable_candidates()`
+checks the REAL mechanical gate this codebase already enforces before a
+chain can actually launch: `repair_lab.check_eligibility` (parent's real
+verdict must be DIED) AND `repair_lab.can_launch_new_attempt` (the
+4-attempt cap not reached), against every `docs/site_data/
+repair_candidates.json` entry. Resolves `parent_strategy` against BOTH
+Adam's (`agent_hypotheses.json`) and Eve's (`eve_hypotheses.json`)
+hypothesis data -- `tools/repair_chain_launch.py`'s own lookup only ever
+checks Adam's files, a real gap this alert works around for itself
+without touching that module (out of scope: this alert only watches,
+never launches).
+
+**Real current answer: 0 eligible candidates.** All 3 committed
+`repair_candidates.json` entries (`RANGE_MEAN_REVERSION`,
+`BOS_CONTINUATION`, `LEADLAG_FOLLOW`) are human-engineered family names
+with no matching `hypothesis_name` in either agent's committed data --
+confirmed directly, and pinned by
+`test_real_committed_repair_candidates_file_currently_finds_nothing`
+against the real file, not a synthetic fixture.
+
+**Discrepancy found and reported, not silently patched:** the
+directive's own definition of "launchable" named `review_status=approved`
+/ `fixable=true` (fields living on a graveyard/distillation entry) as
+part of the bar. Confirmed by reading `repair_lab.py`/
+`repair_chain_launch.py`/`graveyard_distillation.py` in full: **neither
+field is read by any real launch-eligibility code path today** -- no
+mechanism links a distillation entry to a `repair_candidates.json` row (a
+human creates that row by hand, independently). This alert checks the
+real mechanical gate instead, documented in its own module docstring,
+rather than asserting "eligible" on fields the actual launch code never
+consults.
+
+**WHAT SHIPPED:** daily workflow (`.github/workflows/repair_alert.yml`,
+`17 6 * * *` -- deliberately not hourly like `signal_alerts.yml`, since
+the underlying data only changes when a human or an Adam/Eve run adds
+something). Mirrors `signal_alerts.js`'s own ntfy pattern in Python
+(`NTFY_TOPIC` env var, never logged; state-file dedup) since the
+eligibility check lives in `nero_core`. Dedup keyed by
+`parent_strategy:attempts_launched`, not a time cooldown -- a fresh alert
+fires only when the attempt count actually changes, matching
+`signal_alerts.js`'s own reasoning for discrete events. **7 new tests**
+(`tests/test_repair_alert.py`), all passing; existing repair-lab/
+repair-chain-launch suites (25 tests) unaffected.
+
+### Part B -- homepage survivors section + live distance-to-trigger (`b45c60e`, `355d2e6`, `b10e087`)
+
+**B1, real-data investigation.** Zero-live-trades reconfirmed fresh for
+all 3 survivors (`BREAKOUT_MOMENTUM`/GOLD, `TREND_PULLBACK`/BNB,
+`COINTEGRATION_PAIRS`/BTC-ETH) by querying `data/truth_ledger.db`'s
+`execution_log` table directly, not assumed from the 2026-08-07
+`bellwether_stage2_report.md` finding it reconfirms. Real go-live dates:
+GOLD 2026-07-31, BNB/PAIRS 2026-07-28 -- a 10-13 day gap from the
+2026-07-18 code/workflow deploy date, caused by a real infrastructure
+bug (Binance klines returning HTTP 451 to GitHub Actions' US runner
+IPs for BNB; GOLD's weekly cadence means only 2 real evaluations exist
+to date). B1c: `BREAKOUT_MOMENTUM`/`TREND_PULLBACK` mix genuinely
+different units in their own entry conditions (price-vs-price
+percentages alongside a 0-100 RSI reading) -- combining them into one
+"distance" score would require an arbitrary weighting choice, the same
+failure class Bellwether's own aggregation-formula work already found
+and avoided. `COINTEGRATION_PAIRS`' real condition is already a single
+normalized field (a z-score); its distance is the non-arbitrary
+`entry_z - |z|`, no invented weights.
+
+**B3a, WHAT SHIPPED.** `nero_core/execution/export_survivor_distance.py`
+reuses each strategy's own real `add_indicators` function -- never a
+second, parallel indicator computation that could drift from what the
+live strategy itself evaluates. GOLD/BNB read the already-exported
+candle files (no network call). PAIRS needs a live fetch for both legs:
+no ETH candle file exists at any timeframe in `docs/site_data/candles/`,
+so both legs are fetched via the same `tools.timeframe_data.
+fetch_timeframe_candles` `live_scheduler.py` itself uses. Wired into
+`live_scheduler.yml`'s existing workflow (reuses its cadence/secrets
+rather than a new one).
+
+**B2/B3b, WHAT SHIPPED.** New homepage section (`website/components/
+SurvivorsSection.tsx` + `SurvivorDistanceBar.tsx`): real backtest metrics
+labeled "historical, not live"; real days-live count; **"0 live entries
+yet" stated plainly**; links to each strategy's detail page and its real
+verification report (`docs/statistical_harness_upgrade.md`, via the same
+`REPO_BLOB_BASE` link pattern `GraveyardCard.tsx` already uses);
+cross-link to `ORDERFLOW_IMBALANCE`'s own real live-activity page.
+Distance bars: `BREAKOUT_MOMENTUM`/`TREND_PULLBACK` show each real
+condition separately (never combined); `COINTEGRATION_PAIRS` shows its
+one real z-score distance. Server-rendered only -- no client JS, no
+animation of any kind; the bar's fill is a pure function of data already
+fetched at the page's 300s revalidate cadence.
+
+**No time-to-trigger/ETA language anywhere**, guarded by dedicated tests
+at both the data-export layer (Python) and the rendered-DOM layer
+(website). **Real mistake found and fixed same session** (`355d2e6`): the
+first version of both guard tests used a bare `"eta"` substring check,
+which false-positived on ordinary words like "detail"/"metadata" (the
+homepage's own "Strategy detail" link tripped it). Fixed to word-boundary
+regex matching in both languages before this closing report, not left
+standing.
+
+**Test counts:** 5 new Python tests (`tests/test_export_survivor_distance.py`)
++ 14 new website tests (`website/__tests__/survivors.test.ts`,
+`website/__tests__/SurvivorsSection.test.tsx`) = **19 new tests**, all
+passing. `npx tsc --noEmit` confirmed zero type errors in any non-test
+file this directive touched (the only `tsc` errors present are a
+pre-existing jest-dom matcher-types gap already in `strategyPage.test.tsx`
+before this directive, unrelated).
+
+### Part C -- proven-mechanism context channel for Adam/Eve (`db0f48a`)
+
+**WHAT SHIPPED.** New "proven mechanism reference, not a parent
+hypothesis" context channel for both agents, covering the 3 fully-verified
+survivors. Real entry/exit rule text reused verbatim from
+`strategy_descriptions.json` (already shipped, never re-derived); real
+asset/timeframe/verification_status from `strategies.json`'s roster.
+
+Eve (`nero_core/eve/context.py`): new `EveContext.proven_mechanisms`
+field, wired into `load_context()`/`as_prompt_text()`. The prompt text
+explicitly notes Rung 3 already demonstrated her own independent
+macro-conditioning capability (`PAXG_RISKOFF_VIX_SPIKE_LONG_4H`) -- this
+channel is a second, complementary source of inspiration, never framed as
+a replacement for that.
+
+Adam (`nero_core/research_agent/hypothesis_gen.py`): independently
+implemented, no cross-import from `nero_core.eve` -- same "two fully
+independent systems" convention `DataSourceRefusedError` already
+documents in `pipeline.py`. Both the scanner-triggered and web-search
+prompts gained an optional, backward-compatible `proven_mechanisms`
+parameter (default omits the block entirely, so every existing call site
+in the test suite renders byte-identical to before this directive);
+`pipeline.py` now loads the real data once and threads it through both
+generation channels.
+
+**C4, structural guard, confirmed not just asserted.** The 3 survivor
+names predate Adam/Eve entirely -- confirmed by direct search: zero
+matches in `agent_hypotheses.json` or `eve_hypotheses.json`. Eve's own
+`derived_from` validation (`scoring.validate_derived_from`) checks a
+declared parent name against `known_hypothesis_names`, which `session.py`
+builds ONLY from Adam's real history and Eve's own prior-session history
+-- never from this new context field. A `derived_from` naming a survivor
+therefore fails validation by construction, with zero new gating code
+required. Proven with a real regression test
+(`tests/test_eve_proven_mechanism_context.py`'s
+`StructuralGuardNoDerivedFromParentAmongSurvivorsTest`) that loads the
+REAL committed `known_hypothesis_names` union and asserts all 3 survivor
+names are rejected, plus a control case confirming a genuinely known name
+still validates normally.
+
+**Test counts:** 8 new Eve-side tests
+(`tests/test_eve_proven_mechanism_context.py`) + 6 new Adam-side tests
+(`tests/test_research_agent_proven_mechanism_context.py`) = **14 new
+tests**, all passing.
+
+### Evidence-bar and admission-criteria confirmation
+
+`git diff --stat 1941ba7..HEAD -- nero_core/eve/scoring.py
+nero_core/research_agent/frequency_gate.py nero_core/research_agent/
+trial.py` returns **empty** -- zero changes to `MIN_SAMPLE_SIZE`, the
+30/yr frequency floor, the 70/30 split, FDR alpha, bootstrap CI, or Trial
+admission criteria anywhere across this entire directive. Nothing at
+`REVIEW_PENDING` was approved -- Part A's alert only watches for
+eligibility, it never launches anything or writes to any review-status
+field.
+
+### Test counts, before and after this directive
+
+- **Vatican-core (`tests/`, from repo root):** before, 2763 tests / 2
+  pre-existing failures (per the prior closing report, commit `1941ba7`).
+  After: **2789 tests, 2 failures, 17 skipped, 0 errors** -- +26 real new
+  tests (7 Part A + 5 Part B + 14 Part C), the same 2 pre-existing
+  failures unchanged (`test_eve_citation_freshness.py`'s stale 16-vs-24
+  record count, `test_eve_context_verdict_stripped.py`'s near-miss list),
+  zero new failures.
+- **Bellwether (`vatican/bellwether/tests/`, from its own directory):**
+  **75 passed**, unchanged, reconfirmed this directive.
+- **Website (`website/`, `npm test`):** **762 passed** (+14 from Part B),
+  2 pre-existing failures in `siteDataSchema.test.ts`
+  (`failure_patterns.json` count/shape checks, untouched by any commit
+  this directive), reconfirmed clean.
+
+### What the system still cannot do
+
+A graveyard/distillation entry marked `review_status=approved` /
+`fixable=true` still cannot automatically become a launchable
+`repair_candidates.json` entry -- that link is entirely manual today, and
+Part A's alert (like everything else in Repair Lab) can only watch for
+eligibility on candidates a human has already hand-created; it cannot
+surface a distillation-approved family as a repair candidate on its own.
+Eve's own `derived_from` mechanism still has no cross-session near-miss-
+or proven-mechanism-driven auto-suggestion -- both context channels
+(near-misses and the new proven-mechanism reference) are purely
+informational, requiring a human's or Eve's own judgment to act on them.
+
+### Stale figures found this directive, and the real values
+
+None in the directive's own text. Every number it stated checked out
+exactly against live data when re-verified fresh at the start of this
+session: Forward Trial at 20 real admissions, Eve at 3 of 8
+pre-registered sessions, commit `1941ba7` as the prior master directive's
+real close -- all reconfirmed (`forward_trial.json`=20 records,
+`eve_session_registry.json` sessions=11/next_countable=4, `graveyard_
+distillation_drafts.json`=1 entry), not assumed from memory.
+
+### git log origin/main --oneline, every commit this directive
+
+```
+db0f48a CC-1 directive Part C: proven-mechanism context channel for Adam/Eve
+b10e087 CC-1 directive Part B2/B3b: homepage survivors section + live distance viz
+355d2e6 Fix false-positive-prone forbidden-word check in survivor distance guard test
+b45c60e CC-1 directive Part B3a: real, structured live distance-to-trigger export
+aeec6d6 CC-1 directive Part A: ntfy alert for repair-chain launchability
+```
+
+### Files touched this directive
+
+`tools/repair_alert.py`, `tests/test_repair_alert.py`, `.github/
+workflows/repair_alert.yml`, `repair_alert_state.json`; `nero_core/
+execution/export_survivor_distance.py`, `tests/test_export_survivor_
+distance.py`, `docs/site_data/survivor_distance.json`, `.github/
+workflows/live_scheduler.yml`; `website/lib/survivors.ts`, `website/
+lib/types.ts`, `website/lib/data.ts`, `website/components/
+SurvivorsSection.tsx`, `website/components/SurvivorDistanceBar.tsx`,
+`website/app/page.tsx`, `website/__tests__/survivors.test.ts`,
+`website/__tests__/SurvivorsSection.test.tsx`; `nero_core/eve/context.py`,
+`nero_core/research_agent/hypothesis_gen.py`, `nero_core/research_agent/
+pipeline.py`, `tests/test_eve_proven_mechanism_context.py`, `tests/
+test_research_agent_proven_mechanism_context.py`; this file. Zero other
+files touched -- `git status --short` before and after each commit
+confirmed only the untracked, pre-existing, unrelated files
+(`check_news*.py`, `daily_check.bat`, `data/funding_cache/`, `data/
+macro_cache/`, `docs/site_data/agent_hypotheses.json`, `tests/fixtures/
+frozen_candles/*`) remained, never staged.
+
