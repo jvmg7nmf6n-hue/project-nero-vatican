@@ -1,0 +1,49 @@
+name: Repair Alert
+
+# CC-1 directive Part A. Daily, not hourly like signal_alerts.yml -- the
+# underlying data (repair_candidates.json, agent_hypotheses.json/
+# agent_test_results.json, eve_hypotheses.json) only changes when a human
+# adds a candidate or an Adam/Eve run lands, never within an hour, so an
+# hourly re-check would just re-read the same unchanged files.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-alert
+  cancel-in-progress: false
+
+jobs:
+  repair-alert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Check for newly-launchable repair chains and push alerts
+        run: python -m tools.repair_alert
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        continue-on-error: true
+      - name: Save state
+        run: |
+          git config user.name "repair-alert"
+          git config user.email "actions@users.noreply.github.com"
+          git pull --rebase origin main || git rebase --abort || true
+          if [ -f repair_alert_state.json ]; then
+            git add -f repair_alert_state.json
+          fi
+          if git diff --cached --quiet; then
+            echo "no changes"
+            exit 0
+          fi
+          git commit -m "Update repair alert state"
+          git pull --rebase origin main || git rebase --abort || true
+          git push || echo "repair alert push skipped; next run will retry"
