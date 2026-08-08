@@ -805,3 +805,77 @@ export interface SurvivorDistanceExport {
   distances: SurvivorDistanceEntry[];
   errors: { strategy: string; message: string }[];
 }
+
+// CC-1 directive, 2026-08-08: the real Factory Loop scoreboard -- see
+// nero_core/execution/export_factory_loop_scoreboard.py's own module
+// docstring for the full ACTIVE-vs-LIVE and manual-vs-automated-Repair-Lab
+// reasoning this shape encodes.
+export interface ScoreboardActivePosition {
+  strategy?: string;
+  strategy_version?: string;
+  trial_id?: string;
+  hypothesis_name?: string;
+  asset: string;
+  entry_price: number | null;
+  entered_at: string | null;
+}
+
+export interface ScoreboardLiveSchedulerSection {
+  tracked_count: number;
+  active_count: number;
+  active: ScoreboardActivePosition[];
+}
+
+export interface ScoreboardForwardTrialSection {
+  tracked_count: number;
+  active_count: number | null;
+  active: ScoreboardActivePosition[];
+  by_origin: Record<string, number>;
+  error?: string;
+}
+
+export interface ScoreboardRepairAttempt {
+  attempt_id: string;
+  status: string;
+  modification_type: string;
+}
+
+export interface ScoreboardRepairChain {
+  repair_chain_id: string;
+  original_hypothesis_name: string;
+  chain_status: string;
+  attempts: ScoreboardRepairAttempt[];
+}
+
+export interface ScoreboardRepairLabSection {
+  manual_candidates: {
+    count: number;
+    launchable_count: number;
+    note: string;
+    error?: string;
+  };
+  automated_chains: {
+    count: number;
+    open_chains: number;
+    resolved_chains: number;
+    healthy_count: number;
+    chains: ScoreboardRepairChain[];
+    note: string;
+  };
+}
+
+export interface ScoreboardRecentActivityEntry {
+  source: "adam" | "eve";
+  at: string;
+  summary: string;
+}
+
+export interface FactoryLoopScoreboard {
+  schema_version: number;
+  last_updated: string;
+  live_scheduler: ScoreboardLiveSchedulerSection;
+  forward_trial: ScoreboardForwardTrialSection;
+  repair_lab: ScoreboardRepairLabSection;
+  graveyard: { count: number };
+  recent_activity: ScoreboardRecentActivityEntry[];
+}

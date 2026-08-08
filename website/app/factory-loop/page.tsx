@@ -1,10 +1,12 @@
 import { Fragment } from "react";
 import FactoryLoopDiagram from "@/components/FactoryLoopDiagram";
+import FactoryLoopScoreboard from "@/components/FactoryLoopScoreboard";
 import PageHeader from "@/components/PageHeader";
 import {
   fetchAgentHypotheses,
   fetchAgentPerformance,
   fetchEveHypotheses,
+  fetchFactoryLoopScoreboard,
   fetchFactoryLoopStatus,
   fetchForwardTrial,
   fetchGraveyard,
@@ -51,7 +53,7 @@ function latestEntryByTrialId(entries: TrialEntry[]): Map<string, TrialEntry> {
 }
 
 export default async function FactoryLoopPage() {
-  const [graveyard, factoryLoopStatus, agentPerformance, forwardTrialRecords, trialEntriesExport, agentHypotheses, eveHypotheses] =
+  const [graveyard, factoryLoopStatus, agentPerformance, forwardTrialRecords, trialEntriesExport, agentHypotheses, eveHypotheses, scoreboard] =
     await Promise.all([
       fetchGraveyard(),
       fetchFactoryLoopStatus(),
@@ -60,6 +62,7 @@ export default async function FactoryLoopPage() {
       fetchTrialEntries(),
       fetchAgentHypotheses(),
       fetchEveHypotheses(),
+      fetchFactoryLoopScoreboard(),
     ]);
 
   const graveyardCount = graveyard?.length ?? 0;
@@ -80,7 +83,7 @@ export default async function FactoryLoopPage() {
   const adamPromisingWatchlist = agentPerformance?.cumulative.promising_watchlist ?? 0;
 
   return (
-    <div className="prose-vatican max-w-2xl">
+    <div className="flex flex-col gap-8">
       <PageHeader
         title="Factory Loop"
         description="How a trading idea moves through this project, end to end: proposed, tested,
@@ -88,6 +91,9 @@ export default async function FactoryLoopPage() {
         whether it is live today or still just designed."
       />
 
+      <FactoryLoopScoreboard scoreboard={scoreboard} />
+
+    <div className="prose-vatican max-w-2xl">
       <section className="mt-8">
         <FactoryLoopDiagram />
       </section>
@@ -279,6 +285,7 @@ export default async function FactoryLoopPage() {
           publish this page.
         </p>
       </section>
+    </div>
     </div>
   );
 }

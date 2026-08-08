@@ -25,6 +25,7 @@ import type {
   StrategiesExport,
   StrategyDescriptions,
   SurvivorDistanceExport,
+  FactoryLoopScoreboard,
   TrialEntriesExport,
 } from "./types";
 
@@ -206,6 +207,10 @@ export function fetchEveBudgetLedger(): Promise<EveBudgetLedgerEntry[] | null> {
 
 export function fetchSurvivorDistance(): Promise<SurvivorDistanceExport | null> {
   return fetchJson<SurvivorDistanceExport>("survivor_distance.json");
+}
+
+export function fetchFactoryLoopScoreboard(): Promise<FactoryLoopScoreboard | null> {
+  return fetchJson<FactoryLoopScoreboard>("factory_loop_scoreboard.json");
 }
 
 export type CandleFetchResult =
