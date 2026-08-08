@@ -349,8 +349,21 @@ class RealCommittedDataBackfilledTest(unittest.TestCase):
     def test_the_real_committed_eve_hypotheses_file_has_been_backfilled(self) -> None:
         real_path = Path(__file__).resolve().parents[1] / "docs" / "site_data" / "eve_hypotheses.json"
         records = storage.read_json_list(real_path)
-        self.assertEqual(len(records), 16)
-        self.assertTrue(all(r.get("citation_status") == scoring.CITATION_STATUS_UNSCOREABLE_PRE_CITATION for r in records))
+        # The file has grown since the one-time backfill ran (new records
+        # proposed after the citation mechanism shipped carry a real
+        # citation_status of their own -- CITED/NO_SOURCES_CLAIMED -- and are
+        # correctly NOT unscoreable_pre_citation; the backfill script is
+        # idempotent and only ever touches records missing a citation_status
+        # at all). The durable assertion is therefore: exactly the original
+        # 16 pre-mechanism records are marked unscoreable_pre_citation, and
+        # the backfill's actual guarantee -- no record is left uncategorized
+        # -- still holds for every record, old or new.
+        pre_citation = [
+            r for r in records
+            if r.get("citation_status") == scoring.CITATION_STATUS_UNSCOREABLE_PRE_CITATION
+        ]
+        self.assertEqual(len(pre_citation), 16)
+        self.assertTrue(all(r.get("citation_status") is not None for r in records))
 
 
 if __name__ == "__main__":

@@ -109,6 +109,7 @@
     "family": "Range Mean Reversion",
     "failure_pattern": "edge-over-random-negative",
     "fixable": true,
+    "fix_rationale": "EUR/USD long-only removed the diagnosed ~-0.449 R/trade short-leg cost (a real, mechanistically-corroborated fix) but the surviving long-only edge still didn't beat random entry within the regime pool; ETH adx-falling was this cycle's only genuinely grid-shift-eligible config and died when Stage 3 applied the same long-only filter to it. Applying BTC's confirmation filter -- the one refinement in this cycle with clear mechanistic evidence (exit mix shifted 32% to 68% REVERSION_TARGET) -- to EUR/USD's already cost-corrected long-only pool is the one combination this cycle didn't test.",
     "source_doc": "docs/rmr_variant_research_closing_report.md"
   },
   {
@@ -116,6 +117,7 @@
     "family": "Range Mean Reversion",
     "failure_pattern": "sample-too-thin",
     "fixable": true,
+    "fix_rationale": "3 of 14 configs (ETH/4h, ETH/1d, EURUSD/1d) were directionally PROMISING-WATCHLIST but every one carries a LOW SAMPLE flag on at least one half, with ETH/4h closest to clearing the 20-trade adequacy bar (train N=25, test N=13). Re-checking these three configs once more history accrues, rather than treating this cycle's inconclusive result as final, is this project's own established next step for a sample-too-thin verdict (the same precedent RANGE_MEAN_REVERSION_GRAVEYARD's entry cites).",
     "source_doc": "docs/ranging_regime_batch_r1_regime_transition.md"
   },
   {
@@ -123,6 +125,7 @@
     "family": "Range Mean Reversion",
     "failure_pattern": "regime-filter-only",
     "fixable": true,
+    "fix_rationale": "The maturity gate never rescued a DIED baseline and made GOLD/1week -- previously RMR's single best result -- worse (train ExpR +0.026 to -0.038), while SILVER/1week held its PROMISING-WATCHLIST status only by shrinking to a smaller, not larger, edge (train ExpR 0.320 to 0.187) -- the same shrinks-without-concentrating pattern this project already treats as evidence against a robust effect. The 20-candle/8-week maturity thresholds were task-specified, not derived from the data; testing whether a shorter or asset-class-tuned threshold avoids diluting GOLD/1week's edge is the one variant this batch didn't try.",
     "source_doc": "docs/ranging_regime_batch_r2_range_maturity.md"
   },
   {

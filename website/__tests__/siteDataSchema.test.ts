@@ -26,9 +26,14 @@ describe("docs/site_data/failure_patterns.json", () => {
     expect(entries.length).toBeGreaterThan(0);
   });
 
-  it("has one entry per killed family with no duplicate family names", () => {
-    const families = entries.map((e) => e.family);
-    expect(new Set(families).size).toBe(families.length);
+  it("has a unique name per entry (family is an intentional many-to-one grouping label, not a key)", () => {
+    // `family` groups related named entries under a shared failure story on
+    // purpose -- e.g. 6 distinct Range Mean Reversion experiments, 5 Macro
+    // Regime asset-class extensions -- so family names legitimately repeat.
+    // `name` is the real unique identifier (used to look up a specific entry
+    // elsewhere, e.g. the LIQUIDATION_PREDICTOR test below).
+    const names = entries.map((e) => e.name);
+    expect(new Set(names).size).toBe(names.length);
   });
 
   it.each(entries.map((e) => [e.family, e] as const))("%s has a complete, well-typed entry", (_family, entry) => {
