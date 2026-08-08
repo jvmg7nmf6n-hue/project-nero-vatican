@@ -1,7 +1,18 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-08T08:53:50.104630+00:00",
+  "last_updated": "2026-08-08T09:49:19.200744+00:00",
   "rows": [
+    {
+      "timestamp": "2026-08-08T09:49:04.242657+00:00",
+      "strategy": "ORDERFLOW_IMBALANCE",
+      "strategy_version": "orderflow-imbalance-v1.0.0",
+      "asset": "BTC",
+      "signal_type": "EXIT",
+      "entry_price": null,
+      "exit_price": 64993.87,
+      "reasoning": "RATIO_REVERSAL exit, imbalance_ratio=0.4395",
+      "candle_timestamp": "2026-08-08T08:59:59.999000+00:00"
+    },
     {
       "timestamp": "2026-08-08T08:53:36.093858+00:00",
       "strategy": "ORDERFLOW_IMBALANCE",
@@ -2189,17 +2200,6 @@
       "entry_price": null,
       "exit_price": null,
       "reasoning": "|z|=0.32 below entry threshold 2.0",
-      "candle_timestamp": "2026-07-30T11:59:59.999000+00:00"
-    },
-    {
-      "timestamp": "2026-07-30T13:08:43.302181+00:00",
-      "strategy": "TREND_PULLBACK",
-      "strategy_version": "trend-pullback-v1.0.0",
-      "asset": "BNB",
-      "signal_type": "NO_TRADE",
-      "entry_price": null,
-      "exit_price": null,
-      "reasoning": "NOT_IN_ESTABLISHED_UPTREND, RSI_OUTSIDE_NEUTRAL_BAND",
       "candle_timestamp": "2026-07-30T11:59:59.999000+00:00"
     }
   ]
