@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "last_updated": "2026-08-08T06:59:48.453859+00:00",
+  "live_scheduler": {
+    "tracked_count": 37,
+    "active_count": 2,
+    "active": [
+      {
+        "strategy": "PEAD",
+        "strategy_version": "pead-v1.0.0-surprise3pct-hold10",
+        "asset": "AMZN",
+        "entry_price": 233.39667610473631,
+        "entered_at": "2026-08-01T00:08:17.682257+00:00"
+      },
+      {
+        "strategy": "PEAD",
+        "strategy_version": "pead-v1.0.0-surprise8pct-hold10",
+        "asset": "AMZN",
+        "entry_price": 233.39667610473631,
+        "entered_at": "2026-08-01T00:08:17.682257+00:00"
+      }
+    ]
+  },
+  "forward_trial": {
+    "tracked_count": 20,
+    "active_count": 4,
+    "active": [
+      {
+        "trial_id": "268bb030-f7bb-44b3-9885-39d02ebdaf19",
+        "hypothesis_name": "INTRADAY_TSMOM_BTC_4H",
+        "entry_price": 65046.0066,
+        "entered_at": "2026-08-08T06:44:55.757415+00:00",
+        "asset": "BTC"
+      },
+      {
+        "trial_id": "757a5610-8be4-4659-818a-fe3e44809fa5",
+        "hypothesis_name": "VOL_CONFIRMED_CHANNEL_BREAKOUT_BTC_4H",
+        "entry_price": 65046.0066,
+        "entered_at": "2026-08-08T06:44:55.757415+00:00",
+        "asset": "BTC"
+      },
+      {
+        "trial_id": "2662f907-303f-4977-8fe1-fae10a72a53c",
+        "hypothesis_name": "CHANNEL_BREAKOUT_HIGH20_BTC_4H",
+        "entry_price": 65046.0066,
+        "entered_at": "2026-08-08T06:44:55.757415+00:00",
+        "asset": "BTC"
+      },
+      {
+        "trial_id": "9b9b6f57-df84-4ff6-9481-d0bbdfc0d77c",
+        "hypothesis_name": "ATR_EXHAUSTION_SNAPBACK_SOL_4H",
+        "entry_price": 74.844966,
+        "entered_at": "2026-08-08T06:44:55.757415+00:00",
+        "asset": "SOL"
+      }
+    ],
+    "by_origin": {
+      "adam": 6,
+      "eve": 14
+    }
+  },
+  "repair_lab": {
+    "manual_candidates": {
+      "count": 3,
+      "launchable_count": 0,
+      "note": "hand-curated docs/site_data/repair_candidates.json entries -- a DIFFERENT system from the automated chains below"
+    },
+    "automated_chains": {
+      "count": 1,
+      "open_chains": 1,
+      "resolved_chains": 0,
+      "healthy_count": 0,
+      "chains": [
+        {
+          "repair_chain_id": "RC-CHANNEL_LOW_PULLBACK_UPTREND_SOL_4H",
+          "original_hypothesis_name": "CHANNEL_LOW_PULLBACK_UPTREND_SOL_4H",
+          "chain_status": "OPEN",
+          "attempts": [
+            {
+              "attempt_id": "A1",
+              "status": "PENDING_FORWARD_DATA",
+              "modification_type": "exit_structure"
+            }
+          ]
+        }
+      ],
+      "note": "real repair_attempts.json chains -- launched via tools/repair_chain_launch.py, ticked forward via tools/factory_loop_run.py"
+    }
+  },
+  "graveyard": {
+    "count": 25
+  },
+  "recent_activity": [
+    {
+      "source": "eve",
+      "at": "2026-08-07T23:37:23+00:00",
+      "summary": "session_3_of_8 -- Ran to completion (4 turns, 5 real web searches, 3 hypotheses proposed, real spend $0.4538, terminated via end_session_called -- not a budge"
+    },
+    {
+      "source": "eve",
+      "at": "2026-08-06T18:08:19+00:00",
+      "summary": "session_2_of_8 -- Ran to completion (6 turns, 6 real web searches, 5 hypotheses proposed, real spend $0.4405, terminated via end_session_called -- not a budge"
+    },
+    {
+      "source": "adam",
+      "at": "2026-08-06T04:37:28.558750+00:00",
+      "summary": "3 hypotheses generated, $1.5708 spent"
+    },
+    {
+      "source": "adam",
+      "at": "2026-08-04T11:19:56.922724+00:00",
+      "summary": "2 hypotheses generated, $0.5580 spent"
+    },
+    {
+      "source": "adam",
+      "at": "2026-08-04T11:01:19.177208+00:00",
+      "summary": "0 hypotheses generated, $0.0000 spent"
+    },
+    {
+      "source": "eve",
+      "at": "2026-08-04T02:07:49+00:00",
+      "summary": "session_1_of_8 -- Ran to completion (7 turns, 2 real web searches, 6 hypotheses proposed, real spend $0.4273 against $1.50 budget, terminated via end_session_"
+    },
+    {
+      "source": "eve",
+      "at": "2026-08-04T01:58:06+00:00",
+      "summary": "crashed_before_completion -- First real attempt at the first countable session, run after the items-3/4/5/7 precondition fixes (generated_at server-side injection, frequ"
+    },
+    {
+      "source": "eve",
+      "at": "2026-08-03T14:25:19+00:00",
+      "summary": "session_0_b_asset_universe_gap -- Ran to completion (6 turns, 3 web searches, 6 hypotheses proposed, real spend $0.4834, terminated via end_session_called -- not a budget sto"
+    },
+    {
+      "source": "eve",
+      "at": "2026-08-03T09:55:20+00:00",
+      "summary": "session_0_proof_run -- Ran to completion (5 turns, 5 web searches, 4 hypotheses proposed, real spend $0.7129) with the tool_result-protocol bug already fixed -- me"
+    },
+    {
+      "source": "eve",
+      "at": "2026-08-03T08:10:07+00:00",
+      "summary": "crashed_before_completion -- Same tool_result-protocol-bug crash as eve-20260803T080243Z-29f48c2e -- the third and last attempt before that fix landed."
+    }
+  ]
+}
