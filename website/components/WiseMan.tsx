@@ -382,16 +382,32 @@ function WiseManIcon({ reducedMotion, size }: { reducedMotion: boolean; size: nu
     <svg width={size} height={size} viewBox="0 0 40 40" role="img" aria-hidden="true">
       <circle cx="20" cy="20" r="19" fill="#0a0e27" stroke="#d4af37" strokeWidth="1" />
       <g id="wise-man-ring" className={reducedMotion ? "" : "wise-man-spin"} style={{ transformOrigin: "20px 20px" }}>
-        <circle cx="20" cy="20" r="14" fill="none" stroke="#d4af37" strokeWidth="1" strokeDasharray="2 3" />
+        <circle cx="20" cy="20" r="14" fill="none" stroke="#d4af37" strokeWidth="1.5" strokeDasharray="3 4" strokeLinecap="round" />
       </g>
       <g id="wise-man-needle" className={reducedMotion ? "" : "wise-man-tilt"} style={{ transformOrigin: "20px 20px" }}>
-        <polygon points="20,8 23,20 20,32 17,20" fill="#d4af37" />
+        <polygon points="20,6 24,20 20,34 16,20" fill="#d4af37" />
+        <circle cx="20" cy="20" r="2" fill="#0a0e27" />
       </g>
       <style>{`
-        .wise-man-spin { animation: wise-man-ring-spin 12s linear infinite; }
-        .wise-man-tilt { animation: wise-man-needle-tilt 4s ease-in-out infinite; }
+        /* Ring: continuous anti-clockwise spin (Sec 9.2) -- rotate(0) to
+           rotate(-360) is counter-clockwise (SVG's positive-angle direction
+           is clockwise). 8s + bolder rounded dashes so the spin actually
+           reads at icon size (36px closed / 24px open), not just at full
+           scale. */
+        .wise-man-spin { animation: wise-man-ring-spin 8s linear infinite; }
+        /* Needle: independent from the ring (own timing, own motion shape) --
+           a wide "seek and settle" sweep rather than a small wobble, closer
+           to how a compass needle actually behaves (swings past center,
+           settles, swings back) than a flat sine tilt. */
+        .wise-man-tilt { animation: wise-man-needle-tilt 3s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
         @keyframes wise-man-ring-spin { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
-        @keyframes wise-man-needle-tilt { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg); } }
+        @keyframes wise-man-needle-tilt {
+          0% { transform: rotate(-26deg); }
+          30% { transform: rotate(20deg); }
+          50% { transform: rotate(30deg); }
+          80% { transform: rotate(-18deg); }
+          100% { transform: rotate(-26deg); }
+        }
       `}</style>
     </svg>
   );
