@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Logo from "@/components/Logo";
+import WiseMan from "@/components/WiseMan";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -86,6 +87,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </span>
           </div>
         </footer>
+
+        <WiseMan />
       </body>
     </html>
   );
