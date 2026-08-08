@@ -6,6 +6,7 @@
 
 export type WiseManErrorCode =
   | "feature_disabled"
+  | "storage_not_configured"
   | "origin_forbidden"
   | "invalid_request"
   | "input_too_long"
@@ -28,6 +29,10 @@ export interface BilingualMessage {
 
 export const WISE_MAN_ERROR_MESSAGES: Record<WiseManErrorCode, BilingualMessage> = {
   feature_disabled: {
+    en: "Wise Man is resting right now. Please check back later.",
+    ur: "Wise Man abhi available nahi hai. Baraye meherbani thori dair baad try karein.",
+  },
+  storage_not_configured: {
     en: "Wise Man is resting right now. Please check back later.",
     ur: "Wise Man abhi available nahi hai. Baraye meherbani thori dair baad try karein.",
   },

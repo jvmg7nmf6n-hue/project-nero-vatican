@@ -42,14 +42,31 @@ function clientIp(request: Request): string {
   return "unknown";
 }
 
+/** True only when a real, cross-request, cross-instance atomic store is
+ * configured. GATE B follow-up finding (2026-08-08): the in-memory fallback
+ * is NOT merely "doesn't share state across serverless instances" -- it is
+ * a BRAND NEW, always-empty Map created fresh on every single request (see
+ * loadStore() below, called at the top of every POST), so the rate limiter
+ * and spend cap are a complete no-op, not a degraded one, whenever this is
+ * false. See the fail-closed check in POST() immediately below. */
+function hasRealCounterStoreConfigured(env: Partial<Record<string, string>> = process.env): boolean {
+  // Matches @upstash/redis's own Redis.fromEnv() fallback exactly (verified
+  // against the installed package, node_modules/@upstash/redis/nodejs.js:
+  // 5708-5729) -- it accepts UPSTASH_REDIS_REST_URL/_TOKEN OR the legacy
+  // KV_REST_API_URL/_TOKEN names (what the deprecated @vercel/kv package
+  // used to set). Checking only the first pair would fail closed even on a
+  // deployment where Redis.fromEnv() would actually succeed via the legacy
+  // names -- a false negative, not just an overly strict default.
+  const url = env.UPSTASH_REDIS_REST_URL || env.KV_REST_API_URL;
+  const token = env.UPSTASH_REDIS_REST_TOKEN || env.KV_REST_API_TOKEN;
+  return Boolean(url && token);
+}
+
 /** Upstash Redis when configured (production); falls back to an in-memory
- * store otherwise. The in-memory fallback does NOT share state across
- * serverless invocations -- rate limits and the spend cap will not hold in
- * production without a real Redis integration linked (GATE A finding 1.4's
- * own equivalent gap for Eve's ledger). Documented, not silently assumed
- * working. */
+ * store otherwise -- but POST() below refuses to reach this fallback path
+ * at all while the feature flag is on, per the fail-closed decision above. */
 async function loadStore(): Promise<AtomicCounterStore> {
-  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+  if (hasRealCounterStoreConfigured()) {
     return createUpstashRedisCounterStore();
   }
   return createInMemoryCounterStore();
@@ -62,6 +79,28 @@ export async function POST(request: Request): Promise<Response> {
   if (!apiKey || !sessionSecret) {
     console.log(JSON.stringify({ tag: "[wise-man]", requestId, outcome: "not_configured" }));
     return jsonResponse(503, { error: formatWiseManError("feature_disabled") });
+  }
+
+  // FAIL CLOSED (GATE B follow-up, 2026-08-08): the feature flag being on
+  // with no real Redis configured used to mean every request silently got
+  // its own fresh, empty, never-shared counter -- the spend cap and rate
+  // limiter became a complete no-op with nothing in the response to signal
+  // it. That is not an acceptable failure mode on the exact mechanism that
+  // protects the owner's API spend, so this refuses to serve ANY Wise Man
+  // request in that state -- consistent with the fail-closed posture
+  // already used everywhere else in this build (the guardrail, the rate
+  // limiter, and the budget check all fail closed on their own errors; this
+  // extends the same posture to a misconfiguration, not just a runtime
+  // error). The log line is deliberately loud and distinctly tagged so it
+  // is not mistaken for routine per-request logging.
+  if (isWiseManEnabled() && !hasRealCounterStoreConfigured()) {
+    console.error(
+      "[wise-man] CRITICAL: WISE_MAN_ENABLED is on but no real counter store is configured " +
+        "(UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN missing) -- refusing to serve Wise Man " +
+        "requests. The spend cap and rate limiter would otherwise be a silent no-op. " +
+        "See docs/investigations/wise_man_implementation_report.md for the Upstash Redis linking steps.",
+    );
+    return jsonResponse(503, { error: formatWiseManError("storage_not_configured") });
   }
 
   let body: unknown;
