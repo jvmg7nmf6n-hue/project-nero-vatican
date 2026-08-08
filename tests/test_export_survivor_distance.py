@@ -6,6 +6,7 @@ source."""
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import tempfile
 import unittest
@@ -122,12 +123,14 @@ class NoTimeToTriggerLanguageGuardTest(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
         text = json.dumps(payload).lower()
+        # Word-boundary patterns -- a bare "eta" substring check would
+        # false-positive on ordinary words like "detail"/"metadata".
         forbidden = [
-            "eta", "expected within", "estimated time", "time until", "time to trigger",
+            r"\beta\b", "expected within", "estimated time", "time until", "time to trigger",
             "candles until", "minutes until", "hours until", "should trigger", "likely to trigger",
             "probability of firing", "countdown",
         ]
-        hits = [term for term in forbidden if term in text]
+        hits = [term for term in forbidden if re.search(term, text)]
         self.assertEqual(hits, [], f"forbidden time-prediction language found in the real exported payload: {hits}")
 
 
