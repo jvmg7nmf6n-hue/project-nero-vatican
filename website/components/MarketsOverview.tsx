@@ -36,7 +36,21 @@ function formatChangePct(changePct: number): string {
 // shared state).
 export default function MarketsOverview({ tiles, onSelectAsset, volatilityRegimes = [] }: MarketsOverviewProps) {
   if (tiles.length === 0) {
-    return null;
+    // CC-1 directive, 2026-08-08: previously returned null here, silently
+    // vanishing the whole "Markets overview" heading if every asset's candle
+    // fetch failed -- a real UX gap indistinguishable from "this feature
+    // doesn't exist" to a visitor. An honest empty state, matching the rest
+    // of this site's own convention (e.g. /agents's "No session registry
+    // data available yet."), never a fabricated tile in its place.
+    return (
+      <section>
+        <h2 className="font-serif text-2xl text-parchment mb-4">Markets overview</h2>
+        <p data-testid="markets-overview-empty" className="text-muted text-sm">
+          No live market data available right now — every asset&apos;s price fetch failed or returned nothing this
+          request. This is a data-availability gap, not evidence markets aren&apos;t being tracked; try again shortly.
+        </p>
+      </section>
+    );
   }
 
   return (

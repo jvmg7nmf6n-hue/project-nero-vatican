@@ -20,6 +20,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="font-serif tracking-[0.2em] text-parchment">VATICAN</span>
             </Link>
             <nav className="flex gap-6 text-sm text-muted">
+              {/* CC-1 directive, 2026-08-08: real UX finding, not a code bug --
+                  the homepage's own MarketsOverview section (real, live prices)
+                  already exists, but this nav had no link naming it directly;
+                  "Heatmap" (a win-rate grid, no price data at all) was the
+                  nearest-sounding label, so users self-routed there looking for
+                  a markets overview and never found it. This link removes the
+                  ambiguity rather than moving anything. */}
+              <Link href="/" className="hover:text-parchment">
+                Markets
+              </Link>
               <Link href="/ledger" className="hover:text-parchment">
                 Ledger
               </Link>

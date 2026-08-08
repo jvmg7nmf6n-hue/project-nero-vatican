@@ -17,9 +17,15 @@ const OK_TILE: MarketTile = {
 const PLACEHOLDER_TILE: MarketTile = { status: "placeholder", asset: "ETH", strategyCount: 1 };
 
 describe("MarketsOverview", () => {
-  it("renders nothing when there are no tiles", () => {
-    const { container } = render(<MarketsOverview tiles={[]} onSelectAsset={jest.fn()} />);
-    expect(container).toBeEmptyDOMElement();
+  it("shows an honest empty-state message when there are no tiles, never a silent disappear", () => {
+    // CC-1 directive, 2026-08-08: previously rendered nothing at all here
+    // (container was empty), indistinguishable from "this feature doesn't
+    // exist" to a real visitor. Now shows the heading plus an explicit
+    // data-unavailable message, matching the rest of this site's own
+    // never-fabricate/never-silently-vanish convention.
+    render(<MarketsOverview tiles={[]} onSelectAsset={jest.fn()} />);
+    expect(screen.getByText("Markets overview")).toBeInTheDocument();
+    expect(screen.getByTestId("markets-overview-empty")).toBeInTheDocument();
   });
 
   it("renders a real tile with price, change%, sparkline, and strategy count", () => {
