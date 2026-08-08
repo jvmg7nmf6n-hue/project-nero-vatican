@@ -24,6 +24,7 @@ import type {
   StatsExport,
   StrategiesExport,
   StrategyDescriptions,
+  SurvivorDistanceExport,
   TrialEntriesExport,
 } from "./types";
 
@@ -201,6 +202,10 @@ export function fetchEveSessionRecord(sessionId: string): Promise<EveSessionReco
 
 export function fetchEveBudgetLedger(): Promise<EveBudgetLedgerEntry[] | null> {
   return fetchJson<EveBudgetLedgerEntry[]>("eve_budget_ledger.json");
+}
+
+export function fetchSurvivorDistance(): Promise<SurvivorDistanceExport | null> {
+  return fetchJson<SurvivorDistanceExport>("survivor_distance.json");
 }
 
 export type CandleFetchResult =

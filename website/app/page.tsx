@@ -3,6 +3,7 @@ import HeroStats from "@/components/HeroStats";
 import MarketsSection from "@/components/MarketsSection";
 import Panel from "@/components/Panel";
 import SplashScreen from "@/components/SplashScreen";
+import SurvivorsSection from "@/components/SurvivorsSection";
 import {
   fetchCandleData,
   fetchGraveyard,
@@ -12,6 +13,7 @@ import {
   fetchSiteSummary,
   fetchStats,
   fetchStrategies,
+  fetchSurvivorDistance,
 } from "@/lib/data";
 import { buildMarketAssetList, buildMarketTiles } from "@/lib/marketsOverview";
 
@@ -22,7 +24,7 @@ export default async function HomePage({
 }: {
   searchParams?: { asset?: string };
 }) {
-  const [ledger, strategies, summary, graveyard, stats, heartbeat, quantCrossAsset] = await Promise.all([
+  const [ledger, strategies, summary, graveyard, stats, heartbeat, quantCrossAsset, survivorDistance] = await Promise.all([
     fetchLedgerRecent(),
     fetchStrategies(),
     fetchSiteSummary(),
@@ -30,6 +32,7 @@ export default async function HomePage({
     fetchStats(),
     fetchHeartbeat(),
     fetchQuantCrossAsset(),
+    fetchSurvivorDistance(),
   ]);
 
   const rows = ledger?.rows ?? [];
@@ -62,6 +65,8 @@ export default async function HomePage({
         volatilityRegimes={quantCrossAsset?.volatility_regimes ?? []}
         initialAssetFilter={assetFilter}
       />
+
+      <SurvivorsSection survivorDistance={survivorDistance} />
 
       <section>
         <Panel tone="loss" className="flex items-center justify-between gap-4">

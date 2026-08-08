@@ -778,3 +778,30 @@ export interface EveBudgetLedgerEntry {
   crash_reason?: string;
   crash_marked_at?: string;
 }
+
+// CC-1 directive Part B3a: one real, live-computed condition on a survivor
+// strategy's own entry rule -- see nero_core/execution/export_survivor_distance.py's
+// own docstring for why this is deliberately per-condition, never a combined score.
+export interface SurvivorDistanceCondition {
+  label: string;
+  unit: "pct" | "rsi_points" | "z_units" | "boolean_state";
+  distance: number | null;
+  note?: string;
+  raw_zscore?: number;
+}
+
+export interface SurvivorDistanceEntry {
+  strategy_id: string;
+  asset: string;
+  timeframe: string;
+  candle_close_time_ms: number;
+  conditions: SurvivorDistanceCondition[];
+  computed_at: string;
+}
+
+export interface SurvivorDistanceExport {
+  schema_version: number;
+  last_updated: string;
+  distances: SurvivorDistanceEntry[];
+  errors: { strategy: string; message: string }[];
+}
