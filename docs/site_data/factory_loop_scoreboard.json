@@ -1,10 +1,17 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-08-08T16:46:06.674778+00:00",
+  "last_updated": "2026-08-08T17:39:42.693427+00:00",
   "live_scheduler": {
     "tracked_count": 37,
-    "active_count": 2,
+    "active_count": 3,
     "active": [
+      {
+        "strategy": "ORDERFLOW_IMBALANCE",
+        "strategy_version": "orderflow-imbalance-v1.0.0",
+        "asset": "BTC",
+        "entry_price": 65086.45,
+        "entered_at": "2026-08-08T17:38:59.659592+00:00"
+      },
       {
         "strategy": "PEAD",
         "strategy_version": "pead-v1.0.0-surprise3pct-hold10",
