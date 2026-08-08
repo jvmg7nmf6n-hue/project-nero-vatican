@@ -18,6 +18,15 @@
 
 export type SniffedType = "image/png" | "image/jpeg" | "image/gif" | "image/webp" | "application/pdf" | null;
 
+/** Sec 2.5's chosen default: reject .docx with a clear message rather than
+ * add a heavyweight extraction dependency (mammoth et al.) for Phase 1.
+ * .docx (and .xlsx/.pptx) files are ZIP archives -- detected by the ZIP
+ * local-file-header magic bytes so a .docx gets a SPECIFIC, helpful reason
+ * instead of the generic "unrecognized file type" message. */
+function looksLikeZipArchive(bytes: Buffer): boolean {
+  return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
+}
+
 export function sniffMediaType(bytes: Buffer): SniffedType {
   if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
     return "image/png";
@@ -57,6 +66,12 @@ export interface AttachmentValidationResult {
 export function validateAttachment(bytes: Buffer): AttachmentValidationResult {
   const sniffed = sniffMediaType(bytes);
   if (!sniffed) {
+    if (looksLikeZipArchive(bytes)) {
+      return {
+        valid: false,
+        reason: "Word/Excel/PowerPoint files aren't supported yet -- please paste the text or upload a PDF or image instead.",
+      };
+    }
     return { valid: false, reason: "Unrecognized file type -- only PNG, JPEG, GIF, WebP, and PDF are supported." };
   }
   if (sniffed === "application/pdf") {

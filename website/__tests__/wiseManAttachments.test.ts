@@ -85,6 +85,13 @@ describe("validateAttachment (Sec 6 real, documented, server-side-enforced limit
     expect(result.valid).toBe(false);
     expect(result.reason).toContain("PNG, JPEG, GIF, WebP, and PDF");
   });
+
+  it("rejects a .docx (ZIP-signature) with a specific, tailored message (Sec 2.5 default: reject, not extract)", () => {
+    const zipSignature = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0, 0, 0, 0]);
+    const result = validateAttachment(zipSignature);
+    expect(result.valid).toBe(false);
+    expect(result.reason).toContain("paste the text or upload a PDF");
+  });
 });
 
 describe("validateAttachmentSet (per-request caps)", () => {
